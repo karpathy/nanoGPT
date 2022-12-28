@@ -4,20 +4,25 @@ The text is assumed to pre-tokenized and inside files train.pt and val.pt
 """
 
 import os
+import sys
 import time
 import math
+from ast import literal_eval
 
 import numpy as np
 import torch
 import wandb
 
 from model import GPTConfig, GPT
+
 # -----------------------------------------------------------------------------
-# settings, todo argparse or something
+# default config values
 # I/O
 out_dir = 'out'
 eval_interval = 500
 log_interval = 1
+eval_iters = 50
+eval_only = False # if True, script exits right after the first eval
 # wandb logging
 wandb_log = False # disabled by default
 wandb_entity = 'karpathy'
@@ -44,6 +49,38 @@ decay_lr = True # whether to decay the learning rate
 warmup_iters = 2000 # how many steps to warm up for
 lr_decay_iters = 320000 # how many steps to decay the learning rate for
 min_lr = 1e-5 # minimum learning rate
+# -----------------------------------------------------------------------------
+# poor man's Configurator. Potentially a bad idea. Example usage:
+# python train.py override_file --batch_size=32
+# this will first run config/override_file.py, then override batch_size to 32
+for arg in sys.argv[1:]:
+    if '=' not in arg:
+        # assume it's the name of a config file
+        assert not arg.startswith('--')
+        config_file = os.path.join('config', arg + '.py')
+        print(f"Overriding config with {config_file}:")
+        with open(config_file) as f:
+            print(f.read())
+        exec(open(config_file).read())
+    else:
+        # assume it's a --key=value argument
+        assert arg.startswith('--')
+        key, val = arg.split('=')
+        key = key[2:]
+        if key in globals():
+            try:
+                # attempt to eval it it (e.g. if bool, number, or etc)
+                attempt = literal_eval(val)
+            except SyntaxError:
+                # if that goes wrong, just use the string
+                attempt = val
+            # ensure the types match ok
+            assert type(attempt) == type(globals()[key])
+            # cross fingers
+            print(f"Overriding: {key} = {attempt}")
+            globals()[key] = attempt
+        else:
+            raise ValueError(f"Unknown config key: {key}")
 # -----------------------------------------------------------------------------
 
 os.makedirs(out_dir, exist_ok=True)
@@ -88,7 +125,7 @@ elif init_from.startswith('gpt2'):
 model.to(device)
 
 @torch.no_grad()
-def estimate_loss(eval_iters=50):
+def estimate_loss():
     out = {}
     model.eval()
     for split in ['train', 'val']:
@@ -166,6 +203,8 @@ while True:
                     'iter_num': iter_num,
                 }
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+    if iter_num == 0 and eval_only:
+        break
 
     X, Y = get_batch('train')
     with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):

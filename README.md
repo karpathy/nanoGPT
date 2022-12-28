@@ -34,3 +34,26 @@ Once some checkpoints are written to the output directory `out`, we're ready to 
 $ python sample.py
 ```
 
+Training on 1 GPU overnight currently gets loss ~3.74. Random chance at init is -ln(1/50257) = 10.82. Which brings us to baselines.
+
+## baselines
+
+OpenAI GPT-2 checkpoints allow us to get some baselines in place for openwebtext. We can get the numbers as follows:
+
+```
+$ python train.py eval_gpt2
+$ python train.py eval_gpt2_medium
+$ python train.py eval_gpt2_large
+$ python train.py eval_gpt2_xl
+```
+
+and observe the following losses on train and val:
+
+| model | params | train loss | val loss |
+| ------| ------ | ---------- | -------- |
+| gpt2 | 124M         | 3.11  | 3.12     |
+| gpt2-medium | 350M  | 2.85  | 2.84     |
+| gpt2-large | 774M   | 2.66  | 2.67     |
+| gpt2-xl | 1558M     | 2.56  | 2.54     |
+
+I briefly tried finetuning gpt2 a bit more on our OWT and didn't notice dramatic improvements, suggesting that OWT is not much much different from WT in terms of the data distribution, but this needs a bit more thorough attempt once the code is in a better place.
