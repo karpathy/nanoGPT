@@ -57,3 +57,7 @@ and observe the following losses on train and val:
 | gpt2-xl | 1558M     | 2.56  | 2.54     |
 
 I briefly tried finetuning gpt2 a bit more on our OWT and didn't notice dramatic improvements, suggesting that OWT is not much much different from WT in terms of the data distribution, but this needs a bit more thorough attempt once the code is in a better place.
+
+## benchmarking
+
+For model benchmarking `bench.py` might be useful. It's identical what happens in `train.py` except we're measuring just the fwd+bwd+update time of the model on a fixed random batch of data.
