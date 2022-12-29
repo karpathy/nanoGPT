@@ -40,7 +40,7 @@ To my knowledge, running this with the current script with the GPT-2 hyperparame
 $ python sample.py
 ```
 
-Training on 1 GPU overnight currently gets loss ~3.74. Random chance at init is -ln(1/50257) = 10.82. Which brings us to baselines.
+Training on 1 A100 40GB GPU overnight currently gets loss ~3.74, training on 4 gets ~3.60. Random chance at init is -ln(1/50257) = 10.82. Which brings us to baselines:
 
 ## baselines
 
