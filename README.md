@@ -1,11 +1,9 @@
 
 # nanoGPT
 
-The cleanest, fastest repository for training/finetuning medium-sized GPTs.
+The cleanest, fastest repository for training/finetuning medium-sized GPTs. Still under active development, currently trying to reproduce GPT-2 on OpenWebText dataset. The code itself is tiny, plain and readable. At the moment `train.py` is a ~200-line boilerplate training loop and `model.py` a ~300-line GPT model definition, which can also load the GPT-2 weights from OpenAI.
 
-This repo currently requires reading the code, but it's not that bad. work ongoing...
-
-Getting started:
+## install
 
 We need a few dependencies:
 
@@ -15,20 +13,22 @@ We need a few dependencies:
 - `pip install tiktoken` for OpenAI's fast bpe code
 - `pip install wandb` for optional logging
 
-Then we want to render the detaset:
+## usage
+
+To render a dataset we first tokenize some documents into one giant array of indices. E.g. for OpenWebText see:
 
 ```
 $ cd data/openwebtext
 $ python prepare.py
 ```
 
-To download and tokenize the [openwebtext](https://huggingface.co/datasets/openwebtext) dataset. It will create a `train.bin` and `val.bin` which holds the GPT2 BPE token ids in a massive sequence. Then we're ready to kick off training. The training script currently tries to reproduce the smallest GPT-2 released by OpenAI, i.e. the 124M version of GPT-2. We can run it like so:
+To download and tokenize the [OpenWebText](https://huggingface.co/datasets/openwebtext) dataset. It will create a `train.bin` and `val.bin` which holds the GPT2 BPE token ids in one sequence, stored as raw uint16 bytes. Then we're ready to kick off training. The training script currently by default tries to reproduce the smallest GPT-2 released by OpenAI, i.e. the 124M version of GPT-2. We can train as follows, though I encourage you to read the code and see all of the settings and paths up top in the file:
 
 ```
 $ python train.py
 ```
 
-Once some checkpoints are written to the output directory `out`, we're ready to sample from the model:
+Once some checkpoints are written to the output directory `out`, we can sample from the model:
 
 ```
 $ python sample.py
