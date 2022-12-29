@@ -153,7 +153,7 @@ However, we have to note that GPT-2 was trained on (closed, never released) WebT
 
 For model benchmarking `bench.py` might be useful. It's identical what happens in the meat of the training loop of `train.py`, but omits much of the other complexities.
 
-# todos
+## todos
 
 A few that I'm aware of, other than the ones mentioned in code:
 
