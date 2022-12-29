@@ -25,9 +25,11 @@ torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
-device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
-ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
-ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
+torch.manual_seed(1337)
+
+batch_size = 8
+block_size = 1024
+dtype = torch.float16
 
 # data loading init
 if real_data:
@@ -82,7 +84,8 @@ if profile:
 
         X, Y = get_batch('train')
         for k in range(num_steps):
-            with ctx:
+            X, Y = get_batch('train')
+            with torch.autocast(device_type='cuda', dtype=dtype):
                 logits, loss = model(X, Y)
             X, Y = get_batch('train')
             optimizer.zero_grad(set_to_none=True)
@@ -101,7 +104,8 @@ else:
         t0 = time.time()
         X, Y = get_batch('train')
         for k in range(num_steps):
-            with ctx:
+            X, Y = get_batch('train')
+            with torch.autocast(device_type='cuda', dtype=dtype):
                 logits, loss = model(X, Y)
             X, Y = get_batch('train')
             optimizer.zero_grad(set_to_none=True)
