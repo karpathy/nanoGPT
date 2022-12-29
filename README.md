@@ -68,7 +68,7 @@ I briefly tried finetuning gpt2 a bit more on our OWT and didn't notice dramatic
 
 For model benchmarking `bench.py` might be useful. It's identical what happens in the meat of the training loop of `train.py`, but omits much of the other complexities.
 
-# todos
+## todos
 
 A few that I'm aware of, other than the ones mentioned in code:
 
