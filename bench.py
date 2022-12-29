@@ -7,7 +7,7 @@ import time
 import torch
 from model import GPTConfig, GPT
 
-device = 'cuda:3'
+device = 'cuda'
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 torch.manual_seed(1337)
@@ -45,23 +45,52 @@ model.to(device)
 
 optimizer = model.configure_optimizers(weight_decay=1e-2, learning_rate=1e-4, betas=(0.9, 0.95))
 
-burn_in = 10 # number of burn in steps where we don't measure time
-num_steps = 30
-for k in range(num_steps):
+profile = False # use pytorch profiler, or just simple benchmarking?
+if profile:
+    # useful docs on pytorch profiler:
+    # - tutorial https://pytorch.org/tutorials/intermediate/tensorboard_profiler_tutorial.html
+    # - api https://pytorch.org/docs/stable/profiler.html#torch.profiler.profile
+    wait, warmup, active = 5, 5, 5
+    num_steps = wait + warmup + active
+    with torch.profiler.profile(
+        activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
+        schedule=torch.profiler.schedule(wait=wait, warmup=warmup, active=active, repeat=1),
+        on_trace_ready=torch.profiler.tensorboard_trace_handler('./bench_log'),
+        record_shapes=True,
+        profile_memory=True,
+        with_stack=True, # incurs an additional overhead, disable if not needed
+        with_flops=True,
+        with_modules=False, # only for torchscript models atm
+    ) as prof:
 
-    if k == burn_in:
-        t0 = time.time() # start the timer
+        for k in range(num_steps):
+            X, Y = get_batch('train')
+            with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+                logits, loss = model(X, Y)
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            optimizer.step()
+            lossf = loss.item()
+            print(f"{k}/{num_steps} loss: {lossf:.4f}")
 
-    X, Y = get_batch('train')
-    with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
-        logits, loss = model(X, Y)
+            prof.step() # notify the profiler at end of each step
 
-    optimizer.zero_grad(set_to_none=True)
-    loss.backward()
-    optimizer.step()
-    lossf = loss.item()
-    print(f"{k}/{num_steps} loss: {lossf:.4f}")
+else:
 
-torch.cuda.synchronize()
-t1 = time.time()
-print("time in ms per iteration: %.2f" % ((t1 - t0) / (num_steps - burn_in) * 1000))
+    # simple benchmarking
+    torch.cuda.synchronize()
+    for stage, num_steps in enumerate([10, 20]): # burnin, then benchmark
+        t0 = time.time()
+        for k in range(num_steps):
+            X, Y = get_batch('train')
+            with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+                logits, loss = model(X, Y)
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            optimizer.step()
+            lossf = loss.item()
+            print(f"{k}/{num_steps} loss: {lossf:.4f}")
+        torch.cuda.synchronize()
+        t1 = time.time()
+        if stage == 1:
+            print(f"time per iteration: {(t1-t0)/num_steps*1000:.4f}ms")
