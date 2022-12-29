@@ -1,34 +1,40 @@
 
 # nanoGPT
 
-The cleanest, fastest repository for training/finetuning medium-sized GPTs. Still under active development, currently trying to reproduce GPT-2 on OpenWebText dataset. The code itself is tiny, plain and readable. At the moment `train.py` is a ~200-line boilerplate training loop and `model.py` a ~300-line GPT model definition, which can also load the GPT-2 weights from OpenAI.
+The cleanest, smallest, fastest repository for training/finetuning medium-sized GPTs. Still under active development, currently working to reproduce GPT-2 on OpenWebText dataset. The code itself aims by design to be plain and readable: `train.py` is a ~300-line boilerplate training loop and `model.py` a ~300-line GPT model definition, which can optionally load the GPT-2 weights from OpenAI. That's it.
 
 ## install
 
-We need a few dependencies:
+Dependencies:
 
-- [pytorch](https://pytorch.org), of course
-- numpy
-- `pip install datasets` for huggingface datasets
-- `pip install tiktoken` for OpenAI's fast bpe code
-- `pip install wandb` for optional logging
+- [pytorch](https://pytorch.org) <3
+- numpy <3
+- `pip install datasets` for huggingface datasets <3
+- `pip install tiktoken` for OpenAI's fast bpe code <3
+- `pip install wandb` for optional logging <3
 
 ## usage
 
-To render a dataset we first tokenize some documents into one giant array of indices. E.g. for OpenWebText see:
+To render a dataset we first tokenize some documents into one simple long 1D array of indices. E.g. for OpenWebText see:
 
 ```
 $ cd data/openwebtext
 $ python prepare.py
 ```
 
-To download and tokenize the [OpenWebText](https://huggingface.co/datasets/openwebtext) dataset. It will create a `train.bin` and `val.bin` which holds the GPT2 BPE token ids in one sequence, stored as raw uint16 bytes. Then we're ready to kick off training. The training script currently by default tries to reproduce the smallest GPT-2 released by OpenAI, i.e. the 124M version of GPT-2. We can train as follows, though I encourage you to read the code and see all of the settings and paths up top in the file:
+To download and tokenize the [OpenWebText](https://huggingface.co/datasets/openwebtext) dataset. This will create a `train.bin` and `val.bin` which holds the GPT2 BPE token ids in one sequence, stored as raw uint16 bytes. Then we're ready to kick off training. The training script currently by default tries to reproduce the smallest GPT-2 released by OpenAI, i.e. the 124M version of GPT-2. We can demo train as follows on a single device, though I encourage you to read the code and see all of the settings and paths up top in the file:
 
 ```
 $ python train.py
 ```
 
-Once some checkpoints are written to the output directory `out`, we can sample from the model:
+To train using PyTorch Distributed Data Parallel (DDP) run the script with torchrun. For example to train on a node with 4 GPUs run:
+
+```
+$ torchrun --standalone --nproc_per_node=4 train.py
+```
+
+Once some checkpoints are written to the output directory (e.g. `./out` by default), we can sample from the model:
 
 ```
 $ python sample.py
