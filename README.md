@@ -34,7 +34,7 @@ To train using PyTorch Distributed Data Parallel (DDP) run the script with torch
 $ torchrun --standalone --nproc_per_node=4 train.py
 ```
 
-Once some checkpoints are written to the output directory (e.g. `./out` by default), we can sample from the model:
+To my knowledge, running this with the current script with the GPT-2 hyperparameters should reproduce the GPT-2 result, provided that OpenWebText ~= WebText. I'd like to make the code more efficient before attempting to go there. Once some checkpoints are written to the output directory (e.g. `./out` by default), we can sample from the model:
 
 ```
 $ python sample.py
@@ -67,3 +67,15 @@ I briefly tried finetuning gpt2 a bit more on our OWT and didn't notice dramatic
 ## benchmarking
 
 For model benchmarking `bench.py` might be useful. It's identical what happens in the meat of the training loop of `train.py`, but omits much of the other complexities.
+
+# todos
+
+A few that I'm aware of, other than the ones mentioned in code:
+
+- Additional optimizations to the running time
+- Report and track other metrics e.g. PPL
+- Eval zero-shot perplexities on PTB, WikiText, other related benchmarks
+- Current initialization (PyTorch default) departs from GPT-2. In a very quick experiment I found it to be superior to the one suggested in the papers, but that can't be right
+- Currently fp16 is much faster than bf16. Potentially revert back to using fp16 and re-introduce the gradient scaler?
+- Add some finetuning dataset and guide on some dataset for demonstration.
+- Reproduce GPT-2 results. It was estimated ~3 years ago that the training cost of 1.5B model was ~$50K
