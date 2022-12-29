@@ -60,4 +60,4 @@ I briefly tried finetuning gpt2 a bit more on our OWT and didn't notice dramatic
 
 ## benchmarking
 
-For model benchmarking `bench.py` might be useful. It's identical what happens in `train.py` except we're measuring just the fwd+bwd+update time of the model on a fixed random batch of data.
+For model benchmarking `bench.py` might be useful. It's identical what happens in the meat of the training loop of `train.py`, but omits much of the other complexities.
