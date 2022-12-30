@@ -11,6 +11,7 @@ Dependencies:
 - `pip install datasets` for huggingface datasets <3 (if you want to download + preprocess OpenWebText)
 - `pip install tiktoken` for OpenAI's fast bpe code <3
 - `pip install wandb` for optional logging <3
+- `pip install tqdm`
 
 ## usage
 
