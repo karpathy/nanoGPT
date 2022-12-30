@@ -50,8 +50,7 @@ elif init_from.startswith('gpt2'):
 
 model.eval()
 model.to(device)
-if compile:
-    model = torch.compile(model) # requires PyTorch 2.0 (optional)
+model = torch.compile(model) # requires PyTorch 2.0
 
 # look for the meta pickle in case it is available in the dataset folder
 load_meta = False

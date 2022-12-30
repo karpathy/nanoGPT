@@ -29,7 +29,8 @@ torch.manual_seed(1337)
 
 batch_size = 8
 block_size = 1024
-dtype = torch.float16
+dtype = torch.bfloat16
+compile_model = True
 
 # data loading init
 if real_data:
@@ -65,6 +66,11 @@ if compile:
     print("Compiling model...")
     model = torch.compile(model) # pytorch 2.0
 
+if compile_model:
+    print("Compiling model...")
+    model = torch.compile(model) # pytorch 2.0
+
+profile = False # use pytorch profiler, or just simple benchmarking?
 if profile:
     # useful docs on pytorch profiler:
     # - tutorial https://pytorch.org/tutorials/intermediate/tensorboard_profiler_tutorial.html
