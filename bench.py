@@ -14,7 +14,8 @@ torch.manual_seed(1337)
 
 batch_size = 8
 block_size = 1024
-dtype = torch.float16
+dtype = torch.bfloat16
+compile_model = True
 
 # data loading init
 real_data = True
@@ -45,6 +46,10 @@ model = GPT(gptconf)
 model.to(device)
 
 optimizer = model.configure_optimizers(weight_decay=1e-2, learning_rate=1e-4, betas=(0.9, 0.95))
+
+if compile_model:
+    print("Compiling model...")
+    model = torch.compile(model) # pytorch 2.0
 
 profile = False # use pytorch profiler, or just simple benchmarking?
 if profile:

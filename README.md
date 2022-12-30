@@ -8,8 +8,7 @@ The simplest, fastest repository for training/finetuning medium-sized GPTs. It's
 Dependencies:
 
 - [pytorch](https://pytorch.org) <3
-- numpy <3
-- `pip install datasets` for huggingface datasets <3
+- `pip install datasets` for huggingface datasets <3 (if you want to download + preprocess OpenWebText)
 - `pip install tiktoken` for OpenAI's fast bpe code <3
 - `pip install wandb` for optional logging <3
 
@@ -67,6 +66,10 @@ I briefly tried finetuning gpt2 a bit more on our OWT and didn't notice dramatic
 ## benchmarking
 
 For model benchmarking `bench.py` might be useful. It's identical what happens in the meat of the training loop of `train.py`, but omits much of the other complexities.
+
+# efficiency notes
+
+Code by default now uses [PyTorch 2.0](https://pytorch.org/get-started/pytorch-2.0/). At the time of writing (Dec 29, 2022) this makes `torch.compile()` available in the nightly release. The improvement from the one line of code is noticeable, e.g. cutting down iteration time from ~250ms / iter to 135ms / iter. Nice work PyTorch team!
 
 ## todos
 
