@@ -60,21 +60,23 @@ for split, dset in tokenized.items():
     bytes_per_token = 2 # i.e. np.dtype(dtype).itemsize
     subprocess.run(['truncate', '-s', str(total * bytes_per_token), filename], check=True)
 
+    f = open(filename, 'r+b')
+    mm = mmap.mmap(f.fileno(), 0)
+
     # write the ids to the file
     def write_to_file(example):
-        with open(filename, 'r+b') as f:
-            arr_len = len(example['ids'])
-            start = example['offset'] - arr_len
-            mm = mmap.mmap(f.fileno(), 0)
-            arr = np.ndarray((arr_len,), dtype=dtype, buffer=mm, offset=bytes_per_token * start)
-            arr[:] = example['ids']
-            mm.flush()
+        arr_len = len(example['ids'])
+        start = example['offset'] - arr_len
+        arr = np.ndarray((arr_len,), dtype=dtype, buffer=mm, offset=bytes_per_token * start)
+        arr[:] = example['ids']
 
     dset.map(
         write_to_file,
         desc=f"writing {split} split to file {filename}",
-        num_proc=num_proc,
+        num_proc=1,
     )
+    mm.flush()
+    del f
 
 # train.bin is ~17GB, val.bin ~8.5MB
 # train has ~9B tokens (9,035,582,198)
