@@ -14,14 +14,6 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-@torch.jit.script
-def fused_gelu(x):
-    """
-    Implementation of the GELU activation function currently in Google BERT repo (identical to OpenAI GPT).
-    Reference: Gaussian Error Linear Units (GELU) paper: https://arxiv.org/abs/1606.08415
-    """
-    return 0.5 * x * (1.0 + torch.tanh(math.sqrt(2.0 / math.pi) * (x + 0.044715 * torch.pow(x, 3.0))))
-
 class CausalSelfAttention(nn.Module):
 
     def __init__(self, config):
@@ -65,13 +57,14 @@ class MLP(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd)
-        self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd)
-        self.dropout = nn.Dropout(config.dropout)
+        self.c_fc        = nn.Linear(config.n_embd, 4 * config.n_embd)
+        self.fused_gelu  = nn.GELU(approximate='tanh')
+        self.c_proj      = nn.Linear(4 * config.n_embd, config.n_embd)
+        self.dropout     = nn.Dropout(config.dropout)
 
     def forward(self, x):
         x = self.c_fc(x)
-        x = fused_gelu(x)
+        x = self.fused_gelu(x)
         x = self.c_proj(x)
         x = self.dropout(x)
         return x
