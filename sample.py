@@ -21,6 +21,7 @@ model = GPT(gptconf)
 model.load_state_dict(checkpoint['model'])
 model.eval()
 model.to(device)
+model = torch.compile(model) # requires PyTorch 2.0
 
 enc = tiktoken.get_encoding("gpt2")
 #start = enc.encode("\n")
