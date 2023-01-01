@@ -21,18 +21,18 @@ model = GPT(gptconf)
 model.load_state_dict(checkpoint['model'])
 model.eval()
 model.to(device)
-model = torch.compile(model) # requires PyTorch 2.0
+#model = torch.compile(model) # requires PyTorch 2.0 (optional)
 
 enc = tiktoken.get_encoding("gpt2")
-#start = enc.encode("\n")
-start = [enc.eot_token]
+start = enc.encode("\n") # user choice on what token to start with
+#start = [enc.eot_token]
 x = (torch.tensor(start, dtype=torch.long, device=device)[None, ...])
 
-for k in range(1):
+for k in range(10):
 
     with torch.no_grad():
         with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):
-            y = model.generate(x, 300, temperature=0.8, top_k=200)
+            y = model.generate(x, 500, temperature=0.8, top_k=200)
 
     print(enc.decode(y[0].tolist()))
     print('---------------')
