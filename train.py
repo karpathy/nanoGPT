@@ -37,8 +37,7 @@ eval_interval = 2000
 log_interval = 1
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
-always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+always_save_checkpoint = False # if True, always save a checkpoint after each eval
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = 'owt'
@@ -145,11 +144,9 @@ elif init_from == 'resume':
     ckpt_path = os.path.join(out_dir, 'ckpt.pt')
     checkpoint = torch.load(ckpt_path, map_location=device)
     checkpoint_model_args = checkpoint['model_args']
-    # force these config attributes to be equal otherwise we can't even resume training
-    # the rest of the attributes (e.g. dropout) can stay as desired from command line
-    for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
-        model_args[k] = checkpoint_model_args[k]
-    # create the model
+    for k, v in model_args.items():
+        assert checkpoint_model_args[k] == v, "for now"
+        # TODO: think through how passed in params should interact with checkpoint params
     gptconf = GPTConfig(**model_args)
     model = GPT(gptconf)
     model.load_state_dict(checkpoint['model'])
@@ -160,10 +157,11 @@ elif init_from.startswith('gpt2'):
     # initialize from OpenAI GPT-2 weights
     override_args = dict(dropout=dropout)
     model = GPT.from_pretrained(init_from, override_args)
-    # read off the created config params, so we can store them into checkpoint correctly
-    for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
-        model_args[k] = getattr(model.config, k)
-# crop down the model block size if desired, using model surgery
+    # read off and override the GPT sizing model args from the model config
+    model_args['n_layer'] = model.config.n_layer
+    model_args['n_head'] = model.config.n_head
+    model_args['n_embd'] = model.config.n_embd
+# crop down the model block size if desired
 if block_size < model.config.block_size:
     model.crop_block_size(block_size)
     model_args['block_size'] = block_size # so that the checkpoint will have the right value
