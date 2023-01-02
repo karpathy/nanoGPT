@@ -30,7 +30,7 @@ torch.manual_seed(1337)
 batch_size = 8
 block_size = 1024
 dtype = torch.bfloat16
-compile_model = True
+compile = True
 
 # data loading init
 if real_data:
@@ -66,7 +66,7 @@ if compile:
     print("Compiling model...")
     model = torch.compile(model) # pytorch 2.0
 
-if compile_model:
+if compile:
     print("Compiling model...")
     model = torch.compile(model) # pytorch 2.0
 
