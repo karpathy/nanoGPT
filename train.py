@@ -109,6 +109,9 @@ torch.manual_seed(1337 + gpu_id) # note: each worker gets a different seed
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 
+if device == "cpu":
+    device_type = "cpu"
+
 # poor man's data loader, TODO evaluate need for actual DataLoader
 data_dir = os.path.join('data', dataset)
 train_data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
