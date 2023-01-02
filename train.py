@@ -43,6 +43,7 @@ batch_size = 8
 block_size = 1024
 # model
 device = 'cuda:0'
+device_type = 'cuda'
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 dropout = 0.1
 n_layer = 12
@@ -189,7 +190,7 @@ def estimate_loss():
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = get_batch(split)
-            with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):
+            with torch.amp.autocast(device_type=device_type, dtype=torch.bfloat16):
                 logits, loss = model(X, Y)
             losses[k] = loss.item()
         out[split] = losses.mean()
@@ -258,7 +259,7 @@ while True:
         break
 
     X, Y = get_batch('train')
-    with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):
+    with torch.amp.autocast(device_type=device_type, dtype=torch.bfloat16):
         logits, loss = model(X, Y)
 
     optimizer.zero_grad(set_to_none=True)
