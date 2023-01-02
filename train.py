@@ -60,7 +60,7 @@ lr_decay_iters = 320000 # how many steps to decay the learning rate for
 min_lr = 1e-5 # minimum learning rate
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
-compile_model = True # use PyTorch 2.0 to compile the model to be faster
+compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
 # poor man's Configurator. Potentially a bad idea. Example usage:
 # $ python train.py override_file --batch_size=32
@@ -165,7 +165,7 @@ if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 
 # compile the model
-if compile_model:
+if compile:
     print("compiling the model... (takes a ~minute)")
     unoptimized_model = model
     model = torch.compile(model) # requires PyTorch 2.0
