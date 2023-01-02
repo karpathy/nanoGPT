@@ -15,7 +15,7 @@ torch.manual_seed(1337)
 batch_size = 8
 block_size = 1024
 dtype = torch.bfloat16
-compile_model = True
+compile = True
 
 # data loading init
 real_data = True
@@ -47,7 +47,7 @@ model.to(device)
 
 optimizer = model.configure_optimizers(weight_decay=1e-2, learning_rate=1e-4, betas=(0.9, 0.95))
 
-if compile_model:
+if compile:
     print("Compiling model...")
     model = torch.compile(model) # pytorch 2.0
 
