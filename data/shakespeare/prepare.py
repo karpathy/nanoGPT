@@ -12,7 +12,6 @@ if not os.path.exists('input.txt'):
 with open('input.txt', 'r', encoding='utf-8') as f:
     data = f.read()
 
-# Random train/val split
 n = len(data)
 train_data = data[:int(n*0.9)]
 val_data = data[int(n*0.9):]
