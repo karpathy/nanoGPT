@@ -151,3 +151,8 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# Data Files
+input.txt
+train.bin
+val.bin
