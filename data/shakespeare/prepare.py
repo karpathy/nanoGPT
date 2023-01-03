@@ -7,10 +7,11 @@ import numpy as np
 if not os.path.exists('input.txt'):
     data_url = 'https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt'
     with open('input.txt', 'w') as f:
-        f.write(requests.get(data_url).text)
+        f.write(requests.get(data_url).text.encode('utf-8'))
 
 with open('input.txt', 'r') as f:
-    data = f.read()
+    data = f.read().decode('utf-8')
+    
 n = len(data)
 train_data = data[:int(n*0.9)]
 val_data = data[int(n*0.9):]

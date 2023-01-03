@@ -15,6 +15,14 @@ Dependencies:
 - `pip install tqdm`
 - `pip install networkx`
 
+
+Could also do the following to automatically install dependencies (in Linux):
+```bash
+    python3 -m venv venv
+    source venv/bin/activate
+    pip3 install -r requirements.txt
+```
+
 ## usage
 
 To render a dataset we first tokenize some documents into one simple long 1D array of indices. E.g. for OpenWebText see:
