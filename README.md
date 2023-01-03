@@ -114,3 +114,7 @@ Suspiciousness
 Results
 
 - Actually reproduce GPT-2 results and have clean configs that reproduce the result. It was estimated ~3 years ago that the training cost of 1.5B model was ~$50K (?). Sounds a bit too high.
+
+# acknowledgements
+
+Thank you [Lambda labs](https://lambdalabs.com) for supporting the training costs of nanoGPT experiments.
