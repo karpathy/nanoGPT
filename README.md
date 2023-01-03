@@ -8,10 +8,12 @@ The simplest, fastest repository for training/finetuning medium-sized GPTs. It's
 Dependencies:
 
 - [pytorch](https://pytorch.org) <3
+- [numpy](https://numpy.org/install/) <3
 - `pip install datasets` for huggingface datasets <3 (if you want to download + preprocess OpenWebText)
 - `pip install tiktoken` for OpenAI's fast bpe code <3
 - `pip install wandb` for optional logging <3
 - `pip install tqdm`
+- `pip install networkx`
 
 ## usage
 
