@@ -11,15 +11,12 @@ def get_config():
     config.eval_iters = 200
     config.eval_only = False # if True, script exits right after the first eval
     config.always_save_checkpoint = False # if True, always save a checkpoint after each eval
-    
-
-    config.compile = False # takes too little time to finetune, not worth it
-    
+        
     # wandb logging
     config.wandb_log = False # disabled by default
     config.wandb_entity = None
-    config.wandb_project = 'owt'
-    config.wandb_run_name = 'gpt2' # 'run' + str(time.time())
+    config.wandb_project = 'shakespeare'
+    config.wandb_run_name = 'ft-' + str(time.time())
     
     # data
     config.dataset = 'shakespeare'
@@ -48,5 +45,5 @@ def get_config():
     
     # DDP settings
     config.backend = 'nccl' # 'nccl', 'gloo', etc.
-    config.compile = True # use PyTorch 2.0 to compile the model to be faster
+    config.compile = False # # takes too little time to finetune, not worth it
     return config

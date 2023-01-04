@@ -26,9 +26,10 @@ from torch.distributed import init_process_group, destroy_process_group
 from config.train_default import get_config
 from model import GPTConfig, GPT
 
-config_flags.DEFINE_config_file("config", "configs/train_default.py", "Training configuration.", lock_config=True)
+_CONFIG = config_flags.DEFINE_config_file("config", "configs/train_default.py", "Training configuration.", lock_config=True)
 
 def main(argv):
+    print(_CONFIG)
     del argv
     cfg = flags.FLAGS.config
     
@@ -111,7 +112,7 @@ def main(argv):
         optimizer.load_state_dict(checkpoint['optimizer'])
 
     # compile the model
-    if compile:
+    if cfg.compile:
         print("compiling the model... (takes a ~minute)")
         unoptimized_model = model
         model = torch.compile(model) # requires PyTorch 2.0
@@ -125,8 +126,8 @@ def main(argv):
         out = {}
         model.eval()
         for split in ['train', 'val']:
-            losses = torch.zeros(eval_iters)
-            for k in range(eval_iters):
+            losses = torch.zeros(cfg.eval_iters)
+            for k in range(cfg.eval_iters):
                 X, Y = get_batch(split)
                 with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):
                     logits, loss = model(X, Y)
@@ -151,7 +152,7 @@ def main(argv):
 
     # logging
     if cfg.wandb_log and gpu_id == 0:
-        wandb.init(project=cfg.wandb_project, entity=cfg.wandb_entity, name=cfg.wandb_run_name, config=cfg)
+        wandb.init(project=cfg.wandb_project, entity=cfg.wandb_entity, name=cfg.wandb_run_name, config=cfg.to_dict())
 
     # training loop
     t0 = time.time()
@@ -163,12 +164,12 @@ def main(argv):
             for param_group in optimizer.param_groups:
                 param_group['lr'] = lr
         else:
-            lr = learning_rate
+            lr = cfg.learning_rate
 
         if iter_num % cfg.eval_interval == 0 and gpu_id == 0:
             losses = estimate_loss()
             print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-            if wandb_log:
+            if cfg.wandb_log:
                 wandb.log({
                     "iter": iter_num,
                     "train/loss": losses['train'],
