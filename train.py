@@ -187,8 +187,8 @@ def main(argv):
                         'iter_num': iter_num,
                         'best_val_loss': best_val_loss,
                     }
-                    print(f"saving checkpoint to {out_dir}")
-                    torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+                    print(f"saving checkpoint to {cfg.out_dir}")
+                    torch.save(checkpoint, os.path.join(cfg.out_dir, 'ckpt.pt'))
         if iter_num == 0 and cfg.eval_only:
             break
 
