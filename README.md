@@ -46,7 +46,7 @@ Training on 1 A100 40GB GPU overnight currently gets loss ~3.74, training on 4 g
 
 ## finetuning
 
-For an example of how to finetune a GPT on new text go to `data/shakespeare` and look at `prepare.py` to download the tiny shakespeare dataset and render it into a `train.bin` and `val.bin`. Unlike OpenWebText this will run in seconds. Finetuning takes very little time, e.g. on a single GPT just a few minutes. Run an example finetuning like:
+For an example of how to finetune a GPT on new text go to `data/shakespeare` and look at `prepare.py` to download the tiny shakespeare dataset and render it into a `train.bin` and `val.bin`. Unlike OpenWebText this will run in seconds. Finetuning takes very little time, e.g. on a single GPU just a few minutes. Run an example finetuning like:
 
 ```
 $ python train.py finetune_shakespeare
