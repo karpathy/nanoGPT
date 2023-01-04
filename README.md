@@ -18,9 +18,8 @@ Dependencies:
 
 Could also do the following to automatically install dependencies (in Linux):
 ```bash
-    python3 -m venv venv
+    sh env.sh
     source venv/bin/activate
-    pip3 install -r requirements.txt
 ```
 
 ## usage
