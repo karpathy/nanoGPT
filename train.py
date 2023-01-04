@@ -22,6 +22,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
 from model import GPTConfig, GPT
+from utils import guess_config
 
 # -----------------------------------------------------------------------------
 # default config values
@@ -34,7 +35,7 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 # wandb logging
 wandb_log = False # disabled by default
-wandb_entity = 'karpathy'
+wandb_entity = None
 wandb_project = 'owt'
 wandb_run_name = 'gpt2' # 'run' + str(time.time())
 # data
@@ -212,12 +213,7 @@ def get_lr(iter):
 
 # logging
 if wandb_log and gpu_id == 0:
-    wandb.init(project=wandb_project, entity=wandb_entity, name=wandb_run_name)
-    wandb.config = {
-        "batch_size": batch_size,
-        "block_size": block_size,
-        "learning_rate": learning_rate, # TODO log everything else too
-    }
+    wandb.init(project=wandb_project, entity=wandb_entity, name=wandb_run_name, config=guess_config(globals()))
 
 # training loop
 t0 = time.time()
