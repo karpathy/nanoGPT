@@ -43,7 +43,6 @@ batch_size = 8
 block_size = 1024
 # model
 device = 'cuda:0'
-device_type = 'cuda'
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 dropout = 0.1
 n_layer = 12
@@ -109,6 +108,7 @@ torch.manual_seed(1337 + gpu_id) # note: each worker gets a different seed
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 
+device_type = 'cuda'
 if device == "cpu":
     device_type = "cpu"
 
