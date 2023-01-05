@@ -116,7 +116,10 @@ class GPT(nn.Module):
         ))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
 
-        # report number of parameters (note we don't count the decoder parameters in lm_head)
+        # lm_head weight is transpose of token embedding weight
+        self.lm_head.weight = self.transformer.wte.weight
+
+        # report number of parameters (don't count decoder parameters in head as they are shared with wte weight)
         n_params = sum(p.numel() for p in self.transformer.parameters())
         print("number of parameters: %.2fM" % (n_params/1e6,))
 
