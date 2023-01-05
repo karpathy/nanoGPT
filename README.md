@@ -19,7 +19,6 @@ Dependencies:
 - `pip install tiktoken` for OpenAI's fast BPE code <3
 - `pip install wandb` for optional logging <3
 - `pip install tqdm`
-- `pip install networkx`
 
 ## usage
 
