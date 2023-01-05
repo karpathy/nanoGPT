@@ -8,7 +8,7 @@ from model import GPTConfig, GPT
 
 # -----------------------------------------------------------------------------
 out_dir = 'out'
-device = 'cuda:2'
+device = 'cuda'
 compile = False
 start = "\n" # or "<|endoftext|>" or whatever you like
 num_samples = 10 # number of samples to draw
