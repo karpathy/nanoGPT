@@ -7,15 +7,18 @@ import time
 import torch
 from model import GPTConfig, GPT
 
+# -----------------------------------------------------------------------------
 device = 'cuda'
+batch_size = 8
+block_size = 1024
+compile = True
+exec(open('configurator.py').read()) # overrides from command line or config file
+# -----------------------------------------------------------------------------
+
+dtype = torch.bfloat16 # todo make configurable
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 torch.manual_seed(1337)
-
-batch_size = 8
-block_size = 1024
-dtype = torch.bfloat16
-compile = True
 
 # data loading init
 real_data = True
