@@ -71,7 +71,7 @@ I briefly tried finetuning gpt2 a bit more on our OWT and didn't notice dramatic
 For an example of how to finetune a GPT on new text go to `data/shakespeare` and look at `prepare.py` to download the tiny shakespeare dataset and render it into a `train.bin` and `val.bin`. Unlike OpenWebText this will run in seconds. Finetuning takes very little time, e.g. on a single GPU just a few minutes. Run an example finetuning like:
 
 ```
-$ python train.py finetune_shakespeare
+$ python train.py config/finetune_shakespeare.py
 ```
 
 This will load the config parameter overrides in `config/finetune_shakespeare.py` (I didn't tune them much though). Basically, we initialize from a GPT2 checkpoint with `init_from` and train as normal, except shorter and with a small learning rate. The best checkpoint (lowest validation loss) will be in the `out_dir` directory, e.g. in `out-shakespeare` by default, per the config file. You can then run the code in `sample.py` to generate infinite Shakespeare. Note that you'll have to edit it to point to the correct `out_dir`.
@@ -102,7 +102,6 @@ Features / APIs
 - Add back fp16 support? (would need to also add back gradient scaler)
 - Add CPU support
 - Finetune the finetuning script, I think the hyperparams are not great
-- Replace poor man's configurator, and make sample.py configurable...
 - Report and track other metrics e.g. perplexity, num_tokens, MFU, ...
 - Eval zero-shot perplexities on PTB, WikiText, other related benchmarks
 
