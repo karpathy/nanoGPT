@@ -229,8 +229,12 @@ class GPT(nn.Module):
                     # all biases will not be decayed
                     no_decay.add(fpn)
                 elif pn.endswith('weight') and isinstance(m, whitelist_weight_modules):
-                    # weights of whitelist modules will be weight decayed
-                    decay.add(fpn)
+                    if fpn.startswith('lm_head'):
+                        # lm_head weight is tied to token embedding weight
+                        pass 
+                    else:
+                        # weights of whitelist modules will be weight decayed
+                        decay.add(fpn)
                 elif pn.endswith('weight') and isinstance(m, blacklist_weight_modules):
                     # weights of blacklist modules will NOT be weight decayed
                     no_decay.add(fpn)
