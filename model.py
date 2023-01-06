@@ -231,6 +231,7 @@ class GPT(nn.Module):
                 elif pn.endswith('weight') and isinstance(m, whitelist_weight_modules):
                     if fpn.startswith('lm_head'):
                         # lm_head weight is tied to token embedding weight
+                        # its weight decay is handled the same as wte.weight
                         pass 
                     else:
                         # weights of whitelist modules will be weight decayed
