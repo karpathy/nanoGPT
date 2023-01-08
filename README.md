@@ -81,6 +81,24 @@ $ python train.py config/finetune_shakespeare.py
 
 This will load the config parameter overrides in `config/finetune_shakespeare.py` (I didn't tune them much though). Basically, we initialize from a GPT2 checkpoint with `init_from` and train as normal, except shorter and with a small learning rate. The best checkpoint (lowest validation loss) will be in the `out_dir` directory, e.g. in `out-shakespeare` by default, per the config file. You can then run the code in `sample.py` to generate infinite Shakespeare. Note that you'll have to edit it to point to the correct `out_dir`.
 
+## i only have a macbook
+
+It's possible to play with the code if you only have a macbook or some other cheap computer. In this case it's much easier to just work with the Shakespeare dataset. Step 1 render the training data:
+
+```
+$ cd data/shakespeare
+$ python prepare.py
+```
+
+Then launch the training script with a baby network, here is an example:
+
+```
+$ cd ../..
+$ python train.py --dataset=shakespeare --n_layer=4 --n_head=4 --n_embd=64 --device=cpu --compile=False --eval_iters=1 --block_size=64 --batch_size=8
+```
+
+This creates a much smaller Transformer (4 layers, 4 heads, 64 embedding size), runs only on CPU, does not torch.compile the model (torch seems to give an error if you try), only evaluates for one iteration so you can see the training loop at work immediately, and also makes sure the context length is much smaller (e.g. 64 tokens), and the batch size is reduced to 8. On my MacBook Air (M1) this takes about 400ms per iteration. The network is still pretty expensive because the current vocabulary is hard-coded to be the GPT-2 BPE encodings of `vocab_size=50257`. So the embeddings table and the last layer are still massive. In the future I may modify the code to support simple character-level encoding, in which case this would fly. (The required changes would actually be pretty minimal, TODO)
+
 ## benchmarking
 
 For model benchmarking `bench.py` might be useful. It's identical to what happens in the meat of the training loop of `train.py`, but omits much of the other complexities.
@@ -105,7 +123,6 @@ Optimizations
 Features / APIs
 
 - Add back fp16 support? (would need to also add back gradient scaler)
-- Add CPU support
 - Finetune the finetuning script, I think the hyperparams are not great
 - Report and track other metrics e.g. perplexity, num_tokens, MFU, ...
 - Eval zero-shot perplexities on PTB, WikiText, other related benchmarks
