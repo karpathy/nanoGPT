@@ -13,7 +13,6 @@ import os
 import time
 import math
 
-import wandb
 import numpy as np
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -180,6 +179,7 @@ def get_lr(iter):
 
 # logging
 if wandb_log and gpu_id == 0:
+    import wandb
     wandb.init(project=wandb_project, name=wandb_run_name)
     wandb.config = {
         "batch_size": batch_size,
