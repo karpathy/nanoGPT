@@ -9,17 +9,22 @@ import torch
 from model import GPTConfig, GPT
 
 # -----------------------------------------------------------------------------
-device = 'cuda'
 batch_size = 8
 block_size = 1024
-compile = True
+seed = 1337
+device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
+dtype = 'bfloat16' # 'float32' or 'bfloat16' or 'float16'
+compile = True # use PyTorch 2.0 to compile the model to be faster
 exec(open('configurator.py').read()) # overrides from command line or config file
 # -----------------------------------------------------------------------------
 
-dtype = torch.bfloat16 # todo make configurable
+torch.manual_seed(seed)
+torch.cuda.manual_seed(seed)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
-torch.manual_seed(1337)
+device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
+ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
+ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 # data loading init
 if real_data:
@@ -80,7 +85,7 @@ if profile:
         X, Y = get_batch('train')
         for k in range(num_steps):
             X, Y = get_batch('train')
-            with torch.autocast(device_type='cuda', dtype=dtype):
+            with ctx:
                 logits, loss = model(X, Y)
             X, Y = get_batch('train')
             optimizer.zero_grad(set_to_none=True)
@@ -100,7 +105,7 @@ else:
         X, Y = get_batch('train')
         for k in range(num_steps):
             X, Y = get_batch('train')
-            with torch.autocast(device_type='cuda', dtype=dtype):
+            with ctx:
                 logits, loss = model(X, Y)
             X, Y = get_batch('train')
             optimizer.zero_grad(set_to_none=True)
