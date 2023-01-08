@@ -97,9 +97,6 @@ if master_process:
 torch.manual_seed(1337 + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
-# import wandb conditionally
-if wandb_log:
-    import wandb
 
 # poor man's data loader
 data_dir = os.path.join('data', dataset)
@@ -225,6 +222,7 @@ def get_lr(it):
 
 # logging
 if wandb_log and gpu_id == 0:
+    import wandb
     wandb.init(project=wandb_project, name=wandb_run_name)
     wandb.config = {
         "batch_size": batch_size,
