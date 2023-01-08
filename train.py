@@ -75,6 +75,12 @@ torch.manual_seed(1337 + gpu_id) # note: each worker gets a different seed
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 
+autocast_device = None
+if "cpu" in device:
+    autocast_device = "cpu"
+if "cuda" in device:
+    autocast_device = "cuda"
+
 # poor man's data loader, TODO evaluate need for actual DataLoader
 data_dir = os.path.join('data', dataset)
 train_data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
@@ -156,7 +162,10 @@ def estimate_loss():
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = get_batch(split)
-            with torch.amp.autocast(device_type=device, dtype=torch.bfloat16):
+            if autocast_device:
+                with torch.amp.autocast(device_type=autocast_device, dtype=torch.bfloat16):
+                    logits, loss = model(X, Y)
+            else:
                 logits, loss = model(X, Y)
             losses[k] = loss.item()
         out[split] = losses.mean()
@@ -226,9 +235,12 @@ while True:
         break
 
     X, Y = get_batch('train')
-    with torch.amp.autocast(device_type=device, dtype=torch.bfloat16):
+    if autocast_device:
+        with torch.amp.autocast(device_type=autocast_device, dtype=torch.bfloat16):
+            logits, loss = model(X, Y)
+    else:
         logits, loss = model(X, Y)
-
+ 
     optimizer.zero_grad(set_to_none=True)
     loss.backward()
     # TODO: gradient clipping evaluate need for
