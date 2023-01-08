@@ -1,7 +1,13 @@
 
 # nanoGPT
 
-The simplest, fastest repository for training/finetuning medium-sized GPTs. It's a re-write of [minGPT](https://github.com/karpathy/minGPT), which I think became too complicated, and which I am hesitant to now touch. Still under active development, currently working to reproduce GPT-2 on OpenWebText dataset. The code itself aims by design to be plain and readable: `train.py` is a ~300-line boilerplate training loop and `model.py` a ~300-line GPT model definition, which can optionally load the GPT-2 weights from OpenAI. That's it.
+![nanoGPT](assets/nanogpt.jpg)
+
+The simplest, fastest repository for training/finetuning medium-sized GPTs. It is a re-write of [minGPT](https://github.com/karpathy/minGPT) that prioritizes teeth over education. Still under active development, but currently the file `train.py` reproduces GPT-2 (124M) on OpenWebText, running on a single 8XA100 40GB node in 38 hours of training. The code itself aims by design to be plain and readable: `train.py` is a ~300-line boilerplate training loop and `model.py` a ~300-line GPT model definition, which can optionally load the GPT-2 weights from OpenAI. That's it.
+
+![repro124m](assets/gpt2_124M_loss.png)
+
+Because the code is so small and simple, it is very easy to hack to your needs, train new models from scratch, or fintune pretrained checkpoints (e.g. biggest one currently available as a starting point would be the GPT-2 1.3B model from OpenAI).
 
 ## install
 
@@ -17,7 +23,7 @@ Dependencies:
 
 ## usage
 
-To render a dataset we first tokenize some documents into one simple long 1D array of indices. E.g. for OpenWebText see:
+To render a dataset we first tokenize some documents into one simple long 1D array of token indices. E.g. for OpenWebText run:
 
 ```
 $ cd data/openwebtext
@@ -36,13 +42,13 @@ To train using PyTorch Distributed Data Parallel (DDP) run the script with torch
 $ torchrun --standalone --nproc_per_node=4 train.py
 ```
 
-To my knowledge, running this with the current script with the GPT-2 hyperparameters should reproduce the GPT-2 result, provided that OpenWebText ~= WebText. I'd like to make the code more efficient before attempting to go there. Once some checkpoints are written to the output directory (e.g. `./out` by default), we can sample from the model:
+Once some checkpoints are written to the output directory (e.g. `./out` by default), we can sample from the model:
 
 ```
 $ python sample.py
 ```
 
-Training on 1 A100 40GB GPU overnight currently gets loss ~3.74, training on 4 gets ~3.60. Training on an 8 x A100 40GB node for 400,000 iters (~1 day) atm gets down to 3.1. Random chance at init is -ln(1/50257) = 10.82. Which brings us to baselines.
+Training on 1 A100 40GB GPU overnight currently gets loss ~3.74, training on 4 gets ~3.60. Training on an 8 x A100 40GB node for ~500,000 iters (~1 day) atm gets down to ~3.1. Random chance at init is -ln(1/50257) = 10.82. Which brings us to baselines.
 
 ## baselines
 
