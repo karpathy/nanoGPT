@@ -156,7 +156,7 @@ def estimate_loss():
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = get_batch(split)
-            with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):
+            with torch.amp.autocast(device_type=device, dtype=torch.bfloat16):
                 logits, loss = model(X, Y)
             losses[k] = loss.item()
         out[split] = losses.mean()
@@ -226,7 +226,7 @@ while True:
         break
 
     X, Y = get_batch('train')
-    with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):
+    with torch.amp.autocast(device_type=device, dtype=torch.bfloat16):
         logits, loss = model(X, Y)
 
     optimizer.zero_grad(set_to_none=True)
