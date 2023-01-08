@@ -3,11 +3,11 @@
 
 ![nanoGPT](assets/nanogpt.jpg)
 
-The simplest, fastest repository for training/finetuning medium-sized GPTs. It is a re-write of [minGPT](https://github.com/karpathy/minGPT) that prioritizes teeth over education. Still under active development, but currently the file `train.py` reproduces GPT-2 (124M) on OpenWebText, running on a single 8XA100 40GB node in 38 hours of training. The code itself aims by design to be plain and readable: `train.py` is a ~300-line boilerplate training loop and `model.py` a ~300-line GPT model definition, which can optionally load the GPT-2 weights from OpenAI. That's it.
+The simplest, fastest repository for training/finetuning medium-sized GPTs. It is a rewrite of [minGPT](https://github.com/karpathy/minGPT) that prioritizes teeth over education. Still under active development, but currently the file `train.py` reproduces GPT-2 (124M) on OpenWebText, running on a single 8XA100 40GB node in 38 hours of training. The code itself is plain and readable: `train.py` is a ~300-line boilerplate training loop and `model.py` a ~300-line GPT model definition, which can optionally load the GPT-2 weights from OpenAI. That's it.
 
 ![repro124m](assets/gpt2_124M_loss.png)
 
-Because the code is so small and simple, it is very easy to hack to your needs, train new models from scratch, or fintune pretrained checkpoints (e.g. biggest one currently available as a starting point would be the GPT-2 1.3B model from OpenAI).
+Because the code is so simple, it is very easy to hack to your needs, train new models from scratch, or finetune pretrained checkpoints (e.g. biggest one currently available as a starting point would be the GPT-2 1.3B model from OpenAI).
 
 ## install
 
@@ -16,7 +16,7 @@ Dependencies:
 - [pytorch](https://pytorch.org) <3
 - [numpy](https://numpy.org/install/) <3
 - `pip install datasets` for huggingface datasets <3 (if you want to download + preprocess OpenWebText)
-- `pip install tiktoken` for OpenAI's fast bpe code <3
+- `pip install tiktoken` for OpenAI's fast BPE code <3
 - `pip install wandb` for optional logging <3
 - `pip install tqdm`
 - `pip install networkx`
@@ -30,7 +30,7 @@ $ cd data/openwebtext
 $ python prepare.py
 ```
 
-To download and tokenize the [OpenWebText](https://huggingface.co/datasets/openwebtext) dataset. This will create a `train.bin` and `val.bin` which holds the GPT2 BPE token ids in one sequence, stored as raw uint16 bytes. Then we're ready to kick off training. The training script currently by default tries to reproduce the smallest GPT-2 released by OpenAI, i.e. the 124M version of GPT-2. We can demo train as follows on a single device, though I encourage you to read the code and see all of the settings and paths up top in the file:
+To download and tokenize the [OpenWebText](https://huggingface.co/datasets/openwebtext) dataset. This will create a `train.bin` and `val.bin` which holds the GPT2 BPE token ids in one sequence, stored as raw uint16 bytes. Then we're ready to kick off training. The training script currently by default tries to reproduce the smallest GPT-2 released by OpenAI, i.e. the 124M version of GPT-2. We can train as follows on a single device, though I encourage you to read the code and see all of the settings and paths up top in the file:
 
 ```
 $ python train.py
@@ -84,7 +84,7 @@ This will load the config parameter overrides in `config/finetune_shakespeare.py
 
 ## benchmarking
 
-For model benchmarking `bench.py` might be useful. It's identical what happens in the meat of the training loop of `train.py`, but omits much of the other complexities.
+For model benchmarking `bench.py` might be useful. It's identical to what happens in the meat of the training loop of `train.py`, but omits much of the other complexities.
 
 ## efficiency notes
 
@@ -114,7 +114,7 @@ Features / APIs
 Suspiciousness
 
 - Current initialization (PyTorch default) departs from GPT-2. In a very quick experiment I found it to be superior to the one suggested in the papers, but that can't be right?
-- I don't currently seem to need gradient clipping but it is very often used (?). Nothing is exploding so far at these scales but maybe I'm laeving performance on the table. Evaluate with/without.
+- I don't currently seem to need gradient clipping but it is very often used (?). Nothing is exploding so far at these scales but maybe I'm leaving performance on the table. Evaluate with/without.
 - I am still not 100% confident that my GPT-2 small reproduction hyperparameters are good, if someone has reproduced GPT-2 I'd be eager to exchange notes ty
 - I keep seeing different values cited for weight decay and AdamW betas, look into
 - I can't exactly reproduce Chinchilla paper results, see [scaling_laws.ipynb](scaling_laws.ipynb) notebook
