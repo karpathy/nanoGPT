@@ -38,6 +38,7 @@ wandb_run_name = 'gpt2' # 'run' + str(time.time())
 # data
 dataset = 'openwebtext'
 batch_size = 12
+gradient_accumulation_steps = 1
 block_size = 1024
 # model
 n_layer = 12
@@ -87,9 +88,12 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 data_dir = os.path.join('data', dataset)
 train_data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
 val_data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
+
+assert batch_size % gradient_accumulation_steps == 0, "Batch size must be divisible by gradient accumulation steps"
+micro_batch_size = batch_size // gradient_accumulation_steps
 def get_batch(split):
     data = train_data if split == 'train' else val_data
-    ix = torch.randint(len(data) - block_size, (batch_size,))
+    ix = torch.randint(len(data) - block_size, (micro_batch_size,))
     x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
     y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
     x, y = x.to(device), y.to(device)
@@ -233,12 +237,13 @@ while True:
     if iter_num == 0 and eval_only:
         break
 
-    X, Y = get_batch('train')
-    with ctx:
-        logits, loss = model(X, Y)
-
     optimizer.zero_grad(set_to_none=True)
-    loss.backward()
+    for _ in range(gradient_accumulation_steps):
+        X, Y = get_batch('train')
+        with ctx:
+            logits, loss = model(X, Y)
+        loss.backward()
+
     # TODO: gradient clipping evaluate need for
     optimizer.step()
 
