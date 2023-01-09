@@ -242,6 +242,7 @@ while True:
         X, Y = get_batch('train')
         with ctx:
             logits, loss = model(X, Y)
+            loss /= gradient_accumulation_steps
         loss.backward()
 
     # TODO: gradient clipping evaluate need for
