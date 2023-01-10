@@ -206,9 +206,11 @@ if comet_log:
     import comet_ml 
     experiment = comet_ml.Experiment(project_name=comet_project)
     experiment.set_name(comet_run_name)
-    experiment.log_parameter("batch_size", batch_size)
-    experiment.log_parameter("block_size", block_size)
-    experiment.log_parameter("learning_rate", learning_rate)
+    experiment.log_parameters({
+        "batch_size": batch_size,
+        "block_size": block_size,
+        "learning_rate": learning_rate, # TODO log everything else too
+    })
 
 
 # training loop
@@ -234,10 +236,13 @@ while True:
                 "lr": lr,
             })
         if comet_log:
-            experiment.log_metric('iter', iter_num)
-            experiment.log_metric('train/loss', losses['train'])
-            experiment.log_metric('val/loss', losses['val'])
-            experiment.log_metric('lr', lr)
+            experiment.log_metrics({
+                "iter": iter_num,
+                "train/loss": losses['train'],
+                "val/loss": losses['val'],
+                "lr": lr,
+            }, step=iter_num)
+        
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
             raw_model = model.module if ddp else model
