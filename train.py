@@ -35,6 +35,12 @@ init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 wandb_log = False # disabled by default
 wandb_project = 'owt'
 wandb_run_name = 'gpt2' # 'run' + str(time.time())
+
+# comet logging 
+comet_log = False 
+comet_project = 'owt'
+comet_run_name = 'gpt2'
+
 # data
 dataset = 'openwebtext'
 batch_size = 12
@@ -195,6 +201,16 @@ if wandb_log and gpu_id == 0:
         "learning_rate": learning_rate, # TODO log everything else too
     }
 
+# comet logging 
+if comet_log:
+    import comet_ml 
+    experiment = comet_ml.Experiment(project_name=comet_project)
+    experiment.set_name(comet_run_name)
+    experiment.log_parameter("batch_size", batch_size)
+    experiment.log_parameter("block_size", block_size)
+    experiment.log_parameter("learning_rate", learning_rate)
+
+
 # training loop
 t0 = time.time()
 while True:
@@ -217,6 +233,11 @@ while True:
                 "val/loss": losses['val'],
                 "lr": lr,
             })
+        if comet_log:
+            experiment.log_metric('iter', iter_num)
+            experiment.log_metric('train/loss', losses['train'])
+            experiment.log_metric('val/loss', losses['val'])
+            experiment.log_metric('lr', lr)
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
             raw_model = model.module if ddp else model
