@@ -1,9 +1,12 @@
 import requests
 import tiktoken
 import numpy as np
+import logging
 
 class Dataset:
     def __init__(self, data_url = None) -> None:
+        # log event
+        logging.debug(f"Dataset created with data_url: {data_url}")
         self.data_url = data_url
         self.input_data = None
         self.train_ids = None
@@ -11,6 +14,7 @@ class Dataset:
 
     def fetch(self):
         data_url = self.data_url or 'https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt' # shakespeare example if not set
+        logging.debug(f"Fetching data from {data_url}")
         self.input_data = requests.get(data_url, timeout=1024).text
 
     def save(self, path):
@@ -26,6 +30,8 @@ class Dataset:
         n = len(data)
         train_data = data[:int(n*0.9)]
         val_data = data[int(n*0.9):]
+
+        logging.debug(f"Parsing data with {n} characters")
 
         # encode with tiktoken gpt2 bpe
         enc = tiktoken.get_encoding("gpt2")
