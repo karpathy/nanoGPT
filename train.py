@@ -115,9 +115,10 @@ elif init_from == 'resume':
     ckpt_path = os.path.join(out_dir, 'ckpt.pt')
     checkpoint = torch.load(ckpt_path, map_location=device)
     checkpoint_model_args = checkpoint['model_args']
-    for k, v in model_args.items():
-        assert checkpoint_model_args[k] == v, "for now"
-        # TODO: think through how passed in params should interact with checkpoint params
+    
+    # copy model_args from checkpoint model args
+    # TODO: think through how passed in params should interact with checkpoint params
+    model_args = checkpoint_model_args.copy()
     gptconf = GPTConfig(**model_args)
     model = GPT(gptconf)
     state_dict = checkpoint['model']
