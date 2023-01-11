@@ -2,6 +2,7 @@
 Sample from a trained model
 """
 import os
+import pickle
 from contextlib import nullcontext
 import torch
 import tiktoken
@@ -45,9 +46,28 @@ model.to(device)
 if compile:
     model = torch.compile(model) # requires PyTorch 2.0 (optional)
 
+# look for the meta pickle in case it is available in the dataset folder
+load_meta = False
+if 'config' in checkpoint and 'dataset' in checkpoint['config']: # older checkpoints might not have these...
+    meta_path = os.path.join('data', checkpoint['config']['dataset'], 'meta.pkl')
+    load_meta = os.path.exists(meta_path)
+if load_meta:
+    print(f"Loading meta from {meta_path}...")
+    with open(meta_path, 'rb') as f:
+        meta = pickle.load(f)
+    # TODO want to make this more general to arbitrary encoder/decoder schemes
+    stoi, itos = meta['stoi'], meta['itos']
+    encode = lambda s: [stoi[c] for c in s]
+    decode = lambda l: ''.join([itos[i] for i in l])
+else:
+    # ok let's assume gpt-2 encodings by default
+    print("No meta.pkl found, assuming GPT-2 encodings...")
+    enc = tiktoken.get_encoding("gpt2")
+    encode = lambda s: enc.encode(s, allowed_special={"<|endoftext|>"})
+    decode = lambda l: enc.decode(l)
+
 # encode the beginning of the prompt
-enc = tiktoken.get_encoding("gpt2")
-start_ids = enc.encode(start, allowed_special={"<|endoftext|>"})
+start_ids = encode(start)
 x = (torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...])
 
 # run generation
@@ -55,5 +75,5 @@ with torch.no_grad():
     with ctx:
         for k in range(num_samples):
             y = model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k)
-        print(enc.decode(y[0].tolist()))
-        print('---------------')
+            print(decode(y[0].tolist()))
+            print('---------------')
