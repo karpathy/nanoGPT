@@ -50,6 +50,8 @@ class Dataset:
 
 
 if __name__ == "__main__":
+    # Set logging to debug
+    logging.basicConfig(level=logging.DEBUG)
     # Example using shakespeare
     ds = Dataset()
     ds.fetch()
