@@ -37,7 +37,7 @@ wandb_project = 'owt'
 wandb_run_name = 'gpt2' # 'run' + str(time.time())
 
 # comet logging 
-comet_log = False 
+comet_log = False
 comet_project = 'owt'
 comet_run_name = 'gpt2'
 
@@ -204,11 +204,7 @@ if comet_log:
     import comet_ml 
     experiment = comet_ml.Experiment(project_name=comet_project)
     experiment.set_name(comet_run_name)
-    experiment.log_parameters({
-        "batch_size": batch_size,
-        "block_size": block_size,
-        "learning_rate": learning_rate, # TODO log everything else too
-    })
+    experiment.log_parameters(config)
 
 
 # training loop
@@ -235,12 +231,10 @@ while True:
             })
         if comet_log:
             experiment.log_metrics({
-                "iter": iter_num,
                 "train/loss": losses['train'],
                 "val/loss": losses['val'],
                 "lr": lr,
             }, step=iter_num)
-        
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
             raw_model = model.module if ddp else model
@@ -273,6 +267,7 @@ while True:
     if iter_num % log_interval == 0 and gpu_id == 0:
         lossf = loss.item() # loss as float. TODO CPU-GPU sync: profile, make sure not slow af
         print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms")
+      
     iter_num += 1
 
     # termination conditions
