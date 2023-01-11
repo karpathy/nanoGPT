@@ -1,4 +1,3 @@
-import os
 import requests
 import tiktoken
 import numpy as np
@@ -42,3 +41,13 @@ class Dataset:
     def export(self, path, name):
         self.train_ids.tofile(path + name + '_train.bin')
         self.val_ids.tofile(path + name + '_val.bin')
+
+
+if __name__ == "__main__":
+    # Example using shakespeare
+    ds = Dataset()
+    ds.fetch()
+    ds.save('input.txt')
+    ds.load('input.txt')
+    ds.parse()
+    ds.export('./', 'shakespeare')
