@@ -55,7 +55,8 @@ dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
 learning_rate = 6e-4 # max learning rate
 max_iters = 600000 # total number of training iterations
 weight_decay = 1e-2
-betas = (0.9, 0.95)
+beta1 = 0.9
+beta2 = 0.95
 # learning rate decay settings
 decay_lr = True # whether to decay the learning rate
 warmup_iters = 2000 # how many steps to warm up for
@@ -68,7 +69,9 @@ device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
 dtype = 'bfloat16' # 'float32' or 'bfloat16'
 compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
+config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
+config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
 
 # various inits, derived attributes, I/O setup
@@ -175,7 +178,7 @@ model.to(device)
 scaler = torch.amp.GradScaler(enabled=(dtype == 'float16'))
 
 # optimizer
-optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
+optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2))
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory
@@ -229,12 +232,7 @@ def get_lr(it):
 # logging
 if wandb_log and gpu_id == 0:
     import wandb
-    wandb.init(project=wandb_project, name=wandb_run_name)
-    wandb.config = {
-        "batch_size": batch_size,
-        "block_size": block_size,
-        "learning_rate": learning_rate, # TODO log everything else too
-    }
+    wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
 t0 = time.time()
