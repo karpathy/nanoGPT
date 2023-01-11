@@ -97,7 +97,21 @@ $ cd ../..
 $ python train.py --dataset=shakespeare --n_layer=4 --n_head=4 --n_embd=64 --device=cpu --compile=False --eval_iters=1 --block_size=64 --batch_size=8
 ```
 
-This creates a much smaller Transformer (4 layers, 4 heads, 64 embedding size), runs only on CPU, does not torch.compile the model (torch seems to give an error if you try), only evaluates for one iteration so you can see the training loop at work immediately, and also makes sure the context length is much smaller (e.g. 64 tokens), and the batch size is reduced to 8. On my MacBook Air (M1) this takes about 400ms per iteration. The network is still pretty expensive because the current vocabulary is hard-coded to be the GPT-2 BPE encodings of `vocab_size=50257`. So the embeddings table and the last layer are still massive. In the future I may modify the code to support simple character-level encoding, in which case this would fly. (The required changes would actually be pretty minimal, TODO)
+This creates a much smaller Transformer (4 layers, 4 heads, 64 embedding size), runs only on CPU, does not torch.compile the model (torch seems to give an error if you try), only evaluates for one iteration so you can see the training loop at work immediately, and also makes sure the context length is much smaller (e.g. 64 tokens), and the batch size is reduced to 8. On my MacBook Air (M1) this takes about 400ms per iteration. The network is still pretty expensive because the current vocabulary is hard-coded to be the GPT-2 BPE encodings of `vocab_size=50257`. So the embeddings table and the last layer are still massive.
+
+You can now also work with tiny shakespeare on the character level, see `data/shakespeare_char` and run `prepare.py` to tokenize it on the character level. If you have a GPU you can use the decent starter settings in a provided config file, train as follows:
+
+```
+$ python train.py config/train_shakespeare_char.py
+```
+
+But if all you have is a CPU you may want to further override the settings down another notch, e.g.:
+
+```
+$ python train.py config/train_shakespeare_char.py --device=cpu --compile=False --eval_iters=20 --log_interval=1 --block_size=64 --batch_size=8
+```
+
+Where we decrease the context length to just 64 characters and only use a batch size of 8.
 
 ## benchmarking
 
