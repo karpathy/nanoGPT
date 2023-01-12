@@ -45,9 +45,9 @@ class Dataset:
         self.train_ids = np.array(train_ids, dtype=np.uint16)
         self.val_ids = np.array(val_ids, dtype=np.uint16)
     
-    def export(self, path, name):
-        self.train_ids.tofile(path + name + '_train.bin')
-        self.val_ids.tofile(path + name + '_val.bin')
+    def export(self, path):
+        self.train_ids.tofile(path + 'train.bin')
+        self.val_ids.tofile(path + 'val.bin')
 
 
 if __name__ == "__main__":
@@ -60,4 +60,4 @@ if __name__ == "__main__":
         ds.save('input.txt')
     ds.load('input.txt')
     ds.parse()
-    ds.export('./', 'shakespeare')
+    ds.export('./')
