@@ -200,7 +200,7 @@ if wandb_log and gpu_id == 0:
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # comet logging 
-if comet_log:
+if comet_log and gpu_id == 0:
     import comet_ml 
     experiment = comet_ml.Experiment(project_name=comet_project)
     experiment.set_name(comet_run_name)
