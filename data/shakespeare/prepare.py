@@ -1,3 +1,4 @@
+import os
 import requests
 import tiktoken
 import numpy as np
@@ -54,8 +55,9 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
     # Example using shakespeare
     ds = Dataset()
-    ds.fetch()
-    ds.save('input.txt')
+    if not os.path.exists('input.txt'):
+        ds.fetch()
+        ds.save('input.txt')
     ds.load('input.txt')
     ds.parse()
     ds.export('./', 'shakespeare')
