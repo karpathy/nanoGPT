@@ -15,6 +15,7 @@ Dependencies:
 
 - [pytorch](https://pytorch.org) <3
 - [numpy](https://numpy.org/install/) <3
+- `pip install transformers` for huggingface transformers <3 (to load GPT-2 checkpoints)
 - `pip install datasets` for huggingface datasets <3 (if you want to download + preprocess OpenWebText)
 - `pip install tiktoken` for OpenAI's fast BPE code <3
 - `pip install wandb` for optional logging <3
@@ -154,6 +155,10 @@ Results
 
 - Actually reproduce GPT-2 results and have clean configs that reproduce the result. It was estimated ~3 years ago that the training cost of 1.5B model was ~$50K (?). Sounds a bit too high.
 
-# acknowledgements
+## troubleshooting
+
+- Note that by default this repo uses PyTorch 2.0 (i.e. `torch.compile`). This is fairly new and experimental, and not yet available on all platforms (e.g. Windows). If you're running into related error messages try to disable this by adding `--compile=False` flag. This will slow down the code but at least it will run.
+
+## acknowledgements
 
 Thank you [Lambda labs](https://lambdalabs.com) for supporting the training costs of nanoGPT experiments.
