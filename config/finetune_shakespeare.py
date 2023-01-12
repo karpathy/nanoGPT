@@ -13,7 +13,7 @@ compile = False # takes too little time to finetune, not worth it
 always_save_checkpoint = True
 
 dataset = 'shakespeare'
-init_from = 'gpt2-xl'
+init_from = 'gpt2-medium'
 batch_size = 1
 block_size = 512
 
