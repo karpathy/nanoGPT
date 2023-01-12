@@ -3,7 +3,7 @@
 
 ![nanoGPT](assets/nanogpt.jpg)
 
-The simplest, fastest repository for training/finetuning medium-sized GPTs. It is a rewrite of [minGPT](https://github.com/karpathy/minGPT) that prioritizes teeth over education. Still under active development, but currently the file `train.py` reproduces GPT-2 (124M) on OpenWebText, running on a single 8XA100 40GB node in 38 hours of training. The code itself is plain and readable: `train.py` is a ~300-line boilerplate training loop and `model.py` a ~300-line GPT model definition, which can optionally load the GPT-2 weights from OpenAI. That's it.
+The simplest, fastest repository for training/finetuning medium-sized GPTs. It is a rewrite of [minGPT](https://github.com/karpathy/minGPT) that prioritizes teeth over education. Still under active development, but currently the file `train.py` reproduces GPT-2 (124M) on OpenWebText, running on a single 8XA100 40GB node in 38 hours of training. The code itself is plain and readable: `train.py` is a ~300-line boilerplate training loop and `model.py` is a ~300-line GPT model definition, which can optionally load the GPT-2 weights from OpenAI. That's it.
 
 ![repro124m](assets/gpt2_124M_loss.png)
 
@@ -48,7 +48,7 @@ Once some checkpoints are written to the output directory (e.g. `./out` by defau
 $ python sample.py
 ```
 
-Training on 1 A100 40GB GPU overnight currently gets loss ~3.74, training on 4 gets ~3.60. Training on an 8 x A100 40GB node for ~500,000 iters (~1 day) atm gets down to ~3.1. Random chance at init is -ln(1/50257) = 10.82. Which brings us to baselines.
+Training on 1 A100 40GB GPU overnight currently gets a loss of ~3.74, training on 4 gets ~3.60. Training on an 8 x A100 40GB node for ~500,000 iters (~1 day) atm gets down to ~3.1. The random chance at init is -ln(1/50257) = 10.82. This brings us to baselines.
 
 ## baselines
 
@@ -82,7 +82,7 @@ $ python train.py config/finetune_shakespeare.py
 
 This will load the config parameter overrides in `config/finetune_shakespeare.py` (I didn't tune them much though). Basically, we initialize from a GPT2 checkpoint with `init_from` and train as normal, except shorter and with a small learning rate. The best checkpoint (lowest validation loss) will be in the `out_dir` directory, e.g. in `out-shakespeare` by default, per the config file. You can then run the code in `sample.py` to generate infinite Shakespeare. Note that you'll have to edit it to point to the correct `out_dir`.
 
-## i only have a macbook
+## I only have a MacBook
 
 It's possible to play with the code if you only have a macbook or some other cheap computer. In this case it's much easier to just work with the Shakespeare dataset. Step 1 render the training data:
 
