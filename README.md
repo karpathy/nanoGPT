@@ -182,4 +182,4 @@ Results
 
 ## acknowledgements
 
-Thank you [Lambda labs](https://lambdalabs.com) for supporting the training costs of nanoGPT experiments.
+All nanoGPT experiments are powered by GPUs on [Lambda labs](https://lambdalabs.com), the best Cloud GPU provider thank you :)
