@@ -36,13 +36,24 @@ To download and tokenize the [OpenWebText](https://huggingface.co/datasets/openw
 $ python train.py
 ```
 
-To train using PyTorch Distributed Data Parallel (DDP) run the script with torchrun. For example to train on a node with 4 GPUs run:
+If you do not have GPU also add `--device=cpu --compile=False`, though you'd have to also adjust the default network size to be much much smaller (see "i only have a macbook" section below). To train using PyTorch Distributed Data Parallel (DDP) run the script with torchrun. For example to train on a node with 4 GPUs run:
 
 ```
 $ torchrun --standalone --nproc_per_node=4 train.py
 ```
 
-Once some checkpoints are written to the output directory (e.g. `./out` by default), we can sample from the model:
+If you're in a cluster environment and are blessed with multiple GPU nodes you can make GPU go brrrr e.g. across 2 nodes like:
+
+```
+Run on the first (master) node with example IP 123.456.123.456:
+$ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=0 --master_addr=123.456.123.456 --master_port=1234 train.py
+Run on the worker node:
+$ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 --master_addr=123.456.123.456 --master_port=1234 train.py
+```
+
+It is a good idea to benchmark your interconnect (e.g. iperf3). In particular, if you don't have Infiniband then also prepend `NCCL_IB_DISABLE=1` to the above launches. Your multinode training will work, but most likely _crawl_.
+
+By default checkpoints are periodically written to the `--out_dir` (`./out` by default). Once we have one, we can sample from the model:
 
 ```
 $ python sample.py
