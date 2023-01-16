@@ -9,10 +9,11 @@ To run with DDP on 4 gpus on 1 node, example:
 $ torchrun --standalone --nproc_per_node=4 train.py
 
 To run with DDP on 4 gpus across 2 nodes, example:
-- Run on the first (master) node:
+- Run on the first (master) node with example IP 123.456.123.456:
 $ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=0 --master_addr=123.456.123.456 --master_port=1234 train.py
 - Run on the worker node:
 $ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 --master_addr=123.456.123.456 --master_port=1234 train.py
+(If your cluster does not have Infiniband interconnect prepend NCCL_IB_DISABLE=1)
 """
 
 import os
@@ -79,11 +80,11 @@ config = {k: globals()[k] for k in config_keys} # will be useful for logging
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
 if ddp:
     init_process_group(backend=backend)
-    DDP_RANK = int(os.environ['RANK'])
-    DDP_LOCAL_RANK = int(os.environ['LOCAL_RANK'])
-    device = f'cuda:{DDP_LOCAL_RANK}'
-    master_process = DDP_RANK == 0 # this process will do logging, checkpointing etc.
-    seed_offset = DDP_RANK # each process gets a different seed
+    ddp_rank = int(os.environ['RANK'])
+    ddp_local_rank = int(os.environ['LOCAL_RANK'])
+    device = f'cuda:{ddp_local_rank}'
+    master_process = ddp_rank == 0 # this process will do logging, checkpointing etc.
+    seed_offset = ddp_rank # each process gets a different seed
 else:
     # if not ddp, we are running on a single gpu, and one process
     master_process = True
@@ -181,7 +182,7 @@ if compile:
 
 # wrap model into DDP container
 if ddp:
-    model = DDP(model, device_ids=[DDP_LOCAL_RANK])
+    model = DDP(model, device_ids=[ddp_local_rank])
 
 @torch.no_grad()
 def estimate_loss():
