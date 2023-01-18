@@ -1,7 +1,7 @@
 
 # nanoGPT
 
-(https://dcbadge.vercel.app/api/server/3zy8kqD9Cp?compact=true&style=flat)](https://discord.gg/3zy8kqD9Cp)
+[![](https://dcbadge.vercel.app/api/server/3zy8kqD9Cp?compact=true&style=flat)](https://discord.gg/3zy8kqD9Cp)
 
 ![nanoGPT](assets/nanogpt.jpg)
 
