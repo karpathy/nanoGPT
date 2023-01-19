@@ -1,5 +1,12 @@
 
-# nanoGPT
+# nanoGPT - with Fabric ⚡
+
+**This is Karpathy's nanoGPT repo with the addition of [Fabric](https://pytorch-lightning.readthedocs.io/en/latest/fabric/fabric.html).**
+**Fabric is fast, lightweight, and scales your models without boilerplate code.**
+**See [train_fabric.py](train_fabric.py)**
+
+----
+
 
 ![nanoGPT](assets/nanogpt.jpg)
 
