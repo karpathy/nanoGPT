@@ -17,13 +17,13 @@ if not os.path.exists('input.txt'):
 
 with open('input.txt', 'r') as f:
     data = f.read()
-print("length of dataset in characters: ", len(data))
+print(f"length of dataset in characters: {len(data):,}")
 
 # get all the unique characters that occur in this text
 chars = sorted(list(set(data)))
 vocab_size = len(chars)
 print("all the unique characters:", ''.join(chars))
-print("vocab size:", vocab_size)
+print(f"vocab size: {vocab_size:,}")
 
 # create a mapping from characters to integers
 stoi = { ch:i for i,ch in enumerate(chars) }
@@ -41,8 +41,8 @@ val_data = data[int(n*0.9):]
 # encode both to integers
 train_ids = encode(train_data)
 val_ids = encode(val_data)
-print(f"train has {len(train_ids)} tokens")
-print(f"val has {len(val_ids)} tokens")
+print(f"train has {len(train_ids):,} tokens")
+print(f"val has {len(val_ids):,} tokens")
 
 # export to bin files
 train_ids = np.array(train_ids, dtype=np.uint16)
