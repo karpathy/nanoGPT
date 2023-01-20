@@ -125,6 +125,8 @@ $ python train.py config/train_shakespeare_char.py --device=cpu --compile=False 
 
 Where we decrease the context length to just 64 characters and only use a batch size of 8.
 
+Finally, on Apple Silicon Macbooks you can use device `--device mps` ("Metal Performance Shaders"), which can significantly accelerate training (2-3X). You will need a specific version of PyTorch. See [Issue 28](https://github.com/karpathy/nanoGPT/issues/28).
+
 ## benchmarking
 
 For model benchmarking `bench.py` might be useful. It's identical to what happens in the meat of the training loop of `train.py`, but omits much of the other complexities.
