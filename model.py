@@ -39,27 +39,42 @@ class CausalSelfAttention(nn.Module):
                                     .view(1, 1, config.block_size, config.block_size))
         self.n_head = config.n_head
         self.n_embd = config.n_embd
+        self.block_size = config.block_size
 
-    def forward(self, x):
-        B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+    def forward(self, x, past_kv_proj=None):
+        B, Q, C = x.size() # batch size, query sequence length, embedding dimensionality (n_embd)
+        KV = Q # by default, we have the same number of keys/values and queries
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k ,v  = self.c_attn(x).split(self.n_embd, dim=2)
-        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
 
-        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
+        k = k.view(B, KV, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, KV, hs)
+        q = q.view(B, Q, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, Q, hs)
+        v = v.view(B, KV, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, KV, hs)
+
+        if past_kv_proj is not None:
+            # if we have past KV projections, combine them with the present ones
+            past_k_proj, past_v_proj = past_kv_proj
+            assert past_k_proj.size() == past_v_proj.size()
+            k = torch.cat((past_k_proj, k), dim=2)
+            v = torch.cat((past_v_proj, v), dim=2)
+            KV = k.size(2)
+
+        assert KV <= self.block_size, f'Cannot attend to key/value sequence of length {KV}, block size is only {self.block_size}'
+
+        # causal self-attention; Self-attend: (B, nh, Q, hs) x (B, nh, hs, KV) -> (B, nh, Q, KV)
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-        att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+        att = att.masked_fill(self.bias[:,:,KV-Q:KV,:KV] == 0, float('-inf'))
         att = F.softmax(att, dim=-1)
         att = self.attn_dropout(att)
-        y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
+        y = att @ v # (B, nh, Q, KV) x (B, nh, KV, hs) -> (B, nh, Q, hs)
+        y = y.transpose(1, 2).contiguous().view(B, Q, C) # re-assemble all head outputs side by side
 
         # output projection
         y = self.resid_dropout(self.c_proj(y))
-        return y
+        # return the new KV projections only if we had a past to attend to
+        present_kv_proj = (k, v) if past_kv_proj is not None else None
+        return y, present_kv_proj
 
 class MLP(nn.Module):
 
@@ -85,10 +100,11 @@ class Block(nn.Module):
         self.ln_2 = nn.LayerNorm(config.n_embd)
         self.mlp = MLP(config)
 
-    def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
+    def forward(self, x, past_kv_proj=None):
+        attn_res, present_kv_proj = self.attn(self.ln_1(x), past_kv_proj)
+        x = x + attn_res
         x = x + self.mlp(self.ln_2(x))
-        return x
+        return x, present_kv_proj
 
 @dataclass
 class GPTConfig:
@@ -125,18 +141,32 @@ class GPT(nn.Module):
         n_params = sum(p.numel() for p in self.parameters())
         print("number of parameters: %.2fM" % (n_params/1e6,))
 
-    def forward(self, idx, targets=None):
+    def forward(self, idx, targets=None, past_kv_proj=None, start_pos=0):
         device = idx.device
         b, t = idx.size()
         assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
-        pos = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(0) # shape (1, t)
+        pos = torch.arange(start_pos, start_pos + t, dtype=torch.long, device=device).unsqueeze(0) # shape (1, t)
 
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (1, t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
-        for block in self.transformer.h:
-            x = block(x)
+
+        if past_kv_proj is not None:
+            # we have past KV projections, so this is inference
+            assert targets is None
+            # collect the new KV projections for every layer to return them at the end
+            present_kv_proj = []
+            for i, block in enumerate(self.transformer.h):
+                x, layer_kv_proj = block(x, past_kv_proj[i])
+                present_kv_proj.append(layer_kv_proj)
+        else:
+            # we have no past, so this is training
+            # ignore the new KV projections completely
+            present_kv_proj = None
+            for block in self.transformer.h:
+                x, _ = block(x, None)
+
         x = self.transformer.ln_f(x)
 
         if targets is not None:
@@ -148,7 +178,7 @@ class GPT(nn.Module):
             logits = self.lm_head(x[:, [-1], :]) # note: using list [-1] to preserve the time dim
             loss = None
 
-        return logits, loss
+        return logits, loss, present_kv_proj
 
     def crop_block_size(self, block_size):
         # model surgery to decrease the block size if necessary
@@ -272,11 +302,23 @@ class GPT(nn.Module):
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
         Most likely you'll want to make sure to be in model.eval() mode of operation for this.
         """
+        B, T = idx.size()
+        assert T + max_new_tokens <= self.config.block_size, \
+            f'Cannot generate {max_new_tokens} from a sequence of length {T}, since block size is just {self.config.block_size}'
+        empty_history = lambda: torch.empty(B, self.config.n_head, 0, self.config.n_embd // self.config.n_head, device=idx.device)
+        past_kv_proj = [(empty_history(), empty_history()) for _ in range(self.config.n_layer)]
         for _ in range(max_new_tokens):
-            # if the sequence context is growing too long we must crop it at block_size
-            idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
+            if idx.size(1) == T:
+                # our very first step, pass the initial sequence context to the model
+                idx_cond = idx
+                start_pos = 0
+            else:
+                # only pass the token we just generated previously to the model
+                # the previous sequence context is implicitly stored in past_kv_proj
+                idx_cond = idx[:, [-1]]
+                start_pos = idx.size(1) - 1
             # forward the model to get the logits for the index in the sequence
-            logits, _ = self(idx_cond)
+            logits, _, past_kv_proj = self(idx_cond, past_kv_proj=past_kv_proj, start_pos=start_pos)
             # pluck the logits at the final step and scale by desired temperature
             logits = logits[:, -1, :] / temperature
             # optionally crop the logits to only the top k options
