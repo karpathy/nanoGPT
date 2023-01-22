@@ -9,10 +9,10 @@ if not os.path.exists('input.txt'):
     with open('input.txt', 'w') as f:
         f.write(requests.get(data_url).text)
 
-with open('input.txt', 'r', encoding='utf-8') as f:
-    data = f.read()
-n = len(data)
-train_data = data[:int(n*0.9)]
+with open('input.txt', 'r', encoding="utf-8") as f:   # added encoding parameter to the open function call 
+    data = f.read()  
+n = len(data)  
+train_data = data[:int(n*0.9)]  
 val_data = data[int(n*0.9):]
 
 # encode with tiktoken gpt2 bpe
