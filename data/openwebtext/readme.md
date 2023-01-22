@@ -3,9 +3,9 @@
 
 after running `prepare.py` (preprocess) we get:
 
-- train.bin is ~17GB, val.bin ~8.5MB
-- train has ~9B tokens (9,035,582,198)
-- val has ~4M tokens (4,434,897)
+- train.bin is ~17 GB, val.bin is ~8.5 MB
+- train has approximately 9 billion tokens (9,035,582,198) 
+- val has approximately 4 million tokens (4,434,897)
 
 this came from 8,013,769 documents in total.
 
