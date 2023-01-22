@@ -35,9 +35,8 @@ split_dataset['val'] = split_dataset.pop('test') # rename the test split to val
 enc = tiktoken.get_encoding("gpt2")
 def process(example):
     ids = enc.encode_ordinary(example['text']) # encode_ordinary ignores any special tokens
-    ids = [enc.eot_token] + ids # add the end of text token, e.g. 50256 for gpt2 bpe
-    # note: I think eot should be prepended not appended... hmm. it's called "eot" though...
-    out = {'ids': ids, 'len': len(ids)}
+    ids.insert(0, enc.eot_token) # insert the end of text token at the beginning, e.g. 50256 for gpt2 bpe
+    out = {'ids': ids, 'len': len(ids)}  
     return out
 
 # tokenize the dataset
