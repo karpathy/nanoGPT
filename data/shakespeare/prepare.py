@@ -6,10 +6,14 @@ import numpy as np
 # download the tiny shakespeare dataset
 if not os.path.exists('input.txt'):
     data_url = 'https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt'
-    with open('input.txt', 'w') as f:
-        f.write(requests.get(data_url).text)
 
-with open('input.txt', 'r', encoding="utf-8") as f:
+    response = requests.get(data_url)
+
+    if response:  # check to make sure the request is successful 
+        with open('input.txt', 'w') as f:
+            f.write(response.text)
+
+with open('input.txt', 'r') as f:
     data = f.read()
 n = len(data)
 train_data = data[:int(n*0.9)]
