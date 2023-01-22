@@ -35,8 +35,8 @@ def decode(l):
 
 # create the train and test splits
 n = len(data)
-train_data = data[:int(n*0.8)] # Change 0.9 to 0.8 
-val_data = data[int(n*0.8):] # Change 0.9 to 0.8
+train_data = data[:int(n*0.8)] # changed 0.9 to 0.8 
+val_data = data[int(n*0.8):] # changed 0.9 to 0.8
 
 # encode both to integers
 train_ids = encode(train_data)
