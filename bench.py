@@ -14,7 +14,7 @@ block_size = 1024
 seed = 1337
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
 dtype = 'bfloat16' # 'float32' or 'bfloat16' or 'float16'
-compile = True # use PyTorch 2.0 to compile the model to be faster
+compile_model = True # use PyTorch 2.0 to compile the model to be faster
 exec(open('configurator.py').read()) # overrides from command line or config file
 # -----------------------------------------------------------------------------
 
@@ -56,7 +56,7 @@ model.to(device)
 
 optimizer = model.configure_optimizers(weight_decay=1e-2, learning_rate=1e-4, betas=(0.9, 0.95))
 
-if compile:
+if compile_model:
     print("Compiling model...")
     model = torch.compile(model) # pytorch 2.0
 

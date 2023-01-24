@@ -3,7 +3,7 @@ This training script can be run both on a single gpu in debug mode,
 and also in a larger training run with distributed data parallel (ddp).
 
 To run on a single GPU, example:
-$ python train.py --batch_size=32 --compile=False
+$ python train.py --batch_size=32 --compile_model=False
 
 To run with DDP on 4 gpus on 1 node, example:
 $ torchrun --standalone --nproc_per_node=4 train.py
@@ -69,7 +69,7 @@ backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' # 'float32' or 'bfloat16'
-compile = True # use PyTorch 2.0 to compile the model to be faster
+compile_model = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
@@ -175,7 +175,7 @@ if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 
 # compile the model
-if compile:
+if compile_model:
     print("compiling the model... (takes a ~minute)")
     unoptimized_model = model
     model = torch.compile(model) # requires PyTorch 2.0
@@ -200,15 +200,15 @@ def estimate_loss():
     return out
 
 # learning rate decay scheduler (cosine with warmup)
-def get_lr(iter):
+def get_lr(current_iter_num):
     # 1) linear warmup for warmup_iters steps
-    if iter < warmup_iters:
-        return learning_rate * iter / warmup_iters
+    if current_iter_num < warmup_iters:
+        return learning_rate * current_iter_num / warmup_iters
     # 2) if iter > lr_decay_iters, return min learning rate
-    if iter > lr_decay_iters:
+    if current_iter_num > lr_decay_iters:
         return min_lr
     # 3) in between, use cosine decay down to min learning rate
-    decay_ratio = (iter - warmup_iters) / (lr_decay_iters - warmup_iters)
+    decay_ratio = (current_iter_num - warmup_iters) / (lr_decay_iters - warmup_iters)
     assert 0 <= decay_ratio <= 1
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)

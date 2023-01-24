@@ -18,7 +18,7 @@ top_k = 200 # retain only the top_k most likely tokens, clamp others to have 0 p
 seed = 1337
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
 dtype = 'bfloat16' # 'float32' or 'bfloat16' or 'float16'
-compile = False # use PyTorch 2.0 to compile the model to be faster
+compile_model = False # use PyTorch 2.0 to compile the model to be faster
 exec(open('configurator.py').read()) # overrides from command line or config file
 # -----------------------------------------------------------------------------
 
@@ -43,7 +43,7 @@ for k,v in list(state_dict.items()):
 model.load_state_dict(state_dict)
 model.eval()
 model.to(device)
-if compile:
+if compile_model:
     model = torch.compile(model) # requires PyTorch 2.0 (optional)
 
 # look for the meta pickle in case it is available in the dataset folder
