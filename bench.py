@@ -11,6 +11,7 @@ from model import GPTConfig, GPT
 # -----------------------------------------------------------------------------
 batch_size = 8
 block_size = 1024
+bias = True
 seed = 1337
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
 dtype = 'bfloat16' # 'float32' or 'bfloat16' or 'float16'
@@ -50,6 +51,7 @@ gptconf = GPTConfig(
     block_size = block_size, # how far back does the model look? i.e. context size
     n_layer = 12, n_head = 12, n_embd = 768, # size of the model
     dropout = 0, # for determinism
+    bias = bias,
 )
 model = GPT(gptconf)
 model.to(device)
