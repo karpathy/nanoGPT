@@ -108,7 +108,7 @@ class GPTConfig:
     n_layer: int = 12
     n_head: int = 12
     n_embd: int = 768
-    dropout: float = 0.1
+    dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
 
 class GPT(nn.Module):
@@ -215,7 +215,7 @@ class GPT(nn.Module):
         # later, by calling crop_block_size()
 
         # create a from-scratch initialized minGPT model
-        config = GPTConfig(block_size=1024, **config_args)
+        config = GPTConfig(block_size=1024, bias=True, **config_args) # note: force bias=True, as in gpt2 models
         model = GPT(config)
         sd = model.state_dict()
 
