@@ -59,6 +59,7 @@ max_iters = 600000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.95
+grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
 decay_lr = True # whether to decay the learning rate
 warmup_iters = 2000 # how many steps to warm up for
@@ -270,6 +271,8 @@ while True:
         with ctx:
             logits, loss = model(X, Y)
         loss.backward()
+    if grad_clip != 0:
+        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
     optimizer.step()
     optimizer.zero_grad(set_to_none=True)
 
