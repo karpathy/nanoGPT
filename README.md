@@ -36,13 +36,24 @@ To download and tokenize the [OpenWebText](https://huggingface.co/datasets/openw
 $ python train.py
 ```
 
-To train using PyTorch Distributed Data Parallel (DDP) run the script with torchrun. For example to train on a node with 4 GPUs run:
+If you do not have GPU also add `--device=cpu --compile=False`, though you'd have to also adjust the default network size to be much much smaller (see "i only have a macbook" section below). To train using PyTorch Distributed Data Parallel (DDP) run the script with torchrun. For example to train on a node with 4 GPUs run:
 
 ```
 $ torchrun --standalone --nproc_per_node=4 train.py
 ```
 
-Once some checkpoints are written to the output directory (e.g. `./out` by default), we can sample from the model:
+If you're in a cluster environment and are blessed with multiple GPU nodes you can make GPU go brrrr e.g. across 2 nodes like:
+
+```
+Run on the first (master) node with example IP 123.456.123.456:
+$ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=0 --master_addr=123.456.123.456 --master_port=1234 train.py
+Run on the worker node:
+$ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 --master_addr=123.456.123.456 --master_port=1234 train.py
+```
+
+It is a good idea to benchmark your interconnect (e.g. iperf3). In particular, if you don't have Infiniband then also prepend `NCCL_IB_DISABLE=1` to the above launches. Your multinode training will work, but most likely _crawl_.
+
+By default checkpoints are periodically written to the `--out_dir` (`./out` by default). Once we have one, we can sample from the model:
 
 ```
 $ python sample.py
@@ -114,6 +125,8 @@ $ python train.py config/train_shakespeare_char.py --device=cpu --compile=False 
 
 Where we decrease the context length to just 64 characters and only use a batch size of 8.
 
+Finally, on Apple Silicon Macbooks you can use device `--device mps` ("Metal Performance Shaders"), which can significantly accelerate training (2-3X). You will need a specific version of PyTorch. See [Issue 28](https://github.com/karpathy/nanoGPT/issues/28).
+
 ## benchmarking
 
 For model benchmarking `bench.py` might be useful. It's identical to what happens in the meat of the training loop of `train.py`, but omits much of the other complexities.
@@ -144,8 +157,6 @@ Features / APIs
 
 Suspiciousness
 
-- Current initialization (PyTorch default) departs from GPT-2. In a very quick experiment I found it to be superior to the one suggested in the papers, but that can't be right?
-- I don't currently seem to need gradient clipping but it is very often used (?). Nothing is exploding so far at these scales but maybe I'm leaving performance on the table. Evaluate with/without.
 - I am still not 100% confident that my GPT-2 small reproduction hyperparameters are good, if someone has reproduced GPT-2 I'd be eager to exchange notes ty
 - I keep seeing different values cited for weight decay and AdamW betas, look into
 - I can't exactly reproduce Chinchilla paper results, see [scaling_laws.ipynb](scaling_laws.ipynb) notebook
@@ -158,6 +169,10 @@ Results
 
 - Note that by default this repo uses PyTorch 2.0 (i.e. `torch.compile`). This is fairly new and experimental, and not yet available on all platforms (e.g. Windows). If you're running into related error messages try to disable this by adding `--compile=False` flag. This will slow down the code but at least it will run.
 
+For more questions/discussions also feel free to stop by #nanoGPT on Discord:
+
+[![](https://dcbadge.vercel.app/api/server/3zy8kqD9Cp?compact=true&style=flat)](https://discord.gg/3zy8kqD9Cp)
+
 ## acknowledgements
 
-Thank you [Lambda labs](https://lambdalabs.com) for supporting the training costs of nanoGPT experiments.
+All nanoGPT experiments are powered by GPUs on [Lambda labs](https://lambdalabs.com), the best Cloud GPU provider thank you :)

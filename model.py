@@ -22,15 +22,26 @@ def new_gelu(x):
     """
     return 0.5 * x * (1.0 + torch.tanh(math.sqrt(2.0 / math.pi) * (x + 0.044715 * torch.pow(x, 3.0))))
 
+class LayerNorm(nn.Module):
+    """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
+
+    def __init__(self, ndim, bias):
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(ndim))
+        self.bias = nn.Parameter(torch.zeros(ndim)) if bias else None
+
+    def forward(self, input):
+        return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
+
 class CausalSelfAttention(nn.Module):
 
     def __init__(self, config):
         super().__init__()
         assert config.n_embd % config.n_head == 0
         # key, query, value projections for all heads, but in a batch
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd)
+        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
         # output projection
-        self.c_proj = nn.Linear(config.n_embd, config.n_embd)
+        self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
         # regularization
         self.attn_dropout = nn.Dropout(config.dropout)
         self.resid_dropout = nn.Dropout(config.dropout)
@@ -62,8 +73,8 @@ class MLP(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd)
-        self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd)
+        self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
+        self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
@@ -77,9 +88,9 @@ class Block(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.ln_1 = nn.LayerNorm(config.n_embd)
+        self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
         self.attn = CausalSelfAttention(config)
-        self.ln_2 = nn.LayerNorm(config.n_embd)
+        self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
     def forward(self, x):
@@ -96,6 +107,7 @@ class GPTConfig:
     n_embd: int = 768
     # setting dropout to 0.0 is necessary for fused Flash Attention kernel
     dropout: float = 0.0
+    bias: bool = True
 
 class GPT(nn.Module):
 
@@ -110,13 +122,37 @@ class GPT(nn.Module):
             wpe = nn.Embedding(config.block_size, config.n_embd),
             drop = nn.Dropout(config.dropout),
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
-            ln_f = nn.LayerNorm(config.n_embd),
+            ln_f = LayerNorm(config.n_embd, bias=config.bias),
         ))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        # with weight tying when using torch.compile() some warnings get generated:
+        # "UserWarning: functional_call was passed multiple values for tied weights.
+        # This behavior is deprecated and will be an error in future versions"
+        # not 100% sure what this is, so far seems to be harmless. TODO investigate
+        self.transformer.wte.weight = self.lm_head.weight # https://paperswithcode.com/method/weight-tying
 
-        # report number of parameters (note we don't count the decoder parameters in lm_head)
-        n_params = sum(p.numel() for p in self.transformer.parameters())
+        # init all weights
+        self.apply(self._init_weights)
+        # apply special scaled init to the residual projections, per GPT-2 paper
+        for pn, p in self.named_parameters():
+            if pn.endswith('c_proj.weight'):
+                torch.nn.init.normal_(p, mean=0.0, std=0.02/math.sqrt(2 * config.n_layer))
+
+        # report number of parameters
+        n_params = sum(p.numel() for p in self.parameters())
         print("number of parameters: %.2fM" % (n_params/1e6,))
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+        elif isinstance(module, (LayerNorm, nn.LayerNorm)):
+            torch.nn.init.ones_(module.weight)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
 
     def forward(self, idx, targets=None):
         device = idx.device
@@ -154,8 +190,9 @@ class GPT(nn.Module):
             block.attn.bias = block.attn.bias[:,:,:block_size,:block_size]
 
     @classmethod
-    def from_pretrained(cls, model_type, override_args):
+    def from_pretrained(cls, model_type, override_args=None):
         assert model_type in {'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'}
+        override_args = override_args or {} # default to empty dict
         # only dropout can be overridden see more notes below
         assert all(k == 'dropout' for k in override_args)
         from transformers import GPT2LMHeadModel
@@ -176,7 +213,7 @@ class GPT(nn.Module):
         # later, by calling crop_block_size()
 
         # create a from-scratch initialized minGPT model
-        config = GPTConfig(block_size=1024, **config_args)
+        config = GPTConfig(block_size=1024, bias=True, **config_args) # note: force bias=True, as in gpt2 models
         model = GPT(config)
         sd = model.state_dict()
 
@@ -216,7 +253,7 @@ class GPT(nn.Module):
         decay = set()
         no_decay = set()
         whitelist_weight_modules = (torch.nn.Linear, )
-        blacklist_weight_modules = (torch.nn.LayerNorm, torch.nn.Embedding)
+        blacklist_weight_modules = (torch.nn.LayerNorm, LayerNorm, torch.nn.Embedding)
         for mn, m in self.named_modules():
             for pn, p in m.named_parameters():
                 fpn = '%s.%s' % (mn, pn) if mn else pn # full param name
@@ -232,6 +269,14 @@ class GPT(nn.Module):
                 elif pn.endswith('weight') and isinstance(m, blacklist_weight_modules):
                     # weights of blacklist modules will NOT be weight decayed
                     no_decay.add(fpn)
+
+        # subtle: 'transformer.wte.weight' and 'lm_head.weight' are tied, so they
+        # will appear in the no_decay and decay sets respectively after the above.
+        # In addition, because named_parameters() doesn't return duplicates, it
+        # will only return the first occurence, key'd by 'transformer.wte.weight', below.
+        # so let's manually remove 'lm_head.weight' from decay set. This will include
+        # this tensor into optimization via transformer.wte.weight only, and not decayed.
+        decay.remove('lm_head.weight')
 
         # validate that we considered every parameter
         param_dict = {pn: p for pn, p in self.named_parameters()}
@@ -265,7 +310,7 @@ class GPT(nn.Module):
             logits = logits[:, -1, :] / temperature
             # optionally crop the logits to only the top k options
             if top_k is not None:
-                v, _ = torch.topk(logits, top_k)
+                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
                 logits[logits < v[:, [-1]]] = -float('Inf')
             # apply softmax to convert logits to (normalized) probabilities
             probs = F.softmax(logits, dim=-1)

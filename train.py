@@ -2,16 +2,24 @@
 This training script can be run both on a single gpu in debug mode,
 and also in a larger training run with distributed data parallel (ddp).
 
-To run in debug mode example:
-$ python train.py --batch_size=32 --other=args
+To run on a single GPU, example:
+$ python train.py --batch_size=32 --compile=False
 
-To run DDP on 4 gpus on one node, example:
+To run with DDP on 4 gpus on 1 node, example:
 $ torchrun --standalone --nproc_per_node=4 train.py
+
+To run with DDP on 4 gpus across 2 nodes, example:
+- Run on the first (master) node with example IP 123.456.123.456:
+$ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=0 --master_addr=123.456.123.456 --master_port=1234 train.py
+- Run on the worker node:
+$ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 --master_addr=123.456.123.456 --master_port=1234 train.py
+(If your cluster does not have Infiniband interconnect prepend NCCL_IB_DISABLE=1)
 """
 
 import os
 import time
 import math
+import pickle
 from contextlib import nullcontext
 
 import numpy as np
@@ -37,19 +45,22 @@ wandb_project = 'owt'
 wandb_run_name = 'gpt2' # 'run' + str(time.time())
 # data
 dataset = 'openwebtext'
-batch_size = 12
+gradient_accumulation_steps = 5 # used to simulate larger batch sizes
+batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size = 1024
 # model
 n_layer = 12
 n_head = 12
 n_embd = 768
 dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
+bias = False # do we use bias inside LayerNorm and Linear layers?
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
 max_iters = 600000 # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
 beta2 = 0.95
+grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
 decay_lr = True # whether to decay the learning rate
 warmup_iters = 2000 # how many steps to warm up for
@@ -58,7 +69,7 @@ min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchi
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
-device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
+device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' # 'float32' or 'bfloat16'
 compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
@@ -68,17 +79,22 @@ config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
 
 # various inits, derived attributes, I/O setup
-ddp = int(os.environ.get('LOCAL_RANK', -1)) != -1 # is this a ddp run?
+ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
 if ddp:
     init_process_group(backend=backend)
-    gpu_id = int(os.environ["LOCAL_RANK"])
-    device = f"cuda:{gpu_id}"
+    ddp_rank = int(os.environ['RANK'])
+    ddp_local_rank = int(os.environ['LOCAL_RANK'])
+    device = f'cuda:{ddp_local_rank}'
+    master_process = ddp_rank == 0 # this process will do logging, checkpointing etc.
+    seed_offset = ddp_rank # each process gets a different seed
 else:
-    gpu_id = 0 # gpu_id 0 means this is the (single) master process, basically
+    # if not ddp, we are running on a single gpu, and one process
+    master_process = True
+    seed_offset = 0
 
-if gpu_id == 0:
+if master_process:
     os.makedirs(out_dir, exist_ok=True)
-torch.manual_seed(1337 + gpu_id) # note: each worker gets a different seed
+torch.manual_seed(1337 + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
@@ -102,8 +118,20 @@ def get_batch(split):
 iter_num = 0
 best_val_loss = 1e9
 
-# model init. TODO: fix bug we should also propagate the correct vocab_size to the model_args
-model_args = dict(n_layer = n_layer, n_head = n_head, n_embd = n_embd, block_size = block_size, dropout = dropout)
+# attempt to derive vocab_size from the dataset
+meta_path = os.path.join(data_dir, 'meta.pkl')
+if os.path.exists(meta_path):
+    with open(meta_path, 'rb') as f:
+        meta = pickle.load(f)
+    vocab_size = meta['vocab_size']
+    print(f"vocab_size = {vocab_size} (from {meta_path})")
+else:
+    print(f"vocab_size not found in {meta_path}, using GPT-2 default of 50257")
+    vocab_size = 50257
+
+# model init
+model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
+                  dropout=dropout, vocab_size=vocab_size, bias=bias)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -132,6 +160,7 @@ elif init_from == 'resume':
     best_val_loss = checkpoint['best_val_loss']
 elif init_from.startswith('gpt2'):
     print(f"Initializing from OpenAI GPT-2 weights: {init_from}")
+    assert bias, "GPT-2 models have bias, so we can't use bias=False"
     # initialize from OpenAI GPT-2 weights
     override_args = dict(dropout=dropout)
     model = GPT.from_pretrained(init_from, override_args)
@@ -157,7 +186,7 @@ if compile:
 
 # wrap model into DDP container
 if ddp:
-    model = DDP(model, device_ids=[gpu_id])
+    model = DDP(model, device_ids=[ddp_local_rank])
 
 @torch.no_grad()
 def estimate_loss():
@@ -189,7 +218,7 @@ def get_lr(iter):
     return min_lr + coeff * (learning_rate - min_lr)
 
 # logging
-if wandb_log and gpu_id == 0:
+if wandb_log and master_process:
     import wandb
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
@@ -205,7 +234,8 @@ while True:
     else:
         lr = learning_rate
 
-    if iter_num % eval_interval == 0 and gpu_id == 0:
+    # evaluate the loss on train/val sets and write checkpoints
+    if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
         if wandb_log:
@@ -232,20 +262,29 @@ while True:
     if iter_num == 0 and eval_only:
         break
 
-    X, Y = get_batch('train')
-    with ctx:
-        logits, loss = model(X, Y)
-
-    optimizer.zero_grad(set_to_none=True)
-    loss.backward()
-    # TODO: gradient clipping evaluate need for
+    # forward backward update, with optional gradient accumulation to simulate larger batch size
+    for micro_step in range(gradient_accumulation_steps):
+        X, Y = get_batch('train')
+        if ddp:
+            # in DDP training we only need to sync gradients at the last micro step.
+            # the official way to do this is with model.no_sync() context manager, but
+            # I really dislike that this bloats the code and forces us to repeat code
+            # looking at the source of that context manager, it just toggles this variable
+            model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
+        with ctx:
+            logits, loss = model(X, Y)
+        loss.backward()
+    if grad_clip != 0:
+        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
     optimizer.step()
+    optimizer.zero_grad(set_to_none=True)
 
+    # timing and logging
     t1 = time.time()
     dt = t1 - t0
     t0 = t1
-    if iter_num % log_interval == 0 and gpu_id == 0:
-        lossf = loss.item() # loss as float. TODO CPU-GPU sync: profile, make sure not slow af
+    if iter_num % log_interval == 0 and master_process:
+        lossf = loss.item() # loss as float. TODO note CPU-GPU sync! profile, make sure not too slow
         print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms")
     iter_num += 1
 
