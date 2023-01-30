@@ -181,9 +181,10 @@ if block_size < model.config.block_size:
     model_args['block_size'] = block_size # so that the checkpoint will have the right value
 model.to(device)
 
-# initialize a GradScaler if data type is float16 
+# initialize a GradScaler if data type is float16
+scaler = None
 if dtype == 'float16':
-    print(f'Initializing Gradient Scaler to account for dtype: {dtype}')
+    print(f"Initializing Gradient Scaler to account for dtype: {dtype}")
     scaler = torch.cuda.amp.GradScaler()
 
 # optimizer
@@ -284,8 +285,9 @@ while True:
         break
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
-    # and using the GradScaler if data type is float16 
+    # and using the GradScaler if data type is float16
     for micro_step in range(gradient_accumulation_steps):
+        # fetch a batch
         X, Y = get_batch('train')
         if ddp:
             # in DDP training we only need to sync gradients at the last micro step.
@@ -295,10 +297,19 @@ while True:
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
             logits, loss = model(X, Y)
-        loss.backward()
-    if grad_clip != 0:
+        # backward pass, with gradient scaling if training in fp16
+        scaler.scale(loss).backward() if scaler else loss.backward()
+    # clip the gradient
+    if grad_clip != 0.0:
+        scaler.unscale_(optimizer) if scaler else None
         torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-    optimizer.step()
+    # step the optimizer
+    if scaler:
+        scaler.step(optimizer)
+        scaler.update()
+    else:
+        optimizer.step()
+    # flush the gradients as soon as we can, no need for this memory anymore
     optimizer.zero_grad(set_to_none=True)
 
     # timing and logging
