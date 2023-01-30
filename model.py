@@ -49,13 +49,12 @@ class CausalSelfAttention(nn.Module):
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 
         # the output of sdp = (batch, num_heads, seq_len, head_dim)
-        y, _ = torch.nn.functional._scaled_dot_product_attention(
+        y = torch.nn.functional.scaled_dot_product_attention(
             q,
             k,
             v,
             attn_mask=None,
             dropout_p=self.dropout,
-            need_attn_weights=False,
             is_causal=True,
         )
         y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
@@ -101,6 +100,7 @@ class GPTConfig:
     n_layer: int = 12
     n_head: int = 12
     n_embd: int = 768
+    # setting dropout to 0.0 is necessary for fused Flash Attention kernel
     dropout: float = 0.0
 
 class GPT(nn.Module):
