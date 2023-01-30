@@ -105,9 +105,8 @@ class GPTConfig:
     n_layer: int = 12
     n_head: int = 12
     n_embd: int = 768
-    # setting dropout to 0.0 is necessary for fused Flash Attention kernel
     dropout: float = 0.0
-    bias: bool = True
+    bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
 
 class GPT(nn.Module):
 
