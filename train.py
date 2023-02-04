@@ -315,7 +315,7 @@ while True:
     dt = t1 - t0
     t0 = t1
     if iter_num % log_interval == 0 and master_process:
-        lossf = loss.item() # loss as float. TODO note CPU-GPU sync! profile, make sure not too slow
+        lossf = loss.item() # loss as float. note: this is a CPU-GPU sync point
         print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms")
     iter_num += 1
     local_iter_num += 1
