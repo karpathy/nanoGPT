@@ -80,13 +80,12 @@ if profile:
         record_shapes=False,
         profile_memory=False,
         with_stack=False, # incurs an additional overhead, disable if not needed
-        with_flops=False,
+        with_flops=True,
         with_modules=False, # only for torchscript models atm
     ) as prof:
 
         X, Y = get_batch('train')
         for k in range(num_steps):
-            X, Y = get_batch('train')
             with ctx:
                 logits, loss = model(X, Y)
             X, Y = get_batch('train')
@@ -106,7 +105,6 @@ else:
         t0 = time.time()
         X, Y = get_batch('train')
         for k in range(num_steps):
-            X, Y = get_batch('train')
             with ctx:
                 logits, loss = model(X, Y)
             X, Y = get_batch('train')
