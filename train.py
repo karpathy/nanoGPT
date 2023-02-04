@@ -125,21 +125,23 @@ best_val_loss = 1e9
 
 # attempt to derive vocab_size from the dataset
 meta_path = os.path.join(data_dir, 'meta.pkl')
+meta_vocab_size = None
 if os.path.exists(meta_path):
     with open(meta_path, 'rb') as f:
         meta = pickle.load(f)
-    vocab_size = meta['vocab_size']
-    print(f"vocab_size = {vocab_size} (from {meta_path})")
-else:
-    print(f"vocab_size not found in {meta_path}, using GPT-2 default of 50257 (rounded up to 50304 for efficiency)")
-    vocab_size = 50304
+    meta_vocab_size = meta['vocab_size']
+    print(f"found vocab_size = {meta_vocab_size} (inside {meta_path})")
 
 # model init
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
-                  dropout=dropout, vocab_size=vocab_size, bias=bias)
+                  bias=bias, vocab_size=None, dropout=dropout) # start with model_args from command line
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
+    # determine the vocab size we'll use for from-scratch training
+    if meta_vocab_size is None:
+        print("defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)")
+    model_args['vocab_size'] = meta_vocab_size if meta_vocab_size is not None else 50304
     gptconf = GPTConfig(**model_args)
     model = GPT(gptconf)
 elif init_from == 'resume':
@@ -148,9 +150,11 @@ elif init_from == 'resume':
     ckpt_path = os.path.join(out_dir, 'ckpt.pt')
     checkpoint = torch.load(ckpt_path, map_location=device)
     checkpoint_model_args = checkpoint['model_args']
-    for k, v in model_args.items():
-        assert checkpoint_model_args[k] == v, "for now"
-        # TODO: think through how passed in params should interact with checkpoint params
+    # force these config attributes to be equal otherwise we can't even resume training
+    # the rest of the attributes (e.g. dropout) can stay as desired from command line
+    for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
+        model_args[k] = checkpoint_model_args[k]
+    # create the model
     gptconf = GPTConfig(**model_args)
     model = GPT(gptconf)
     state_dict = checkpoint['model']
@@ -165,24 +169,23 @@ elif init_from == 'resume':
     best_val_loss = checkpoint['best_val_loss']
 elif init_from.startswith('gpt2'):
     print(f"Initializing from OpenAI GPT-2 weights: {init_from}")
-    assert bias, "GPT-2 models have bias, so we can't use bias=False"
     # initialize from OpenAI GPT-2 weights
     override_args = dict(dropout=dropout)
     model = GPT.from_pretrained(init_from, override_args)
-    # read off and override the GPT sizing model args from the model config
-    model_args['n_layer'] = model.config.n_layer
-    model_args['n_head'] = model.config.n_head
-    model_args['n_embd'] = model.config.n_embd
-# crop down the model block size if desired
+    # read off the created config params, so we can store them into checkpoint correctly
+    for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
+        model_args[k] = getattr(model.config, k)
+# crop down the model block size if desired, using model surgery
 if block_size < model.config.block_size:
     model.crop_block_size(block_size)
+    model_args['block_size'] = block_size # so that the checkpoint will have the right value
 model.to(device)
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
 # optimizer
-optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2))
+optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 
