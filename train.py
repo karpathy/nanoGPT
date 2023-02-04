@@ -128,8 +128,8 @@ if os.path.exists(meta_path):
     vocab_size = meta['vocab_size']
     print(f"vocab_size = {vocab_size} (from {meta_path})")
 else:
-    print(f"vocab_size not found in {meta_path}, using GPT-2 default of 50257")
-    vocab_size = 50257
+    print(f"vocab_size not found in {meta_path}, using GPT-2 default of 50257 (rounded up to 50304 for efficiency)")
+    vocab_size = 50304
 
 # model init
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
