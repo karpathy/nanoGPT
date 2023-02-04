@@ -39,7 +39,7 @@ if real_data:
         ix = torch.randint(len(data) - block_size, (batch_size,))
         x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
         y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
-        x, y = x.to(device), y.to(device)
+        x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
         return x, y
 else:
     # alternatively, if fixed data is desired to not care about data loading
@@ -76,14 +76,15 @@ if profile:
         record_shapes=False,
         profile_memory=False,
         with_stack=False, # incurs an additional overhead, disable if not needed
-        with_flops=False,
+        with_flops=True,
         with_modules=False, # only for torchscript models atm
     ) as prof:
 
+        X, Y = get_batch('train')
         for k in range(num_steps):
-            X, Y = get_batch('train')
             with ctx:
                 logits, loss = model(X, Y)
+            X, Y = get_batch('train')
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
@@ -98,10 +99,11 @@ else:
     torch.cuda.synchronize()
     for stage, num_steps in enumerate([10, 20]): # burnin, then benchmark
         t0 = time.time()
+        X, Y = get_batch('train')
         for k in range(num_steps):
-            X, Y = get_batch('train')
             with ctx:
                 logits, loss = model(X, Y)
+            X, Y = get_batch('train')
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
