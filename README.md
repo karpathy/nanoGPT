@@ -14,7 +14,7 @@ Because the code is so simple, it is very easy to hack to your needs, train new 
 Dependencies:
 
 - [pytorch](https://pytorch.org) <3
-- [numpy](https://numpy.org/install/) <3
+- `pip install numpy==1.21`
 - `pip install transformers` for huggingface transformers <3 (to load GPT-2 checkpoints)
 - `pip install datasets` for huggingface datasets <3 (if you want to download + preprocess OpenWebText)
 - `pip install tiktoken` for OpenAI's fast BPE code <3
@@ -166,6 +166,8 @@ Results
 ## troubleshooting
 
 - Note that by default this repo uses PyTorch 2.0 (i.e. `torch.compile`). This is fairly new and experimental, and not yet available on all platforms (e.g. Windows). If you're running into related error messages try to disable this by adding `--compile=False` flag. This will slow down the code but at least it will run.
+
+- You might need to downgrade protobuf (`pip install protobuf==3.20.*`) if you're getting a "TypeError: Descriptors cannot not be created directly" error when training.
 
 For more questions/discussions also feel free to stop by #nanoGPT on Discord:
 
