@@ -68,6 +68,11 @@ $ python sample.py --start="Large Language Models (LLMs) are becoming increasing
 
 Note that you can run `sample.py` while training on the last checkpoint, but if training simultaneously on GPU you may want to add the `--device=cpu` flag to avoid consuming GPU resources and out of memory issues.
 
+You can also sample with a prompt loaded from a file as such:
+```
+$ python sample.py --satrt=FILE:prompt.txt
+```
+
 ## baselines
 
 OpenAI GPT-2 checkpoints allow us to get some baselines in place for openwebtext. We can get the numbers as follows:
