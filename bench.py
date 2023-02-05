@@ -63,10 +63,6 @@ if compile:
     print("Compiling model...")
     model = torch.compile(model) # pytorch 2.0
 
-if compile:
-    print("Compiling model...")
-    model = torch.compile(model) # pytorch 2.0
-
 if profile:
     # useful docs on pytorch profiler:
     # - tutorial https://pytorch.org/tutorials/intermediate/tensorboard_profiler_tutorial.html
