@@ -53,11 +53,20 @@ $ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 --master_addr=123.456.123
 
 It is a good idea to benchmark your interconnect (e.g. iperf3). In particular, if you don't have Infiniband then also prepend `NCCL_IB_DISABLE=1` to the above launches. Your multinode training will work, but most likely _crawl_.
 
+## inference/sampling
 By default checkpoints are periodically written to the `--out_dir` (`./out` by default). Once we have one, we can sample from the model:
 
 ```
 $ python sample.py
 ```
+
+You can sample with a prompt by using the `--start` flag.  (By default the start flag is an empty string, allowing the model to sample a larger space of outputs).
+
+```
+$ python sample.py --start="Large Language Models (LLMs) are becoming increasingly popular.  One of the uses for it is"
+```
+
+Note that you can run `sample.py` while training on the last checkpoint, but if training simultaneously on GPU you may want to add the `--device=cpu` flag to avoid consuming GPU resources and out of memory issues.
 
 ## baselines
 
