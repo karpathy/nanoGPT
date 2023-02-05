@@ -70,7 +70,7 @@ Note that you can run `sample.py` while training on the last checkpoint, but if 
 
 You can also sample with a prompt loaded from a file as such:
 ```
-$ python sample.py --satrt=FILE:prompt.txt
+$ python sample.py --start=FILE:prompt.txt
 ```
 
 ## baselines
