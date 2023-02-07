@@ -84,14 +84,12 @@ if ddp:
     init_process_group(backend=backend)
     ddp_rank = int(os.environ['RANK'])
     ddp_local_rank = int(os.environ['LOCAL_RANK'])
-    world_size = int(os.environ['WORLD_SIZE']) # total number of training processes
     device = f'cuda:{ddp_local_rank}'
     torch.cuda.set_device(device)
     master_process = ddp_rank == 0 # this process will do logging, checkpointing etc.
     seed_offset = ddp_rank # each process gets a different seed
 else:
     # if not ddp, we are running on a single gpu, and one process
-    world_size = 1
     master_process = True
     seed_offset = 0
 
@@ -309,7 +307,7 @@ while True:
     if iter_num % log_interval == 0 and master_process:
         lossf = loss.item() # loss as float. note: this is a CPU-GPU sync point
         if local_iter_num >= 5: # let the training loop settle a bit
-            mfu = raw_model.estimate_mfu(batch_size * world_size * gradient_accumulation_steps, dt)
+            mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
         print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
     iter_num += 1
