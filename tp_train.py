@@ -235,7 +235,7 @@ if init_from == "scratch":
     rank_print(f"======== model ===============\n {model=}\n ==================\n")
 
     # hand init model (relies on code from awgu repo)
-    from build_tp_nano import parallelize_gpt
+    from build_nano import parallelize_gpt
 
     tp_model = parallelize_gpt(model, twod_mesh)
 
