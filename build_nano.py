@@ -355,9 +355,12 @@ def parallelize_mlp(
             module.c_fc.weight, mesh, [Shard(0) for _ in range(mesh.ndim)]
         )
     )  # (n_embd, 4 * n_embd / mesh.size)^T
-    module.c_fc.bias = nn.Parameter(
-        distribute_tensor(module.c_fc.bias, mesh, [Shard(0) for _ in range(mesh.ndim)])
-    )  # (4 * n_embd / mesh.size)
+    if module.c_fc.bias:
+        module.c_fc.bias = nn.Parameter(
+            distribute_tensor(
+                module.c_fc.bias, mesh, [Shard(0) for _ in range(mesh.ndim)]
+            )
+        )  # (4 * n_embd / mesh.size)
 
     # Row-wise shard the second linear's weight and replicate its bias
     module.c_proj.weight = nn.Parameter(
@@ -365,11 +368,12 @@ def parallelize_mlp(
             module.c_proj.weight, mesh, [Shard(1) for _ in range(mesh.ndim)]
         )
     )  # (4 * n_embd / mesh.size, n_embd)^T
-    module.c_proj.bias = nn.Parameter(
-        distribute_tensor(
-            module.c_proj.bias, mesh, [Replicate() for _ in range(mesh.ndim)]
-        )
-    )  # (n_embd,)
+    if module.c_fc.bias:
+        module.c_proj.bias = nn.Parameter(
+            distribute_tensor(
+                module.c_proj.bias, mesh, [Replicate() for _ in range(mesh.ndim)]
+            )
+        )  # (n_embd,)
 
     if module.dropout.p > 0:
         _warn_dropout()
@@ -395,6 +399,7 @@ def parallelize_block(
     module.attn = parallelize_causal_self_attention(module.attn, mesh)
     print(f"===> Success - module attn parallelized")
     module.mlp = parallelize_mlp(module.mlp, mesh)
+    print(f"===> Success - module MLP parallelized")
     return module
 
 
