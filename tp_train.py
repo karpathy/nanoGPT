@@ -41,7 +41,7 @@ try:
     from torch.distributed.tensor.parallel import (
         PairwiseParallel,
         parallelize_module,
-        get_parallelization_fqn,
+        # get_parallelization_fqn,
     )
 
     # need to setup hooks for TP
@@ -236,10 +236,7 @@ model = GPT(gptconf).cuda(_rank)
 
 # rank_print(f"======== model ===============\n {model=}\n ==================\n")
 
-# hand init model (relies on code from awgu repo)
-# from build_nano import parallelize_gpt
 
-# tp_model = parallelize_gpt(model, twod_mesh)
 """def parallelize_gpt(
 module: GPT,
 mesh: DeviceMesh,
