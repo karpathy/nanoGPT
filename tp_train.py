@@ -41,6 +41,7 @@ try:
     from torch.distributed.tensor.parallel import (
         PairwiseParallel,
         parallelize_module,
+        get_parallelization_fqn,
     )
 
     # need to setup hooks for TP
@@ -53,7 +54,7 @@ except BaseException as e:
     print(f"Exception during TP init - {e=}\n")
     pass
 
-
+assert TP_AVAILABLE, f"fsdp did not init"
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
@@ -220,86 +221,91 @@ model_args = dict(
     dropout=dropout,
 )  # start with model_args from command line
 
-if init_from == "scratch":
-    # init a new model from scratch
-    print("Initializing a new model from scratch")
-    # determine the vocab size we'll use for from-scratch training
-    if meta_vocab_size is None:
-        print(
-            "defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)"
-        )
-    model_args["vocab_size"] = meta_vocab_size if meta_vocab_size is not None else 50304
+# if init_from == "scratch":
+# init a new model from scratch
+print("Initializing a new model from scratch")
+# determine the vocab size we'll use for from-scratch training
+if meta_vocab_size is None:
+    print(
+        "defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)"
+    )
+model_args["vocab_size"] = meta_vocab_size if meta_vocab_size is not None else 50304
 
-    gptconf = GPTConfig(**model_args)
-    model = GPT(gptconf)
-    rank_print(f"======== model ===============\n {model=}\n ==================\n")
+gptconf = GPTConfig(**model_args)
+model = GPT(gptconf).cuda(_rank)
 
-    # hand init model (relies on code from awgu repo)
-    from build_nano import parallelize_gpt
+# rank_print(f"======== model ===============\n {model=}\n ==================\n")
 
-    tp_model = parallelize_gpt(model, twod_mesh)
+# hand init model (relies on code from awgu repo)
+# from build_nano import parallelize_gpt
 
-    rank_print(f"{model=}")
-    """tp_model = parallelize_module(
-        model,
-        twod_mesh,
-        {"attn": PairwiseParallel(), "mlp": PairwiseParallel()},
+# tp_model = parallelize_gpt(model, twod_mesh)
+"""def parallelize_gpt(
+module: GPT,
+mesh: DeviceMesh,
+) -> GPT:
+module.transformer["h"] = nn.ModuleList(
+    [parallelize_block(block, mesh) for block in module.transformer["h"]]
+)
+return module
+
+for block in model.transformer["h"]:
+
+"""
+import torch.distributed as dist
+import torch.nn as nn
+
+# tp_gpt = parallelize_gpt(GPT(config).cuda(), device_mesh)
+# parallelize_block(block, mesh) for block in module.transformer["h"]]
+
+# model.transformer["h"] = nn.ModuleList()
+# for name, module in model.named_parameters():
+#    print(f"{name=}")
+
+rank = dist.get_rank()
+fqn = get_parallelization_fqn(model)
+
+for i in range(6):
+    block = model.get_submodule(f"transformer.h.{i}")
+    parallelized_block = parallelize_module(
+        module=block,
+        device_mesh=twod_mesh,
+        parallelize_plan={"attn": PairwiseParallel(), "mlp": PairwiseParallel()},
         tp_mesh_dim=1,
     )
-    """
-    fsdp_pg = twod_mesh.get_dim_groups()[0]
+    block = parallelized_block
 
 
-elif init_from == "resume":
-    print(f"Resuming training from {out_dir}")
-    # resume training from a checkpoint.
-    ckpt_path = os.path.join(out_dir, "ckpt.pt")
-    checkpoint = torch.load(ckpt_path, map_location=device)
-    checkpoint_model_args = checkpoint["model_args"]
-    # force these config attributes to be equal otherwise we can't even resume training
-    # the rest of the attributes (e.g. dropout) can stay as desired from command line
-    for k in ["n_layer", "n_head", "n_embd", "block_size", "bias", "vocab_size"]:
-        model_args[k] = checkpoint_model_args[k]
-    # create the model
-    gptconf = GPTConfig(**model_args)
-    model = GPT(gptconf)
-    state_dict = checkpoint["model"]
-    # fix the keys of the state dictionary :(
-    # honestly no idea how checkpoints sometimes get this prefix, have to debug more
-    unwanted_prefix = "_orig_mod."
-    for k, v in list(state_dict.items()):
-        if k.startswith(unwanted_prefix):
-            state_dict[k[len(unwanted_prefix) :]] = state_dict.pop(k)
-    model.load_state_dict(state_dict)
-    iter_num = checkpoint["iter_num"]
-    best_val_loss = checkpoint["best_val_loss"]
-elif init_from.startswith("gpt2"):
-    print(f"Initializing from OpenAI GPT-2 weights: {init_from}")
-    # initialize from OpenAI GPT-2 weights
-    override_args = dict(dropout=dropout)
-    model = GPT.from_pretrained(init_from, override_args)
-    # read off the created config params, so we can store them into checkpoint correctly
-    for k in ["n_layer", "n_head", "n_embd", "block_size", "bias", "vocab_size"]:
-        model_args[k] = getattr(model.config, k)
-# crop down the model block size if desired, using model surgery
-if block_size < model.config.block_size:
-    model.crop_block_size(block_size)
-    model_args[
-        "block_size"
-    ] = block_size  # so that the checkpoint will have the right value
+"""model = parallelize_module(
+    model,
+    twod_mesh,
+    fqn,
+    # {"attn": PairwiseParallel(), "mlp": PairwiseParallel()},
+    tp_mesh_dim=1,
+)
+"""
+# print(f"{tp_model=}")
 
+fsdp_pg = twod_mesh.get_dim_groups()[0]
+
+
+# todo - add back main code later for resume
 
 model.to(device)
+model = FSDP(model, process_group=fsdp_pg)
+
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == "float16"))
 
 # optimizer
-optimizer = model.configure_optimizers(
-    weight_decay, learning_rate, (beta1, beta2), device_type
-)
-if init_from == "resume":
-    optimizer.load_state_dict(checkpoint["optimizer"])
+optimizer = torch.optim.AdamW(model.parameters(), learning_rate)
+
+# optimizer = model.configure_optimizers(
+#    weight_decay, learning_rate, (beta1, beta2), device_type
+# )
+# if init_from == "resume":
+#    optimizer.load_state_dict(checkpoint["optimizer"])
 
 # compile the model
 """if compile:
@@ -313,7 +319,7 @@ if ddp:
 """
 
 # TP and FSDP init
-assert 1, "stopping here"
+# assert 1, "stopping here"
 
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
@@ -349,10 +355,9 @@ def get_lr(it):
 
 
 # logging
-if wandb_log and master_process:
-    import wandb
-
-    wandb.init(project=wandb_project, name=wandb_run_name, config=config)
+# if wandb_log and master_process:
+#    import wandb
+#    wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
 X, Y = get_batch("train")  # fetch the very first batch
@@ -383,7 +388,7 @@ while True:
             )
         if losses["val"] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses["val"]
-            raw_model = model.module if ddp else model
+            raw_model = model.module if _tp else model
             if iter_num > 0:
                 checkpoint = {
                     "model": raw_model.state_dict(),
@@ -401,7 +406,7 @@ while True:
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
     for micro_step in range(gradient_accumulation_steps):
-        if ddp or _tp:
+        if _tp or _tp:
             # in DDP training we only need to sync gradients at the last micro step.
             # the official way to do this is with model.no_sync() context manager, but
             # I really dislike that this bloats the code and forces us to repeat code
@@ -446,5 +451,5 @@ while True:
     if iter_num > max_iters:
         break
 
-if ddp:
+if _tp:
     destroy_process_group()
