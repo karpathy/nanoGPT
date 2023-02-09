@@ -31,7 +31,7 @@ from model import GPTConfig, GPT
 
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.tensor.parallel.fsdp import is_available
-
+import inspect
 
 TP_AVAILABLE = False
 try:
@@ -232,9 +232,9 @@ if meta_vocab_size is None:
 model_args["vocab_size"] = meta_vocab_size if meta_vocab_size is not None else 50304
 
 gptconf = GPTConfig(**model_args)
-model = GPT(gptconf).cuda(_rank)
+model = GPT(twod_mesh, gptconf).cuda(_rank)
 
-# rank_print(f"======== model ===============\n {model=}\n ==================\n")
+rank_print(f"======== model ===============\n {model=}\n ==================\n")
 
 
 """def parallelize_gpt(
@@ -260,7 +260,7 @@ import torch.nn as nn
 #    print(f"{name=}")
 
 rank = dist.get_rank()
-fqn = get_parallelization_fqn(model)
+# fqn = get_parallelization_fqn(model)
 
 for i in range(6):
     block = model.get_submodule(f"transformer.h.{i}")
@@ -296,7 +296,15 @@ model = FSDP(model, process_group=fsdp_pg)
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == "float16"))
 
 # optimizer
-optimizer = torch.optim.AdamW(model.parameters(), learning_rate)
+# new PyTorch nightly has a new 'fused' option for AdamW that is much faster
+
+use_fused = (device_type == "cuda") and (
+    "fused" in inspect.signature(torch.optim.AdamW).parameters
+)
+print(f"using fused AdamW: {use_fused}")
+extra_args = dict(fused=True) if use_fused else dict()
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, **extra_args)
+# optimizer = torch.optim.AdamW(model.parameters(), learning_rate)
 
 # optimizer = model.configure_optimizers(
 #    weight_decay, learning_rate, (beta1, beta2), device_type

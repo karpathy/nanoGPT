@@ -10,12 +10,21 @@ https://github.com/huggingface/transformers/blob/main/src/transformers/models/gp
 import math
 import inspect
 from dataclasses import dataclass
+import inspect
 
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from torch.distributed.tensor.parallel._view_with_dim_change import (
     _view_with_sharding_dim_change,
+)
+
+from torch.distributed._tensor import (
+    DeviceMesh,
+    distribute_tensor,
+    DTensor,
+    Replicate,
+    Shard,
 )
 
 
@@ -48,9 +57,11 @@ class LayerNorm(nn.Module):
 
 
 class CausalSelfAttention(nn.Module):
-    def __init__(self, config):
+    def __init__(self, mesh, config):
         super().__init__()
         assert config.n_embd % config.n_head == 0
+        self.mesh = mesh
+
         # key, query, value projections for all heads, but in a batch
         self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
         # output projection
@@ -62,21 +73,30 @@ class CausalSelfAttention(nn.Module):
         self.n_embd = config.n_embd
         self.dropout = config.dropout
         # flash attention make GPU go brrrrr but support is only in PyTorch nightly and still a bit scary
-        self.flash = (
-            hasattr(torch.nn.functional, "scaled_dot_product_attention")
-            and self.dropout == 0.0
+        self.flash = False  # (
+        #    hasattr(torch.nn.functional, "scaled_dot_product_attention")
+        #    and self.dropout == 0.0
+        # )
+        # Replicate the causal mask
+        causal_mask = torch.tril(torch.ones(config.block_size, config.block_size)).view(
+            1, 1, config.block_size, config.block_size
         )
-        if not self.flash:
-            print(
-                "WARNING: using slow attention. Flash Attention atm needs PyTorch nightly and dropout=0.0"
-            )
-            # causal mask to ensure that attention is only applied to the left in the input sequence
-            self.register_buffer(
-                "bias",
-                torch.tril(torch.ones(config.block_size, config.block_size)).view(
-                    1, 1, config.block_size, config.block_size
-                ),
-            )
+        causal_mask = DTensor.from_local(
+            causal_mask, self.mesh, [Replicate()], run_check=False
+        )
+        self.register_buffer("mask", causal_mask)
+
+        # if not self.flash:
+        # print(
+        #    "WARNING: using slow attention. Flash Attention atm needs PyTorch nightly and dropout=0.0"
+        # )
+        # causal mask to ensure that attention is only applied to the left in the input sequence
+        #    self.register_buffer(
+        #        "mask",
+        #        torch.tril(torch.ones(config.block_size, config.block_size)).view(
+        #            1, 1, config.block_size, config.block_size
+        #        ),
+        #   )
 
     def forward(self, x):
         (
@@ -98,22 +118,25 @@ class CausalSelfAttention(nn.Module):
         )  # (B, nh, T, hs)
 
         # dtensor
+        k = torch.Tensor.contiguous(k)
+        q = torch.Tensor.contiguous(q)
+        v = torch.Tensor.contiguous(v)
         k = _view_with_sharding_dim_change(k, 0, (-1, T, C // self.n_head))
         q = _view_with_sharding_dim_change(q, 0, (-1, T, C // self.n_head))
         v = _view_with_sharding_dim_change(v, 0, (-1, T, C // self.n_head))
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        if self.flash:
-            # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(
-                q, k, v, attn_mask=None, dropout_p=self.dropout, is_causal=True
-            )
-        else:
+        # if self.flash:
+        # efficient attention using Flash Attention CUDA kernels
+        #   y = torch.nn.functional.scaled_dot_product_attention(
+        #       q, k, v, attn_mask=None, dropout_p=self.dropout, is_causal=True
+        #   )
+        if True:  # todo - remove, jsut forcing regular attention vs flash above
             # manual implementation of attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
             att = _view_with_sharding_dim_change(att, 1, (B, -1, T, T))
 
-            att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float("-inf"))
+            att = att.masked_fill(self.mask[:, :, :T, :T] == 0, float("-inf"))
             att = _view_with_sharding_dim_change(att, 0, (-1, T, T))
 
             att = F.softmax(att, dim=-1)
@@ -146,10 +169,10 @@ class MLP(nn.Module):
 
 
 class Block(nn.Module):
-    def __init__(self, config):
+    def __init__(self, mesh, config):
         super().__init__()
         self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
-        self.attn = CausalSelfAttention(config)
+        self.attn = CausalSelfAttention(mesh, config)
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
@@ -167,11 +190,11 @@ class GPTConfig:
     n_head: int = 12
     n_embd: int = 768
     dropout: float = 0.0
-    bias: bool = True  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    bias: bool = False  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
 
 
 class GPT(nn.Module):
-    def __init__(self, config):
+    def __init__(self, mesh, config):
         super().__init__()
         assert config.vocab_size is not None
         assert config.block_size is not None
@@ -182,7 +205,7 @@ class GPT(nn.Module):
                 wte=nn.Embedding(config.vocab_size, config.n_embd),
                 wpe=nn.Embedding(config.block_size, config.n_embd),
                 drop=nn.Dropout(config.dropout),
-                h=nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
+                h=nn.ModuleList([Block(mesh, config) for _ in range(config.n_layer)]),
                 ln_f=LayerNorm(config.n_embd, bias=config.bias),
             )
         )
