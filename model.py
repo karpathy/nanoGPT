@@ -201,7 +201,7 @@ class GPT(nn.Module):
             logits = self.lm_head(x[:, [-1], :]) # note: using list [-1] to preserve the time dim
             loss = None
 
-        return logits, loss
+        return logits, loss, x
 
     def crop_block_size(self, block_size):
         # model surgery to decrease the block size if necessary
@@ -370,3 +370,56 @@ class GPT(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
 
         return idx
+
+class RewardModel(nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.n_embd = model.lm_head.in_features
+        self.block_size = model.config.block_size
+        model.lm_head = nn.Linear(self.n_embd*self.block_size, 2)
+        self.model = model
+        self.config = model.config
+
+    
+    # def forward(self, x, y, targets=None):
+    #     # x: batch_size x block_size
+    #     # y: batch_size x block_size
+    #     # return: batch_size x 2
+
+        
+    #     _, _, x = self.model(x)
+    #     x = x.view(-1, self.n_embd)
+    #     logits = self.rm_head(x)
+    #     probs = torch.softmax(logits,1)
+    #     # print(sum(probs,1))
+    #     if targets is None:
+    #         loss = None
+    #     else:
+    #         # loss = F.cross_entropy(logits, targets)
+    #         loss = F.binary_cross_entropy(probs, targets)
+
+    #     return logits, probs, loss
+
+    def forward(self, idx, targets=None):
+        device = idx.device
+        b, t = idx.size()
+        assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
+        pos = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(0) # shape (1, t)
+
+        # forward the GPT model itself
+        tok_emb = self.model.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
+        pos_emb = self.model.transformer.wpe(pos) # position embeddings of shape (1, t, n_embd)
+        x = self.model.transformer.drop(tok_emb + pos_emb)
+        for block in self.model.transformer.h:
+            x = block(x)
+        x = self.model.transformer.ln_f(x)
+        x = x.view(b, self.block_size*self.n_embd)
+        logits = self.model.lm_head(x)
+        probs = torch.softmax(logits,1)
+        if targets is not None:
+            # if we are given some desired targets also calculate the loss
+            loss = F.cross_entropy(logits, targets, ignore_index=-1)
+        else:
+            loss = None
+
+        return probs, loss
