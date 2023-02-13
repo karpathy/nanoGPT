@@ -45,7 +45,7 @@ wandb_project = 'owt'
 wandb_run_name = 'gpt2' # 'run' + str(time.time())
 # data
 dataset = 'openwebtext'
-gradient_accumulation_steps = 1 # used to simulate larger batch sizes
+gradient_accumulation_steps = 5 # used to simulate larger batch sizes
 batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size = 1024
 # model
@@ -92,6 +92,7 @@ else:
     # if not ddp, we are running on a single gpu, and one process
     master_process = True
     seed_offset = 0
+    gradient_accumulation_steps *= 8 # simulate 8 gpus
 
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
