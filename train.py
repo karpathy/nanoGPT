@@ -28,55 +28,18 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
 from model import GPTConfig, GPT
-
+import yaml
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'out'
-eval_interval = 2000
-log_interval = 1
-eval_iters = 200
-eval_only = False # if True, script exits right after the first eval
-always_save_checkpoint = True # if True, always save a checkpoint after each eval
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
-# wandb logging
-wandb_log = False # disabled by default
-wandb_project = 'rlhf' # 'gpt2'
-wandb_run_name = 'gpt2' # 'run' + str(time.time())
-# data
-dataset = 'openai_summarize_tldr' # 'openwebtext', 'shakespeare', 'openai_summarize_tldr'
-gradient_accumulation_steps = 1 # used to simulate larger batch sizes
-batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
-block_size = 1024 // 4
-# model
-n_layer = 12 // 3
-n_head = 12 // 3
-n_embd = 768 // 4
-dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
-bias = False # do we use bias inside LayerNorm and Linear layers?
-# adamw optimizer
-learning_rate = 6e-4 # max learning rate
-max_iters = 600000 # total number of training iterations
-weight_decay = 1e-2
-beta1 = 0.9
-beta2 = 0.95
-grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
-# learning rate decay settings
-decay_lr = True # whether to decay the learning rate
-warmup_iters = 2000 # how many steps to warm up for
-lr_decay_iters = 600000 # should be ~= max_iters per Chinchilla
-min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
-# DDP settings
-backend = 'nccl' # 'nccl', 'gloo', etc.
-# system
-device = 'cuda:1' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
-dtype = 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
-compile = False # use PyTorch 2.0 to compile the model to be faster
-# -----------------------------------------------------------------------------
-config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
-exec(open('configurator.py').read()) # overrides from command line or config file
-config = {k: globals()[k] for k in config_keys} # will be useful for logging
-# -----------------------------------------------------------------------------
+
+# load config.yaml from current directory
+with open('config.yaml') as f:
+    config = yaml.load(f, Loader=yaml.FullLoader)
+    # nested dictionary structure
+    for k, v in config.items():
+        for k2, v2 in v.items():
+            globals()[k2] = v2
 
 # various inits, derived attributes, I/O setup
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
@@ -137,6 +100,7 @@ if os.path.exists(meta_path):
 # model init
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
                   bias=bias, vocab_size=None, dropout=dropout) # start with model_args from command line
+print(model_args)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
