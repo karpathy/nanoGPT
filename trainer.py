@@ -213,6 +213,32 @@ class Trainer():
         
         return model
     
+    def evaluate(self, model, ctx):
+        losses = self.estimate_loss(model, ctx)
+        print(f"step {self.iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        if self.wandb_log:
+            wandb.log({
+                "iter": self.iter_num,
+                "train/loss": losses['train'],
+                "val/loss": losses['val'],
+                "lr": lr,
+                "mfu": running_mfu*100, # convert to percentage
+            })
+        if losses['val'] < self.best_val_loss or self.always_save_checkpoint:
+            self.best_val_loss = losses['val']
+            raw_model = model.module if self.ddp else model
+            if self.iter_num > 0:
+                checkpoint = {
+                    'model': raw_model.state_dict(),
+                    'optimizer': self.optimizer.state_dict(),
+                    'model_args': self.model_args,
+                    'iter_num': self.iter_num,
+                    'best_val_loss': self.best_val_loss,
+                    'config': self.config,
+                }
+                print(f"saving checkpoint to {self.out_dir}")
+                torch.save(checkpoint, os.path.join(self.out_dir, 'ckpt.pt'))
+    
     def train(self):
         # set up distributed training
         self.setup_ddp()
@@ -253,30 +279,8 @@ class Trainer():
 
             # evaluate the loss on train/val sets and write checkpoints
             if self.iter_num % self.eval_interval == 0 and self.master_process:
-                losses = self.estimate_loss(model, ctx)
-                print(f"step {self.iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-                if self.wandb_log:
-                    wandb.log({
-                        "iter": self.iter_num,
-                        "train/loss": losses['train'],
-                        "val/loss": losses['val'],
-                        "lr": lr,
-                        "mfu": running_mfu*100, # convert to percentage
-                    })
-                if losses['val'] < self.best_val_loss or self.always_save_checkpoint:
-                    self.best_val_loss = losses['val']
-                    raw_model = model.module if self.ddp else model
-                    if self.iter_num > 0:
-                        checkpoint = {
-                            'model': raw_model.state_dict(),
-                            'optimizer': self.optimizer.state_dict(),
-                            'model_args': self.model_args,
-                            'iter_num': self.iter_num,
-                            'best_val_loss': self.best_val_loss,
-                            'config': self.config,
-                        }
-                        print(f"saving checkpoint to {self.out_dir}")
-                        torch.save(checkpoint, os.path.join(self.out_dir, 'ckpt.pt'))
+                self.evaluate(model, ctx)
+
             if self.iter_num == 0 and self.eval_only:
                 break
 
@@ -368,6 +372,41 @@ class RewardModelTrainer(Trainer):
         else:
             return torch.tensor([1.0, 0.0])
 
+    def evaluate(self, model, ctx, X):
+        losses = self.estimate_loss(model, ctx)
+        print(f"step {self.iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        reward_probs, _ = model(X)
+        text = self.enc.decode(X[self.iter_num % self.eval_interval].tolist())
+
+        test_text = 'I love pizza' + 'a'*10000
+        test_text_enc = torch.tensor(self.enc.encode(test_text)[:256]).unsqueeze(0)
+        test_reward_probs, _ = model(test_text_enc.to(self.device))
+        print("input: ", text[:30], f"expect no reward: {reward_probs[0][-1]} \n")
+        print("input: ", test_text[:30], f"expect +ve reward: {test_reward_probs[0][-1]} \n")
+
+        if self.wandb_log:
+            wandb.log({
+                "iter": self.iter_num,
+                "train/loss": losses['train'],
+                "val/loss": losses['val'],
+                "lr": self.lr,
+                "mfu": self.running_mfu*100, # convert to percentage
+            })
+        if losses['val'] < self.best_val_loss or self.always_save_checkpoint:
+            self.best_val_loss = losses['val']
+            raw_model = model.module if self.ddp else model
+            if self.iter_num > 0:
+                checkpoint = {
+                    'model': raw_model.state_dict(),
+                    'optimizer': self.optimizer.state_dict(),
+                    'model_args': self.model_args,
+                    'iter_num': self.iter_num,
+                    'best_val_loss': self.best_val_loss,
+                    'config': self.config,
+                }
+                print(f"saving checkpoint to {self.out_dir}")
+                torch.save(checkpoint, os.path.join(self.out_dir, 'reward_ckpt.pt'))
+
     def train(self):
         # set up distributed training
         self.setup_ddp()
@@ -390,59 +429,35 @@ class RewardModelTrainer(Trainer):
         # training loop
         X, Y = self.get_batch('train') # fetch the very first batch
         t0 = time.time()
-        
-        for iter in range(self.max_iters):
+        local_iter_num = 0 # number of iterations in the lifetime of this process
+        self.running_mfu = -1.0
+        while True:
+
+            # determine and set the learning rate for this iteration
+            lr = self.get_lr(self.iter_num) if self.decay_lr else self.learning_rate
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = lr
 
             # every once in a while evaluate the loss on train and val sets
-            if iter % self.eval_interval == 0 or iter == self.max_iters - 1:
-                losses = self.estimate_loss(model, ctx)
-                print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-                reward_probs, _ = model(X)
-                text = self.enc.decode(X[iter % self.eval_interval].tolist())
+            if self.iter_num % self.eval_interval == 0 and self.master_process:
+                self.evaluate(model, ctx, X)
 
-                test_text = 'I love pizza' + 'a'*10000
-                test_text_enc = torch.tensor(self.enc.encode(test_text)[:256]).unsqueeze(0)
-                test_reward_probs, _ = model(test_text_enc.to(self.device))
-                print("input: ", text[:30], f"expect no reward: {reward_probs[0][-1]} \n")
-                print("input: ", test_text[:30], f"expect +ve reward: {test_reward_probs[0][-1]} \n")
-
-                if self.wandb_log:
-                    wandb.log({
-                        "iter": self.iter_num,
-                        "train/loss": losses['train'],
-                        "val/loss": losses['val'],
-                        "lr": self.lr,
-                        # "mfu": running_mfu*100, # convert to percentage
-                    })
-                if losses['val'] < self.best_val_loss or self.always_save_checkpoint:
-                    self.best_val_loss = losses['val']
-                    raw_model = model.module if self.ddp else model
-                    if self.iter_num > 0:
-                        checkpoint = {
-                            'model': raw_model.state_dict(),
-                            'optimizer': self.optimizer.state_dict(),
-                            'model_args': self.model_args,
-                            'iter_num': self.iter_num,
-                            'best_val_loss': self.best_val_loss,
-                            'config': self.config,
-                        }
-                        print(f"saving checkpoint to {self.out_dir}")
-                        torch.save(checkpoint, os.path.join(self.out_dir, 'reward_ckpt.pt'))
-
+            if self.iter_num == 0 and self.eval_only:
+                break
+            
             # sample a batch of data
-            xb, yb = self.get_batch('train')
+            X, Y = self.get_batch('train')
 
             # evaluate the loss
-            logits, loss = model(xb, yb)
+            logits, loss = model(X, Y)
             self.optimizer.zero_grad(set_to_none=True)
             loss.backward()
             self.optimizer.step()
 
             # timing and logging
             t1 = time.time()
-            dt = t1 - t0
+            # dt = t1 - t0
             t0 = t1
-            
             # if self.iter_num % self.log_interval == 0 and self.master_process:
             #     lossf = loss.item() # loss as float. note: this is a CPU-GPU sync point
             #     if local_iter_num >= 5: # let the training loop settle a bit
@@ -450,9 +465,11 @@ class RewardModelTrainer(Trainer):
             #         running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
             #     print(f"iter {self.iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
             self.iter_num += 1
-            # local_iter_num += 1
+            local_iter_num += 1
 
             # termination conditions
             if self.iter_num > self.max_iters:
                 break
-        
+
+        if self.ddp:
+            destroy_process_group()
