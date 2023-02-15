@@ -229,7 +229,7 @@ class Trainer():
         # logging
         if self.wandb_log and self.master_process:
             import wandb
-            wandb.init(project=self.wandb_project, name=self.wandb_run_name, config=config)
+            wandb.init(project=self.wandb_project, name=self.wandb_run_name, config=self.config)
 
         # training loop
         X, Y = self.get_batch('train') # fetch the very first batch
@@ -265,7 +265,7 @@ class Trainer():
                             'model_args': self.model_args,
                             'iter_num': iter_num,
                             'best_val_loss': best_val_loss,
-                            'config': config,
+                            'config': self.config,
                         }
                         print(f"saving checkpoint to {self.out_dir}")
                         torch.save(checkpoint, os.path.join(self.out_dir, 'ckpt.pt'))
