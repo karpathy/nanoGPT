@@ -446,7 +446,8 @@ class RewardModelTrainer(Trainer):
                 test_text = 'I love pizza' + 'a'*10000
                 test_text_enc = torch.tensor(self.enc.encode(test_text)[:256]).unsqueeze(0)
                 test_reward_probs, _ = model(test_text_enc.to(self.device))
-                print(f"test reward pred: {test_reward_probs[0][-1]}", "input: ", test_text[:30])
+                print("input: ", text[:30], f"expect no reward: {reward_probs[0][-1]} \n")
+                print("input: ", test_text[:30], f"expect +ve reward: {test_reward_probs[0][-1]} \n")
 
             # sample a batch of data
             xb, yb = self.get_batch('train')

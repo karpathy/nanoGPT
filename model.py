@@ -380,26 +380,6 @@ class RewardModel(nn.Module):
         self.model = model
         self.config = model.config
 
-    
-    # def forward(self, x, y, targets=None):
-    #     # x: batch_size x block_size
-    #     # y: batch_size x block_size
-    #     # return: batch_size x 2
-
-        
-    #     _, _, x = self.model(x)
-    #     x = x.view(-1, self.n_embd)
-    #     logits = self.rm_head(x)
-    #     probs = torch.softmax(logits,1)
-    #     # print(sum(probs,1))
-    #     if targets is None:
-    #         loss = None
-    #     else:
-    #         # loss = F.cross_entropy(logits, targets)
-    #         loss = F.binary_cross_entropy(probs, targets)
-
-    #     return logits, probs, loss
-
     def forward(self, idx, targets=None):
         device = idx.device
         b, t = idx.size()
