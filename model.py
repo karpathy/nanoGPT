@@ -381,6 +381,8 @@ class RLHF(nn.Module):
         self.n_embd = model.lm_head.in_features
         self.block_size = model.config.block_size
         model.reward_head = nn.Linear(self.n_embd*self.block_size, 2)
+        model.policy_head = nn.Linear(model.lm_head.in_features, model.lm_head.out_features, bias=False)
+        # model.policy_head = 
         self.mode = mode
 
     def forward_reward(self, idx, targets=None):
@@ -410,9 +412,37 @@ class RLHF(nn.Module):
     def forward(self, idx, targets=None):
         if self.mode == 'reward':
             return self.forward_reward(idx, targets)
+        elif self.mode == 'policy':
+            return self.forward_policy(idx, targets)
         else:
             return self.model(idx, targets)
     
+    def forward_policy(self, idx, targets=None):
+        device = idx.device
+        b, t = idx.size()
+        assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
+        pos = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(0) # shape (1, t)
+
+        # forward the GPT model itself
+        tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
+        pos_emb = self.transformer.wpe(pos) # position embeddings of shape (1, t, n_embd)
+        x = self.transformer.drop(tok_emb + pos_emb)
+        for block in self.transformer.h:
+            x = block(x)
+        x = self.transformer.ln_f(x)
+
+        if targets is not None:
+            # if we are given some desired targets also calculate the loss
+            logits = self.policy_head(x)
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
+        else:
+            # inference-time mini-optimization: only forward the lm_head on the very last position
+            logits = self.policy_head(x[:, [-1], :]) # note: using list [-1] to preserve the time dim
+            loss = None
+
+        return logits, loss
+    
+    @torch.no_grad()
     def generate(self, idx, max_new_tokens, device):
         # idx is (B, T) array of indices in the current context
         log_probs = torch.tensor([]).to(device)

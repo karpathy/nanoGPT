@@ -157,6 +157,31 @@ class Trainer():
             self.iter_num = checkpoint['iter_num']
             self.best_val_loss = checkpoint['best_val_loss']
             self.checkpoint = checkpoint
+        elif self.init_from('RLHF'):
+            print(f"Resuming training from {self.out_dir}")
+            # resume training from a checkpoint.
+            ckpt_path = os.path.join(self.out_dir, 'ckpt.pt')
+            checkpoint = torch.load(ckpt_path, map_location=self.device)      
+            checkpoint_model_args = checkpoint['model_args']
+            # force these config attributes to be equal otherwise we can't even resume training
+            # the rest of the attributes (e.g. dropout) can stay as desired from command line
+            for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
+                self.model_args[k] = checkpoint_model_args[k]
+            # create the model
+            gptconf = GPTConfig(**self.model_args)
+            model = GPT(gptconf)
+            model = RLHF(model)
+            state_dict = checkpoint['model']
+            # fix the keys of the state dictionary :(
+            # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+            unwanted_prefix = '_orig_mod.'
+            for k,v in list(state_dict.items()):
+                if k.startswith(unwanted_prefix):
+                    state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+            model.load_state_dict(state_dict)
+            self.iter_num = checkpoint['iter_num']
+            self.best_val_loss = checkpoint['best_val_loss']
+            self.checkpoint = checkpoint     
         elif self.init_from.startswith('gpt2'):
             print(f"Initializing from OpenAI GPT-2 weights: {self.init_from}")
             # initialize from OpenAI GPT-2 weights
@@ -366,7 +391,7 @@ class RewardModelTrainer(Trainer):
             x, y = x.to(self.device), y.to(self.device)
         return x, y
     
-    def reward(self, sequence, t='love'):
+    def reward(self, sequence, t='pizza'):
         if t in self.enc.decode(sequence.tolist()):
             # print('hello')
             return torch.tensor([0.0,1.0])
@@ -379,8 +404,8 @@ class RewardModelTrainer(Trainer):
         reward_probs, _ = model(X)
         text = self.enc.decode(X[self.iter_num % self.eval_interval].tolist())
 
-        test_text = 'I love pizza' + 'a'*10000
-        test_text_enc = torch.tensor(self.enc.encode(test_text)[:256]).unsqueeze(0)
+        test_text = 'pizza ' + 'a'*10000
+        test_text_enc = torch.tensor(self.enc.encode(test_text)[:self.block_size]).unsqueeze(0)
         test_reward_probs, _ = model(test_text_enc.to(self.device))
         print("input: ", text[:30], f"expect no reward: {reward_probs[0][-1]} \n")
         print("input: ", test_text[:30], f"expect +ve reward: {test_reward_probs[0][-1]} \n")
@@ -508,6 +533,7 @@ class RLTrainer(Trainer):
         super().__init__(config)
         import tiktoken
         self.enc = tiktoken.get_encoding("gpt2")
+        self.mode = 'RL'
     
     def train(self):
 
@@ -517,72 +543,70 @@ class RLTrainer(Trainer):
 
         # model init
         model = self.init_model()
-        # import copy
-        # model2 = copy.deepcopy(model)
 
-        actor = ActorModel(model)
+        model = RLHF(model, self.mode)
 
-        actor.to(self.device)
+        model.to(self.device)
         
         
         # reward_model = RewardModel(model2)
 
-        resume = True
-        if resume:
-            # print(f"Resuming training from {self.out_dir}")
-            # # resume training from a checkpoint.
-            # ckpt_path = os.path.join(self.out_dir, 'reward_ckpt.pt')
-            # checkpoint = torch.load(ckpt_path, map_location=self.device)      
-            # state_dict = checkpoint['model']
-            # # fix the keys of the state dictionary :(
-            # # honestly no idea how checkpoints sometimes get this prefix, have to debug more
-            # unwanted_prefix = '_orig_mod.'
-            # for k,v in list(state_dict.items()):
-            #     if k.startswith(unwanted_prefix):
-            #         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-            # reward_model.load_state_dict(state_dict)
+        # resume = True
+        # if resume:
+        #     # print(f"Resuming training from {self.out_dir}")
+        #     # # resume training from a checkpoint.
+        #     # ckpt_path = os.path.join(self.out_dir, 'reward_ckpt.pt')
+        #     # checkpoint = torch.load(ckpt_path, map_location=self.device)      
+        #     # state_dict = checkpoint['model']
+        #     # # fix the keys of the state dictionary :(
+        #     # # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+        #     # unwanted_prefix = '_orig_mod.'
+        #     # for k,v in list(state_dict.items()):
+        #     #     if k.startswith(unwanted_prefix):
+        #     #         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+        #     # reward_model.load_state_dict(state_dict)
 
-            print(f"Restoring reward model from {self.out_dir}")
-            # resume training from a checkpoint.
-            ckpt_path = os.path.join(self.out_dir, 'reward_ckpt.pt')
-            checkpoint = torch.load(ckpt_path, map_location=self.device)      
-            checkpoint_model_args = checkpoint['model_args']
-            # force these config attributes to be equal otherwise we can't even resume training
-            # the rest of the attributes (e.g. dropout) can stay as desired from command line
-            for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
-                self.model_args[k] = checkpoint_model_args[k]
-            # create the model
-            gptconf = GPTConfig(**self.model_args)
-            model = GPT(gptconf)
+        #     print(f"Restoring reward model from {self.out_dir}")
+        #     # resume training from a checkpoint.
+        #     ckpt_path = os.path.join(self.out_dir, 'reward_ckpt.pt')
+        #     checkpoint = torch.load(ckpt_path, map_location=self.device)      
+        #     checkpoint_model_args = checkpoint['model_args']
+        #     # force these config attributes to be equal otherwise we can't even resume training
+        #     # the rest of the attributes (e.g. dropout) can stay as desired from command line
+        #     for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
+        #         self.model_args[k] = checkpoint_model_args[k]
+        #     # create the model
+        #     gptconf = GPTConfig(**self.model_args)
+        #     model = GPT(gptconf)
 
-            reward_model = RewardModel(model)
-            reward_model.to('cuda:0')
+        #     reward_model = RewardModel(model)
+        #     reward_model.to('cuda:0')
 
-            state_dict = checkpoint['model']
-            # fix the keys of the state dictionary :(
-            # honestly no idea how checkpoints sometimes get this prefix, have to debug more
-            unwanted_prefix = '_orig_mod.'
-            for k,v in list(state_dict.items()):
-                if k.startswith(unwanted_prefix):
-                    state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-            reward_model.load_state_dict(state_dict)
-            self.iter_num = checkpoint['iter_num']
-            self.best_val_loss = checkpoint['best_val_loss']
-            self.checkpoint = checkpoint
+        #     state_dict = checkpoint['model']
+        #     # fix the keys of the state dictionary :(
+        #     # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+        #     unwanted_prefix = '_orig_mod.'
+        #     for k,v in list(state_dict.items()):
+        #         if k.startswith(unwanted_prefix):
+        #             state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+        #     reward_model.load_state_dict(state_dict)
+        #     self.iter_num = checkpoint['iter_num']
+        #     self.best_val_loss = checkpoint['best_val_loss']
+        #     self.checkpoint = checkpoint
         
         
-        actor_optimizer = torch.optim.AdamW(actor.model.lm_head.parameters(), lr=1e-2)
+        actor_optimizer = torch.optim.AdamW(model.model.policy_head.parameters(), lr=1e-2)
 
         last_time = time.time()
         rets_all = []
         max_iters = 100000
         X, Y = self.get_batch('train') # fetch the very first batch
-        X.to(self.device)
+        
         for iter in range(max_iters):
 
-            states, probs = actor.generate(X, self.block_size, self.device)
+            states, probs = model.generate(X, self.block_size, self.device)
 
-            rewards = reward_model(torch.tensor(states).to('cuda:0'))[0][:,1].unsqueeze(-1)
+            rewards = model.forward_reward(torch.tensor(states))[0][:,1].unsqueeze(-1)
 
             rewards = rewards.to(self.device)
 
@@ -601,7 +625,7 @@ class RLTrainer(Trainer):
                 current_time = time.time()
                 # print(current_time - last_time)
                 last_time = current_time
-                text = actor.generate(X, self.block_size, self.device)[0]
+                text = model.generate(X, self.block_size, self.device)[0]
                 for i in range(1):
                     text_i = text[i,:]
                     # print(reward(text_i))

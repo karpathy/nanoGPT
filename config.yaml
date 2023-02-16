@@ -14,7 +14,7 @@ data:
   dataset: openwebtext # 'openwebtext', 'shakespeare', 'openai_summarize_tldr'
   gradient_accumulation_steps: 1 # used to simulate larger batch sizes
   batch_size: 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
-  block_size: 256
+  block_size: 16
 model:
   n_layer: 1
   n_head: 1
