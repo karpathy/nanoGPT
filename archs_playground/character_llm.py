@@ -154,7 +154,6 @@ class Block(nn.Module):
     def __init__(self, n_embd, num_heads, block_size, head_size, dropout, bias_proj=False, bias_head=False, ffwd_bias=False, activation_id=0):
         # n_embd: embedding dimension, n_head: the number of heads we'd like
         super().__init__()
-        head_size = n_embd // n_head
         self.sa = MultiHeadAttention(
             num_heads, block_size, n_embd, dropout, head_size, bias_proj=bias_proj, bias_head=bias_head)
         self.ffwd = FeedFoward(
@@ -183,8 +182,8 @@ class BigramLanguageModel(nn.Module):
         self.n_layers = n_layers
         self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
         self.position_embedding_table = nn.Embedding(block_size, n_embd)
-        self.blocks = nn.Sequential(*[Block(n_embd, num_heads, block_size, head_size, dropout, bias_proj=bias_proj,
-                                    bias_head=bias_head, ffwd_bias=ffwd_bias, activation_id=activation_id) for _ in range(n_layer)])
+        self.blocks = nn.Sequential(*[Block(n_embd, num_heads[i], block_size, head_size[i], dropout, bias_proj=bias_proj[i],
+                                    bias_head=bias_head[i], ffwd_bias=ffwd_bias[i], activation_id=activation_id[i]) for i in range(n_layer)])
         self.ln_f = nn.LayerNorm(n_embd)  # final layer norm
 
         self.lm_head = nn.Linear(n_embd, vocab_size)
@@ -248,17 +247,19 @@ if __name__ == '__main__':
     bias_head_list = [True, False]
     ffwd_bias_list = [True, False]
     stats = {}
-    for _ in range(5000):
+    for _ in range(1000000):
         torch.manual_seed(1337)
+        stats_now = {}
         n_layer = np.random.choice(n_layers)
         n_embd = np.random.choice(embed_dims)
-        n_head = np.random.choice(heads)
-        activation_id = np.random.choice(activation_indices)
-        bias_proj = np.random.choice(bias_proj_list)
-        bias_head = np.random.choice(bias_head_list)
-        ffwd_bias = np.random.choice(ffwd_bias_list)
+        n_head = [np.random.choice(heads) for _ in range(n_layer)]
+        activation_id = [np.random.choice(activation_indices) for _ in range(n_layer)]
+        bias_proj = [np.random.choice(bias_proj_list) for _ in range(n_layer)]
+        bias_head = [np.random.choice(bias_head_list) for _ in range(n_layer)]
+        ffwd_bias = [np.random.choice(ffwd_bias_list) for _ in range(n_layer)]
+        head_size = [n_embd//h for h in n_head]
         model = BigramLanguageModel(
-        n_layer, vocab_size, n_embd, block_size, n_head, n_embd // n_head, dropout, bias_proj=bias_proj, bias_head=bias_head, ffwd_bias=ffwd_bias, activation_id=activation_id)
+        n_layer, vocab_size, n_embd, block_size, n_head, head_size , dropout, bias_proj=bias_proj, bias_head=bias_head, ffwd_bias=ffwd_bias, activation_id=activation_id)
         m = model.to(device)
         # print the number of parameters in the model
         print(sum(p.numel() for p in m.parameters())/1e6, 'M parameters')
@@ -267,13 +268,19 @@ if __name__ == '__main__':
         optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, max_iters)
         val_losses = []
-        for iter in range(max_iters):
+        str_n_head = '_'.join([str(h) for h in n_head])
+        str_activation_id = '_'.join([str(a) for a in activation_id])
+        str_bias_proj = '_'.join([str(b) for b in bias_proj])
+        str_bias_head = '_'.join([str(b) for b in bias_head])
+        str_ffwd_bias = '_'.join([str(b) for b in ffwd_bias])
+        if ' '.join([str(n_layer), str(n_embd), str_n_head, str_activation_id, str_bias_proj, str_bias_head, str_ffwd_bias, str(num_params)])  not in stats:
+         for iter in range(max_iters):
             # every once in a while evaluate the loss on train and val sets
             if iter % eval_interval == 0 or iter == max_iters - 1:
                 losses = estimate_loss()
                 print(
                 f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-                val_losses.append(losses['val'])
+                val_losses.append(losses['val'].item())
             # sample a batch of data
             xb, yb = get_batch('train')
             # evaluate the loss
@@ -282,9 +289,17 @@ if __name__ == '__main__':
             loss.backward()
             optimizer.step()
             scheduler.step()
-        plt.plot(val_losses, label=f'{n_layer} {n_embd} {n_head} {activation_id} {bias_proj} {bias_head} {ffwd_bias} {num_params}', alpha=0.5, linewidth=0.5, marker='o', markersize=2)
-        stats[' '.join([str(n_layer), str(n_embd), str(n_head), str(activation_id), str(bias_proj), str(bias_head), str(ffwd_bias), str(num_params)])] = val_losses
-        plt.legend()
-        plt.savefig('losses.png')
-        with open('stats.pkl', 'wb') as f:
-            pickle.dump(stats, f)
+         #stats[' '.join([str(n_layer), str(n_embd), str(n_head), str(activation_id), str(bias_proj), str(bias_head), str(ffwd_bias), str(num_params)])] = val_losses
+         stats_now["val_losses"] = val_losses
+         stats_now["n_layer"] = n_layer
+         stats_now["n_embd"] = n_embd
+         stats_now["n_head"] = n_head
+         stats_now["activation_id"] = activation_id
+         stats_now["bias_proj"] = bias_proj
+         stats_now["bias_head"] = bias_head
+         stats_now["ffwd_bias"] = ffwd_bias
+         stats_now["num_params"] = num_params
+         stats[' '.join([str(n_layer), str(n_embd), str_n_head, str_activation_id, str_bias_proj, str_bias_head, str_ffwd_bias, str(num_params)])] = stats_now
+         with open('stats_all.pkl', 'wb') as fp:
+              pickle.dump(stats, fp)
+

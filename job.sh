@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -p mldlc_gpu-rtx2080 #rtx2080
+#SBATCH -p ml_gpu-rtx2080 #rtx2080
 #SBATCH --gres=gpu:1
 #SBATCH -t 6-00:00:00 # time (D-HH:MM)
 #SBATCH -c 2 # number of cores
