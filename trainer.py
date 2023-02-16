@@ -414,8 +414,35 @@ class RewardModelTrainer(Trainer):
         ctx, meta_vocab_size = self.setup()
 
         # model init
+        
+
         model = self.init_model()
         model = RewardModel(model)
+        
+        resume = True
+        if resume:
+            print(f"Resuming training from {self.out_dir}")
+            # resume training from a checkpoint.
+            ckpt_path = os.path.join(self.out_dir, 'reward_ckpt.pt')
+            checkpoint = torch.load(ckpt_path, map_location=self.device)      
+            # checkpoint_model_args = checkpoint['model_args']
+            # force these config attributes to be equal otherwise we can't even resume training
+            # the rest of the attributes (e.g. dropout) can stay as desired from command line
+            # for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
+            #     self.model_args[k] = checkpoint_model_args[k]
+            # # create the model
+            # gptconf = GPTConfig(**self.model_args)
+            # model = GPT(gptconf)
+            state_dict = checkpoint['model']
+            # fix the keys of the state dictionary :(
+            # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+            unwanted_prefix = '_orig_mod.'
+            for k,v in list(state_dict.items()):
+                if k.startswith(unwanted_prefix):
+                    state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+            model.load_state_dict(state_dict)
+
+    
         model.to(self.device)
 
         self.optimizer = torch.optim.AdamW(model.model.lm_head.parameters(), lr=1e-3)
