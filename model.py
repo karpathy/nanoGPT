@@ -371,16 +371,19 @@ class GPT(nn.Module):
 
         return idx
 
-class RewardModel(nn.Module):
-    def __init__(self, model):
+class RLHF(nn.Module):
+    def __init__(self, model, mode):
         super().__init__()
-        self.n_embd = model.lm_head.in_features
-        self.block_size = model.config.block_size
-        model.lm_head = nn.Linear(self.n_embd*self.block_size, 2)
         self.model = model
         self.config = model.config
 
-    def forward(self, idx, targets=None):
+        # reward model
+        self.n_embd = model.lm_head.in_features
+        self.block_size = model.config.block_size
+        model.reward_head = nn.Linear(self.n_embd*self.block_size, 2)
+        self.mode = mode
+
+    def forward_reward(self, idx, targets=None):
         device = idx.device
         b, t = idx.size()
         assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
@@ -394,7 +397,7 @@ class RewardModel(nn.Module):
             x = block(x)
         x = self.model.transformer.ln_f(x)
         x = x.view(b, self.block_size*self.n_embd)
-        logits = self.model.lm_head(x)
+        logits = self.model.reward_head(x)
         probs = torch.softmax(logits,1)
         if targets is not None:
             # if we are given some desired targets also calculate the loss
@@ -403,16 +406,13 @@ class RewardModel(nn.Module):
             loss = None
 
         return probs, loss
-
-class ActorModel(nn.Module):
-    def __init__(self, model):
-        super().__init__()
-        self.model = model
-        self.config = model.config
     
     def forward(self, idx, targets=None):
-        return self.model(idx, targets)
-
+        if self.mode == 'reward':
+            return self.forward_reward(idx, targets)
+        else:
+            return self.model(idx, targets)
+    
     def generate(self, idx, max_new_tokens, device):
         # idx is (B, T) array of indices in the current context
         log_probs = torch.tensor([]).to(device)
@@ -438,3 +438,7 @@ class ActorModel(nn.Module):
             log_probs = torch.cat((log_probs, log_probs_idx_next), dim=1)
 
         return idx[:,-max_new_tokens:], log_probs[:,-max_new_tokens:]
+
+    
+
+

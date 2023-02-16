@@ -33,9 +33,6 @@ from accelerate import Accelerator
 
 
 
-accelerator = Accelerator()
-
-
 # load config.yaml from current directory
 with open('config.yaml') as f:
     conf = yaml.load(f, Loader=yaml.FullLoader)

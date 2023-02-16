@@ -8,7 +8,7 @@ from contextlib import nullcontext
 import numpy as np
 import torch
 
-from model import GPTConfig, GPT, RewardModel, ActorModel
+from model import GPTConfig, GPT, RLHF
 import yaml
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
@@ -351,6 +351,7 @@ class RewardModelTrainer(Trainer):
         super().__init__(config)
         import tiktoken
         self.enc = tiktoken.get_encoding("gpt2")
+        self.mode = 'reward'
     
     def get_batch(self, split):
         # generate a small batch of data of inputs x and targets y
@@ -417,7 +418,7 @@ class RewardModelTrainer(Trainer):
         
 
         model = self.init_model()
-        model = RewardModel(model)
+        model = RLHF(model, self.mode)
         
         resume = self.config['resume_reward']
         if resume:
@@ -445,7 +446,7 @@ class RewardModelTrainer(Trainer):
     
         model.to(self.device)
 
-        self.optimizer = torch.optim.AdamW(model.model.lm_head.parameters(), lr=1e-3)
+        self.optimizer = torch.optim.AdamW(model.model.reward_head.parameters(), lr=1e-3)
 
         model = self.setup_model(model)
 
