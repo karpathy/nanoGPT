@@ -29,6 +29,12 @@ from model import GPTConfig, GPT
 import yaml
 from torch.nn.parallel import DistributedDataParallel as DDP
 from trainer import Trainer
+from accelerate import Accelerator
+
+
+
+accelerator = Accelerator()
+
 
 # load config.yaml from current directory
 with open('config.yaml') as f:

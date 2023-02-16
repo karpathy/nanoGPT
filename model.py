@@ -404,7 +404,15 @@ class RewardModel(nn.Module):
 
         return probs, loss
 
-class ActorModel(GPT):
+class ActorModel(nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+        self.config = model.config
+    
+    def forward(self, idx, targets=None):
+        return self.model(idx, targets)
+
     def generate(self, idx, max_new_tokens, device):
         # idx is (B, T) array of indices in the current context
         log_probs = torch.tensor([]).to(device)

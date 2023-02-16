@@ -8,7 +8,7 @@ from contextlib import nullcontext
 import numpy as np
 import torch
 
-from model import GPTConfig, GPT, RewardModel
+from model import GPTConfig, GPT, RewardModel, ActorModel
 import yaml
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
@@ -365,7 +365,7 @@ class RewardModelTrainer(Trainer):
             x, y = x.to(self.device), y.to(self.device)
         return x, y
     
-    def reward(self, sequence, t='pizza'):
+    def reward(self, sequence, t='love'):
         if t in self.enc.decode(sequence.tolist()):
             # print('hello')
             return torch.tensor([0.0,1.0])
@@ -419,7 +419,7 @@ class RewardModelTrainer(Trainer):
         model = self.init_model()
         model = RewardModel(model)
         
-        resume = True
+        resume = self.config['resume_reward']
         if resume:
             print(f"Resuming training from {self.out_dir}")
             # resume training from a checkpoint.
@@ -500,3 +500,108 @@ class RewardModelTrainer(Trainer):
 
         if self.ddp:
             destroy_process_group()
+
+
+class RLTrainer(Trainer):
+    def __init__(self, config):
+        super().__init__(config)
+        import tiktoken
+        self.enc = tiktoken.get_encoding("gpt2")
+    
+    def train(self):
+
+        self.setup_ddp()
+
+        ctx, meta_vocab_size = self.setup()
+
+        # model init
+        model = self.init_model()
+        # import copy
+        # model2 = copy.deepcopy(model)
+
+        actor = ActorModel(model)
+
+        actor.to(self.device)
+        
+        
+        # reward_model = RewardModel(model2)
+
+        resume = True
+        if resume:
+            # print(f"Resuming training from {self.out_dir}")
+            # # resume training from a checkpoint.
+            # ckpt_path = os.path.join(self.out_dir, 'reward_ckpt.pt')
+            # checkpoint = torch.load(ckpt_path, map_location=self.device)      
+            # state_dict = checkpoint['model']
+            # # fix the keys of the state dictionary :(
+            # # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+            # unwanted_prefix = '_orig_mod.'
+            # for k,v in list(state_dict.items()):
+            #     if k.startswith(unwanted_prefix):
+            #         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+            # reward_model.load_state_dict(state_dict)
+
+            print(f"Restoring reward model from {self.out_dir}")
+            # resume training from a checkpoint.
+            ckpt_path = os.path.join(self.out_dir, 'reward_ckpt.pt')
+            checkpoint = torch.load(ckpt_path, map_location=self.device)      
+            checkpoint_model_args = checkpoint['model_args']
+            # force these config attributes to be equal otherwise we can't even resume training
+            # the rest of the attributes (e.g. dropout) can stay as desired from command line
+            for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
+                self.model_args[k] = checkpoint_model_args[k]
+            # create the model
+            gptconf = GPTConfig(**self.model_args)
+            model = GPT(gptconf)
+
+            reward_model = RewardModel(model)
+            reward_model.to('cuda:0')
+
+            state_dict = checkpoint['model']
+            # fix the keys of the state dictionary :(
+            # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+            unwanted_prefix = '_orig_mod.'
+            for k,v in list(state_dict.items()):
+                if k.startswith(unwanted_prefix):
+                    state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+            reward_model.load_state_dict(state_dict)
+            self.iter_num = checkpoint['iter_num']
+            self.best_val_loss = checkpoint['best_val_loss']
+            self.checkpoint = checkpoint
+        
+        
+        actor_optimizer = torch.optim.AdamW(actor.model.lm_head.parameters(), lr=1e-2)
+
+        last_time = time.time()
+        rets_all = []
+        max_iters = 100000
+        X, Y = self.get_batch('train') # fetch the very first batch
+        X.to(self.device)
+        for iter in range(max_iters):
+
+            states, probs = actor.generate(X, self.block_size, self.device)
+
+            rewards = reward_model(torch.tensor(states).to('cuda:0'))[0][:,1].unsqueeze(-1)
+
+            rewards = rewards.to(self.device)
+
+            rets = rewards * probs.squeeze()*1000 #- 0.05*log_probs
+            actor_loss = -rets.sum()
+            actor_optimizer.zero_grad(set_to_none=True)
+            actor_loss.backward()
+            actor_optimizer.step()
+
+            rets_all.append(rewards.mean().detach().cpu().numpy())
+
+            if iter % 10 == 0:
+                # print(actor_loss, critic_loss)
+                print(f'Actor loss: {actor_loss}, iter: {iter}')
+                print(f'rets: {np.mean(rets_all[-1000:])}')
+                current_time = time.time()
+                # print(current_time - last_time)
+                last_time = current_time
+                text = actor.generate(X, self.block_size, self.device)[0]
+                for i in range(1):
+                    text_i = text[i,:]
+                    # print(reward(text_i))
+                    print(self.enc.decode(text_i.tolist()))

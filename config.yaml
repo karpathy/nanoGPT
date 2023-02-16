@@ -1,6 +1,6 @@
 IO:
   out_dir: out
-  eval_interval: 1000
+  eval_interval: 2000
   log_interval: 1
   eval_iters: 200
   eval_only: False # if True, script exits right after the first eval
@@ -16,9 +16,9 @@ data:
   batch_size: 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
   block_size: 256
 model:
-  n_layer: 4
-  n_head: 4
-  n_embd: 64
+  n_layer: 1
+  n_head: 1
+  n_embd: 16
   dropout: 0.0 # for pretraining 0 is good, for finetuning try 0.1+
   bias: False # do we use bias inside LayerNorm and Linear layers?
 optimizer: # adamw
