@@ -157,31 +157,6 @@ class Trainer():
             self.iter_num = checkpoint['iter_num']
             self.best_val_loss = checkpoint['best_val_loss']
             self.checkpoint = checkpoint
-        elif self.init_from('RLHF'):
-            print(f"Resuming training from {self.out_dir}")
-            # resume training from a checkpoint.
-            ckpt_path = os.path.join(self.out_dir, 'ckpt.pt')
-            checkpoint = torch.load(ckpt_path, map_location=self.device)      
-            checkpoint_model_args = checkpoint['model_args']
-            # force these config attributes to be equal otherwise we can't even resume training
-            # the rest of the attributes (e.g. dropout) can stay as desired from command line
-            for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
-                self.model_args[k] = checkpoint_model_args[k]
-            # create the model
-            gptconf = GPTConfig(**self.model_args)
-            model = GPT(gptconf)
-            model = RLHF(model)
-            state_dict = checkpoint['model']
-            # fix the keys of the state dictionary :(
-            # honestly no idea how checkpoints sometimes get this prefix, have to debug more
-            unwanted_prefix = '_orig_mod.'
-            for k,v in list(state_dict.items()):
-                if k.startswith(unwanted_prefix):
-                    state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-            model.load_state_dict(state_dict)
-            self.iter_num = checkpoint['iter_num']
-            self.best_val_loss = checkpoint['best_val_loss']
-            self.checkpoint = checkpoint     
         elif self.init_from.startswith('gpt2'):
             print(f"Initializing from OpenAI GPT-2 weights: {self.init_from}")
             # initialize from OpenAI GPT-2 weights
@@ -430,8 +405,8 @@ class RewardModelTrainer(Trainer):
                     'best_val_loss': self.best_val_loss,
                     'config': self.config,
                 }
-                print(f"saving checkpoint to {self.out_dir}")
-                torch.save(checkpoint, os.path.join(self.out_dir, 'reward_ckpt.pt'))
+                print(f"saving checkpoint to {self.config['out_dir_multihead']}")
+                torch.save(checkpoint, os.path.join(self.config['out_dir_multihead'], 'ckpt.pt'))
 
     def train(self):
         # set up distributed training
@@ -445,28 +420,22 @@ class RewardModelTrainer(Trainer):
         model = self.init_model()
         model = RLHF(model, self.mode)
         
-        resume = self.config['resume_reward']
-        if resume:
-            print(f"Resuming training from {self.out_dir}")
-            # resume training from a checkpoint.
-            ckpt_path = os.path.join(self.out_dir, 'reward_ckpt.pt')
-            checkpoint = torch.load(ckpt_path, map_location=self.device)      
-            # checkpoint_model_args = checkpoint['model_args']
-            # force these config attributes to be equal otherwise we can't even resume training
-            # the rest of the attributes (e.g. dropout) can stay as desired from command line
-            # for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
-            #     self.model_args[k] = checkpoint_model_args[k]
-            # # create the model
-            # gptconf = GPTConfig(**self.model_args)
-            # model = GPT(gptconf)
-            state_dict = checkpoint['model']
-            # fix the keys of the state dictionary :(
-            # honestly no idea how checkpoints sometimes get this prefix, have to debug more
-            unwanted_prefix = '_orig_mod.'
-            for k,v in list(state_dict.items()):
-                if k.startswith(unwanted_prefix):
-                    state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-            model.load_state_dict(state_dict)
+        if self.config['init_multihead_from'] == 'scratch':
+            print("initializing multihead from scratch")
+        else:
+            if self.config['init_multihead_from'] == 'resume':
+                print(f"Resuming training from {self.config['out_dir_multihead']}")
+                # resume training from a checkpoint.
+                ckpt_path = os.path.join(self.config['out_dir_multihead'], 'ckpt.pt')
+                checkpoint = torch.load(ckpt_path, map_location=self.device)      
+                state_dict = checkpoint['model']
+                # fix the keys of the state dictionary :(
+                # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+                unwanted_prefix = '_orig_mod.'
+                for k,v in list(state_dict.items()):
+                    if k.startswith(unwanted_prefix):
+                        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+                model.load_state_dict(state_dict)
 
     
         model.to(self.device)
@@ -545,6 +514,24 @@ class RLTrainer(Trainer):
         model = self.init_model()
 
         model = RLHF(model, self.mode)
+
+        if self.config['init_multihead_from'] == 'scratch':
+            print("initializing multihead from scratch")
+        else:
+            if self.config['init_multihead_from'] == 'resume':
+                print(f"Resuming training from {self.config['out_dir_multihead']}")
+                # resume training from a checkpoint.
+                ckpt_path = os.path.join(self.config['out_dir_multihead'], 'ckpt.pt')
+                checkpoint = torch.load(ckpt_path, map_location=self.device)      
+                state_dict = checkpoint['model']
+                # fix the keys of the state dictionary :(
+                # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+                unwanted_prefix = '_orig_mod.'
+                for k,v in list(state_dict.items()):
+                    if k.startswith(unwanted_prefix):
+                        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+                model.load_state_dict(state_dict)
+
 
         model.to(self.device)
         

@@ -4,7 +4,7 @@ import yaml
 
 # assert enc.decode(enc.encode("hello world")) == "hello world"
 
-with open('rew_config.yaml') as f:
+with open('config_reward.yaml') as f:
     conf = yaml.load(f, Loader=yaml.FullLoader)
     # nested dictionary structure
     config = {}               
