@@ -366,7 +366,7 @@ class RewardModelTrainer(Trainer):
             x, y = x.to(self.device), y.to(self.device)
         return x, y
     
-    def reward(self, sequence, t='pizza'):
+    def reward(self, sequence, t='z'):
         if t in self.enc.decode(sequence.tolist()):
             # print('hello')
             return torch.tensor([0.0,1.0])
@@ -379,10 +379,15 @@ class RewardModelTrainer(Trainer):
         reward_probs, _ = model(X)
         text = self.enc.decode(X[self.iter_num % self.eval_interval].tolist())
 
-        test_text = 'pizza ' + 'a'*10000
+        print("input: ", text[:30], f"expect no reward: {reward_probs[0][-1]} \n")
+        # test_text = text[:4] + 'z' + text[4 + 1:-1]
+        test_text = list(text)
+        test_text[4] = 'z'
+        test_text = ''.join(test_text)
+
         test_text_enc = torch.tensor(self.enc.encode(test_text)[:self.block_size]).unsqueeze(0)
         test_reward_probs, _ = model(test_text_enc.to(self.device))
-        print("input: ", text[:30], f"expect no reward: {reward_probs[0][-1]} \n")
+
         print("input: ", test_text[:30], f"expect +ve reward: {test_reward_probs[0][-1]} \n")
 
         if self.wandb_log:
@@ -440,7 +445,8 @@ class RewardModelTrainer(Trainer):
     
         model.to(self.device)
 
-        self.optimizer = torch.optim.AdamW(model.model.reward_head.parameters(), lr=1e-3)
+        # self.optimizer = torch.optim.AdamW(model.model.reward_head.parameters(), lr=1e-3)
+        self.optimizer = torch.optim.AdamW(model.model.parameters(), lr=1e-3)
 
         model = self.setup_model(model)
 
@@ -582,37 +588,46 @@ class RLTrainer(Trainer):
         #     self.checkpoint = checkpoint
         
         
-        actor_optimizer = torch.optim.AdamW(model.model.policy_head.parameters(), lr=1e-2)
+        # actor_optimizer = torch.optim.AdamW(model.model.policy_head.parameters(), lr=1e-2)
+        actor_optimizer = torch.optim.AdamW(model.parameters(), lr=1e-2)
 
         last_time = time.time()
-        rets_all = []
+        rews_all = []
         max_iters = 100000
         X, Y = self.get_batch('train') # fetch the very first batch
         
         for iter in range(max_iters):
 
-            states, probs = model.generate(X, self.block_size, self.device)
-
-            rewards = model.forward_reward(torch.tensor(states))[0][:,1].unsqueeze(-1)
+            states, log_probs = model.generate(X, self.block_size, self.device, self.block_size)
+            rewards = torch.zeros_like(states, dtype=torch.float16)
+            rewards[states==89] = 1.0
+            # for i, state in enumerate(states):
+            #     text = self.enc.decode(state.tolist())
+            #     if 'z' in text:
+            #         rewards[i] = 1
+            #     else:
+            #         rewards[i] = 0
+    
+            # rewards = model.forward_reward(torch.tensor(states))[0][:,1].unsqueeze(-1) - 0.5
 
             rewards = rewards.to(self.device)
 
-            rets = rewards * probs.squeeze()*1000 #- 0.05*log_probs
+            rets = rewards * log_probs.squeeze() #- 0.05*log_probs
             actor_loss = -rets.sum()
             actor_optimizer.zero_grad(set_to_none=True)
             actor_loss.backward()
             actor_optimizer.step()
 
-            rets_all.append(rewards.mean().detach().cpu().numpy())
+            rews_all.append(rewards.mean().detach().cpu().numpy())
 
-            if iter % 10 == 0:
+            if iter % 1000 == 0:
                 # print(actor_loss, critic_loss)
                 print(f'Actor loss: {actor_loss}, iter: {iter}')
-                print(f'rets: {np.mean(rets_all[-1000:])}')
+                print(f'rets: {np.mean(rews_all[-1000:])}')
                 current_time = time.time()
                 # print(current_time - last_time)
                 last_time = current_time
-                text = model.generate(X, self.block_size, self.device)[0]
+                text = model.generate(X, self.block_size, self.device, self.block_size)[0]
                 for i in range(1):
                     text_i = text[i,:]
                     # print(reward(text_i))

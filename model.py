@@ -442,13 +442,13 @@ class RLHF(nn.Module):
 
         return logits, loss
     
-    @torch.no_grad()
-    def generate(self, idx, max_new_tokens, device):
+    # @torch.no_grad()
+    def generate(self, idx, max_new_tokens, device, block_size):
         # idx is (B, T) array of indices in the current context
         log_probs = torch.tensor([]).to(device)
         for _ in range(max_new_tokens):
             # crop idx to the last block_size tokens
-            block_size = 256
+            # block_size = 256
             idx_cond = idx[:, -block_size:]
             # get the predictions
             logits, loss = self(idx_cond)
