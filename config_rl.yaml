@@ -1,0 +1,42 @@
+IO:
+  out_dir: out
+  eval_interval: 100
+  log_interval: 1
+  eval_iters: 200
+  eval_only: False # if True, script exits right after the first eval
+  always_save_checkpoint: True # if True, always save a checkpoint after each eval
+  init_from: resume # 'scratch' or 'resume' or 'gpt2*'
+  init_multihead_from: resume
+  out_dir_multihead: out_reward # used if restoring multihead
+wandb:
+  wandb_log: False # disabled by default
+  wandb_project: rlhf # 'gpt2'
+  wandb_run_name: gpt2 # 'run' + str(time.time())
+data:
+  dataset: openwebtext # 'openwebtext', 'shakespeare', 'openai_summarize_tldr'
+  gradient_accumulation_steps: 1 # used to simulate larger batch sizes
+  batch_size: 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
+  block_size: 256
+model:
+  n_layer: 1
+  n_head: 1
+  n_embd: 16
+  dropout: 0.0 # for pretraining 0 is good, for finetuning try 0.1+
+  bias: False # do we use bias inside LayerNorm and Linear layers?
+optimizer: # adamw
+  learning_rate: 6.0e-4 # max learning rate
+  max_iters: 600000 # total number of training iterations
+  weight_decay: 1.0e-2
+  beta1: 0.9
+  beta2: 0.95
+  grad_clip: 1.0 # clip gradients at this value, or disable if == 0.0
+  decay_lr: True # whether to decay the learning rate
+  warmup_iters: 2000 # how many steps to warm up for
+  lr_decay_iters: 600000 # should be ~= max_iters per Chinchilla
+  min_lr: 6.0e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
+DDP:
+  backend: nccl # 'nccl', 'gloo', etc.
+system:
+  device: cuda:1 # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+  dtype: float16 # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
+  compile: False # use PyTorch 2.0 to compile the model to be faster
