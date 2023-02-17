@@ -15,6 +15,8 @@ from torch.distributed import init_process_group, destroy_process_group
 from utils import dotdict
 import wandb
 
+from torch.nn import functional as F
+
 class Trainer():
     def __init__(self, config):
         self.config = config
@@ -538,9 +540,16 @@ class RLTrainer(Trainer):
                         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
                 model.load_state_dict(state_dict)
 
-
+        separate_reward_model = False     
+        if separate_reward_model:
+            import copy
+            reward_model = copy.deepcopy(model)
+        else:
+            reward_model = model
         model.to(self.device)
-        
+        reward_model.to(self.device)
+
+
         
         # reward_model = RewardModel(model2)
 
@@ -598,21 +607,21 @@ class RLTrainer(Trainer):
         
         for iter in range(max_iters):
 
-            states, log_probs = model.generate(X, self.block_size, self.device, self.block_size)
-            rewards = torch.zeros_like(states, dtype=torch.float16)
-            rewards[states==89] = 1.0
-            # for i, state in enumerate(states):
-            #     text = self.enc.decode(state.tolist())
-            #     if 'z' in text:
-            #         rewards[i] = 1
-            #     else:
-            #         rewards[i] = 0
-    
-            # rewards = model.forward_reward(torch.tensor(states))[0][:,1].unsqueeze(-1) - 0.5
+            states, log_probs, log_probs_reference = model.generate(X, self.block_size, self.device, self.block_size)
+            
+            hard_code_reward = True
+            if hard_code_reward:
+                rewards = torch.zeros_like(states, dtype=torch.float16)
+                rewards[states==89] = 1.0
+                rewards = torch.sum(rewards, 1, keepdim=True)
+                rewards[rewards > 1] = 1
+            else:
+                rewards = reward_model.forward_reward(torch.tensor(states))[0][:,1].unsqueeze(-1)
 
             rewards = rewards.to(self.device)
 
-            rets = rewards * log_probs.squeeze() #- 0.05*log_probs
+            # minus KL divergence
+            rets = rewards * log_probs.squeeze() - 1*(log_probs-log_probs_reference) #- 0.05*log_probs
             actor_loss = -rets.sum()
             actor_optimizer.zero_grad(set_to_none=True)
             actor_loss.backward()

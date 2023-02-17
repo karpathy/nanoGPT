@@ -443,15 +443,17 @@ class RLHF(nn.Module):
         return logits, loss
     
     # @torch.no_grad()
-    def generate(self, idx, max_new_tokens, device, block_size):
+    def generate(self, idx, max_new_tokens, device, block_size, use_reference=True):
         # idx is (B, T) array of indices in the current context
         log_probs = torch.tensor([]).to(device)
+        log_probs_ref = torch.tensor([]).to(device)
         for _ in range(max_new_tokens):
             # crop idx to the last block_size tokens
             # block_size = 256
             idx_cond = idx[:, -block_size:]
             # get the predictions
             logits, loss = self(idx_cond)
+
             # focus only on the last time step
             logits = logits[:, -1, :] # becomes (B, C)
             # apply softmax to get probabilities
@@ -459,15 +461,23 @@ class RLHF(nn.Module):
             probs_next = F.softmax(logits, dim=-1) # (B, C)
             # sample from the distribution
             idx_next = torch.multinomial(probs_next, num_samples=1) # (B, 1)
+
+            probs_idx_next = torch.gather(probs_next, 1, idx_next)
+            log_probs_idx_next = torch.log(probs_idx_next)
+            log_probs = torch.cat((log_probs, log_probs_idx_next), dim=1)
+            
+            if use_reference:
+                logits_ref, _ = self.model(idx_cond)
+                logits_ref = logits_ref[:, -1, :] # becomes (B, C)
+                probs_ref_next = F.softmax(logits_ref, dim=-1) # (B, C)
+                probs_ref_idx_next = torch.gather(probs_ref_next, 1, idx_next)
+                log_probs_ref_idx_next = torch.log(probs_ref_idx_next)
+                log_probs_ref = torch.cat((log_probs_ref, log_probs_ref_idx_next), dim=1)
+            
             # append sampled index to the running sequence
             idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
             
-            probs_idx_next = torch.gather(probs_next, 1, idx_next)
-            log_probs_idx_next = torch.log(probs_idx_next)
-
-            log_probs = torch.cat((log_probs, log_probs_idx_next), dim=1)
-
-        return idx[:,-max_new_tokens:], log_probs[:,-max_new_tokens:]
+        return idx[:,-max_new_tokens:], log_probs[:,-max_new_tokens:], log_probs_ref[:,-max_new_tokens:]
 
     
 
