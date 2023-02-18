@@ -447,10 +447,15 @@ class RLHF(nn.Module):
         # idx is (B, T) array of indices in the current context
         log_probs = torch.tensor([]).to(device)
         log_probs_ref = torch.tensor([]).to(device)
-        for _ in range(max_new_tokens):
+        values = torch.tensor([]).to(device)
+        for i in range(max_new_tokens):
             # crop idx to the last block_size tokens
             # block_size = 256
             idx_cond = idx[:, -block_size:]
+
+            value = torch.tensor([]).to(device)
+
+            values = torch.cat((values, value), dim=1)
             # get the predictions
             logits, loss = self(idx_cond)
 
@@ -477,7 +482,33 @@ class RLHF(nn.Module):
             # append sampled index to the running sequence
             idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
             
-        return idx[:,-max_new_tokens:], log_probs[:,-max_new_tokens:], log_probs_ref[:,-max_new_tokens:]
+
+            if i == max_new_tokens-1:
+                hard_code_reward = True
+                if hard_code_reward:
+                    states = idx[:,-max_new_tokens:]
+                    rewards = torch.zeros_like(states, dtype=torch.float16)
+                    rewards[states==89] = 1.0
+                    rewards = torch.sum(rewards, 1, keepdim=True)
+                    rewards[rewards > 1] = 1
+                # else:
+                #     rewards = reward_model.forward_reward(torch.tensor(states))[0][:,1].unsqueeze(-1)
+
+                for t in reversed(range(max_new_tokens)):
+                    if t == max_new_tokens - 1:
+                        # value at last state is 0
+                        delta = rewards[:] - values[:, t]
+                        advantages[:, t] = delta
+                        returns[:, t] = rewards[:]
+                    else:
+                        # rewards can only be non-zero at the last state
+                        delta = gamma * values_all[:, t + 1] - values_all[:, t]
+                        advantages_all[:, t] = delta + gamma * lam * advantages_all[:, t + 1]
+                        returns_all[:, t] += gamma * returns_all[:, t + 1]
+
+                    
+            
+        return idx[:,-max_new_tokens:], log_probs[:,-max_new_tokens:], log_probs_ref[:,-max_new_tokens:], rewards
 
     
 

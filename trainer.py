@@ -604,21 +604,11 @@ class RLTrainer(Trainer):
         rews_all = []
         max_iters = 100000
         X, Y = self.get_batch('train') # fetch the very first batch
-        
+        t0  = time.time()
         for iter in range(max_iters):
-
-            states, log_probs, log_probs_reference = model.generate(X, self.block_size, self.device, self.block_size)
             
-            hard_code_reward = True
-            if hard_code_reward:
-                rewards = torch.zeros_like(states, dtype=torch.float16)
-                rewards[states==89] = 1.0
-                rewards = torch.sum(rewards, 1, keepdim=True)
-                rewards[rewards > 1] = 1
-            else:
-                rewards = reward_model.forward_reward(torch.tensor(states))[0][:,1].unsqueeze(-1)
-
-            rewards = rewards.to(self.device)
+            states, log_probs, log_probs_reference, rewards = model.generate(X, self.block_size, self.device, self.block_size)
+            
 
             # minus KL divergence
             rets = rewards * log_probs.squeeze() - 1*(log_probs-log_probs_reference) #- 0.05*log_probs
@@ -630,6 +620,8 @@ class RLTrainer(Trainer):
             rews_all.append(rewards.mean().detach().cpu().numpy())
 
             if iter % 1000 == 0:
+                t1 = time.time()
+                print(f'iter: {iter}, time: {t1-t0}')
                 # print(actor_loss, critic_loss)
                 print(f'Actor loss: {actor_loss}, iter: {iter}')
                 print(f'rets: {np.mean(rews_all[-1000:])}')
