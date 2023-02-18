@@ -540,7 +540,7 @@ class RLTrainer(Trainer):
                         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
                 model.load_state_dict(state_dict)
 
-        separate_reward_model = False     
+        separate_reward_model = True     
         if separate_reward_model:
             import copy
             reward_model = copy.deepcopy(model)
@@ -598,7 +598,7 @@ class RLTrainer(Trainer):
         
         
         # actor_optimizer = torch.optim.AdamW(model.model.policy_head.parameters(), lr=1e-2)
-        actor_optimizer = torch.optim.AdamW(model.parameters(), lr=1e-2)
+        actor_optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 
         last_time = time.time()
         rews_all = []
@@ -607,11 +607,11 @@ class RLTrainer(Trainer):
         t0  = time.time()
         for iter in range(max_iters):
             
-            states, log_probs, log_probs_reference, rewards, advantages = model.generate(X, self.block_size, self.device, self.block_size)
+            states, log_probs, log_probs_reference, rewards, advantages = model.generate(X, self.block_size, self.device, self.block_size, reward_model=reward_model)
             
 
             # minus KL divergence
-            rets = advantages * log_probs.squeeze() - 1*(log_probs-log_probs_reference) #- 0.05*log_probs
+            rets = advantages * log_probs.squeeze() #- 1*(log_probs-log_probs_reference) #- 0.05*log_probs
             actor_loss = -rets.sum()
             actor_optimizer.zero_grad(set_to_none=True)
             actor_loss.backward()
@@ -628,8 +628,11 @@ class RLTrainer(Trainer):
                 current_time = time.time()
                 # print(current_time - last_time)
                 last_time = current_time
-                text = model.generate(X, self.block_size, self.device, self.block_size)[0]
+                text = model.generate(X, self.block_size, self.device, self.block_size, reward_model=reward_model)[0]
                 for i in range(1):
                     text_i = text[i,:]
                     # print(reward(text_i))
-                    print(self.enc.decode(text_i.tolist()))
+                    try:
+                        print(self.enc.decode(text_i.tolist()))
+                    except:
+                        continue 

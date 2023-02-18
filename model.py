@@ -443,7 +443,7 @@ class RLHF(nn.Module):
         return logits, loss
     
     # @torch.no_grad()
-    def generate(self, idx, max_new_tokens, device, block_size, use_reference=True):
+    def generate(self, idx, max_new_tokens, device, block_size, use_reference=True, reward_model=None):
         # idx is (B, T) array of indices in the current context
         log_probs = torch.tensor([]).to(device)
         log_probs_ref = torch.tensor([]).to(device)
@@ -493,9 +493,9 @@ class RLHF(nn.Module):
             
 
             if i == max_new_tokens-1:
-                hard_code_reward = True
-                if hard_code_reward:
-                    states = idx[:,-max_new_tokens:]
+                hard_code_reward = False
+                states = idx[:,-max_new_tokens:]
+                if hard_code_reward: 
                     rewards = torch.zeros_like(states, dtype=torch.float16)
                     rewards[states==89] = 1.0
                     rewards = torch.sum(rewards, 1, keepdim=True)
@@ -503,8 +503,8 @@ class RLHF(nn.Module):
 
                     # if torch.any(rewards):
                     #     print(rewards)
-                # else:
-                #     rewards = reward_model.forward_reward(torch.tensor(states))[0][:,1].unsqueeze(-1)
+                else:
+                    rewards = reward_model.forward_reward(torch.tensor(states))[0][:,1].unsqueeze(-1)
 
                 for t in reversed(range(max_new_tokens)):
                     if t == max_new_tokens - 1:
