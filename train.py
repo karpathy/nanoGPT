@@ -104,6 +104,10 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
+# batch size scheduler
+if batch_size_schedule: 
+    batch_size_max = batch_size 
+    batch_size = 4 
 # poor man's data loader
 data_dir = os.path.join('data', dataset)
 train_data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
@@ -230,6 +234,10 @@ def get_lr(it):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
 
+# batch_size scheduler (when enabled) 
+def get_batch_size(it):
+    return min(batch_size + 1, batch_size_max) if it % 3 ==0 else batch_size 
+
 # logging
 if wandb_log and master_process:
     import wandb
@@ -245,6 +253,8 @@ while True:
 
     # determine and set the learning rate for this iteration
     lr = get_lr(iter_num) if decay_lr else learning_rate
+    # determine and set the batch_size for this iteration 
+    batch_size = get_batch_size(iter_num) if batch_size_schedule else batch_size 
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
