@@ -607,11 +607,11 @@ class RLTrainer(Trainer):
         t0  = time.time()
         for iter in range(max_iters):
             
-            states, log_probs, log_probs_reference, rewards = model.generate(X, self.block_size, self.device, self.block_size)
+            states, log_probs, log_probs_reference, rewards, advantages = model.generate(X, self.block_size, self.device, self.block_size)
             
 
             # minus KL divergence
-            rets = rewards * log_probs.squeeze() - 1*(log_probs-log_probs_reference) #- 0.05*log_probs
+            rets = advantages * log_probs.squeeze() - 1*(log_probs-log_probs_reference) #- 0.05*log_probs
             actor_loss = -rets.sum()
             actor_optimizer.zero_grad(set_to_none=True)
             actor_loss.backward()

@@ -448,14 +448,23 @@ class RLHF(nn.Module):
         log_probs = torch.tensor([]).to(device)
         log_probs_ref = torch.tensor([]).to(device)
         values = torch.tensor([]).to(device)
+
+        idx_cond_all = torch.zeros((idx.shape[0], block_size, max_new_tokens)).to(device)
+        values_all = torch.zeros((idx.shape[0], max_new_tokens)).to(device)
+        actions_all = torch.zeros((idx.shape[0], max_new_tokens)).to(device)
+        rewards_all = torch.zeros((idx.shape[0],)).to(device)
+        log_probs_all = torch.zeros((idx.shape[0], max_new_tokens)).to(device)
+        advantages_all = torch.zeros((idx.shape[0], max_new_tokens)).to(device)
+        returns_all = torch.zeros((idx.shape[0], max_new_tokens)).to(device)
+        gamma = 1
+        lam = 1
+
+        
         for i in range(max_new_tokens):
             # crop idx to the last block_size tokens
             # block_size = 256
             idx_cond = idx[:, -block_size:]
 
-            value = torch.tensor([]).to(device)
-
-            values = torch.cat((values, value), dim=1)
             # get the predictions
             logits, loss = self(idx_cond)
 
@@ -491,25 +500,27 @@ class RLHF(nn.Module):
                     rewards[states==89] = 1.0
                     rewards = torch.sum(rewards, 1, keepdim=True)
                     rewards[rewards > 1] = 1
+
+                    # if torch.any(rewards):
+                    #     print(rewards)
                 # else:
                 #     rewards = reward_model.forward_reward(torch.tensor(states))[0][:,1].unsqueeze(-1)
 
                 for t in reversed(range(max_new_tokens)):
                     if t == max_new_tokens - 1:
                         # value at last state is 0
-                        delta = rewards[:] - values[:, t]
-                        advantages[:, t] = delta
-                        returns[:, t] = rewards[:]
+                        delta = rewards[:].squeeze() - values_all[:, t]
+                        advantages_all[:, t] = delta
+                        # returns_all[:, t] = rewards[:]
                     else:
                         # rewards can only be non-zero at the last state
                         delta = gamma * values_all[:, t + 1] - values_all[:, t]
                         advantages_all[:, t] = delta + gamma * lam * advantages_all[:, t + 1]
-                        returns_all[:, t] += gamma * returns_all[:, t + 1]
+                        # returns_all[:, t] += gamma * returns_all[:, t + 1]
 
                     
             
-        return idx[:,-max_new_tokens:], log_probs[:,-max_new_tokens:], log_probs_ref[:,-max_new_tokens:], rewards
-
+        return idx[:,-max_new_tokens:], log_probs[:,-max_new_tokens:], log_probs_ref[:,-max_new_tokens:], rewards, advantages_all
     
 
 
