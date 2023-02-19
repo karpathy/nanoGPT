@@ -522,5 +522,91 @@ class RLHF(nn.Module):
             
         return idx[:,-max_new_tokens:], log_probs[:,-max_new_tokens:], log_probs_ref[:,-max_new_tokens:], rewards, advantages_all
     
+    def generate_gumbel(self, idx, max_new_tokens, device, block_size, reward_model, use_reference=True):
+        
+        onehot = torch.tensor([]).to(device)
+        for i in range(max_new_tokens):
+            # crop idx to the last block_size tokens
+            # block_size = 256
+            idx_cond = idx[:, -block_size:]
+
+            # get the predictions
+            logits, loss = self(idx_cond)
+
+            # focus only on the last time step
+            logits = logits[:, -1, :] # becomes (B, C)
+            # apply softmax to get probabilities
+            
+            probs_next = F.softmax(logits, dim=-1) # (B, C)
+            #gumbel sample
+            idx_next, onehot_next = self.gumbel_softmax(logits, tau=1, device=idx.device)
+
+            # append sampled index to the running sequence
+            idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
+
+            onehot = torch.cat((onehot, onehot_next), dim=2) # (B, T+1)
+
+            if i == max_new_tokens-1:
+                rewards = reward_model.forward_reward_gumbel(onehot)[0][:,1].unsqueeze(-1)
+
+        return idx[:,-max_new_tokens:], rewards
 
 
+
+
+
+   
+    # modified for PyTorch from https://github.com/ericjang/gumbel-softmax/blob/master/Categorical%20VAE.ipynb
+    def sample_gumbel(self, shape, eps=1e-20):
+        """Sample from Gumbel(0, 1)"""
+        U = torch.distributions.Uniform(0,1).sample(shape)
+        return -torch.log(-torch.log(U + eps) + eps)
+
+    # modified for PyTorch from https://github.com/ericjang/gumbel-softmax/blob/master/Categorical%20VAE.ipynb
+    def gumbel_softmax_sample(self, logits, tau, device, dim=1):
+        """ Draw a sample from the Gumbel-Softmax distribution"""
+        y = logits + self.sample_gumbel(logits.shape).to(device)
+        return F.softmax(y / tau, dim=dim)
+
+    def gumbel_softmax(self, logits, tau, device):
+        gumbel_sample = self.gumbel_softmax_sample(logits, tau, device)
+        probs = F.softmax(logits, dim=-1)
+        idx_next = torch.multinomial(probs, num_samples=1)
+        onehot_idx_next = torch.nn.functional.one_hot(idx_next, num_classes=logits.shape[1]).squeeze()
+        y = (onehot_idx_next-gumbel_sample).detach() + gumbel_sample
+        idx_next_from_y = torch.argmax(y, dim=1).unsqueeze(-1)
+        return idx_next_from_y, y.unsqueeze(-1)
+
+    def forward_reward_gumbel(self, onehots, idx=None, targets=None):
+        # (embd, vocab) @ (vocab, embd) = (embd,embd)
+        
+        device = onehots.device
+        t = onehots.shape[2]
+        b = onehots.shape[0]
+        # b, t = idx.size()
+        # assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
+        pos = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(0) # shape (1, t)
+
+        # forward the GPT model itself
+        # tok_emb = self.model.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
+        tok_emb = (self.model.transformer.wte.weight.T @ onehots)
+        tok_emb = torch.transpose(tok_emb, 1, 2)
+
+        if idx is not None:
+            tok_emb2 = self.model.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
+            assert torch.all(tok_emb == tok_emb2)
+        pos_emb = self.model.transformer.wpe(pos) # position embeddings of shape (1, t, n_embd)
+        x = self.model.transformer.drop(tok_emb + pos_emb)
+        for block in self.model.transformer.h:
+            x = block(x)
+        x = self.model.transformer.ln_f(x)
+        x = x.view(b, self.block_size*self.n_embd)
+        logits = self.model.reward_head(x)
+        probs = torch.softmax(logits,1)
+        if targets is not None:
+            # if we are given some desired targets also calculate the loss
+            loss = F.cross_entropy(logits, targets, ignore_index=-1)
+        else:
+            loss = None
+
+        return probs, loss
