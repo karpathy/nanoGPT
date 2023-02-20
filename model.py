@@ -372,7 +372,7 @@ class GPT(nn.Module):
         return idx
 
 class RLHF(nn.Module):
-    def __init__(self, model, mode):
+    def __init__(self, model, mode, prob_reward=False):
         super().__init__()
         self.model = model
         self.config = model.config
@@ -380,10 +380,16 @@ class RLHF(nn.Module):
         # reward model
         self.n_embd = model.lm_head.in_features
         self.block_size = model.config.block_size
-        model.reward_head = nn.Linear(self.n_embd*self.block_size, 1, bias=False)
+        # model.reward_head = nn.Sequential(nn.Linear(self.n_embd*self.block_size, self.n_embd*self.block_size), nn.ReLU(), nn.Linear(self.n_embd*self.block_size, 1, bias=False))
         model.policy_head = nn.Linear(model.lm_head.in_features, model.lm_head.out_features, bias=False)
         # model.policy_head = 
         self.mode = mode
+        self.prob_reward = prob_reward
+        if prob_reward:
+            model.reward_head = nn.Linear(self.n_embd*self.block_size, 2, bias=False)
+        else:
+            model.reward_head = nn.Linear(self.n_embd*self.block_size, 1, bias=False)
+        
 
     # def forward_reward(self, idx, targets=None):
     #     device = idx.device
@@ -423,9 +429,19 @@ class RLHF(nn.Module):
             x = block(x)
         x = self.model.transformer.ln_f(x)
         x = x.view(b, self.block_size*self.n_embd)
+
         rewards = self.model.reward_head(x)
 
-        return rewards
+        if self.prob_reward:
+            probs = torch.softmax(rewards,1)
+            if targets is not None:
+                # if we are given some desired targets also calculate the loss
+                loss = F.cross_entropy(probs, targets, ignore_index=-1)
+            else:
+                loss = None
+            return probs, loss
+        else:
+            return rewards
     
     def forward(self, idx, targets=None):
         if self.mode == 'reward':
@@ -522,7 +538,11 @@ class RLHF(nn.Module):
                     # if torch.any(rewards):
                     #     print(rewards)
                 else:
-                    rewards = reward_model.forward_reward(torch.tensor(states))[0][:,1].unsqueeze(-1)
+                    if self.prob_reward:
+                        rewards = reward_model.forward_reward(torch.tensor(states))[0][:,1].unsqueeze(-1)
+                    else:
+                        rewards = reward_model.forward_reward(torch.tensor(states))
+                    
 
                 for t in reversed(range(max_new_tokens)):
                     if t == max_new_tokens - 1:
@@ -565,7 +585,10 @@ class RLHF(nn.Module):
             onehot = torch.cat((onehot, onehot_next), dim=2) # (B, T+1)
 
             if i == max_new_tokens-1:
-                rewards = reward_model.forward_reward_gumbel(onehot)[0][:,1].unsqueeze(-1)
+                if self.prob_reward:
+                    rewards = reward_model.forward_reward_gumbel(onehot)[0][:,1].unsqueeze(-1)
+                else:
+                    rewards = reward_model.forward_reward_gumbel(onehot)
 
         return idx[:,-max_new_tokens:], rewards
 
@@ -619,12 +642,16 @@ class RLHF(nn.Module):
             x = block(x)
         x = self.model.transformer.ln_f(x)
         x = x.view(b, self.block_size*self.n_embd)
-        logits = self.model.reward_head(x)
-        probs = torch.softmax(logits,1)
-        if targets is not None:
-            # if we are given some desired targets also calculate the loss
-            loss = F.cross_entropy(logits, targets, ignore_index=-1)
-        else:
-            loss = None
 
-        return probs, loss
+        rewards = self.model.reward_head(x)
+
+        if self.prob_reward:
+            probs = torch.softmax(rewards,1)
+            if targets is not None:
+                # if we are given some desired targets also calculate the loss
+                loss = F.cross_entropy(rewards, targets, ignore_index=-1)
+            else:
+                loss = None
+            return probs, loss
+        else:
+            return rewards

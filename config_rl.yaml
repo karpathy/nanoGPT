@@ -1,3 +1,5 @@
+algorithm:
+  method: pg
 IO:
   out_dir: out
   eval_interval: 100

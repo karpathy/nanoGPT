@@ -1,5 +1,5 @@
 
-from trainer import RewardModelTrainer2
+from trainer_reward import RewardModelTrainer
 import yaml
 
 from datasets import load_dataset
@@ -110,12 +110,11 @@ val_pairs = create_comparison_dataset(data_path, "test")
 
 # Make pairwise datasets for training
 print("Creating pairwise datasets")
-print("Block size:", config['block_size'])
 train_dataset = PairwiseDataset(train_pairs, max_length=config['block_size'])
 val_dataset = PairwiseDataset(val_pairs, max_length=config['block_size'])
 
 
-trainer = RewardModelTrainer2(config, train_dataset, val_dataset, collate_fn=collate_fn)
+trainer = RewardModelTrainer(config, train_dataset, val_dataset, collate_fn=collate_fn)
 
 trainer.train()
 

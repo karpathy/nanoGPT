@@ -6,7 +6,7 @@ import torch
 from model import GPTConfig, GPT
 import yaml
 from torch.nn.parallel import DistributedDataParallel as DDP
-from trainer import RLTrainer
+from trainer_rl import PolicyGradientTrainer, GumbelTrainer
 
 # load config.yaml from current directory
 with open('config_rl.yaml') as f:
@@ -18,8 +18,16 @@ with open('config_rl.yaml') as f:
             config[k2] = v2
     # convert to dotdict
 print(config)
-trainer = RLTrainer(config)
 
+if config['method'] == 'gumbel':
+    print('Using Gumbel method')
+    trainer = GumbelTrainer(config)
+elif config['method'] == 'pg':
+    print('Using Policy Gradient method')
+    trainer = PolicyGradientTrainer(config)
+else:
+    raise NotImplementedError
+        
 trainer.train()
 
 
