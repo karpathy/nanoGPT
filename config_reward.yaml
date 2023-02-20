@@ -6,7 +6,7 @@ IO:
   eval_only: False # if True, script exits right after the first eval
   always_save_checkpoint: True # if True, always save a checkpoint after each eval
   init_from: resume # 'scratch' or 'resume' or 'gpt2*'
-  init_multihead_from: resume
+  init_multihead_from: scratch
   out_dir_multihead: out_reward # used if restoring multihead
 wandb:
   wandb_log: False # disabled by default
