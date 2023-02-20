@@ -28,13 +28,13 @@ import torch
 from model import GPTConfig, GPT
 import yaml
 from torch.nn.parallel import DistributedDataParallel as DDP
-from trainer import Trainer
+from trainers.trainer import Trainer
 from accelerate import Accelerator
 
 
 
 # load config.yaml from current directory
-with open('config.yaml') as f:
+with open('config/config.yaml') as f:
     conf = yaml.load(f, Loader=yaml.FullLoader)
     # nested dictionary structure
     config = {}               

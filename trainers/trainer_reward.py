@@ -5,7 +5,7 @@ from torch.distributed import destroy_process_group
 import wandb
 import time, os
 from model import RLHF
-from trainer import Trainer
+from trainers.trainer import Trainer
 
 # This one for reward models similar to InstructGPT paper (rewards based on comparisons)
 class RewardModelTrainer(Trainer):

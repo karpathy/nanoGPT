@@ -1,12 +1,12 @@
 
-from trainer_reward import ProbRewardModelTrainer
+from trainers.trainer_reward import ProbRewardModelTrainer
 import yaml
 
 from tqdm import tqdm
 import tiktoken
 import torch
 
-with open('config_reward.yaml') as f:
+with open('config/config_reward.yaml') as f:
     conf = yaml.load(f, Loader=yaml.FullLoader)
     # nested dictionary structure
     config = {}               

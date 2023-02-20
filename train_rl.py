@@ -6,7 +6,7 @@ import torch
 from model import GPTConfig, GPT
 import yaml
 from torch.nn.parallel import DistributedDataParallel as DDP
-from trainer_rl import PolicyGradientTrainer, GumbelTrainer
+from trainers.trainer_rl import PolicyGradientTrainer, GumbelTrainer
 
 # load config.yaml from current directory
 with open('config_rl.yaml') as f:
