@@ -23,7 +23,7 @@ class PolicyGradientTrainer(Trainer):
         # model init
         model = self.init_model()
 
-        model = RLHF(model, self.mode, prob_reward=True)
+        model = RLHF(model, self.mode, discrete_reward=self.config['discrete_reward'])
 
         if self.config['init_multihead_from'] == 'scratch':
             print("initializing multihead from scratch")
@@ -118,7 +118,7 @@ class GumbelTrainer(Trainer):
         # model init
         model = self.init_model()
 
-        model = RLHF(model, self.mode, prob_reward=True)
+        model = RLHF(model, self.mode, discrete_reward=self.config['discrete_reward'])
 
         if self.config['init_multihead_from'] == 'scratch':
             print("initializing multihead from scratch")

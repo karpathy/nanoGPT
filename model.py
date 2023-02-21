@@ -372,7 +372,7 @@ class GPT(nn.Module):
         return idx
 
 class RLHF(nn.Module):
-    def __init__(self, model, mode, prob_reward=False):
+    def __init__(self, model, mode, discrete_reward=False):
         super().__init__()
         self.model = model
         self.config = model.config
@@ -384,8 +384,9 @@ class RLHF(nn.Module):
         model.policy_head = nn.Linear(model.lm_head.in_features, model.lm_head.out_features, bias=False)
         # model.policy_head = 
         self.mode = mode
-        self.prob_reward = prob_reward
-        if prob_reward:
+        self.discrete_reward = discrete_reward
+        if discrete_reward:
+            # probability over two categories, [1, 0] is no reward, [0, 1] is reward
             model.reward_head = nn.Linear(self.n_embd*self.block_size, 2, bias=False)
         else:
             model.reward_head = nn.Linear(self.n_embd*self.block_size, 1, bias=False)
@@ -407,7 +408,7 @@ class RLHF(nn.Module):
 
         rewards = self.model.reward_head(x)
 
-        if self.prob_reward:
+        if self.discrete_reward:
             probs = torch.softmax(rewards,1)
             if targets is not None:
                 # if we are given some desired targets also calculate the loss
@@ -511,7 +512,7 @@ class RLHF(nn.Module):
                     rewards[rewards > 1] = 1
 
                 else:
-                    if self.prob_reward:
+                    if self.discrete_reward:
                         rewards = reward_model.forward_reward(torch.tensor(states))[0][:,1].unsqueeze(-1)
                     else:
                         rewards = reward_model.forward_reward(torch.tensor(states))
@@ -558,7 +559,7 @@ class RLHF(nn.Module):
             onehot = torch.cat((onehot, onehot_next), dim=2) # (B, T+1)
 
             if i == max_new_tokens-1:
-                if self.prob_reward:
+                if self.discrete_reward:
                     rewards = reward_model.forward_reward_gumbel(onehot)[0][:,1].unsqueeze(-1)
                 else:
                     rewards = reward_model.forward_reward_gumbel(onehot)
@@ -614,7 +615,7 @@ class RLHF(nn.Module):
 
         rewards = self.model.reward_head(x)
 
-        if self.prob_reward:
+        if self.discrete_reward:
             probs = torch.softmax(rewards,1)
             if targets is not None:
                 # if we are given some desired targets also calculate the loss
