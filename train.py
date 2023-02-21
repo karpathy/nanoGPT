@@ -20,6 +20,7 @@ import os
 import time
 import math
 import pickle
+import inspect
 from contextlib import nullcontext
 
 import numpy as np
@@ -29,6 +30,7 @@ from torch.distributed import init_process_group, destroy_process_group
 
 from model import GPTConfig, GPT
 
+import minlora
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
@@ -180,13 +182,46 @@ elif init_from.startswith('gpt2'):
 if block_size < model.config.block_size:
     model.crop_block_size(block_size)
     model_args['block_size'] = block_size # so that the checkpoint will have the right value
+if use_lora:
+    minlora.add_lora(model, lora_config=lora_config)
+    minlora.tie_weights(linear=model.lm_head, embedding=model.transformer.wte)
 model.to(device)
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
 # optimizer
-optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
+def configure_optimizers_lora(self, weight_decay, learning_rate, betas, device_type):
+    # we apply weight decay to all lora params
+    optim_groups = [
+        # note: .get_lora_params() returns a generator
+        # we need to wrap it in a list so we can consume it twice
+        {"params": list(minlora.get_lora_params(self)) , "weight_decay": weight_decay},
+        # you can also add biases for fine-tuning,
+        # but I want to make sure lora alone works
+        # {"params": minlora.get_bias_params(self), "weight_decay": 0.0}, # bias params don't get weight decay
+    ]
+
+    def parameter_count(optim_groups):
+        n = sum(p.numel() for group in optim_groups for p in group["params"])
+        if n < 1e6:
+            return f"{n/1e3:.1f}k"
+        else:
+            return f"{n/1e6:.1f}M"
+
+    print(f"optimizing {parameter_count(optim_groups)} parameters")
+
+    # new PyTorch nightly has a new 'fused' option for AdamW that is much faster
+    use_fused = (device_type == "cuda") and ("fused" in inspect.signature(torch.optim.AdamW).parameters)
+    print(f"using fused AdamW: {use_fused}")
+    extra_args = dict(fused=True) if use_fused else dict()
+    optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
+
+    return optimizer
+if use_lora:
+    optimizer = configure_optimizers_lora(model, weight_decay, learning_rate, (beta1, beta2), device_type)
+else:
+    optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 
@@ -271,6 +306,8 @@ while True:
                     'best_val_loss': best_val_loss,
                     'config': config,
                 }
+                if use_lora:
+                    checkpoint['lora'] = minlora.get_lora_state_dict(raw_model)
                 print(f"saving checkpoint to {out_dir}")
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
     if iter_num == 0 and eval_only:
