@@ -1,6 +1,6 @@
 algorithm:
   method: pg # pg or gumbel
-  hard_code_reward: False # use a learned reward model or hard code reward (latter does not work with Gumbel)
+  hard_code_reward: True # use a learned reward model or hard code reward (latter does not work with Gumbel)
   separate_reward_model: True # when using a reward model, instantiate it separately rather than share params with LM
 IO:
   out_dir: out
@@ -10,7 +10,7 @@ IO:
   eval_only: False # if True, script exits right after the first eval
   always_save_checkpoint: True # if True, always save a checkpoint after each eval
   init_from: resume # 'scratch' or 'resume' or 'gpt2*'
-  init_multihead_from: resume
+  init_multihead_from: scratch
   out_dir_multihead: out_reward # used if restoring multihead
 wandb:
   wandb_log: False # disabled by default

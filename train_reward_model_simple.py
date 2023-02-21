@@ -1,5 +1,5 @@
 
-from trainers.trainer_reward import ProbRewardModelTrainer
+from trainers.reward_trainer import ProbRewardModelTrainer
 import yaml
 
 from tqdm import tqdm

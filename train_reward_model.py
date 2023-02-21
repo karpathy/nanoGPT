@@ -1,5 +1,5 @@
 
-from trainers.trainer_reward import RewardModelTrainer
+from trainers.reward_trainer import RewardModelTrainer
 import yaml
 
 from datasets import load_dataset
