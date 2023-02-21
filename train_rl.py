@@ -9,7 +9,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from trainers.trainer_rl import PolicyGradientTrainer, GumbelTrainer
 
 # load config.yaml from current directory
-with open('config_rl.yaml') as f:
+with open('config/config_rl.yaml') as f:
     conf = yaml.load(f, Loader=yaml.FullLoader)
     # nested dictionary structure
     config = {}               
@@ -21,6 +21,7 @@ print(config)
 
 if config['method'] == 'gumbel':
     print('Using Gumbel method')
+    assert config['hard_code_reward'] == False, 'hard_code_reward must be False for Gumbel method'
     trainer = GumbelTrainer(config)
 elif config['method'] == 'pg':
     print('Using Policy Gradient method')

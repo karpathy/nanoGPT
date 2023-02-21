@@ -389,31 +389,6 @@ class RLHF(nn.Module):
             model.reward_head = nn.Linear(self.n_embd*self.block_size, 2, bias=False)
         else:
             model.reward_head = nn.Linear(self.n_embd*self.block_size, 1, bias=False)
-        
-
-    # def forward_reward(self, idx, targets=None):
-    #     device = idx.device
-    #     b, t = idx.size()
-    #     assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
-    #     pos = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(0) # shape (1, t)
-
-    #     # forward the GPT model itself
-    #     tok_emb = self.model.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
-    #     pos_emb = self.model.transformer.wpe(pos) # position embeddings of shape (1, t, n_embd)
-    #     x = self.model.transformer.drop(tok_emb + pos_emb)
-    #     for block in self.model.transformer.h:
-    #         x = block(x)
-    #     x = self.model.transformer.ln_f(x)
-    #     x = x.view(b, self.block_size*self.n_embd)
-    #     logits = self.model.reward_head(x)
-    #     probs = torch.softmax(logits,1)
-    #     if targets is not None:
-    #         # if we are given some desired targets also calculate the loss
-    #         loss = F.cross_entropy(logits, targets, ignore_index=-1)
-    #     else:
-    #         loss = None
-
-    #     return probs, loss
     
     def forward_reward(self, idx, targets=None):
         device = idx.device
@@ -477,7 +452,7 @@ class RLHF(nn.Module):
         return logits, loss
     
     # @torch.no_grad()
-    def generate(self, idx, max_new_tokens, device, block_size, use_reference=True, reward_model=None):
+    def generate(self, idx, max_new_tokens, device, block_size, use_reference=True, reward_model=None, hard_code_reward=True):
         # idx is (B, T) array of indices in the current context
         log_probs = torch.tensor([]).to(device)
         log_probs_ref = torch.tensor([]).to(device)
@@ -493,7 +468,7 @@ class RLHF(nn.Module):
         gamma = 1
         lam = 1
 
-        
+        # TODO: Critic, PPO
         for i in range(max_new_tokens):
             # crop idx to the last block_size tokens
             # block_size = 256
@@ -527,16 +502,14 @@ class RLHF(nn.Module):
             
 
             if i == max_new_tokens-1:
-                hard_code_reward = False
                 states = idx[:,-max_new_tokens:]
                 if hard_code_reward: 
+                    # simple test where reward for outputting the letter 'z' (89)
                     rewards = torch.zeros_like(states, dtype=torch.float16)
                     rewards[states==89] = 1.0
                     rewards = torch.sum(rewards, 1, keepdim=True)
                     rewards[rewards > 1] = 1
 
-                    # if torch.any(rewards):
-                    #     print(rewards)
                 else:
                     if self.prob_reward:
                         rewards = reward_model.forward_reward(torch.tensor(states))[0][:,1].unsqueeze(-1)
@@ -591,10 +564,6 @@ class RLHF(nn.Module):
                     rewards = reward_model.forward_reward_gumbel(onehot)
 
         return idx[:,-max_new_tokens:], rewards
-
-
-
-
 
    
     # modified for PyTorch from https://github.com/ericjang/gumbel-softmax/blob/master/Categorical%20VAE.ipynb

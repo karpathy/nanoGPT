@@ -42,15 +42,23 @@ class PolicyGradientTrainer(Trainer):
                         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
                 model.load_state_dict(state_dict)
 
-        separate_reward_model = True     
-        if separate_reward_model:
-            import copy
-            reward_model = copy.deepcopy(model)
+        
+        if self.config['hard_code_reward']:
+            reward_model = None
+            print('Using hard-coded reward')
         else:
-            reward_model = model
+            print('Using learned reward model')
+            if self.config['separate_reward_model']:
+                import copy
+                reward_model = copy.deepcopy(model)
+                print('Reward model instantiated separately')
+            else:
+                reward_model = model
+                print('Reward model and actor model share backbone')
+            reward_model.to(self.device)
+        
         model.to(self.device)
-        reward_model.to(self.device)
-
+        
         # actor_optimizer = torch.optim.AdamW(model.model.policy_head.parameters(), lr=1e-2)
         actor_optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 
@@ -61,7 +69,8 @@ class PolicyGradientTrainer(Trainer):
         t0  = time.time()
         for iter in range(max_iters):
             
-            states, log_probs, log_probs_reference, rewards, advantages = model.generate(X, self.block_size, self.device, self.block_size, reward_model=reward_model)
+            states, log_probs, log_probs_reference, rewards, advantages = model.generate(
+                X, self.block_size, self.device, self.block_size, reward_model=reward_model, hard_code_reward=self.config['hard_code_reward'])
 
             # minus KL divergence
             rets = advantages * log_probs.squeeze() #- 1*(log_probs-log_probs_reference) #- 0.05*log_probs

@@ -1,5 +1,7 @@
 algorithm:
-  method: pg
+  method: pg # pg or gumbel
+  hard_code_reward: False # use a learned reward model or hard code reward (latter does not work with Gumbel)
+  separate_reward_model: True # when using a reward model, instantiate it separately rather than share params with LM
 IO:
   out_dir: out
   eval_interval: 100
