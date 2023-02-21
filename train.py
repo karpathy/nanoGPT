@@ -29,7 +29,6 @@ from model import GPTConfig, GPT
 import yaml
 from torch.nn.parallel import DistributedDataParallel as DDP
 from trainers.trainer import Trainer
-from accelerate import Accelerator
 
 
 
