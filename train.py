@@ -48,6 +48,11 @@ dataset = 'openwebtext'
 gradient_accumulation_steps = 5 # used to simulate larger batch sizes
 batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size = 1024
+# batch size scheduler settings 
+batch_size_initial=batch_size//4
+batch_size_max_iter=400000
+batch_size_schedule=False
+batch_size_max=batch_size
 # model
 n_layer = 12
 n_head = 12
@@ -103,11 +108,10 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 # note: float16 data type will automatically use a GradScaler
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
-
 # batch size scheduler
 if batch_size_schedule: 
-    batch_size_max = batch_size 
-    batch_size = 4 
+    batch_size_max = batch_size
+    batch_size=batch_size_initial
 # poor man's data loader
 data_dir = os.path.join('data', dataset)
 train_data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
@@ -236,7 +240,7 @@ def get_lr(it):
 
 # batch_size scheduler (when enabled) 
 def get_batch_size(it):
-    return min(batch_size + 1, batch_size_max) if it % 3 ==0 else batch_size 
+    return min(batch_size + 1, batch_size_max) if it % (batch_size_max_iter/100) ==0 else batch_size 
 
 # logging
 if wandb_log and master_process:
@@ -255,6 +259,7 @@ while True:
     lr = get_lr(iter_num) if decay_lr else learning_rate
     # determine and set the batch_size for this iteration 
     batch_size = get_batch_size(iter_num) if batch_size_schedule else batch_size 
+    print(batch_size) 
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 

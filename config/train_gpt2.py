@@ -10,7 +10,10 @@ wandb_run_name='gpt2-124M'
 # 12 batch size * 1024 block size * 5 gradaccum * 8 GPUs = 491,520
 # batch schedule increases to batch_size given when enabled 
 batch_size = 12
-batch_schedule_increase = True
+batch_schedule_increase = False
+batch_size_max_iter = 400000 # batch_size will be at a max at this iter (typically <=max_iter)
+batch_size_initial = 4 # starting batch_size
+
 block_size = 1024
 gradient_accumulation_steps = 5
 
