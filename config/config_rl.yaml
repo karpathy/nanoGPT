@@ -1,5 +1,5 @@
 algorithm:
-  method: pg # pg or gumbel
+  method: gumbel # pg or gumbel
   hard_code_reward: False # use a learned reward model or hard code reward (latter does not work with Gumbel)
   separate_reward_model: True # when using a reward model, instantiate it separately rather than share params with LM
   discrete_reward: True # reward output is 0 or 1 sample if True, otherwise reward is continuous
@@ -18,7 +18,7 @@ wandb:
   wandb_project: rlhf # 'gpt2'
   wandb_run_name: gpt2 # 'run' + str(time.time())
 data:
-  dataset: openwebtext # 'openwebtext', 'shakespeare', 'openai_summarize_tldr'
+  dataset: shakespeare # 'openwebtext', 'shakespeare', 'openai_summarize_tldr'
   gradient_accumulation_steps: 1 # used to simulate larger batch sizes
   batch_size: 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
   block_size: 16

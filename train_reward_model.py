@@ -4,7 +4,6 @@ import yaml
 
 from datasets import load_dataset
 from torch.utils.data import Dataset
-# assert enc.decode(enc.encode("hello world")) == "hello world"
 from tqdm import tqdm
 import tiktoken
 import torch

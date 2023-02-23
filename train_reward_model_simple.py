@@ -15,7 +15,7 @@ with open('config/config_reward.yaml') as f:
             config[k2] = v2
 print(config)
 
-trainer = ProbRewardModelTrainer(config, prob_reward=True)
+trainer = ProbRewardModelTrainer(config, discrete_reward=True)
 
 trainer.train()
 

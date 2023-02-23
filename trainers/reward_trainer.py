@@ -170,12 +170,12 @@ class RewardModelTrainer(Trainer):
 
 # This one is for reward models which output a probability of reward directly from a given text (no comparison)
 class ProbRewardModelTrainer(Trainer):
-    def __init__(self, config, prob_reward=False):
+    def __init__(self, config, discrete_reward=False):
         super().__init__(config)
         import tiktoken
         self.enc = tiktoken.get_encoding("gpt2")
         self.mode = 'reward'
-        self.prob_reward = prob_reward
+        self.discrete_reward = discrete_reward
 
     def get_batch(self, split):
         # generate a small batch of data of inputs x and targets y
@@ -190,7 +190,7 @@ class ProbRewardModelTrainer(Trainer):
             x, y = x.to(self.device), y.to(self.device)
         return x, y
     
-    def reward(self, sequence, t='z'):
+    def reward(self, sequence, t='p'):
         if t in self.enc.decode(sequence.tolist()):
             # print('hello')
             return torch.tensor([0.0,1.0])
@@ -206,13 +206,16 @@ class ProbRewardModelTrainer(Trainer):
         print("input: ", text[:30], f"likely no reward: {reward_probs[0][-1]} \n")
         # test_text = text[:4] + 'z' + text[4 + 1:-1]
         test_text = list(text)
-        test_text[4] = 'z'
+        test_text[3] = 'p'
+        test_text[4] = 'o'
         test_text = ''.join(test_text)
 
         test_text_enc = torch.tensor(self.enc.encode(test_text)[:self.block_size]).unsqueeze(0)
-        test_reward_probs, _ = model(test_text_enc.to(self.device))
-
-        print("input: ", test_text[:30], f"expect +ve reward: {test_reward_probs[0][-1]} \n")
+        try:
+            test_reward_probs, _ = model(test_text_enc.to(self.device))
+            print("input: ", test_text[:30], f"expect +ve reward: {test_reward_probs[0][-1]} \n")
+        except:
+            pass
 
         if self.wandb_log:
             wandb.log({
@@ -247,7 +250,7 @@ class ProbRewardModelTrainer(Trainer):
         
 
         model = self.init_model()
-        model = RLHF(model, self.mode, prob_reward=self.prob_reward)
+        model = RLHF(model, self.mode, discrete_reward=self.discrete_reward)
         
         if self.config['init_multihead_from'] == 'scratch':
             print("initializing multihead from scratch")
