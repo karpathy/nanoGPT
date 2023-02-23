@@ -183,6 +183,8 @@ class ProbRewardModelTrainer(Trainer):
         ix = torch.randint(len(data) - self.block_size, (self.batch_size,))
         x = torch.stack([torch.from_numpy((data[i:i+self.block_size]).astype(np.int64)) for i in ix])
         y = torch.stack([self.reward(torch.from_numpy((data[i+1:i+1+self.block_size]).astype(np.int64))) for i in ix])
+        
+
         if self.device_type == 'cuda':
             # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
             x, y = x.pin_memory().to(self.device, non_blocking=True), y.pin_memory().to(self.device, non_blocking=True)
@@ -190,7 +192,7 @@ class ProbRewardModelTrainer(Trainer):
             x, y = x.to(self.device), y.to(self.device)
         return x, y
     
-    def reward(self, sequence, t='p'):
+    def reward(self, sequence, t='z'):
         if t in self.enc.decode(sequence.tolist()):
             # print('hello')
             return torch.tensor([0.0,1.0])
@@ -200,20 +202,32 @@ class ProbRewardModelTrainer(Trainer):
     def evaluate(self, model, ctx, X):
         losses = self.estimate_loss(model, ctx)
         print(f"step {self.iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-        reward_probs, _ = model(X)
+        
+        
         text = self.enc.decode(X[self.iter_num % self.eval_interval].tolist())
 
-        print("input: ", text[:30], f"likely no reward: {reward_probs[0][-1]} \n")
+        try:
+            reward_probs, _ = model(X[self.iter_num % self.eval_interval].unsqueeze(0))
+            actual_reward_probs = self.reward(X[self.iter_num % self.eval_interval])[1]
+
+            print("input: ", text[:30], f"expect {actual_reward_probs}, reward: {reward_probs[0][-1]} \n")
+        except:
+            pass
+        
         # test_text = text[:4] + 'z' + text[4 + 1:-1]
         test_text = list(text)
-        test_text[3] = 'p'
-        test_text[4] = 'o'
+        test_text[3] = 'z'
+        # test_text[4] = 'a'
+        # test_text[5] = 'n'
+        # test_text[6] = 'd'
+        # test_text[7] = ' '
         test_text = ''.join(test_text)
-
-        test_text_enc = torch.tensor(self.enc.encode(test_text)[:self.block_size]).unsqueeze(0)
         try:
+            test_text_enc = torch.tensor(self.enc.encode(test_text)[:self.block_size]).unsqueeze(0)
             test_reward_probs, _ = model(test_text_enc.to(self.device))
-            print("input: ", test_text[:30], f"expect +ve reward: {test_reward_probs[0][-1]} \n")
+            actual_reward_probs = self.reward(test_text_enc[0].to(self.device))[1]
+
+            print("input: ", test_text[:30], f"expect {actual_reward_probs}, reward: {test_reward_probs[0][-1]} \n")
         except:
             pass
 
@@ -248,6 +262,8 @@ class ProbRewardModelTrainer(Trainer):
 
         # model init
         
+        if self.master_process:
+            os.makedirs(self.config['out_dir_multihead'], exist_ok=True)
 
         model = self.init_model()
         model = RLHF(model, self.mode, discrete_reward=self.discrete_reward)

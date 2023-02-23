@@ -139,6 +139,7 @@ class GumbelTrainer(Trainer):
 
         separate_reward_model = True     
         if separate_reward_model:
+            print('Reward model instantiated as copy')
             import copy
             reward_model = copy.deepcopy(model)
         else:

@@ -1,3 +1,27 @@
+# nanoChatGPT
+
+A crude in-efficient RLHF layer on top of nanoGPT to test an idea I had. I have verified it works for a very basic example where you incentivise the network to produce the letter 'z'. The motivation was to test out backpropagating through the reward model using Straight-Through Gumbel-Softmax rather than using policy gradient.
+
+train.py automatically uses config/config.yaml
+
+```
+$ python train.py
+```
+
+Once a basic model is trained, can fine tune a reward model for a simple example with underlying reward rule. The default in the code is to produce the letter 'z':
+
+```
+$ python train_reward_model_simple.py
+```
+
+This creates a multihead model on top of the existing one. Once the reward model is trained sufficiently you can train the RL policy using:
+
+```
+$ python train_rl.py
+```
+
+The default config uses the Gumbel trick but it can be set to PG and it will do policy gradient instead (the latter needs a critic etc). I have validated that the Gumbel method works given that the preceding steps also worked so curious to see if this would scale to large models.
+
 
 # nanoGPT
 

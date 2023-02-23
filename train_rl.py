@@ -11,7 +11,6 @@ with open('config/config_rl.yaml') as f:
         for k2, v2 in v.items():
             config[k2] = v2
     # convert to dotdict
-print(config)
 
 if config['method'] == 'gumbel':
     print('Using Gumbel method')
