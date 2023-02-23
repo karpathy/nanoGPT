@@ -192,14 +192,14 @@ class ProbRewardModelTrainer(Trainer):
             x, y = x.to(self.device), y.to(self.device)
         return x, y
     
-    def reward(self, sequence, t='z'):
+    def reward(self, sequence, t='and'):
         if t in self.enc.decode(sequence.tolist()):
             # print('hello')
             return torch.tensor([0.0,1.0])
         else:
             return torch.tensor([1.0, 0.0])
 
-    def evaluate(self, model, ctx, X):
+    def evaluate(self, model, ctx, X, lr):
         losses = self.estimate_loss(model, ctx)
         print(f"step {self.iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
         
@@ -216,11 +216,11 @@ class ProbRewardModelTrainer(Trainer):
         
         # test_text = text[:4] + 'z' + text[4 + 1:-1]
         test_text = list(text)
-        test_text[3] = 'z'
-        # test_text[4] = 'a'
-        # test_text[5] = 'n'
-        # test_text[6] = 'd'
-        # test_text[7] = ' '
+        test_text[3] = ' '
+        test_text[4] = 'a'
+        test_text[5] = 'n'
+        test_text[6] = 'd'
+        test_text[7] = ' '
         test_text = ''.join(test_text)
         try:
             test_text_enc = torch.tensor(self.enc.encode(test_text)[:self.block_size]).unsqueeze(0)
@@ -236,8 +236,8 @@ class ProbRewardModelTrainer(Trainer):
                 "iter": self.iter_num,
                 "train/loss": losses['train'],
                 "val/loss": losses['val'],
-                "lr": self.lr,
-                "mfu": self.running_mfu*100, # convert to percentage
+                "lr": lr,
+                # "mfu": self.running_mfu*100, # convert to percentage
             })
         if losses['val'] < self.best_val_loss or self.always_save_checkpoint:
             self.best_val_loss = losses['val']
@@ -311,7 +311,7 @@ class ProbRewardModelTrainer(Trainer):
 
             # every once in a while evaluate the loss on train and val sets
             if self.iter_num % self.eval_interval == 0 and self.master_process:
-                self.evaluate(model, ctx, X)
+                self.evaluate(model, ctx, X, lr)
 
             if self.iter_num == 0 and self.eval_only:
                 break

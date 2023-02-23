@@ -9,7 +9,7 @@ IO:
   init_multihead_from: scratch
   out_dir_multihead: out_reward # used if restoring multihead
 wandb:
-  wandb_log: False # disabled by default
+  wandb_log: True # disabled by default
   wandb_project: rlhf # 'gpt2'
   wandb_run_name: gpt2 # 'run' + str(time.time())
 data:

@@ -215,7 +215,7 @@ class Trainer():
         
         return model
     
-    def evaluate(self, model, ctx):
+    def evaluate(self, model, ctx, lr):
         losses = self.estimate_loss(model, ctx)
         print(f"step {self.iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
         if self.wandb_log:
@@ -224,7 +224,7 @@ class Trainer():
                 "train/loss": losses['train'],
                 "val/loss": losses['val'],
                 "lr": lr,
-                "mfu": running_mfu*100, # convert to percentage
+                # "mfu": running_mfu*100, # convert to percentage
             })
         if losses['val'] < self.best_val_loss or self.always_save_checkpoint:
             self.best_val_loss = losses['val']
@@ -281,7 +281,7 @@ class Trainer():
 
             # evaluate the loss on train/val sets and write checkpoints
             if self.iter_num % self.eval_interval == 0 and self.master_process:
-                self.evaluate(model, ctx)
+                self.evaluate(model, ctx, lr)
 
             if self.iter_num == 0 and self.eval_only:
                 break
