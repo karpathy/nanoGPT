@@ -2,11 +2,11 @@ import torch
 import numpy as np
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import destroy_process_group
-import wandb
 import time, os
 from model import RLHF
 from trainers.trainer import Trainer
 
+# TODO: this works but is currently crude and incomplete, critic implementation plus PPO are obvious next steps
 class PolicyGradientTrainer(Trainer):
     def __init__(self, config):
         super().__init__(config)
@@ -156,8 +156,6 @@ class GumbelTrainer(Trainer):
         t0  = time.time()
         for iter in range(max_iters):
             
-            # states, log_probs, log_probs_reference, rewards, advantages = model.generate(X, self.block_size, self.device, self.block_size, reward_model=reward_model)
-
             states, rewards = model.generate_gumbel(X, self.block_size, self.device, self.block_size, reward_model=reward_model)
 
 
@@ -173,8 +171,6 @@ class GumbelTrainer(Trainer):
             if iter % 1000 == 0:
                 t1 = time.time()
                 print(f'iter: {iter}, time: {t1-t0}')
-                # print(actor_loss, critic_loss)
-                # print(f'Actor loss: {actor_loss}, iter: {iter}')
                 print(f'rets: {np.mean(rews_all[-1000:])}')
                 current_time = time.time()
                 # print(current_time - last_time)

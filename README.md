@@ -1,28 +1,26 @@
 # nanoChatGPT
 
-A crude RLHF layer on top of nanoGPT to test an idea I had that you can backpropagate through the reward function rather than use policy gradient. I have verified it works for a very basic example where you incentivise the network to produce 'and'. The trick is to use the Straight-Through Gumbel-Softmax estimator.
-
-train.py automatically uses config/config.yaml
+A crude RLHF layer on top of nanoGPT to test an idea I had that you can backpropagate through the reward function rather than use policy gradient. I have verified it works for a very basic example where you incentivise the network to produce words containing 'and'. The trick is to use the Straight-Through Gumbel-Softmax estimator.
 
 ```
-$ python train.py
+$ python train.py # settings in config/config.yaml
 ```
 
-Once a basic model is trained, can fine tune a reward model for a simple example with underlying reward rule. The default in the code is to produce the letter 'z':
+Once a basic model is trained, can fine tune a reward model for an underlying reward rule. 
 
 ```
-$ python train_reward_model_simple.py
+$ python train_reward_model_simple.py # settings in config/config_reward.yaml
 ```
 
 This creates a multihead model on top of the existing one. Once the reward model is trained sufficiently you can train the RL policy using:
 
 ```
-$ python train_rl.py
+$ python train_rl.py # settings in config/config_rl.yaml
 ```
 
-The default config uses the Gumbel trick but it can be set to PG and it will do policy gradient instead (the latter needs a critic etc). I have validated that the Gumbel method works given that the preceding steps also worked so curious to see if this would scale to large models.
+The default config uses the Gumbel trick but it can be set to PG and it will do policy gradient instead (the latter still needs a critic implementation etc). I have validated that the Gumbel method works given that the preceding steps also worked. I am curious to see if this would scale to large models - let me know if you're able to test this. 
 
-Model output should look something like:
+Model output after a short amount of training produces results like:
 
 ```
 hand hand thousand the thousand the hand hand hand hand thousand
@@ -34,7 +32,7 @@ If you're feeling adventorous you can also try:
 $ python train_reward_model.py
 ```
 
-Which uses hooks up to the reddit tldr dataset. The pipes should work but I have not actually finetuned this at all.
+Which uses the reddit tldr dataset. The pipes should work but I have not actually finetuned this at all.
 
 Below is Andrej Karpathy's original README
 ________

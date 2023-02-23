@@ -580,8 +580,12 @@ class RLHF(nn.Module):
 
     def gumbel_softmax(self, logits, tau, device):
         gumbel_sample = self.gumbel_softmax_sample(logits, tau, device)
-        probs = F.softmax(logits, dim=-1)
-        idx_next = torch.multinomial(probs, num_samples=1)
+
+        # Alternatively could try
+        # probs = F.softmax(gumbel_sample, dim=-1)
+        # idx_next = torch.multinomial(probs, num_samples=1)
+
+        idx_next = gumbel_sample.max(-1, keepdim=True)[1]
         onehot_idx_next = torch.nn.functional.one_hot(idx_next, num_classes=logits.shape[1]).squeeze()
         y = (onehot_idx_next-gumbel_sample).detach() + gumbel_sample
         idx_next_from_y = torch.argmax(y, dim=1).unsqueeze(-1)
