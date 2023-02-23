@@ -108,6 +108,7 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 # note: float16 data type will automatically use a GradScaler
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
+
 # batch size scheduler
 if batch_size_schedule: 
     batch_size_max = batch_size
@@ -259,7 +260,6 @@ while True:
     lr = get_lr(iter_num) if decay_lr else learning_rate
     # determine and set the batch_size for this iteration 
     batch_size = get_batch_size(iter_num) if batch_size_schedule else batch_size 
-    print(batch_size) 
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
