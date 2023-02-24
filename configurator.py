@@ -16,7 +16,6 @@ comes up with a better simple Python solution I am all ears.
 
 import sys
 from ast import literal_eval
-from types import NoneType
 
 for arg in sys.argv[1:]:
     if '=' not in arg:
