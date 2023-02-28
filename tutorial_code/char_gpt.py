@@ -166,7 +166,7 @@ def decode_and_print_batch(batch):
 class Head(nn.Module):
     """ one head of self-attention """
 
-    def __init__(self, block_size: int, n_embed: int, head_size: int):
+    def __init__(self, block_size: int, n_embed: int, head_size: int, flash: bool = False):
         """
         Arguments
         ---------
@@ -182,7 +182,7 @@ class Head(nn.Module):
         self.block_size = block_size  # equivalent to T
         self.n_embed = n_embed
         self.head_size = head_size  # equivalent to C
-
+        self.flash = flash
         self.key = nn.Linear(self.n_embed, self.head_size, bias=False)
         self.query = nn.Linear(self.n_embed, self.head_size, bias=False)
         self.value = nn.Linear(self.n_embed, self.head_size, bias=False)
@@ -195,18 +195,18 @@ class Head(nn.Module):
         B, T, C = x.shape  # B: batch size; T: block size; C: embedding size
         k = self.key(x)  # (B, T, C) @ (C, head_size)  -> (B, T, head_size)
         q = self.query(x)  # (B, T, C) @ (C, head_size)  -> (B, T, head_size)
-
-        # compute attention scores ("affinities")
-        wei = q @ k.transpose(-2, -1)  # (B, T, head_size) @ (B, head_size, T) -> (B, T, T)
-
-        # performing `scaled` attention
-        wei *= self.head_size ** -(1 / 2)  # scaling by `1/sqrt(head size)`
-
-        wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf'))  # (B, T, T)
-        wei = F.softmax(wei, dim=-1)  # (B, T, T)
-        # perform the weighted aggregation of the values
         v = self.value(x)  # (B, T, C) @ (C, head_size)  -> (B, T, head_size)
-        out = wei @ v  # (B, T, T) @ (B, T, head_size) -> (B, T, head_size)
+        if self.flash:
+           out = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=0.1, is_causal=True)
+        else:
+            # compute attention scores ("affinities")
+            wei = q @ k.transpose(-2, -1)  # (B, T, head_size) @ (B, head_size, T) -> (B, T, T)
+            # performing `scaled` attention
+            wei *= self.head_size ** -(1 / 2)  # scaling by `1/sqrt(head size)`
+            wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf'))  # (B, T, T)
+            wei = F.softmax(wei, dim=-1)  # (B, T, T)
+            # perform the weighted aggregation of the values
+            out = wei @ v  # (B, T, T) @ (B, T, head_size) -> (B, T, head_size)
         return out
 
 
@@ -214,7 +214,7 @@ class MultiHeadAttention(nn.Module):
     """ multiple heads of self-attention in parallel """
 
     def __init__(
-        self, block_size: int, n_embed: int, head_size: int, num_heads: int
+        self, block_size: int, n_embed: int, head_size: int, num_heads: int, flash: bool = False
     ):
         """
         Arguments
@@ -231,7 +231,7 @@ class MultiHeadAttention(nn.Module):
         """
         super().__init__()
         self.heads = nn.ModuleList(
-            [Head(block_size, n_embed, head_size) for _ in range(num_heads)]
+            [Head(block_size, n_embed, head_size, flash) for _ in range(num_heads)]
         )
         # linear FC layer
         self.proj = nn.Linear(head_size * num_heads, n_embed)
@@ -279,13 +279,14 @@ class Block(nn.Module):
         wide_factor: int = 4,
         activation: str = "relu",  # could also be "gelu"
         dropout: float = 0.0,
+        flash: bool = False,
         prenormalize: bool = False
     ):
         super().__init__()
         # setting head_size to be a factor of other dimensions
         head_size = n_embed // num_heads
         # the multi-headed self-attention (msa)
-        self.msa = MultiHeadAttention(block_size, n_embed, head_size, num_heads)
+        self.msa = MultiHeadAttention(block_size, n_embed, head_size, num_heads, flash)
         self.ffwd = FeedForward(n_embed, wide_factor, activation, dropout)
 
         self.prenormalize = prenormalize
@@ -319,6 +320,7 @@ class CharGPT(nn.Module):
             n_embed: int,
             num_heads: int,
             wide_factor: int = 4,
+            flash: bool = False,
             activation: str = "relu",  # could also be "gelu"
             dropout: float = 0.0,
             prenormalize: bool = False,
@@ -339,6 +341,7 @@ class CharGPT(nn.Module):
                 wide_factor=wide_factor,
                 activation=activation,
                 dropout=dropout,
+                flash = flash,
                 prenormalize=prenormalize,
             ) for _ in range(n_layers)]  # stacks the layers of Transformer blocks
         )
