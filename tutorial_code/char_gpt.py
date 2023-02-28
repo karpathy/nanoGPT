@@ -151,9 +151,7 @@ def generate_from_model(
         context = torch.tensor(start_token, dtype=torch.long, device=device)
         context = context.repeat(batch_num, 1)
     # will generate the next sentence_len characters for each of the start token
-    out = model.generate(
-        context, max_new_tokens=sentence_len, block_size=block_size
-    )
+    out = model.generate(context, max_new_tokens=sentence_len)
     print(out.shape)
     return out
 
