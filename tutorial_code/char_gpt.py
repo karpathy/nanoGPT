@@ -126,28 +126,33 @@ def train_and_evaluate_model(
 
     if plot_loss:
         plot_losses(train_losses, verbosity_len, valid_losses)
-    return losses
 
 
 def generate_from_model(
-    model: nn.Module, batch_num: int, sentence_len: int, start_str: str = None
+    model: nn.Module,
+    vocab_size: int,
+    block_size: int,
+    sentence_len: int,
+    batch_num: int = 1,
+    start_str: str = None,
+    device: str = "cpu"
 ):
     # sampling a start token and generating a batch of it as context
     if start_str is None:
-        start_token = np.random.randint(VOCAB_SIZE)
+        start_token = np.random.randint(vocab_size)
         print(f"Start token: {decode([start_token])}")
-        context = torch.zeros((batch_num, 1), dtype=torch.long, device=DEVICE)
+        context = torch.zeros((batch_num, 1), dtype=torch.long, device=device)
         # setting the first token of the batch to the sampled start token
         context[:, 0] = start_token
     else:
         start_token = encode(start_str)
         print(f"Start token: {decode(start_token)}")
         # generating batch of sentences with the start token
-        context = torch.tensor(start_token, dtype=torch.long, device=DEVICE)
+        context = torch.tensor(start_token, dtype=torch.long, device=device)
         context = context.repeat(batch_num, 1)
     # will generate the next sentence_len characters for each of the start token
     out = model.generate(
-        context, max_new_tokens=sentence_len, block_size=BLOCK_SIZE
+        context, max_new_tokens=sentence_len, block_size=block_size
     )
     print(out.shape)
     return out
