@@ -18,6 +18,18 @@ def decode(l):
     return ''.join([itos[i] for i in l])
 
 
+def plot_losses(losses, verbosity, val_losses=None):
+    # plt.clf()
+    plt.plot(losses, label="train");
+    if val_losses is not None:
+        plt.plot(val_losses, label="valid");
+        plt.legend();
+    plt.ylabel("Loss")
+    plt.xlabel(f"Num steps (~{verbosity}x)")
+    plt.xlim(0, len(losses))
+    plt.show();
+
+
 def get_batch(split: str, block_size: int = 8, batch_size: int = 4, device: str = None):
     """ Gets a randomized batch from the split of data chosen.
 
