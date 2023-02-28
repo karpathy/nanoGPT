@@ -483,7 +483,7 @@ class NanoGPT(CharGPT):
         n_params = sum(p.numel() for p in self.parameters())
         if non_embedding:
             n_params -= self.position_embedding_table.weight.numel()
-        return
+        return n_params
 
     @torch.no_grad()
     def generate(self, idx, max_new_tokens: int, temperature: float = 1.0, top_k: int = None):
