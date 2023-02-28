@@ -117,6 +117,37 @@ def train_and_evaluate_model(
     return losses
 
 
+def generate_from_model(
+    model: nn.Module, batch_num: int, sentence_len: int, start_str: str = None
+):
+    # sampling a start token and generating a batch of it as context
+    if start_str is None:
+        start_token = np.random.randint(VOCAB_SIZE)
+        print(f"Start token: {decode([start_token])}")
+        context = torch.zeros((batch_num, 1), dtype=torch.long, device=DEVICE)
+        # setting the first token of the batch to the sampled start token
+        context[:, 0] = start_token
+    else:
+        start_token = encode(start_str)
+        print(f"Start token: {decode(start_token)}")
+        # generating batch of sentences with the start token
+        context = torch.tensor(start_token, dtype=torch.long, device=DEVICE)
+        context = context.repeat(batch_num, 1)
+    # will generate the next sentence_len characters for each of the start token
+    out = model.generate(
+        context, max_new_tokens=sentence_len, block_size=BLOCK_SIZE
+    )
+    print(out.shape)
+    return out
+
+
+def decode_and_print_batch(batch):
+    for b in range(batch.shape[0]):
+        print(f"\nBatch ID: {b}")
+        print(decode(batch[b].tolist()))
+    print()
+
+
 class Head(nn.Module):
     """ one head of self-attention """
 
@@ -356,20 +387,20 @@ class CharGPT(nn.Module):
         return idx
 
 
-def main():
-    global vocab_size, vocab_set, stoi, itos
+with open('input.txt', 'r', encoding='utf-8') as f:
+    text = f.read()
 
-    with open('input.txt', 'r', encoding='utf-8') as f:
-        text = f.read()
+# Checking all the unique characters that occur in this text
+chars = sorted(list(set(text)))
+vocab_size = len(chars)
+vocab_set = "".join(chars)
 
-    # Checking all the unique characters that occur in this text
-    chars = sorted(list(set(text)))
-    vocab_size = len(chars)
-    vocab_set = "".join(chars)
+# Create a mapping from characters to integers
+stoi = {ch: i for i, ch in enumerate(chars)}
+itos = {i: ch for i, ch in enumerate(chars)}
 
-    # Create a mapping from characters to integers
-    stoi = {ch: i for i, ch in enumerate(chars)}
-    itos = {i: ch for i, ch in enumerate(chars)}
-
-
-main()
+# Train and test splits
+data = torch.tensor(encode(text), dtype=torch.long)
+n = int(train_size * len(data))
+train_data = data[:n]
+valid_data = data[n:]
