@@ -168,7 +168,7 @@ def decode_and_print_batch(batch):
 class Head(nn.Module):
     """ one head of self-attention """
 
-    def __init__(self, block_size: int, n_embed: int, head_size: int):
+    def __init__(self, block_size: int, n_embed: int, head_size: int, dropi):
         """
         Arguments
         ---------
@@ -402,6 +402,83 @@ class CharGPT(nn.Module):
 
         self.train()
         return idx
+
+
+class NanoGPT(CharGPT):
+    def __init__(
+            self,
+            vocab_size: int,
+            n_layers: int,
+            block_size: int,
+            n_embed: int,
+            num_heads: int,
+            wide_factor: int = 4,
+            activation: str = "relu",  # could also be "gelu"
+            dropout: float = 0.0,
+            prenormalize: bool = False,
+            device: str = None,
+            weight_tying: str = False,
+            init_type: str = None
+    ):
+        super().__init__(
+            vocab_size=vocab_size,
+            n_layers=n_layers,
+            block_size=block_size,
+            n_embed=n_embed,
+            num_heads=num_heads,
+            wide_factor=wide_factor,
+            activation=activation,
+            dropout=dropout,
+            prenormalize=prenormalize,
+            device=device,
+        )
+        self.blocks = nn.Sequential(
+            nn.Dropout(dropout),  # like GPT-2
+            *[Block(
+                block_size=block_size,
+                n_embed=n_embed,
+                num_heads=num_heads,
+                wide_factor=wide_factor,
+                activation=activation,
+                dropout=dropout,
+                prenormalize=prenormalize,
+            ) for _ in range(n_layers)]  # stacks the layers of Transformer blocks
+        )
+        if weight_tying:
+            # weight-tying, https://paperswithcode.com/method/weight-tying
+            self.token_embedding_table.weight = self.lm_head.weight
+
+        if init_type == "custom":
+            # https://github.com/karpathy/nanoGPT/blob/master/model.py#L147
+            # init all weights
+            self.apply(self._init_weights)
+            # apply special scaled init to the residual projections, per GPT-2 paper
+            for pn, p in self.named_parameters():
+                if pn.endswith('c_proj.weight'):
+                    torch.nn.init.normal_(p, mean=0.0, std=0.02/math.sqrt(2 * n_layers))
+
+        # report number of parameters
+        print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+
+    def get_num_params(self, non_embedding=True):
+        """
+        Return the number of parameters in the model.
+        For non-embedding count (default), the position embeddings get subtracted.
+        The token embeddings would too, except due to the parameter sharing these
+        params are actually used as weights in the final layer, so we include them.
+        """
+        n_params = sum(p.numel() for p in self.parameters())
+        if non_embedding:
+            n_params -= self.transformer.wpe.weight.numel()
+        return
 
 
 global data, train_data, valid_data
