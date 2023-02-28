@@ -168,7 +168,7 @@ def decode_and_print_batch(batch):
 class Head(nn.Module):
     """ one head of self-attention """
 
-    def __init__(self, block_size: int, n_embed: int, head_size: int, dropi):
+    def __init__(self, block_size: int, n_embed: int, head_size: int):
         """
         Arguments
         ---------
