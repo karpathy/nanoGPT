@@ -9,36 +9,6 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 
-global data, train_data, valid_data
-with open('input.txt', 'r', encoding='utf-8') as f:
-    text = f.read()
-
-# Checking all the unique characters that occur in this text
-chars = sorted(list(set(text)))
-vocab_size = len(chars)
-vocab_set = "".join(chars)
-
-# Create a mapping from characters to integers
-stoi = {ch: i for i, ch in enumerate(chars)}
-itos = {i: ch for i, ch in enumerate(chars)}
-
-# Train and test splits
-train_size = 0.9
-data = torch.tensor(encode(text), dtype=torch.long)
-n = int(train_size * len(data))
-train_data = data[:n]
-valid_data = data[n:]
-
-
-# Encoder: take a string, output a list of integers
-def encode(s):
-    return [stoi[c] for c in s]
-
-# Decoder: take a list of integers, output a string
-def decode(l):
-    return ''.join([itos[i] for i in l])
-
-
 def get_batch(split: str, block_size: int = 8, batch_size: int = 4, device: str = None):
     """ Gets a randomized batch from the split of data chosen.
 
@@ -407,3 +377,23 @@ class CharGPT(nn.Module):
         model.train()
         return idx
 
+
+global data, train_data, valid_data
+with open('input.txt', 'r', encoding='utf-8') as f:
+    text = f.read()
+
+# Checking all the unique characters that occur in this text
+chars = sorted(list(set(text)))
+vocab_size = len(chars)
+vocab_set = "".join(chars)
+
+# Create a mapping from characters to integers
+stoi = {ch: i for i, ch in enumerate(chars)}
+itos = {i: ch for i, ch in enumerate(chars)}
+
+# Train and test splits
+train_size = 0.9
+data = torch.tensor(encode(text), dtype=torch.long)
+n = int(train_size * len(data))
+train_data = data[:n]
+valid_data = data[n:]
