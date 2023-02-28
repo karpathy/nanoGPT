@@ -482,7 +482,7 @@ class NanoGPT(CharGPT):
         """
         n_params = sum(p.numel() for p in self.parameters())
         if non_embedding:
-            n_params -= self.transformer.wpe.weight.numel()
+            n_params -= self.position_embedding_table.weight.numel()
         return
 
     @torch.no_grad()
