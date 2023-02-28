@@ -9,6 +9,15 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 
+# Encoder: take a string, output a list of integers
+def encode(s):
+    return [stoi[c] for c in s]
+
+# Decoder: take a list of integers, output a string
+def decode(l):
+    return ''.join([itos[i] for i in l])
+
+
 def get_batch(split: str, block_size: int = 8, batch_size: int = 4, device: str = None):
     """ Gets a randomized batch from the split of data chosen.
 
