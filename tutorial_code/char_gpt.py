@@ -347,6 +347,12 @@ class CharGPT(nn.Module):
         self.ln_f = nn.LayerNorm(n_embed)  # final layer norm (has bias)
         self.lm_head = nn.Linear(n_embed, vocab_size)
 
+        self.vocab_size = vocab_size
+        self.n_layers = n_layers
+        self.block_size = block_size
+        self.n_embed = n_embed
+        self.num_heads = num_heads
+        self.activation = activation
         self.device = device
         if self.device is None:
             self.device = "gpu" if torch.cuda.is_available() else "cpu"
@@ -380,7 +386,8 @@ class CharGPT(nn.Module):
 
         return logits, loss
 
-    def generate(self, idx, max_new_tokens, block_size, verbose: bool = False):
+    @torch.no_grad()
+    def generate(self, idx, max_new_tokens):
         # B: batch_size, T: block_size, C:
         # idx is (B, T) array of indices in the current context
 
@@ -388,7 +395,7 @@ class CharGPT(nn.Module):
 
         for _ in range(max_new_tokens):
             # crop idx to the last block_size tokens
-            idx_cond = idx[:, -block_size:]
+            idx_cond = idx[:, -self.block_size:]
             # get the predictions
             logits, loss = self(idx_cond)
             # focus only on the last time step
@@ -479,6 +486,33 @@ class NanoGPT(CharGPT):
         if non_embedding:
             n_params -= self.transformer.wpe.weight.numel()
         return
+
+    @torch.no_grad()
+    def generate(self, idx, max_new_tokens: int, temperature: float = 1.0, top_k: int = None):
+        """
+        Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
+        the sequence max_new_tokens times, feeding the predictions back into the model each time.
+        Most likely you'll want to make sure to be in model.eval() mode of operation for this.
+        """
+        for _ in range(max_new_tokens):
+            # if the sequence context is growing too long we must crop it at block_size
+            idx_cond = idx if idx.size(1) <= self.block_size else idx[:, -self.block_size:]
+            # forward the model to get the logits for the index in the sequence
+            logits, _ = self(idx_cond)
+            # pluck the logits at the final step and scale by desired temperature
+            logits = logits[:, -1, :] / temperature
+            # optionally crop the logits to only the top k options
+            if top_k is not None:
+                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                logits[logits < v[:, [-1]]] = -float('Inf')
+            # apply softmax to convert logits to (normalized) probabilities
+            probs = F.softmax(logits, dim=-1)
+            # sample from the distribution
+            idx_next = torch.multinomial(probs, num_samples=1)
+            # append sampled index to the running sequence and continue
+            idx = torch.cat((idx, idx_next), dim=1)
+
+        return idx
 
 
 global data, train_data, valid_data
