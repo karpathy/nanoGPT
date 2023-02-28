@@ -384,7 +384,7 @@ class CharGPT(nn.Module):
         # B: batch_size, T: block_size, C:
         # idx is (B, T) array of indices in the current context
 
-        model.eval()
+        self.eval()
 
         for _ in range(max_new_tokens):
             # crop idx to the last block_size tokens
@@ -400,7 +400,7 @@ class CharGPT(nn.Module):
             # append sampled index to the running sequence
             idx = torch.cat((idx, idx_next), dim=1)  # (B, T+1)
 
-        model.train()
+        self.train()
         return idx
 
 
