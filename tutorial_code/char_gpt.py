@@ -185,7 +185,7 @@ class Head(nn.Module):
         wei = q @ k.transpose(-2, -1)  # (B, T, head_size) @ (B, head_size, T) -> (B, T, T)
 
         # performing `scaled` attention
-        wei *= head_size ** -(1 / 2)  # scaling by `1/sqrt(head size)`
+        wei *= self.head_size ** -(1 / 2)  # scaling by `1/sqrt(head size)`
 
         wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf'))  # (B, T, T)
         wei = F.softmax(wei, dim=-1)  # (B, T, T)
