@@ -216,3 +216,9 @@ For more questions/discussions feel free to stop by **#nanoGPT** on Discord:
 ## acknowledgements
 
 All nanoGPT experiments are powered by GPUs on [Lambda labs](https://lambdalabs.com), my favorite Cloud GPU provider. Thank you Lambda labs for sponsoring nanoGPT!
+
+## model architecture
+
+You can see the final model architecture in this diagram:
+
+![model_architecture](assets/nano_gpt_architecture.png)
