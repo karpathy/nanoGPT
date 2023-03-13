@@ -1,0 +1,5 @@
+transformers==2.11.0
+datasets==2.9.0
+tiktoken==0.2.0
+wandb
+tqdm
