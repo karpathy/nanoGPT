@@ -13,8 +13,13 @@ wandb_log = False # override via command line if you like
 wandb_project = 'shakespeare-char'
 wandb_run_name = 'mini-gpt'
 
+# batch schedule increases to batch_size given when enabled
 dataset = 'shakespeare_char'
 batch_size = 64
+batch_size_schedule = False # when scheduler is on, batch_size is treated as the max value. 
+batch_size_max_iter = 100 # batch_size will be at a max at this iter (typically <=max_iter)
+batch_size_initial = 4 # starting batch_size
+
 block_size = 256 # context of up to 256 previous characters
 
 # baby GPT model :)
