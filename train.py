@@ -276,6 +276,8 @@ while True:
     if iter_num == 0 and eval_only:
         break
 
+    # collect the loss values in gradient accumulation steps
+    losses = torch.zeros(gradient_accumulation_steps)
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
     for micro_step in range(gradient_accumulation_steps):
@@ -287,8 +289,12 @@ while True:
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
             logits, loss = model(X, Y)
+        losses[micro_step] = loss.item()
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, Y = get_batch('train')
+        # normalize the loss value to account for the number of gradient accumulation steps
+        if gradient_accumulation_steps > 1:
+            loss = loss / gradient_accumulation_steps
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
     # clip the gradient
@@ -306,7 +312,7 @@ while True:
     dt = t1 - t0
     t0 = t1
     if iter_num % log_interval == 0 and master_process:
-        lossf = loss.item() # loss as float. note: this is a CPU-GPU sync point
+        lossf = losses.mean() # loss as float. note: this is a CPU-GPU sync point
         if local_iter_num >= 5: # let the training loop settle a bit
             mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
