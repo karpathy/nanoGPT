@@ -1,0 +1,7 @@
+numpy
+torch --pre --force-reinstall --index-url https://download.pytorch.org/whl/nightly/cu117
+transformers
+datasets
+tiktoken
+wandb
+tqdm
