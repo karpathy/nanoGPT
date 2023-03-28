@@ -289,6 +289,9 @@ while True:
             logits, loss = model(X, Y)
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, Y = get_batch('train')
+        if loss.isnan():
+            print(f"loss is NaN in iter {iter_num} micro_step {micro_step}")
+            continue
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
     # clip the gradient
