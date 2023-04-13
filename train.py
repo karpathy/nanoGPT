@@ -194,9 +194,13 @@ checkpoint = None # free up memory
 
 # compile the model
 if compile:
-    print("compiling the model... (takes a ~minute)")
-    unoptimized_model = model
-    model = torch.compile(model) # requires PyTorch 2.0
+    if os.name == 'nt':
+        print("WARNING: torch.compile is not supported on Windows")
+        compile = False
+    else:
+        print("compiling the model... (takes a ~minute)")
+        unoptimized_model = model
+        model = torch.compile(model) # requires PyTorch 2.0
 
 # wrap model into DDP container
 if ddp:
