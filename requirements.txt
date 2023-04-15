@@ -1,0 +1,7 @@
+torch==2.0.0
+numpy==1.24.2
+transformers==4.28.1
+datasets==2.11.0
+tiktoken==0.3.3
+wandb==0.14.2
+tqdm==4.65.0
