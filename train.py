@@ -45,7 +45,7 @@ wandb_project = 'owt'
 wandb_run_name = 'gpt2' # 'run' + str(time.time())
 # data
 dataset = 'openwebtext'
-gradient_accumulation_steps = 5 # used to simulate larger batch sizes
+gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
 batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size = 1024
 # model
@@ -84,16 +84,20 @@ if ddp:
     init_process_group(backend=backend)
     ddp_rank = int(os.environ['RANK'])
     ddp_local_rank = int(os.environ['LOCAL_RANK'])
+    ddp_world_size = int(os.environ['WORLD_SIZE'])
     device = f'cuda:{ddp_local_rank}'
     torch.cuda.set_device(device)
     master_process = ddp_rank == 0 # this process will do logging, checkpointing etc.
     seed_offset = ddp_rank # each process gets a different seed
+    assert gradient_accumulation_steps % torch.cuda.device_count() == 0
+    gradient_accumulation_steps //= torch.cuda.device_count()
 else:
     # if not ddp, we are running on a single gpu, and one process
     master_process = True
     seed_offset = 0
-    gradient_accumulation_steps *= 8 # simulate 8 gpus
-print("total number of tokens per iteration:", batch_size * block_size * gradient_accumulation_steps)
+    ddp_world_size = 1
+tokens_per_iter = gradient_accumulation_steps * ddp_world_size * batch_size * block_size
+print(f"tokens per iteration will be: {tokens_per_iter:,}")
 
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
