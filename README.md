@@ -19,7 +19,7 @@ Dependencies:
 - `pip install datasets` for huggingface datasets <3 (if you want to download + preprocess OpenWebText)
 - `pip install tiktoken` for OpenAI's fast BPE code <3
 - `pip install wandb` for optional logging <3
-- `pip install tqdm`
+- `pip install tqdm` <3
 
 ## quick start
 
@@ -37,7 +37,7 @@ This creates a `train.bin` and `val.bin` in that data directory. Now it is time 
 $ python train.py config/train_shakespeare_char.py
 ```
 
-If you peak inside it, you'll see that we're training a GPT with a context size of up to 256 characters, 384 feature channels, and it is a 6-layer Transformer with 6 heads in each layer. On one A100 GPU this training run takes about 3 minutes and the best validation loss is 1.4697. Based on the configuration, the model checkpoints are being written into the `--out_dir` directory `out-shakespeare-char`. So once the training finishes we can sample from the best model by pointing the sampling script at this directory:
+If you peek inside it, you'll see that we're training a GPT with a context size of up to 256 characters, 384 feature channels, and it is a 6-layer Transformer with 6 heads in each layer. On one A100 GPU this training run takes about 3 minutes and the best validation loss is 1.4697. Based on the configuration, the model checkpoints are being written into the `--out_dir` directory `out-shakespeare-char`. So once the training finishes we can sample from the best model by pointing the sampling script at this directory:
 
 ```
 $ python sample.py --out_dir=out-shakespeare-char
@@ -84,7 +84,7 @@ bot thou the sought bechive in that to doth groan you,
 No relving thee post mose the wear
 ```
 
-Not bad for ~3 minutes on a CPU, for a hint of the right character gestalt. If you're willing to wait longer free to tune the hyperparameters, increase the size of the network, the context length (`--block_size`), the length of training, etc.
+Not bad for ~3 minutes on a CPU, for a hint of the right character gestalt. If you're willing to wait longer, feel free to tune the hyperparameters, increase the size of the network, the context length (`--block_size`), the length of training, etc.
 
 Finally, on Apple Silicon Macbooks and with a recent PyTorch version make sure to add `--device mps` (short for "Metal Performance Shaders"); PyTorch then uses the on-chip GPU that can *significantly* accelerate training (2-3X) and allow you to use larger networks. See [Issue 28](https://github.com/karpathy/nanoGPT/issues/28) for more.
 
