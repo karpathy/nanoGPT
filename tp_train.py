@@ -30,7 +30,7 @@ from torch.distributed import init_process_group, destroy_process_group
 from model import GPTConfig, GPT
 
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
-from torch.distributed.tensor.parallel.fsdp import is_available
+from torch.distributed.tensor.parallel.fsdp import enable_2d_with_fsdp
 import inspect
 
 TP_AVAILABLE = False
@@ -46,9 +46,7 @@ try:
 
     # need to setup hooks for TP
 
-    fsdp_is_available = is_available()
-
-    TP_AVAILABLE = fsdp_is_available
+    TP_AVAILABLE = enable_2d_with_fsdp()
 
 except BaseException as e:
     print(f"Exception during TP init - {e=}\n")
@@ -98,7 +96,7 @@ backend = "nccl"  # 'nccl', 'gloo', etc.
 device = (
     "cuda"  # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 )
-dtype = "bfloat16"  # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
+
 compile = False  # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
 config_keys = [
@@ -154,17 +152,14 @@ torch.manual_seed(1337 + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True  # allow tf32 on cudnn
 device_type = "cuda" if "cuda" in device else "cpu"  # for later use in torch.autocast
-# note: float16 data type will automatically use a GradScaler
+
+dtype = "bfloat16"  # 'float32', 'bfloat16'
 ptdtype = {
     "float32": torch.float32,
     "bfloat16": torch.bfloat16,
     "float16": torch.float16,
 }[dtype]
-ctx = (
-    nullcontext()
-    if device_type == "cpu"
-    else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
-)
+
 
 # poor man's data loader
 data_dir = os.path.join("data", dataset)
@@ -288,12 +283,12 @@ fsdp_pg = twod_mesh.get_dim_groups()[0]
 
 # todo - add back main code later for resume
 
-model.to(device)
-model = FSDP(model, process_group=fsdp_pg)
+#model.to(device)
+model = FSDP(model, device_id=device, process_group=fsdp_pg)
 
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
-scaler = torch.cuda.amp.GradScaler(enabled=(dtype == "float16"))
+#scaler = torch.cuda.amp.GradScaler(enabled=(dtype == "float16"))
 
 # optimizer
 # new PyTorch nightly has a new 'fused' option for AdamW that is much faster
@@ -336,8 +331,7 @@ def estimate_loss():
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = get_batch(split)
-            with ctx:
-                logits, loss = model(X, Y)
+            logits, loss = model(X, Y)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -369,11 +363,13 @@ X, Y = get_batch("train")  # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0  # number of iterations in the lifetime of this process
 running_mfu = -1.0
-while True:
+eval_interval = 5
+
+while local_iter_num < 10:
     # determine and set the learning rate for this iteration
-    lr = get_lr(iter_num) if decay_lr else learning_rate
-    for param_group in optimizer.param_groups:
-        param_group["lr"] = lr
+    #lr = get_lr(iter_num) if decay_lr else learning_rate
+    #for param_group in optimizer.param_groups:
+    #    param_group["lr"] = lr
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
@@ -381,17 +377,8 @@ while True:
         print(
             f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
         )
-        if wandb_log:
-            wandb.log(
-                {
-                    "iter": iter_num,
-                    "train/loss": losses["train"],
-                    "val/loss": losses["val"],
-                    "lr": lr,
-                    "mfu": running_mfu * 100,  # convert to percentage
-                }
-            )
-        if losses["val"] < best_val_loss or always_save_checkpoint:
+        
+        '''if losses["val"] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses["val"]
             raw_model = model.module if _tp else model
             if iter_num > 0:
@@ -405,12 +392,13 @@ while True:
                 }
                 print(f"saving checkpoint to {out_dir}")
                 torch.save(checkpoint, os.path.join(out_dir, "ckpt.pt"))
+        '''
     if iter_num == 0 and eval_only:
         break
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
-    for micro_step in range(gradient_accumulation_steps):
+    '''for micro_step in range(gradient_accumulation_steps):
         if _tp or _tp:
             # in DDP training we only need to sync gradients at the last micro step.
             # the official way to do this is with model.no_sync() context manager, but
@@ -420,18 +408,19 @@ while True:
                 micro_step == gradient_accumulation_steps - 1
             )
         with ctx:
-            logits, loss = model(X, Y)
+        '''
+    logits, loss = model(X, Y)
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
-        X, Y = get_batch("train")
+    X, Y = get_batch("train")
         # backward pass, with gradient scaling if training in fp16
-        scaler.scale(loss).backward()
+    loss.backward()
     # clip the gradient
-    if grad_clip != 0.0:
-        scaler.unscale_(optimizer)
-        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+    #if grad_clip != 0.0:
+    #    scaler.unscale_(optimizer)
+    #    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
     # step the optimizer and scaler if training in fp16
-    scaler.step(optimizer)
-    scaler.update()
+    optimizer.step()
+    
     # flush the gradients as soon as we can, no need for this memory anymore
     optimizer.zero_grad(set_to_none=True)
 
