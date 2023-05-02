@@ -77,76 +77,41 @@ class CausalSelfAttention(nn.Module):
         #    hasattr(torch.nn.functional, "scaled_dot_product_attention")
         #    and self.dropout == 0.0
         # )
-        # Replicate the causal mask
-        causal_mask = torch.tril(torch.ones(config.block_size, config.block_size)).view(
-            1, 1, config.block_size, config.block_size
-        )
-        causal_mask = DTensor.from_local(
-            causal_mask, self.mesh, [Replicate()], run_check=False
-        )
-        self.register_buffer("mask", causal_mask)
-
-        # if not self.flash:
-        # print(
-        #    "WARNING: using slow attention. Flash Attention atm needs PyTorch nightly and dropout=0.0"
-        # )
-        # causal mask to ensure that attention is only applied to the left in the input sequence
-        #    self.register_buffer(
-        #        "mask",
-        #        torch.tril(torch.ones(config.block_size, config.block_size)).view(
-        #            1, 1, config.block_size, config.block_size
-        #        ),
-        #   )
+        if not self.flash:
+            print(
+            "WARNING: using slow attention. Flash Attention atm needs PyTorch nightly and dropout=0.0"
+            )
+            # causal mask to ensure that attention is only applied to the left in the input sequence
+            self.register_buffer(
+                "bias",
+                torch.tril(torch.ones(config.block_size, config.block_size)).view(
+                    1, 1, config.block_size, config.block_size
+                ),
+            )
 
     def forward(self, x):
-        (
-            B,
-            T,
-            C,
-        ) = x.size()  # batch size, sequence length, embedding dimensionality (n_embd)
+        B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+        tp_size = self.mesh.mesh.size(0)
+        assert self.n_head % tp_size == 0, "num of heads are not divisible by tp size." 
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
-        k = k.view(B, T, self.n_head, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
-        q = q.view(B, T, self.n_head, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
-
-        # dtensor
-        k = torch.Tensor.contiguous(k)
-        q = torch.Tensor.contiguous(q)
-        v = torch.Tensor.contiguous(v)
-        k = _view_with_sharding_dim_change(k, 0, (-1, T, C // self.n_head))
-        q = _view_with_sharding_dim_change(q, 0, (-1, T, C // self.n_head))
-        v = _view_with_sharding_dim_change(v, 0, (-1, T, C // self.n_head))
+        q, k ,v  = self.c_attn(x).split(self.n_embd // tp_size, dim=2)
+        k = k.view(B, T, self.n_head // tp_size, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        q = q.view(B, T, self.n_head // tp_size, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        v = v.view(B, T, self.n_head // tp_size, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        # if self.flash:
-        # efficient attention using Flash Attention CUDA kernels
-        #   y = torch.nn.functional.scaled_dot_product_attention(
-        #       q, k, v, attn_mask=None, dropout_p=self.dropout, is_causal=True
-        #   )
-        if True:  # todo - remove, jsut forcing regular attention vs flash above
+        if self.flash:
+            # efficient attention using Flash Attention CUDA kernels
+            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout, is_causal=True)
+        else:
             # manual implementation of attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = _view_with_sharding_dim_change(att, 1, (B, -1, T, T))
-
-            att = att.masked_fill(self.mask[:, :, :T, :T] == 0, float("-inf"))
-            att = _view_with_sharding_dim_change(att, 0, (-1, T, T))
-
+            att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
-            y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-            y = _view_with_sharding_dim_change(y, 1, (B, -1, T, C // self.n_head))
-
-        y = (
-            y.transpose(1, 2).contiguous().view(B, T, C)
-        )  # re-assemble all head outputs side by side
+            y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+        y = y.transpose(1, 2).contiguous().view(B, T, C // tp_size) # re-assemble all head outputs side by side
 
         # output projection
         y = self.resid_dropout(self.c_proj(y))

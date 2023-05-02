@@ -1,1 +1,1 @@
-torchrun --standalone --nproc_per_node=4 --rdzv_id=101 --rdzv_endpoint="localhost:5971" tp_train.py config/train_shakespeare_char.py
+torchrun --standalone --nproc_per_node=8 --rdzv_id=101 --rdzv_endpoint="localhost:5971" tp_train.py config/train_shakespeare_char.py

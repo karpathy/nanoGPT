@@ -24,6 +24,7 @@ from contextlib import nullcontext
 
 import numpy as np
 import torch
+import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
@@ -31,6 +32,7 @@ from model import GPTConfig, GPT
 
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.tensor.parallel.fsdp import enable_2d_with_fsdp
+from torch.distributed.tensor.parallel._utils import _create_1d_device_mesh
 import inspect
 
 TP_AVAILABLE = False
@@ -40,6 +42,8 @@ try:
     )
     from torch.distributed.tensor.parallel import (
         PairwiseParallel,
+        ColwiseParallelForAttn,
+        RowwiseParallelForAttn,
         parallelize_module,
         # get_parallelization_fqn,
     )
@@ -141,7 +145,7 @@ model_parallel_size = 2
 # 2-D mesh is [dp, tp]
 twod_mesh = DeviceMesh(
     device_type="cuda",
-    mesh=torch.arange(0, world_size).view(model_parallel_size, -1),
+    mesh=torch.arange(0, world_size).view(-1, model_parallel_size),
 )
 rank_print(f"{twod_mesh=}")
 
@@ -168,8 +172,10 @@ train_data = np.memmap(os.path.join(data_dir, "train.bin"), dtype=np.uint16, mod
 val_data = np.memmap(os.path.join(data_dir, "val.bin"), dtype=np.uint16, mode="r")
 
 
-def get_batch(split):
+def get_batch(split, fsdp_pg):
     data = train_data if split == "train" else val_data
+    # Training data needs to be same across TP ranks.
+    torch.manual_seed(dist.get_rank(fsdp_pg))
     ix = torch.randint(len(data) - block_size, (batch_size,))
     x = torch.stack(
         [torch.from_numpy((data[i : i + block_size]).astype(np.int64)) for i in ix]
@@ -227,7 +233,8 @@ if meta_vocab_size is None:
 model_args["vocab_size"] = meta_vocab_size if meta_vocab_size is not None else 50304
 
 gptconf = GPTConfig(**model_args)
-model = GPT(twod_mesh, gptconf).cuda(_rank)
+tp_device_mesh = _create_1d_device_mesh(twod_mesh, -1)
+model = GPT(tp_device_mesh, gptconf).cuda(_rank)
 
 rank_print(f"======== model ===============\n {model=}\n ==================\n")
 
@@ -254,7 +261,6 @@ import torch.nn as nn
 # for name, module in model.named_parameters():
 #    print(f"{name=}")
 
-rank = dist.get_rank()
 # fqn = get_parallelization_fqn(model)
 
 for i in range(6):
@@ -262,7 +268,11 @@ for i in range(6):
     parallelized_block = parallelize_module(
         module=block,
         device_mesh=twod_mesh,
-        parallelize_plan={"attn": PairwiseParallel(), "mlp": PairwiseParallel()},
+        parallelize_plan={
+            "attn.c_attn": ColwiseParallelForAttn(),
+            "attn.c_proj": RowwiseParallelForAttn(),
+            "mlp": PairwiseParallel()
+        },
         tp_mesh_dim=1,
     )
     block = parallelized_block
@@ -324,13 +334,14 @@ if ddp:
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
-def estimate_loss():
+def estimate_loss(fsdp_pg):
     out = {}
     model.eval()
     for split in ["train", "val"]:
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
-            X, Y = get_batch(split)
+            X, Y = get_batch(split, fsdp_pg)
+            print("after get batch ", k)
             logits, loss = model(X, Y)
             losses[k] = loss.item()
         out[split] = losses.mean()
@@ -359,7 +370,7 @@ def get_lr(it):
 #    wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
-X, Y = get_batch("train")  # fetch the very first batch
+X, Y = get_batch("train", fsdp_pg)  # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0  # number of iterations in the lifetime of this process
 running_mfu = -1.0
@@ -372,8 +383,10 @@ while local_iter_num < 10:
     #    param_group["lr"] = lr
 
     # evaluate the loss on train/val sets and write checkpoints
-    if iter_num % eval_interval == 0 and master_process:
-        losses = estimate_loss()
+
+    # Running the estimate_loss on rank0 only will cause hang because it calls into a distributed model!
+    if iter_num % eval_interval == 0 and master_process and False:
+        losses = estimate_loss(fsdp_pg)
         print(
             f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
         )
@@ -411,7 +424,7 @@ while local_iter_num < 10:
         '''
     logits, loss = model(X, Y)
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
-    X, Y = get_batch("train")
+    X, Y = get_batch("train", fsdp_pg)
         # backward pass, with gradient scaling if training in fp16
     loss.backward()
     # clip the gradient
