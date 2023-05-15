@@ -6,19 +6,21 @@ from contextlib import nullcontext
 import numpy as np
 import time
 import torch
+
+from config.config_loader import load_config
 from model import GPTConfig, GPT
 
+conf = load_config(default_file="config/batch.conf")
 # -----------------------------------------------------------------------------
-batch_size = 12
-block_size = 1024
-bias = False
-real_data = True
-seed = 1337
-device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
-dtype = 'bfloat16' # 'float32' or 'bfloat16' or 'float16'
-compile = True # use PyTorch 2.0 to compile the model to be faster
-profile = False # use pytorch profiler, or just simple benchmarking?
-exec(open('configurator.py').read()) # overrides from command line or config file
+batch_size = conf["batch_size"]
+block_size = conf["block_size"]
+bias = conf["bias"]
+real_data = conf["real_data"]
+seed = conf["seed"]
+device = conf["device"]  # examples: "cpu", "cuda", "cuda:0", "cuda:1", etc.
+dtype = conf["dtype"]  # "float32" or "bfloat16" or "float16"
+compile = conf["compile"]  # use PyTorch 2.0 to compile the model to be faster
+profile = conf["profile"]  # use pytorch profiler, or just simple benchmarking?
 # -----------------------------------------------------------------------------
 
 torch.manual_seed(seed)

@@ -7,20 +7,22 @@ from contextlib import nullcontext
 import torch
 import tiktoken
 from model import GPTConfig, GPT
+from config.config_loader import to_dict, to_json, load_config
 
+conf = load_config(default_file="config/sample.conf")
+print(to_json(conf))
 # -----------------------------------------------------------------------------
-init_from = 'resume' # either 'resume' (from an out_dir) or a gpt2 variant (e.g. 'gpt2-xl')
-out_dir = 'out' # ignored if init_from is not 'resume'
-start = "\n" # or "<|endoftext|>" or etc. Can also specify a file, use as: "FILE:prompt.txt"
-num_samples = 10 # number of samples to draw
-max_new_tokens = 500 # number of tokens generated in each sample
-temperature = 0.8 # 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
-top_k = 200 # retain only the top_k most likely tokens, clamp others to have 0 probability
-seed = 1337
-device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
-dtype = 'bfloat16' # 'float32' or 'bfloat16' or 'float16'
-compile = False # use PyTorch 2.0 to compile the model to be faster
-exec(open('configurator.py').read()) # overrides from command line or config file
+init_from = conf["init_from"]  # "resume" # either "resume" (from an out_dir) or a gpt2 variant (e.g. "gpt2-xl")
+out_dir = conf["out_dir"]  # ignored if init_from is not "resume"
+start =  conf["start"]  # or "<|endoftext|>" or etc. Can also specify a file, use as: "FILE:prompt.txt"
+num_samples = conf["num_samples"]  # number of samples to draw
+max_new_tokens = conf["max_new_tokens"]  # number of tokens generated in each sample
+temperature = conf["temperature"]  # 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
+top_k = conf["top_k"]  # retain only the top_k most likely tokens, clamp others to have 0 probability
+seed = conf["seed"]
+device = conf["device"]  # examples: "cpu", "cuda", "cuda:0", "cuda:1", etc.
+dtype = conf["dtype"]  # "float32" or "bfloat16" or "float16"
+compile = conf["compile"]  # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
 
 torch.manual_seed(seed)
