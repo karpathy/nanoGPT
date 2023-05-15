@@ -2,7 +2,7 @@
 name = "nanogpt"
 version = "0.1.0"
 description = ""
-authors = ["Harsh Vardhan <openroadie@chez-vardhan.com>"]
+authors = ""
 readme = "README.md"
 
 [tool.poetry.dependencies]
