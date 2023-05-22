@@ -57,6 +57,8 @@ except BaseException as e:
     pass
 
 assert TP_AVAILABLE, f"fsdp did not init"
+
+
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
@@ -232,64 +234,45 @@ if meta_vocab_size is None:
     )
 model_args["vocab_size"] = meta_vocab_size if meta_vocab_size is not None else 50304
 
+
+_pure_fsdp = True
+_2D = False
+
 gptconf = GPTConfig(**model_args)
-tp_device_mesh = _create_1d_device_mesh(twod_mesh, -1)
+if _2D:
+    tp_device_mesh = _create_1d_device_mesh(twod_mesh, -1)
+else:
+    tp_device_mesh = None
+
 model = GPT(tp_device_mesh, gptconf).cuda(_rank)
 
 # rank_print(f"======== model ===============\n {model=}\n ==================\n")
 
 
-"""def parallelize_gpt(
-module: GPT,
-mesh: DeviceMesh,
-) -> GPT:
-module.transformer["h"] = nn.ModuleList(
-    [parallelize_block(block, mesh) for block in module.transformer["h"]]
-)
-return module
-
-for block in model.transformer["h"]:
-
-"""
 import torch.distributed as dist
 import torch.nn as nn
 
-# tp_gpt = parallelize_gpt(GPT(config).cuda(), device_mesh)
-# parallelize_block(block, mesh) for block in module.transformer["h"]]
 
-# model.transformer["h"] = nn.ModuleList()
-# for name, module in model.named_parameters():
-#    print(f"{name=}")
+if _2D:
+    for i in range(gptconf.n_layer):
+        block = model.get_submodule(f"transformer.h.{i}")
+        parallelized_block = parallelize_module(
+            module=block,
+            device_mesh=twod_mesh,
+            parallelize_plan={
+                "attn.c_attn": ColwiseParallel(),
+                "attn.c_proj": RowwiseParallel(),
+                "mlp": PairwiseParallel(),
+            },
+            tp_mesh_dim=1,
+        )
+        block = parallelized_block
+    rank_print(f"initialized model for 2D with {gptconf.n_layer}'s.\n")
 
-# fqn = get_parallelization_fqn(model)
-
-for i in range(6):
-    block = model.get_submodule(f"transformer.h.{i}")
-    parallelized_block = parallelize_module(
-        module=block,
-        device_mesh=twod_mesh,
-        parallelize_plan={
-            "attn.c_attn": ColwiseParallel(),
-            "attn.c_proj": RowwiseParallel(),
-            "mlp": PairwiseParallel(),
-        },
-        tp_mesh_dim=1,
-    )
-    block = parallelized_block
-
-
-"""model = parallelize_module(
-    model,
-    twod_mesh,
-    fqn,
-    # {"attn": PairwiseParallel(), "mlp": PairwiseParallel()},
-    tp_mesh_dim=1,
-)
-"""
-# print(f"{tp_model=}")
-
-fsdp_pg = twod_mesh.get_dim_groups()[0]
-
+if _2D:
+    fsdp_pg = twod_mesh.get_dim_groups()[0]
+else:
+    fsdp_pg = None
 
 # todo - add back main code later for resume
 
@@ -328,9 +311,6 @@ if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
 """
 
-# TP and FSDP init
-# assert 1, "stopping here"
-
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
@@ -363,11 +343,6 @@ def get_lr(it):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))  # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
 
-
-# logging
-# if wandb_log and master_process:
-#    import wandb
-#    wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
 X, Y = get_batch("train", fsdp_pg)  # fetch the very first batch

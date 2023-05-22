@@ -61,7 +61,6 @@ class CausalSelfAttention(nn.Module):
         super().__init__()
         assert config.n_embd % config.n_head == 0
         self.mesh = mesh
-        self.tp_size = self.mesh.mesh.size(0)
 
         # key, query, value projections for all heads, but in a batch
         self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
@@ -71,9 +70,15 @@ class CausalSelfAttention(nn.Module):
         self.attn_dropout = nn.Dropout(config.dropout)
         self.resid_dropout = nn.Dropout(config.dropout)
         self.n_head = config.n_head
-        assert (
-            self.n_head % self.tp_size == 0
-        ), "num of heads are not divisible by tp size."
+        # TP (2D) specific checks
+        if self.mesh is not None:
+            self.tp_size = self.mesh.mesh.size(0)
+            assert (
+                self.n_head % self.tp_size == 0
+            ), "num of heads are not divisible by tp size."
+        else:
+            self.tp_size = 1
+
         self.n_embd = config.n_embd
         self.dropout = config.dropout
         # flash attention make GPU go brrrrr but support is only in PyTorch nightly and still a bit scary
