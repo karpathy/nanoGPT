@@ -42,8 +42,8 @@ try:
     )
     from torch.distributed.tensor.parallel import (
         PairwiseParallel,
-        ColwiseParallelForAttn,
-        RowwiseParallelForAttn,
+        ColwiseParallel,
+        RowwiseParallel,
         parallelize_module,
         # get_parallelization_fqn,
     )
@@ -62,7 +62,7 @@ assert TP_AVAILABLE, f"fsdp did not init"
 # I/O
 out_dir = "out"
 eval_interval = 2000
-log_interval = 1
+log_interval = 2
 eval_iters = 200
 eval_only = False  # if True, script exits right after the first eval
 always_save_checkpoint = True  # if True, always save a checkpoint after each eval
@@ -236,7 +236,7 @@ gptconf = GPTConfig(**model_args)
 tp_device_mesh = _create_1d_device_mesh(twod_mesh, -1)
 model = GPT(tp_device_mesh, gptconf).cuda(_rank)
 
-rank_print(f"======== model ===============\n {model=}\n ==================\n")
+# rank_print(f"======== model ===============\n {model=}\n ==================\n")
 
 
 """def parallelize_gpt(
@@ -269,9 +269,9 @@ for i in range(6):
         module=block,
         device_mesh=twod_mesh,
         parallelize_plan={
-            "attn.c_attn": ColwiseParallelForAttn(),
-            "attn.c_proj": RowwiseParallelForAttn(),
-            "mlp": PairwiseParallel()
+            "attn.c_attn": ColwiseParallel(),
+            "attn.c_proj": RowwiseParallel(),
+            "mlp": PairwiseParallel(),
         },
         tp_mesh_dim=1,
     )
@@ -293,12 +293,12 @@ fsdp_pg = twod_mesh.get_dim_groups()[0]
 
 # todo - add back main code later for resume
 
-#model.to(device)
+# model.to(device)
 model = FSDP(model, device_id=device, process_group=fsdp_pg)
 
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
-#scaler = torch.cuda.amp.GradScaler(enabled=(dtype == "float16"))
+# scaler = torch.cuda.amp.GradScaler(enabled=(dtype == "float16"))
 
 # optimizer
 # new PyTorch nightly has a new 'fused' option for AdamW that is much faster
@@ -371,47 +371,86 @@ def get_lr(it):
 
 # training loop
 X, Y = get_batch("train", fsdp_pg)  # fetch the very first batch
-t0 = time.time()
+
 local_iter_num = 0  # number of iterations in the lifetime of this process
 running_mfu = -1.0
-eval_interval = 5
+eval_interval = 1
+warmup = 5
 
-while local_iter_num < 10:
-    # determine and set the learning rate for this iteration
-    #lr = get_lr(iter_num) if decay_lr else learning_rate
-    #for param_group in optimizer.param_groups:
-    #    param_group["lr"] = lr
+while local_iter_num < 51:
+    t0 = time.time()
+    logits, loss = model(X, Y)
+    # immediately async prefetch next batch while model is doing the forward pass on the GPU
+    X, Y = get_batch("train", fsdp_pg)
+    # backward pass, with gradient scaling if training in fp16
+    loss.backward()
+    # clip the gradient
+    # if grad_clip != 0.0:
+    #    scaler.unscale_(optimizer)
+    #    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+    # step the optimizer and scaler if training in fp16
+    optimizer.step()
 
-    # evaluate the loss on train/val sets and write checkpoints
+    # flush the gradients as soon as we can, no need for this memory anymore
+    optimizer.zero_grad(set_to_none=True)
 
-    # Running the estimate_loss on rank0 only will cause hang because it calls into a distributed model!
-    if iter_num % eval_interval == 0 and master_process and False:
-        losses = estimate_loss(fsdp_pg)
-        print(
-            f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
+    # timing and logging
+    t1 = time.time()
+    dt = t1 - t0
+
+    if iter_num >= warmup:
+        lossf = loss.item()  # loss as float. note: this is a CPU-GPU sync point
+        # if local_iter_num >= 3:  # let the training loop settle a bit
+        mfu = model.estimate_mfu(
+            batch_size * world_size * gradient_accumulation_steps, dt
         )
-        
-        '''if losses["val"] < best_val_loss or always_save_checkpoint:
-            best_val_loss = losses["val"]
-            raw_model = model.module if _tp else model
-            if iter_num > 0:
-                checkpoint = {
-                    "model": raw_model.state_dict(),
-                    "optimizer": optimizer.state_dict(),
-                    "model_args": model_args,
-                    "iter_num": iter_num,
-                    "best_val_loss": best_val_loss,
-                    "config": config,
-                }
-                print(f"saving checkpoint to {out_dir}")
-                torch.save(checkpoint, os.path.join(out_dir, "ckpt.pt"))
-        '''
-    if iter_num == 0 and eval_only:
+        running_mfu = mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
+        rank_print(
+            f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%"
+        )
+    iter_num += 1
+    local_iter_num += 1
+    rank_print(f"iter {iter_num} completed...")
+
+    # termination conditions
+    if iter_num > max_iters:
         break
+
+        # determine and set the learning rate for this iteration
+        # lr = get_lr(iter_num) if decay_lr else learning_rate
+        # for param_group in optimizer.param_groups:
+        #    param_group["lr"] = lr
+
+        # evaluate the loss on train/val sets and write checkpoints
+
+        # Running the estimate_loss on rank0 only will cause hang because it calls into a distributed model!
+        # if iter_num % eval_interval == 0 and master_process and False:
+        # losses = estimate_loss(fsdp_pg)
+        # print(
+        #    f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
+        # )
+
+        """if losses["val"] < best_val_loss or always_save_checkpoint:
+        best_val_loss = losses["val"]
+        raw_model = model.module if _tp else model
+        if iter_num > 0:
+            checkpoint = {
+                "model": raw_model.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "model_args": model_args,
+                "iter_num": iter_num,
+                "best_val_loss": best_val_loss,
+                "config": config,
+            }
+            print(f"saving checkpoint to {out_dir}")
+            torch.save(checkpoint, os.path.join(out_dir, "ckpt.pt"))
+        """
+        # if iter_num == 0 and eval_only:
+        #    break
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
-    '''for micro_step in range(gradient_accumulation_steps):
+    """for micro_step in range(gradient_accumulation_steps):
         if _tp or _tp:
             # in DDP training we only need to sync gradients at the last micro step.
             # the official way to do this is with model.no_sync() context manager, but
@@ -421,42 +460,7 @@ while local_iter_num < 10:
                 micro_step == gradient_accumulation_steps - 1
             )
         with ctx:
-        '''
-    logits, loss = model(X, Y)
-        # immediately async prefetch next batch while model is doing the forward pass on the GPU
-    X, Y = get_batch("train", fsdp_pg)
-        # backward pass, with gradient scaling if training in fp16
-    loss.backward()
-    # clip the gradient
-    #if grad_clip != 0.0:
-    #    scaler.unscale_(optimizer)
-    #    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-    # step the optimizer and scaler if training in fp16
-    optimizer.step()
-    
-    # flush the gradients as soon as we can, no need for this memory anymore
-    optimizer.zero_grad(set_to_none=True)
-
-    # timing and logging
-    t1 = time.time()
-    dt = t1 - t0
-    t0 = t1
-    if iter_num % log_interval == 0 and master_process:
-        lossf = loss.item()  # loss as float. note: this is a CPU-GPU sync point
-        if local_iter_num >= 5:  # let the training loop settle a bit
-            mfu = model.estimate_mfu(
-                batch_size * world_size * gradient_accumulation_steps, dt
-            )
-            running_mfu = mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
-        print(
-            f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%"
-        )
-    iter_num += 1
-    local_iter_num += 1
-
-    # termination conditions
-    if iter_num > max_iters:
-        break
+        """
 
 if _tp:
     destroy_process_group()
