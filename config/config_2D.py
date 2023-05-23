@@ -9,7 +9,6 @@ from torch.utils.data import Dataset
 
 from .base_config import base_config, fsdp_checkpointing_base, get_policy_base
 
-
 # wrap model into FSDP container
 from torch.distributed.fsdp.wrap import ModuleWrapPolicy
 from model import CausalSelfAttention, MLP, GPT
@@ -23,7 +22,7 @@ import torch.distributed as dist
 class train_config(base_config):
     # current models = "10.5M", "124M"
     model_name: str = "10.5M"
-    use_tensor_parallel: bool = False
+    use_tensor_parallel: bool = True
 
     dataset = "shakespeare_char"
     data_dir = "data"
@@ -40,7 +39,7 @@ class train_config(base_config):
     wrapping_policy = ModuleWrapPolicy({CausalSelfAttention, MLP})
     model_sharding_strategy = ShardingStrategy.FULL_SHARD
 
-    # stats
+    # stats - dynamic, not set by user
     current_model_params: int = 0
 
 
