@@ -21,6 +21,7 @@ import torch.distributed as dist
 
 @dataclass
 class train_config(base_config):
+    # current models = "10.5M", "124M"
     model_name: str = "10.5M"
     use_tensor_parallel: bool = False
 
@@ -37,7 +38,7 @@ class train_config(base_config):
 
     # FSDP specific
     wrapping_policy = ModuleWrapPolicy({CausalSelfAttention, MLP})
-    model_sharding_strategy = ShardingStrategy.HYBRID_SHARD
+    model_sharding_strategy = ShardingStrategy.FULL_SHARD
 
     # stats
     current_model_params: int = 0
@@ -68,7 +69,7 @@ def build_model(cfg, tp_mesh=None):
         n_head = 6
         n_embd = 384
 
-    elif model_name == "GPT2_Base":
+    elif model_name == "124M":
         block_size: int = 1024
         vocab_size: int = 50304  # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
         n_layer: int = 12

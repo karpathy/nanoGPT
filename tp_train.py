@@ -252,7 +252,9 @@ else:
 
 # todo - add back main code later for resume
 
-model = FSDP(model, device_id=device, process_group=fsdp_pg)
+model = FSDP(
+    model, auto_wrap_policy=cfg.wrapping_policy, device_id=device, process_group=fsdp_pg
+)
 
 
 # optimizer
