@@ -35,6 +35,10 @@ from torch.distributed.tensor.parallel.fsdp import enable_2d_with_fsdp
 from torch.distributed.tensor.parallel._utils import _create_1d_device_mesh
 import inspect
 
+import config.config_2D as fsdp_config
+
+cfg = fsdp_config.train_config()
+
 TP_AVAILABLE = False
 try:
     from torch.distributed._tensor import (
@@ -168,7 +172,7 @@ ptdtype = {
 
 
 # poor man's data loader
-data_dir = os.path.join("data", dataset)
+data_dir = os.path.join(cfg.data_dir, cfg.dataset)
 rank_print(f"{data_dir=}")
 train_data = np.memmap(os.path.join(data_dir, "train.bin"), dtype=np.uint16, mode="r")
 val_data = np.memmap(os.path.join(data_dir, "val.bin"), dtype=np.uint16, mode="r")
@@ -202,51 +206,23 @@ def get_batch(split, fsdp_pg):
 iter_num = 0
 best_val_loss = 1e9
 
-# attempt to derive vocab_size from the dataset
-meta_path = os.path.join(data_dir, "meta.pkl")
-meta_vocab_size = None
-if os.path.exists(meta_path):
-    with open(meta_path, "rb") as f:
-        meta = pickle.load(f)
-    meta_vocab_size = meta["vocab_size"]
-    print(f"found vocab_size = {meta_vocab_size} (inside {meta_path})")
-
 # model init
 
 
-model_args = dict(
-    n_layer=n_layer,
-    n_head=n_head,
-    n_embd=n_embd,
-    block_size=block_size,
-    bias=bias,
-    vocab_size=None,
-    dropout=dropout,
-)  # start with model_args from command line
-
 # if init_from == "scratch":
 # init a new model from scratch
-print("Initializing a new model from scratch")
-# determine the vocab size we'll use for from-scratch training
-if meta_vocab_size is None:
-    print(
-        "defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)"
-    )
-model_args["vocab_size"] = meta_vocab_size if meta_vocab_size is not None else 50304
+rank_print("Initializing a new model from scratch")
+
+# _pure_fsdp = True
+_2D = cfg.use_tensor_parallel
 
 
-_pure_fsdp = True
-_2D = False
-
-gptconf = GPTConfig(**model_args)
 if _2D:
     tp_device_mesh = _create_1d_device_mesh(twod_mesh, -1)
 else:
     tp_device_mesh = None
-
-model = GPT(tp_device_mesh, gptconf).cuda(_rank)
-
-# rank_print(f"======== model ===============\n {model=}\n ==================\n")
+model, model_config = fsdp_config.build_model(cfg, tp_device_mesh)
+model.cuda(_rank)
 
 
 import torch.distributed as dist
@@ -254,7 +230,7 @@ import torch.nn as nn
 
 
 if _2D:
-    for i in range(gptconf.n_layer):
+    for i in range(model_config.n_layer):
         block = model.get_submodule(f"transformer.h.{i}")
         parallelized_block = parallelize_module(
             module=block,
@@ -267,7 +243,7 @@ if _2D:
             tp_mesh_dim=1,
         )
         block = parallelized_block
-    rank_print(f"initialized model for 2D with {gptconf.n_layer}'s.\n")
+    rank_print(f"initialized model for 2D with {model_config.n_layer}'s.\n")
 
 if _2D:
     fsdp_pg = twod_mesh.get_dim_groups()[0]
@@ -276,12 +252,8 @@ else:
 
 # todo - add back main code later for resume
 
-# model.to(device)
 model = FSDP(model, device_id=device, process_group=fsdp_pg)
 
-
-# initialize a GradScaler. If enabled=False scaler is a no-op
-# scaler = torch.cuda.amp.GradScaler(enabled=(dtype == "float16"))
 
 # optimizer
 # new PyTorch nightly has a new 'fused' option for AdamW that is much faster
@@ -352,7 +324,7 @@ running_mfu = -1.0
 eval_interval = 1
 warmup = 5
 
-while local_iter_num < 51:
+while local_iter_num < cfg.iters_to_run:
     t0 = time.time()
     logits, loss = model(X, Y)
     # immediately async prefetch next batch while model is doing the forward pass on the GPU
@@ -437,5 +409,8 @@ while local_iter_num < 51:
         with ctx:
         """
 
-if _tp:
-    destroy_process_group()
+dist.barrier()
+rank_print(
+    f"Training completed.  \nRun used tensor_parallel = {cfg.use_tensor_parallel}"
+)
+destroy_process_group()
