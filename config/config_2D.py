@@ -22,7 +22,7 @@ import torch.distributed as dist
 class train_config(base_config):
     # current models = "10.5M", "124M"
     model_name: str = "10.5M"
-    use_tensor_parallel: bool = True
+    use_tensor_parallel: bool = False
 
     dataset = "shakespeare_char"
     data_dir = "data"
@@ -36,6 +36,7 @@ class train_config(base_config):
     dropout: float = 0.0
 
     # FSDP specific
+    use_mixed_precision: bool = True
     wrapping_policy = ModuleWrapPolicy({CausalSelfAttention, MLP})
     model_sharding_strategy = ShardingStrategy.FULL_SHARD
 
@@ -52,6 +53,15 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = False  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+
+
+def set_mixed_precision_policy():
+    from config.mixed_precision import get_mixed_precision_policy
+    cfg = train_config()
+    if cfg.use_mixed_precision:
+        return get_mixed_precision_policy()
+    else:
+        return None
 
 
 def build_model(cfg, tp_mesh=None):

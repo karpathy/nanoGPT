@@ -219,6 +219,7 @@ _2D = cfg.use_tensor_parallel
 
 if _2D:
     tp_device_mesh = _create_1d_device_mesh(twod_mesh, -1)
+    
 else:
     tp_device_mesh = None
 model, model_config = fsdp_config.build_model(cfg, tp_device_mesh)
@@ -230,20 +231,12 @@ import torch.nn as nn
 
 
 if _2D:
-    for i in range(model_config.n_layer):
-        block = model.get_submodule(f"transformer.h.{i}")
-        parallelized_block = parallelize_module(
-            module=block,
-            device_mesh=twod_mesh,
-            parallelize_plan={
-                "attn.c_attn": ColwiseParallel(),
-                "attn.c_proj": RowwiseParallel(),
-                "mlp": PairwiseParallel(),
-            },
-            tp_mesh_dim=1,
-        )
-        block = parallelized_block
-    rank_print(f"initialized model for 2D with {model_config.n_layer}'s.\n")
+    from tp_handlers import parallelize_model
+
+    num_layers = parallelize_model(model, model_config, twod_mesh)
+
+    
+    rank_print(f"initialized model for 2D with {num_layers} layers.\n")
 
 if _2D:
     fsdp_pg = twod_mesh.get_dim_groups()[0]
@@ -251,9 +244,14 @@ else:
     fsdp_pg = None
 
 # todo - add back main code later for resume
+mixed_precision_policy = fsdp_config.set_mixed_precision_policy()
 
 model = FSDP(
-    model, auto_wrap_policy=cfg.wrapping_policy, device_id=device, process_group=fsdp_pg
+    model, 
+    auto_wrap_policy=cfg.wrapping_policy, 
+    mixed_precision = mixed_precision_policy, 
+    device_id=device, 
+    process_group=fsdp_pg
 )
 
 
