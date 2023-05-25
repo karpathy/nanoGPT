@@ -54,6 +54,8 @@ except BaseException as e:
 
 assert TP_AVAILABLE, f"fsdp did not init"
 
+from gpu_memory import Memory_Maximizer
+
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -136,6 +138,7 @@ def rank_print(x):
     if _rank == 0:
         print(x)
 
+_gpu_mem_tracker = Memory_Maximizer(rank=_rank)
 
 rank_print(f"TP is available = {TP_AVAILABLE}\n")
 model_parallel_size = 2
@@ -321,6 +324,8 @@ warmup = 5
 iter_time_accumulator = 0.0
 iter_count = 0
 
+_gpu_mem_tracker.start()
+
 while local_iter_num < cfg.iters_to_run:
     t0 = time.time()
     logits, loss = model(X, Y)
@@ -341,6 +346,7 @@ while local_iter_num < cfg.iters_to_run:
     # timing and logging
     t1 = time.time()
     dt = t1 - t0
+    _gpu_mem_tracker.update()
 
     if iter_num >= warmup:
         lossf = loss.item()  # loss as float. note: this is a CPU-GPU sync point
@@ -410,16 +416,18 @@ while local_iter_num < cfg.iters_to_run:
 
 dist.barrier()
 rank_print(
-    f"Training completed.  \nRun used tensor_parallel = {cfg.use_tensor_parallel}"
+    f"\nTraining completed.  \nRun used tensor_parallel = {cfg.use_tensor_parallel}"
 )
 # display run stats
 gpu_type = torch.cuda.get_device_name(0)
 gpu_count = dist.get_world_size()
 #model_params = model.get_num_params() # /1e6
+rank_print(f"\n----- Performance Stats --------\n")
 rank_print(f"Model Size:  {_current_model_params:.2f}M")
 rank_print(f"Run completed with {gpu_count} gpus, of type {gpu_type}")
 rank_print(f"Running MFU final = {running_mfu*100:.2f}%")
 iter_avg = round(iter_time_accumulator / iter_count,4)
-rank_print(f"Avg iter speed: {iter_avg}, with {iter_count} iterations averaged.")
-
+rank_print(f"Avg iter speed: {iter_avg}, with {iter_count} iterations averaged.\n")
+if _rank==0:
+    _gpu_mem_tracker.stop()
 destroy_process_group()

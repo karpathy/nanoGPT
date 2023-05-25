@@ -57,18 +57,21 @@ def format_to_gb(item, precision=4):
 class Memory_Maximizer:
     def __init__(
         self,
+        rank=None
     ):
         current_free, full_gpu_mem = torch.cuda.mem_get_info()
 
         self.m_total_gpu_memory = format_to_gb(full_gpu_mem)
-
-        print(f"--> total memory per gpu (GB) = {self.m_total_gpu_memory}")
+        self.rank = rank
+        if self.rank ==0:
+            print(f"--> total memory per gpu (GB) = {self.m_total_gpu_memory}")
 
         self.m_reserved_memory_list = []
         self.m_reserved_memory_pct = []
         self.m_total_ooms = 0
         self.m_num_retries = 0
         self.m_max_reserved = 0
+        
 
     def start(self):
         """start memory tracking, reset any current info"""
@@ -79,8 +82,8 @@ class Memory_Maximizer:
         self.m_num_retries = 0
         self.m_total_ooms = 0
         self.m_max_reserved = 0
-
-        print(f"reserved and peak memory stats reset, ready to track")
+        if self.rank==0:
+            print(f"reserved and peak memory stats reset, ready to track")
 
     def update(
         self,
@@ -98,7 +101,9 @@ class Memory_Maximizer:
         self,
     ):
         """end of training...get various stats and display"""
-
+        if self.rank != 0:
+            return None
+        
         print(f"\nreserved memory = {self.m_reserved_memory_list}")
         print(f"memory % = {self.m_reserved_memory_pct}\n")
 
