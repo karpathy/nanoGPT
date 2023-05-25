@@ -20,16 +20,16 @@ import torch.distributed as dist
 
 @dataclass
 class train_config(base_config):
-    # current models = "10.5M", "124M"
-    model_name: str = "10.5M"
+    # current models = "10.5M", "124M", "201M"
+    model_name: str = "201M"
     use_tensor_parallel: bool = False
 
     dataset = "shakespeare_char"
     data_dir = "data"
 
-    iters_to_run: int = 11
+    iters_to_run: int = 9
 
-    batch_size = 64
+    batch_size = 128
     block_size = 256  # context of up to 256 previous characters
     use_bias: bool = False  # use bias in linear layers (recommend No)
     vocab_size: int = 65  # 50304  # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
@@ -69,11 +69,16 @@ def build_model(cfg, tp_mesh=None, rank=None):
         n_embd = 384
 
     elif model_name == "124M":
-        block_size: int = 1024
-        vocab_size: int = 50304  # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
+        #block_size: int = 1024
+        #vocab_size: int = 50304  # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
         n_layer: int = 12
         n_head: int = 12
         n_embd: int = 768
+    
+    elif model_name == "201M":
+        n_layer: int = 16
+        n_head: int = 16
+        n_embd: int =1024
 
     else:
         assert False, f"model {model_name} not supported yet."

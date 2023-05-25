@@ -57,21 +57,34 @@ def format_to_gb(item, precision=4):
 class Memory_Maximizer:
     def __init__(
         self,
-        rank=None
+        rank = None
     ):
+
         current_free, full_gpu_mem = torch.cuda.mem_get_info()
 
         self.m_total_gpu_memory = format_to_gb(full_gpu_mem)
-        self.rank = rank
+        self.rank=rank
+        
         if self.rank ==0:
             print(f"--> total memory per gpu (GB) = {self.m_total_gpu_memory}")
 
         self.m_reserved_memory_list = []
         self.m_reserved_memory_pct = []
+        self.m_allocated_memory_list = []
+        self.m_allocated_memory_pct = []
+        self.m_active_memory_list = []
+        self.m_active_memory_pct = []
+
         self.m_total_ooms = 0
         self.m_num_retries = 0
         self.m_max_reserved = 0
-        
+        self.m_max_allocated = 0
+        self.m_max_active = 0
+
+        self.rank=rank
+
+    def _convert_to_gpu_pct(self, value):
+        return round(100 * (value / self.m_total_gpu_memory), 2)
 
     def start(self):
         """start memory tracking, reset any current info"""
@@ -79,44 +92,68 @@ class Memory_Maximizer:
         torch.cuda.reset_peak_memory_stats()
         self.m_reserved_memory_list = []
         self.m_reserved_memory_pct = []
-        self.m_num_retries = 0
+        self.m_allocated_memory_list = []
+        self.m_allocated_memory_pct = []
+        self.m_active_memory_list = []
+        self.m_active_memory_pct = []
+
         self.m_total_ooms = 0
+        self.m_num_retries = 0
         self.m_max_reserved = 0
-        if self.rank==0:
-            print(f"reserved and peak memory stats reset, ready to track")
+        self.m_max_allocated = 0
+        self.m_max_active = 0
+        if self.rank ==0:
+            print(f"memory stats reset, ready to track")
 
     def update(
         self,
     ):
         """update reserved memory for this epoch"""
-        updated_reserved = torch.cuda.memory_reserved()
-        updated_reserved = format_to_gb(updated_reserved)
+        updated_reserved = format_to_gb(torch.cuda.memory_reserved())
+        updated_allocated = format_to_gb(torch.cuda.memory_allocated())
 
         self.m_reserved_memory_list.append(updated_reserved)
-        self.m_reserved_memory_pct.append(
-            round(100 * (updated_reserved / self.m_total_gpu_memory), 2)
-        )
+        self.m_reserved_memory_pct.append(self._convert_to_gpu_pct(updated_reserved))
+
+        self.m_allocated_memory_list.append(updated_allocated)
+        self.m_allocated_memory_pct.append(self._convert_to_gpu_pct(updated_allocated))
 
     def stop(
         self,
+        verbose=False,
     ):
         """end of training...get various stats and display"""
-        if self.rank != 0:
-            return None
-        
-        print(f"\nreserved memory = {self.m_reserved_memory_list}")
-        print(f"memory % = {self.m_reserved_memory_pct}\n")
+        if self.rank !=0:
+            return
+        if verbose:
+            print(f"\nreserved memory = {self.m_reserved_memory_list}")
+            print(f"memory % = {self.m_reserved_memory_pct}\n")
+            print(f"allocated memory = {self.m_allocated_memory_list}")
+            print(f"allocated memory % = {self.m_allocated_memory_pct}")
 
         cuda_max_reserved = format_to_gb(torch.cuda.max_memory_reserved())
-        print(f"--> cuda max reserved memory = {cuda_max_reserved}")
-        res_percentage = 100 * cuda_max_reserved / self.m_total_gpu_memory
+        print(f"\n--> cuda max reserved memory = {cuda_max_reserved}")
+        res_percentage = self._convert_to_gpu_pct(cuda_max_reserved)
 
-        print(f"--> max reserved percentage = {round(res_percentage,4)}%\n")
+        print(f"--> max reserved percentage = {round(res_percentage,4)} %\n")
+
+        cuda_max_allocated = format_to_gb(torch.cuda.max_memory_allocated())
+        print(f"--> cuda max memory allocated = {cuda_max_allocated}")
+        alloc_percentage = self._convert_to_gpu_pct(cuda_max_allocated)
+        print(f"--> max allocated percentage = {alloc_percentage} %\n")
 
         cuda_info = torch.cuda.memory_stats()
 
+        active_peak = cuda_info.get("active_bytes.all.peak", 0)
+        active_peak_memory_gb = format_to_gb(active_peak)
+
         self.m_num_retries = cuda_info.get("num_alloc_retries", 0)
         self.m_cuda_ooms = cuda_info.get("num_ooms", 0)
+
+        print(f"--> peak active memory = {active_peak_memory_gb}")
+        print(
+            f"--> peak active memory {self._convert_to_gpu_pct(active_peak_memory_gb)} %\n"
+        )
 
         print(f"cudaMalloc retries = {self.m_num_retries}")
         print(f"cuda OOM = {self.m_cuda_ooms}\n")
