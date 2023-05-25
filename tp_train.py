@@ -277,8 +277,7 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, **extra_args
 if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
 """
-model_params = model.get_num_params() # /1e6
-rank_print(f"Model Size:  {model_params:.2f}")
+
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
@@ -319,6 +318,8 @@ local_iter_num = 0  # number of iterations in the lifetime of this process
 running_mfu = -1.0
 eval_interval = 1
 warmup = 5
+iter_time_accumulator = 0.0
+iter_count = 0
 
 while local_iter_num < cfg.iters_to_run:
     t0 = time.time()
@@ -351,6 +352,8 @@ while local_iter_num < cfg.iters_to_run:
         rank_print(
             f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%"
         )
+        iter_time_accumulator += dt
+        iter_count +=1
     iter_num += 1
     local_iter_num += 1
     rank_print(f"iter {iter_num} completed...")
@@ -415,6 +418,8 @@ gpu_count = dist.get_world_size()
 #model_params = model.get_num_params() # /1e6
 rank_print(f"Model Size:  {_current_model_params:.2f}M")
 rank_print(f"Run completed with {gpu_count} gpus, of type {gpu_type}")
-
+rank_print(f"Running MFU final = {running_mfu*100:.2f}%")
+iter_avg = round(iter_time_accumulator / iter_count,4)
+rank_print(f"Avg iter speed: {iter_avg}, with {iter_count} iterations averaged.")
 
 destroy_process_group()
