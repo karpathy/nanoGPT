@@ -22,7 +22,7 @@ import torch.distributed as dist
 class train_config(base_config):
     # current models = "10.5M", "124M"
     model_name: str = "10.5M"
-    use_tensor_parallel: bool = False
+    use_tensor_parallel: bool = True
 
     dataset = "shakespeare_char"
     data_dir = "data"
