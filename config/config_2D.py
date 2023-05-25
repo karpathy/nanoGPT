@@ -11,7 +11,7 @@ from .base_config import base_config, fsdp_checkpointing_base, get_policy_base
 
 # wrap model into FSDP container
 from torch.distributed.fsdp.wrap import ModuleWrapPolicy
-from model import CausalSelfAttention, MLP, GPT
+from model import CausalSelfAttention, MLP, GPT, GPTConfig
 from torch.distributed.fsdp import (
     ShardingStrategy,
 )
@@ -27,7 +27,7 @@ class train_config(base_config):
     dataset = "shakespeare_char"
     data_dir = "data"
 
-    iters_to_run: int = 21
+    iters_to_run: int = 11
 
     batch_size = 64
     block_size = 256  # context of up to 256 previous characters
@@ -44,16 +44,6 @@ class train_config(base_config):
     current_model_params: int = 0
 
 
-@dataclass
-class GPTConfig:
-    block_size: int = 1024
-    vocab_size: int = 50304  # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
-    n_layer: int = 12
-    n_head: int = 12
-    n_embd: int = 768
-    dropout: float = 0.0
-    bias: bool = False  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
-
 
 def set_mixed_precision_policy():
     from config.mixed_precision import get_mixed_precision_policy
@@ -64,7 +54,7 @@ def set_mixed_precision_policy():
         return None
 
 
-def build_model(cfg, tp_mesh=None):
+def build_model(cfg, tp_mesh=None, rank=None):
     """load model config and return built model (from scratch)"""
     cfg = train_config()
     model_name = cfg.model_name
@@ -99,7 +89,7 @@ def build_model(cfg, tp_mesh=None):
     )
 
     gpt_conf = GPTConfig(**model_args)
-    model = GPT(tp_mesh, gpt_conf)
+    model = GPT(tp_mesh, gpt_conf, rank=rank)
     cfg.current_model_params = model.get_num_params()
     return model, gpt_conf
 

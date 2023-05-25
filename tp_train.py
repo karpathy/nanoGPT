@@ -214,9 +214,10 @@ if _2D:
     
 else:
     tp_device_mesh = None
-model, model_config = fsdp_config.build_model(cfg, tp_device_mesh)
+model, model_config = fsdp_config.build_model(cfg, tp_device_mesh, rank=_rank)
 model.cuda(_rank)
 
+_current_model_params = model.get_num_params()/1e6
 
 import torch.distributed as dist
 import torch.nn as nn
@@ -238,6 +239,7 @@ else:
 # todo - add back main code later for resume
 mixed_precision_policy = fsdp_config.set_mixed_precision_policy()
 
+
 model = FSDP(
     model, 
     auto_wrap_policy=cfg.wrapping_policy, 
@@ -253,13 +255,14 @@ model = FSDP(
 use_fused = (device_type == "cuda") and (
     "fused" in inspect.signature(torch.optim.AdamW).parameters
 )
-print(f"using fused AdamW: {use_fused}")
+
+rank_print(f"Optimizer = using fused AdamW: {use_fused}")
 extra_args = dict(fused=True) if use_fused else dict()
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, **extra_args)
 # optimizer = torch.optim.AdamW(model.parameters(), learning_rate)
 
-# optimizer = model.configure_optimizers(
-#    weight_decay, learning_rate, (beta1, beta2), device_type
+#optimizer = model.configure_optimizers(
+#    weight_decay, learning_rate, (beta1, beta2), device_type, rank=_rank)
 # )
 # if init_from == "resume":
 #    optimizer.load_state_dict(checkpoint["optimizer"])
@@ -274,7 +277,8 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, **extra_args
 if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
 """
-
+model_params = model.get_num_params() # /1e6
+rank_print(f"Model Size:  {model_params:.2f}")
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
@@ -405,4 +409,12 @@ dist.barrier()
 rank_print(
     f"Training completed.  \nRun used tensor_parallel = {cfg.use_tensor_parallel}"
 )
+# display run stats
+gpu_type = torch.cuda.get_device_name(0)
+gpu_count = dist.get_world_size()
+#model_params = model.get_num_params() # /1e6
+rank_print(f"Model Size:  {_current_model_params:.2f}M")
+rank_print(f"Run completed with {gpu_count} gpus, of type {gpu_type}")
+
+
 destroy_process_group()

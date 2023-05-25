@@ -27,6 +27,17 @@ from torch.distributed._tensor import (
     Shard,
 )
 
+@dataclass
+class GPTConfig:
+    block_size: int = 1024
+    vocab_size: int = 50304  # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
+    n_layer: int = 12
+    n_head: int = 12
+    n_embd: int = 768
+    dropout: float = 0.0
+    bias: bool = False  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+
+
 
 # @torch.jit.script # good to enable when not using torch.compile, disable when using (our default)
 def new_gelu(x):
@@ -168,19 +179,9 @@ class Block(nn.Module):
         return x
 
 
-@dataclass
-class GPTConfig:
-    block_size: int = 1024
-    vocab_size: int = 50304  # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
-    n_layer: int = 12
-    n_head: int = 12
-    n_embd: int = 768
-    dropout: float = 0.0
-    bias: bool = False  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
-
 
 class GPT(nn.Module):
-    def __init__(self, mesh, config):
+    def __init__(self, mesh, config, rank=None):
         super().__init__()
         assert config.vocab_size is not None
         assert config.block_size is not None
@@ -214,7 +215,8 @@ class GPT(nn.Module):
                 )
 
         # report number of parameters
-        print("number of parameters: %.2fM" % (self.get_num_params() / 1e6,))
+        if rank is not None and rank==0:
+            print("number of parameters: %.2fM" % (self.get_num_params() / 1e6,))
 
     def get_num_params(self, non_embedding=True):
         """
@@ -358,7 +360,7 @@ class GPT(nn.Module):
 
         return model
 
-    def configure_optimizers(self, weight_decay, learning_rate, betas, device_type):
+    def configure_optimizers(self, weight_decay, learning_rate, betas, device_type, rank=None):
         """
         This long function is unfortunately doing something very simple and is being very defensive:
         We are separating out all parameters of the model into two buckets: those that will experience
@@ -423,7 +425,8 @@ class GPT(nn.Module):
         use_fused = (device_type == "cuda") and (
             "fused" in inspect.signature(torch.optim.AdamW).parameters
         )
-        print(f"using fused AdamW: {use_fused}")
+        if rank is not None and rank==0:
+            print(f"using fused AdamW: {use_fused}")
         extra_args = dict(fused=True) if use_fused else dict()
         optimizer = torch.optim.AdamW(
             optim_groups, lr=learning_rate, betas=betas, **extra_args
@@ -441,8 +444,9 @@ class GPT(nn.Module):
         flops_per_token = 6 * N + 12 * L * H * Q * T
         flops_per_fwdbwd = flops_per_token * T
         flops_per_iter = flops_per_fwdbwd * fwdbwd_per_iter
-        # express our flops throughput as ratio of A100 bfloat16 peak flops
+        # express our flops throughput as ratio of A100 bfloat16 peak flops or A10 bf16 flops
         flops_achieved = flops_per_iter * (1.0 / dt)  # per second
+
         flops_promised = 125e12  # A10 TFlops ....  312e12  A100 GPU bfloat16 peak flops is 312 TFLOPS
         mfu = flops_achieved / flops_promised
         return mfu
