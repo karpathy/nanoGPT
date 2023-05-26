@@ -148,7 +148,8 @@ twod_mesh = DeviceMesh(
     device_type="cuda",
     mesh=torch.arange(0, world_size).view(-1, model_parallel_size),
 )
-rank_print(f"{twod_mesh=}")
+#rank_print(f"{twod_mesh=}")
+#rank_print(f"2D mesh [dp, tp] = {twod_mesh.ndim=}, {twod_mesh.get_dim_groups=}, {twod_mesh}")
 
 
 if master_process:
@@ -251,7 +252,10 @@ model = FSDP(
     process_group=fsdp_pg
 )
 
-
+if cfg.use_fsdp_activation_checkpointing:
+        fsdp_config.apply_checkpointing_policy(model)
+        if _rank == 0:
+            print(f"--> FSDP activation checkpointing in use")
 # optimizer
 # new PyTorch nightly has a new 'fused' option for AdamW that is much faster
 
@@ -418,16 +422,18 @@ dist.barrier()
 rank_print(
     f"\nTraining completed.  \nRun used tensor_parallel = {cfg.use_tensor_parallel}"
 )
+rank_print(f"FSDP Checkpointing?  {cfg.use_fsdp_activation_checkpointing}")
 # display run stats
 gpu_type = torch.cuda.get_device_name(0)
 gpu_count = dist.get_world_size()
 #model_params = model.get_num_params() # /1e6
 rank_print(f"\n----- Performance Stats --------\n")
-rank_print(f"Model Size:  {_current_model_params:.2f}M")
+
+if _rank==0:
+    _gpu_mem_tracker.stop()
+rank_print(f"\nModel Size:  {_current_model_params:.2f}M")
 rank_print(f"Run completed with {gpu_count} gpus, of type {gpu_type}")
 rank_print(f"Running MFU final = {running_mfu*100:.2f}%")
 iter_avg = round(iter_time_accumulator / iter_count,4)
 rank_print(f"Avg iter speed: {iter_avg}, with {iter_count} iterations averaged.\n")
-if _rank==0:
-    _gpu_mem_tracker.stop()
 destroy_process_group()

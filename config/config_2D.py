@@ -11,7 +11,7 @@ from .base_config import base_config, fsdp_checkpointing_base, get_policy_base
 
 # wrap model into FSDP container
 from torch.distributed.fsdp.wrap import ModuleWrapPolicy
-from model import CausalSelfAttention, MLP, GPT, GPTConfig
+from model import CausalSelfAttention, MLP, GPT, GPTConfig, Block
 from torch.distributed.fsdp import (
     ShardingStrategy,
 )
@@ -22,7 +22,7 @@ import torch.distributed as dist
 class train_config(base_config):
     # current models = "10.5M", "124M", "201M"
     model_name: str = "201M"
-    use_tensor_parallel: bool = False
+    use_tensor_parallel: bool = True
 
     dataset = "shakespeare_char"
     data_dir = "data"
@@ -39,6 +39,7 @@ class train_config(base_config):
     use_mixed_precision: bool = True
     wrapping_policy = ModuleWrapPolicy({CausalSelfAttention, MLP})
     model_sharding_strategy = ShardingStrategy.FULL_SHARD
+    use_fsdp_activation_checkpointing: bool = True
 
     # stats - dynamic, not set by user
     current_model_params: int = 0
@@ -118,3 +119,6 @@ def get_vocab_size(cfg: train_config = None):
         meta_vocab_size is not None
     ), f"Failed to determine vocab size for {cfg.data_dir}"
     return meta_vocab_size
+
+def apply_checkpointing_policy(model):
+    return fsdp_checkpointing_base(model, MLP)
