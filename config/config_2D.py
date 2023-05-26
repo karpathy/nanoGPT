@@ -20,8 +20,8 @@ import torch.distributed as dist
 
 @dataclass
 class train_config(base_config):
-    # current models = "10.5M", "124M", "201M"
-    model_name: str = "201M"
+    # current models = "10.5M", "124M", "201M", "774M", "1.5B"
+    model_name: str = "1.5B"
     use_tensor_parallel: bool = True
 
     dataset = "shakespeare_char"
@@ -29,7 +29,7 @@ class train_config(base_config):
 
     iters_to_run: int = 9
 
-    batch_size = 128
+    batch_size = 48
     block_size = 256  # context of up to 256 previous characters
     use_bias: bool = False  # use bias in linear layers (recommend No)
     vocab_size: int = 65  # 50304  # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
@@ -45,9 +45,9 @@ class train_config(base_config):
     current_model_params: int = 0
 
 
-
 def set_mixed_precision_policy():
     from config.mixed_precision import get_mixed_precision_policy
+
     cfg = train_config()
     if cfg.use_mixed_precision:
         return get_mixed_precision_policy()
@@ -70,16 +70,26 @@ def build_model(cfg, tp_mesh=None, rank=None):
         n_embd = 384
 
     elif model_name == "124M":
-        #block_size: int = 1024
-        #vocab_size: int = 50304  # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
+        # block_size: int = 1024
+        # vocab_size: int = 50304  # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
         n_layer: int = 12
         n_head: int = 12
         n_embd: int = 768
-    
+
     elif model_name == "201M":
         n_layer: int = 16
         n_head: int = 16
-        n_embd: int =1024
+        n_embd: int = 1024
+
+    elif model_name == "774M":
+        n_layer: int = 48
+        n_head: int = 20
+        n_embd: int = 1280
+
+    elif model_name == "1.5B":
+        n_layer: int = 46
+        n_head: int = 20
+        n_embd: int = 1600
 
     else:
         assert False, f"model {model_name} not supported yet."
@@ -120,5 +130,6 @@ def get_vocab_size(cfg: train_config = None):
     ), f"Failed to determine vocab size for {cfg.data_dir}"
     return meta_vocab_size
 
+
 def apply_checkpointing_policy(model):
-    return fsdp_checkpointing_base(model, MLP)
+    return fsdp_checkpointing_base(model, (MLP, CausalSelfAttention))

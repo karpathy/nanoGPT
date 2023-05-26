@@ -27,6 +27,7 @@ from torch.distributed._tensor import (
     Shard,
 )
 
+
 @dataclass
 class GPTConfig:
     block_size: int = 1024
@@ -36,7 +37,6 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = False  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
-
 
 
 # @torch.jit.script # good to enable when not using torch.compile, disable when using (our default)
@@ -70,7 +70,9 @@ class LayerNorm(nn.Module):
 class CausalSelfAttention(nn.Module):
     def __init__(self, mesh, config):
         super().__init__()
-        assert config.n_embd % config.n_head == 0
+        assert (
+            config.n_embd % config.n_head == 0
+        ), f"{config.n_embd=}, is not evenly divisble by {config.n_head=}"
         self.mesh = mesh
 
         # key, query, value projections for all heads, but in a batch
@@ -179,7 +181,6 @@ class Block(nn.Module):
         return x
 
 
-
 class GPT(nn.Module):
     def __init__(self, mesh, config, rank=None):
         super().__init__()
@@ -215,7 +216,7 @@ class GPT(nn.Module):
                 )
 
         # report number of parameters
-        if rank is not None and rank==0:
+        if rank is not None and rank == 0:
             print("number of parameters: %.2fM" % (self.get_num_params() / 1e6,))
 
     def get_num_params(self, non_embedding=True):
@@ -360,7 +361,9 @@ class GPT(nn.Module):
 
         return model
 
-    def configure_optimizers(self, weight_decay, learning_rate, betas, device_type, rank=None):
+    def configure_optimizers(
+        self, weight_decay, learning_rate, betas, device_type, rank=None
+    ):
         """
         This long function is unfortunately doing something very simple and is being very defensive:
         We are separating out all parameters of the model into two buckets: those that will experience
@@ -425,7 +428,7 @@ class GPT(nn.Module):
         use_fused = (device_type == "cuda") and (
             "fused" in inspect.signature(torch.optim.AdamW).parameters
         )
-        if rank is not None and rank==0:
+        if rank is not None and rank == 0:
             print(f"using fused AdamW: {use_fused}")
         extra_args = dict(fused=True) if use_fused else dict()
         optimizer = torch.optim.AdamW(
