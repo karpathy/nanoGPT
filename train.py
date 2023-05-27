@@ -89,8 +89,9 @@ if ddp:
     torch.cuda.set_device(device)
     master_process = ddp_rank == 0 # this process will do logging, checkpointing etc.
     seed_offset = ddp_rank # each process gets a different seed
-    assert gradient_accumulation_steps % torch.cuda.device_count() == 0
-    gradient_accumulation_steps //= torch.cuda.device_count()
+    assert ddp_world_size <= torch.cuda.device_count()
+    assert gradient_accumulation_steps % ddp_world_size == 0
+    gradient_accumulation_steps //= ddp_world_size
 else:
     # if not ddp, we are running on a single gpu, and one process
     master_process = True
