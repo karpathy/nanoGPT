@@ -138,6 +138,7 @@ def rank_print(x):
     if _rank == 0:
         print(x)
 
+
 _gpu_mem_tracker = Memory_Maximizer(rank=_rank)
 
 rank_print(f"TP is available = {TP_AVAILABLE}\n")
@@ -148,8 +149,8 @@ twod_mesh = DeviceMesh(
     device_type="cuda",
     mesh=torch.arange(0, world_size).view(-1, model_parallel_size),
 )
-#rank_print(f"{twod_mesh=}")
-#rank_print(f"2D mesh [dp, tp] = {twod_mesh.ndim=}, {twod_mesh.get_dim_groups=}, {twod_mesh}")
+# rank_print(f"{twod_mesh=}")
+# rank_print(f"2D mesh [dp, tp] = {twod_mesh.ndim=}, {twod_mesh.get_dim_groups=}, {twod_mesh}")
 
 
 if master_process:
@@ -215,13 +216,13 @@ _2D = cfg.use_tensor_parallel
 
 if _2D:
     tp_device_mesh = _create_1d_device_mesh(twod_mesh, -1)
-    
+
 else:
     tp_device_mesh = None
 model, model_config = fsdp_config.build_model(cfg, tp_device_mesh, rank=_rank)
 model.cuda(_rank)
 
-_current_model_params = model.get_num_params()/1e6
+_current_model_params = model.get_num_params() / 1e6
 
 import torch.distributed as dist
 import torch.nn as nn
@@ -232,7 +233,6 @@ if _2D:
 
     num_layers = parallelize_model(model, model_config, twod_mesh)
 
-    
     rank_print(f"initialized model for 2D with {num_layers} layers.\n")
 
 if _2D:
@@ -245,17 +245,17 @@ mixed_precision_policy = fsdp_config.set_mixed_precision_policy()
 
 
 model = FSDP(
-    model, 
-    auto_wrap_policy=cfg.wrapping_policy, 
-    mixed_precision = mixed_precision_policy, 
-    device_id=device, 
-    process_group=fsdp_pg
+    model,
+    auto_wrap_policy=cfg.wrapping_policy,
+    mixed_precision=mixed_precision_policy,
+    device_id=device,
+    process_group=fsdp_pg,
 )
 
 if cfg.use_fsdp_activation_checkpointing:
-        fsdp_config.apply_checkpointing_policy(model)
-        if _rank == 0:
-            print(f"--> FSDP activation checkpointing in use")
+    fsdp_config.apply_checkpointing_policy(model)
+    if _rank == 0:
+        print(f"--> FSDP activation checkpointing in use")
 # optimizer
 # new PyTorch nightly has a new 'fused' option for AdamW that is much faster
 
@@ -268,7 +268,7 @@ extra_args = dict(fused=True) if use_fused else dict()
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, **extra_args)
 # optimizer = torch.optim.AdamW(model.parameters(), learning_rate)
 
-#optimizer = model.configure_optimizers(
+# optimizer = model.configure_optimizers(
 #    weight_decay, learning_rate, (beta1, beta2), device_type, rank=_rank)
 # )
 # if init_from == "resume":
@@ -328,6 +328,14 @@ warmup = 5
 iter_time_accumulator = 0.0
 iter_count = 0
 
+# compute actual num heads
+# TP (2D) specific checks
+if twod_mesh is not None:
+    _tp_size = twod_mesh.mesh.size(0)
+
+else:
+    _tp_size = 1
+
 _gpu_mem_tracker.start()
 
 while local_iter_num < cfg.iters_to_run:
@@ -356,14 +364,14 @@ while local_iter_num < cfg.iters_to_run:
         lossf = loss.item()  # loss as float. note: this is a CPU-GPU sync point
         # if local_iter_num >= 3:  # let the training loop settle a bit
         mfu = model.estimate_mfu(
-            batch_size * world_size * gradient_accumulation_steps, dt
+            batch_size * world_size * gradient_accumulation_steps, dt, tp_size=_tp_size
         )
         running_mfu = mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
         rank_print(
             f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%"
         )
         iter_time_accumulator += dt
-        iter_count +=1
+        iter_count += 1
     iter_num += 1
     local_iter_num += 1
     rank_print(f"iter {iter_num} completed...")
@@ -426,14 +434,14 @@ rank_print(f"FSDP Checkpointing?  {cfg.use_fsdp_activation_checkpointing}")
 # display run stats
 gpu_type = torch.cuda.get_device_name(0)
 gpu_count = dist.get_world_size()
-#model_params = model.get_num_params() # /1e6
+# model_params = model.get_num_params() # /1e6
 rank_print(f"\n----- Performance Stats --------\n")
 
-if _rank==0:
+if _rank == 0:
     _gpu_mem_tracker.stop()
 rank_print(f"\nModel Size:  {_current_model_params:.2f}M")
 rank_print(f"Run completed with {gpu_count} gpus, of type {gpu_type}")
 rank_print(f"Running MFU final = {running_mfu*100:.2f}%")
-iter_avg = round(iter_time_accumulator / iter_count,4)
+iter_avg = round(iter_time_accumulator / iter_count, 4)
 rank_print(f"Avg iter speed: {iter_avg}, with {iter_count} iterations averaged.\n")
 destroy_process_group()

@@ -21,25 +21,25 @@ import torch.distributed as dist
 @dataclass
 class train_config(base_config):
     # current models = "10.5M", "124M", "201M", "774M", "1.5B"
-    model_name: str = "1.5B"
-    use_tensor_parallel: bool = True
+    model_name: str = "124M"
+    use_tensor_parallel: bool = False
 
-    dataset = "shakespeare_char"
+    dataset = "openwebtext"
     data_dir = "data"
 
     iters_to_run: int = 9
 
     batch_size = 48
-    block_size = 256  # context of up to 256 previous characters
+    block_size = 1024  # 256  # 1024 = gpt2, openwebtext, context of up to 256 previous characters
     use_bias: bool = False  # use bias in linear layers (recommend No)
-    vocab_size: int = 65  # 50304  # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
+    vocab_size: int = 50304  # use 65 for shakespeare, GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
     dropout: float = 0.0
 
     # FSDP specific
     use_mixed_precision: bool = True
     wrapping_policy = ModuleWrapPolicy({CausalSelfAttention, MLP})
     model_sharding_strategy = ShardingStrategy.FULL_SHARD
-    use_fsdp_activation_checkpointing: bool = True
+    use_fsdp_activation_checkpointing: bool = False
 
     # stats - dynamic, not set by user
     current_model_params: int = 0
