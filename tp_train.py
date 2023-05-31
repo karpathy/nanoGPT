@@ -354,6 +354,7 @@ while local_iter_num < cfg.iters_to_run:
 
     # flush the gradients as soon as we can, no need for this memory anymore
     optimizer.zero_grad(set_to_none=True)
+    torch.distributed.barrier()
 
     # timing and logging
     t1 = time.time()
