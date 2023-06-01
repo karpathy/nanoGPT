@@ -103,13 +103,14 @@ device = (
 
 compile = False  # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
-config_keys = [
+"""config_keys = [
     k
     for k, v in globals().items()
     if not k.startswith("_") and isinstance(v, (int, float, bool, str))
 ]
 exec(open("configurator.py").read())  # overrides from command line or config file
 config = {k: globals()[k] for k in config_keys}  # will be useful for logging
+"""
 # -----------------------------------------------------------------------------
 
 # various inits, derived attributes, I/O setup
@@ -222,7 +223,11 @@ else:
 model, model_config = fsdp_config.build_model(cfg, tp_device_mesh, rank=_rank)
 model.cuda(_rank)
 
-_current_model_params = model.get_num_params() / 1e6
+# we need this or else calcing mfu in fsdp = sharded model size...
+_mfu_model_params = model.get_num_params()
+print(f"{_mfu_model_params=}")
+_current_model_params = _mfu_model_params / 1e6
+
 
 import torch.distributed as dist
 import torch.nn as nn
@@ -336,10 +341,13 @@ if twod_mesh is not None:
 else:
     _tp_size = 1
 
+# num_params = model.get_num_params()
+# print(f"{num_params=}")
+
 _gpu_mem_tracker.start()
 
 while local_iter_num < cfg.iters_to_run:
-    t0 = time.time()
+    t0 = time.perf_counter()
     logits, loss = model(X, Y)
     # immediately async prefetch next batch while model is doing the forward pass on the GPU
     X, Y = get_batch("train", fsdp_pg)
@@ -357,15 +365,21 @@ while local_iter_num < cfg.iters_to_run:
     torch.distributed.barrier()
 
     # timing and logging
-    t1 = time.time()
+    t1 = time.perf_counter()
     dt = t1 - t0
     _gpu_mem_tracker.update()
 
     if iter_num >= warmup:
         lossf = loss.item()  # loss as float. note: this is a CPU-GPU sync point
         # if local_iter_num >= 3:  # let the training loop settle a bit
+
         mfu = model.estimate_mfu(
-            batch_size * world_size * gradient_accumulation_steps, dt, tp_size=_tp_size
+            _mfu_model_params,
+            cfg.batch_size
+            / _tp_size,  #  * world_size,  #  * gradient_accumulation_steps,
+            dt,
+            config_file=model_config,
+            tp_size=_tp_size,
         )
         running_mfu = mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
         rank_print(
