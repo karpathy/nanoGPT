@@ -8,54 +8,48 @@ c - to run, bash run_tp.sh
 
 """
 
-import os
-import time
+import inspect
 import math
+import os
 import pickle
+import time
 from contextlib import nullcontext
 
 import numpy as np
 import torch
 import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.distributed import init_process_group, destroy_process_group
-
-from model import GPTConfig, GPT
-
+import torch.nn as nn
+from torch.distributed import destroy_process_group, init_process_group
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
-from torch.distributed.tensor.parallel.fsdp import enable_2d_with_fsdp
-from torch.distributed.tensor.parallel._utils import _create_1d_device_mesh
-import inspect
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 import config.config_2D as fsdp_config
+from model import GPT, GPTConfig
 
 cfg = fsdp_config.train_config()
 
 TP_AVAILABLE = False
 try:
-    from torch.distributed._tensor import (
-        DeviceMesh,
-    )
-    from torch.distributed.tensor.parallel import (
-        PairwiseParallel,
+    from torch.distributed._tensor import DeviceMesh
+    from torch.distributed.tensor.parallel import (  # get_parallelization_fqn,
         ColwiseParallel,
+        PairwiseParallel,
         RowwiseParallel,
         parallelize_module,
-        # get_parallelization_fqn,
     )
+    from torch.distributed.tensor.parallel._utils import _create_1d_device_mesh
+    from torch.distributed.tensor.parallel.fsdp import enable_2d_with_fsdp
 
     # need to setup hooks for TP
-
     TP_AVAILABLE = enable_2d_with_fsdp()
 
 except BaseException as e:
     print(f"Exception during TP init - {e=}\n")
-    pass
 
-assert TP_AVAILABLE, f"fsdp did not init"
+if cfg.use_tensor_parallel:
+    assert TP_AVAILABLE, f"fsdp did not init"
 
 from gpu_memory import Memory_Maximizer
-
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -150,6 +144,7 @@ twod_mesh = DeviceMesh(
     device_type="cuda",
     mesh=torch.arange(0, world_size).view(-1, model_parallel_size),
 )
+
 # rank_print(f"{twod_mesh=}")
 # rank_print(f"2D mesh [dp, tp] = {twod_mesh.ndim=}, {twod_mesh.get_dim_groups=}, {twod_mesh}")
 
@@ -211,26 +206,18 @@ best_val_loss = 1e9
 # init a new model from scratch
 rank_print("Initializing a new model from scratch")
 
-# _pure_fsdp = True
 _2D = cfg.use_tensor_parallel
-
 
 if _2D:
     tp_device_mesh = _create_1d_device_mesh(twod_mesh, -1)
-
 else:
     tp_device_mesh = None
+
 model, model_config = fsdp_config.build_model(cfg, tp_device_mesh, rank=_rank)
-model.cuda(_rank)
 
 # we need this or else calcing mfu in fsdp = sharded model size...
 _mfu_model_params = model.get_num_params()
-print(f"{_mfu_model_params=}")
 _current_model_params = _mfu_model_params / 1e6
-
-
-import torch.distributed as dist
-import torch.nn as nn
 
 
 if _2D:

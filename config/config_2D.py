@@ -22,7 +22,7 @@ import torch.distributed as dist
 class train_config(base_config):
     # current models = "10.5M", "124M", "201M", "774M", "1.5B"
     model_name: str = "201M"
-    use_tensor_parallel: bool = False
+    use_tensor_parallel: bool = True
 
     dataset = "openwebtext"  # options = shakespeare_char, openwebtext
     data_dir = "data"
@@ -39,7 +39,7 @@ class train_config(base_config):
     use_mixed_precision: bool = True
     wrapping_policy = ModuleWrapPolicy({CausalSelfAttention, MLP})
     model_sharding_strategy = ShardingStrategy.FULL_SHARD
-    use_fsdp_activation_checkpointing: bool = False
+    use_fsdp_activation_checkpointing: bool = True
 
     # stats - dynamic, not set by user
     current_model_params: int = 0
