@@ -137,16 +137,21 @@ def rank_print(x):
 _gpu_mem_tracker = Memory_Maximizer(rank=_rank)
 
 rank_print(f"TP is available = {TP_AVAILABLE}\n")
-model_parallel_size = 2
+tensor_parallel_size = 2
 
-# 2-D mesh is [dp, tp]
+# 2-D mesh is [dp, tp].
+# tp = tensor parallel group size (num gpus per TP sharding).
+# dp = FSDP model (data) group size (groups to shard the model across).
+
 twod_mesh = DeviceMesh(
     device_type="cuda",
-    mesh=torch.arange(0, world_size).view(-1, model_parallel_size),
+    mesh=torch.arange(0, world_size).view(-1, tensor_parallel_size),
 )
 
-# rank_print(f"{twod_mesh=}")
-# rank_print(f"2D mesh [dp, tp] = {twod_mesh.ndim=}, {twod_mesh.get_dim_groups=}, {twod_mesh}")
+rank_print(f"{twod_mesh=}")
+rank_print(
+    f"2D mesh [dp, tp] = {twod_mesh.ndim=}, {twod_mesh.get_dim_groups=}, {twod_mesh}"
+)
 
 
 if master_process:
@@ -213,6 +218,7 @@ if _2D:
 else:
     tp_device_mesh = None
 
+rank_print(f"{tp_device_mesh=}")
 model, model_config = fsdp_config.build_model(cfg, tp_device_mesh, rank=_rank)
 
 # we need this or else calcing mfu in fsdp = sharded model size...
@@ -327,6 +333,8 @@ if twod_mesh is not None:
 
 else:
     _tp_size = 1
+
+rank_print(f"{_tp_size=}, {twod_mesh=}")
 
 # num_params = model.get_num_params()
 # print(f"{num_params=}")
