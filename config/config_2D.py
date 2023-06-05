@@ -22,7 +22,7 @@ import torch.distributed as dist
 class train_config(base_config):
     # current models = "10.5M", "124M", "201M", "774M", "1.5B"
     model_name: str = "201M"
-    use_tensor_parallel: bool = True
+    use_tensor_parallel: bool = False
 
     dataset = "openwebtext"  # options = shakespeare_char, openwebtext
     data_dir = "data"

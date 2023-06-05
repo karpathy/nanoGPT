@@ -141,7 +141,7 @@ tensor_parallel_size = 2
 
 # 2-D mesh is [dp, tp].
 # tp = tensor parallel group size (num gpus per TP sharding).
-# dp = FSDP model (data) group size (groups to shard the model across).
+# dp = FSDP data group size (groups to shard the model across).
 
 twod_mesh = DeviceMesh(
     device_type="cuda",
@@ -238,7 +238,7 @@ if _2D:
 else:
     fsdp_pg = None
 
-# todo - add back main code later for resume
+# todo - add back main code later for resume training
 mixed_precision_policy = fsdp_config.set_mixed_precision_policy()
 
 
@@ -249,6 +249,7 @@ model = FSDP(
     device_id=device,
     process_group=fsdp_pg,
 )
+
 
 if cfg.use_fsdp_activation_checkpointing:
     fsdp_config.apply_checkpointing_policy(model)
@@ -453,5 +454,7 @@ rank_print(f"\nModel Size:  {_current_model_params:.2f}M")
 rank_print(f"Run completed with {gpu_count} gpus, of type {gpu_type}")
 rank_print(f"Running MFU final = {running_mfu*100:.2f}%")
 iter_avg = round(iter_time_accumulator / iter_count, 4)
-rank_print(f"Avg iter speed: {iter_avg}, with {iter_count} iterations averaged.\n")
+rank_print(
+    f"Avg iter speed (in seconds): {iter_avg}, with {iter_count} iterations averaged.\n"
+)
 destroy_process_group()
