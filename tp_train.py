@@ -176,10 +176,8 @@ train_data = np.memmap(os.path.join(data_dir, "train.bin"), dtype=np.uint16, mod
 val_data = np.memmap(os.path.join(data_dir, "val.bin"), dtype=np.uint16, mode="r")
 
 
-def get_batch(split, fsdp_pg):
+def get_batch(split):
     data = train_data if split == "train" else val_data
-    # Training data needs to be same across TP ranks.
-    torch.manual_seed(dist.get_rank(fsdp_pg))
     ix = torch.randint(len(data) - block_size, (batch_size,))
     x = torch.stack(
         [torch.from_numpy((data[i : i + block_size]).astype(np.int64)) for i in ix]
@@ -235,8 +233,11 @@ if _2D:
 
 if _2D:
     fsdp_pg = twod_mesh.get_dim_groups()[0]
+    # Important - Training data needs to be the same across TP ranks.
+    torch.manual_seed(dist.get_rank(fsdp_pg))
 else:
     fsdp_pg = None
+
 
 # todo - add back main code later for resume training
 mixed_precision_policy = fsdp_config.set_mixed_precision_policy()
@@ -287,13 +288,13 @@ if ddp:
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
-def estimate_loss(fsdp_pg):
+def estimate_loss():
     out = {}
     model.eval()
     for split in ["train", "val"]:
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
-            X, Y = get_batch(split, fsdp_pg)
+            X, Y = get_batch(split)
             print("after get batch ", k)
             logits, loss = model(X, Y)
             losses[k] = loss.item()
@@ -318,7 +319,7 @@ def get_lr(it):
 
 
 # training loop
-X, Y = get_batch("train", fsdp_pg)  # fetch the very first batch
+X, Y = get_batch("train")  # fetch the very first batch
 
 local_iter_num = 0  # number of iterations in the lifetime of this process
 running_mfu = -1.0
@@ -346,7 +347,7 @@ while local_iter_num < cfg.iters_to_run:
     t0 = time.perf_counter()
     logits, loss = model(X, Y)
     # immediately async prefetch next batch while model is doing the forward pass on the GPU
-    X, Y = get_batch("train", fsdp_pg)
+    X, Y = get_batch("train")
     # backward pass, with gradient scaling if training in fp16
     loss.backward()
     # clip the gradient
