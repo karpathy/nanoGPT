@@ -144,13 +144,7 @@ if _2D_Ready and cfg.use_tensor_parallel:
     # tp = tensor parallel group size (num gpus per TP sharding).
     # dp = FSDP data group size (groups to shard the model across).
 
-    # assuming single node, we split gpus in half...
-    tensor_parallel_size = world_size // 2
-
-    assert (
-        _rank == _local_rank
-    ), f"please adjust tensor_parallel_size to span the entire node"
-    rank_print(f"{tensor_parallel_size=}\n")
+    tensor_parallel_size = 2
 
     twod_mesh = DeviceMesh(
         device_type="cuda",
@@ -343,7 +337,10 @@ if _2D and twod_mesh is not None:
     rank_print(f"{_fsdp_size=}, {_tp_size=}, {twod_mesh=}")
 
 else:
+    # we divide num attn heads by tp_size for tp.
+    # If not using, divide by 1 to make the adjustments inert
     _tp_size = 1
+    _fsdp_size = 1
 
 
 # num_params = model.get_num_params()
