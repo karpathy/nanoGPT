@@ -28,26 +28,29 @@ from model import GPT, GPTConfig
 
 cfg = fsdp_config.train_config()
 
-TP_AVAILABLE = False
-try:
-    from torch.distributed._tensor import DeviceMesh
-    from torch.distributed.tensor.parallel import (  # get_parallelization_fqn,
-        ColwiseParallel,
-        PairwiseParallel,
-        RowwiseParallel,
-        parallelize_module,
-    )
-    from torch.distributed.tensor.parallel._utils import _create_1d_device_mesh
-    from torch.distributed.tensor.parallel.fsdp import enable_2d_with_fsdp
-
-    # need to setup hooks for TP
-    TP_AVAILABLE = enable_2d_with_fsdp()
-
-except BaseException as e:
-    print(f"Exception during TP init - {e=}\n")
+_2D_Ready = False
 
 if cfg.use_tensor_parallel:
-    assert TP_AVAILABLE, f"fsdp did not init"
+    try:
+        from torch.distributed._tensor import DeviceMesh
+        from torch.distributed.tensor.parallel import (
+            ColwiseParallel,
+            PairwiseParallel,
+            RowwiseParallel,
+            parallelize_module,
+        )
+        from torch.distributed.tensor.parallel._utils import _create_1d_device_mesh
+
+        from torch.distributed.tensor.parallel.fsdp import enable_2d_with_fsdp
+
+        # need to setup hooks for TP
+        _2D_Ready = enable_2d_with_fsdp()
+
+    except BaseException as e:
+        print(f"Exception during TP-2D init:\nType={(type(e).__name__)}\nMessage={e}\n")
+
+    assert _2D_Ready, f"tp hooks for fsdp did not init properly"
+
 
 from gpu_memory import Memory_Maximizer
 
@@ -110,11 +113,9 @@ config = {k: globals()[k] for k in config_keys}  # will be useful for logging
 # various inits, derived attributes, I/O setup
 
 # Init TP
-_tp = int(os.environ.get("RANK", -1)) != -1  # verify distributed run
+_multi_gpu = int(os.environ.get("RANK", -1)) != -1  # verify distributed run
 
-assert (
-    _tp and TP_AVAILABLE
-), "this config assumes setup for Tensor Parallel - distributed not ready here."
+assert _multi_gpu, "this config assumes distributed setup - multi-gpu not ready here."
 
 
 init_process_group(backend=backend)
@@ -136,22 +137,27 @@ def rank_print(x):
 
 _gpu_mem_tracker = Memory_Maximizer(rank=_rank)
 
-rank_print(f"TP is available = {TP_AVAILABLE}\n")
-tensor_parallel_size = 2
+rank_print(f"2D (TP + FSDP) is available = {_2D_Ready}\n")
 
-# 2-D mesh is [dp, tp].
-# tp = tensor parallel group size (num gpus per TP sharding).
-# dp = FSDP data group size (groups to shard the model across).
+if _2D_Ready and cfg.use_tensor_parallel:
+    # 2-D mesh is [dp, tp].
+    # tp = tensor parallel group size (num gpus per TP sharding).
+    # dp = FSDP data group size (groups to shard the model across).
 
-twod_mesh = DeviceMesh(
-    device_type="cuda",
-    mesh=torch.arange(0, world_size).view(-1, tensor_parallel_size),
-)
+    # assuming single node, we split gpus in half...
+    tensor_parallel_size = world_size // 2
 
-rank_print(f"{twod_mesh=}")
-rank_print(
-    f"2D mesh [dp, tp] = {twod_mesh.ndim=}, {twod_mesh.get_dim_groups=}, {twod_mesh}"
-)
+    assert (
+        _rank == _local_rank
+    ), f"please adjust tensor_parallel_size to span the entire node"
+    rank_print(f"{tensor_parallel_size=}\n")
+
+    twod_mesh = DeviceMesh(
+        device_type="cuda",
+        mesh=torch.arange(0, world_size).view(-1, tensor_parallel_size),
+    )
+
+    rank_print(f"{twod_mesh=}")
 
 
 if master_process:
@@ -161,13 +167,14 @@ torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True  # allow tf32 on cudnn
 device_type = "cuda" if "cuda" in device else "cpu"  # for later use in torch.autocast
 
+""" FSDP uses mixed precision policies...
 dtype = "bfloat16"  # 'float32', 'bfloat16'
 ptdtype = {
     "float32": torch.float32,
     "bfloat16": torch.bfloat16,
     "float16": torch.float16,
 }[dtype]
-
+"""
 
 # poor man's data loader
 data_dir = os.path.join(cfg.data_dir, cfg.dataset)
@@ -210,11 +217,11 @@ best_val_loss = 1e9
 rank_print("Initializing a new model from scratch")
 
 _2D = cfg.use_tensor_parallel
+tp_device_mesh = None
 
 if _2D:
     tp_device_mesh = _create_1d_device_mesh(twod_mesh, -1)
-else:
-    tp_device_mesh = None
+
 
 rank_print(f"{tp_device_mesh=}")
 model, model_config = fsdp_config.build_model(cfg, tp_device_mesh, rank=_rank)
@@ -328,15 +335,16 @@ warmup = 5
 iter_time_accumulator = 0.0
 iter_count = 0
 
-# compute actual num heads
+
 # TP (2D) specific checks
-if twod_mesh is not None:
-    _tp_size = twod_mesh.mesh.size(0)
+if _2D and twod_mesh is not None:
+    _tp_size = twod_mesh.mesh.size(1)
+    _fsdp_size = twod_mesh.mesh.size(0)
+    rank_print(f"{_fsdp_size=}, {_tp_size=}, {twod_mesh=}")
 
 else:
     _tp_size = 1
 
-rank_print(f"{_tp_size=}, {twod_mesh=}")
 
 # num_params = model.get_num_params()
 # print(f"{num_params=}")

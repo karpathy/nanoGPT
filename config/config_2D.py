@@ -21,13 +21,13 @@ import torch.distributed as dist
 @dataclass
 class train_config(base_config):
     # current models = "10.5M", "124M", "201M", "774M", "1.5B"
-    model_name: str = "201M"
+    model_name: str = "774M"
     use_tensor_parallel: bool = True
 
     dataset = "openwebtext"  # options = shakespeare_char, openwebtext
     data_dir = "data"
 
-    iters_to_run: int = 9
+    iters_to_run: int = 8
 
     batch_size = 48
     block_size = 1024  # 256  # 1024 = gpt2, openwebtext, context of up to 256 previous characters
