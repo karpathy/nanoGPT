@@ -215,9 +215,9 @@ tp_device_mesh = None
 
 if _2D:
     tp_device_mesh = _create_1d_device_mesh(twod_mesh, -1)
+    rank_print(f"{tp_device_mesh=}")
+    rank_print(f"tp_size = {tp_device_mesh.size(0)}")
 
-
-rank_print(f"{tp_device_mesh=}")
 model, model_config = fsdp_config.build_model(cfg, tp_device_mesh, rank=_rank)
 
 # we need this or else calcing mfu in fsdp = sharded model size...
@@ -226,6 +226,7 @@ _current_model_params = _mfu_model_params / 1e6
 
 
 if _2D:
+    # need to init all model layers with TP
     from tp_handlers import parallelize_model
 
     num_layers = parallelize_model(model, model_config, twod_mesh)
