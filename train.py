@@ -115,6 +115,9 @@ train_data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mod
 val_data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
 def get_batch(split):
     data = train_data if split == 'train' else val_data
+    # pad data to ensure torch.randint index is satisfied 
+    if len(data) < block_size:
+        data = np.pad(data, (0, block_size-len(data)+1), mode="constant")
     ix = torch.randint(len(data) - block_size, (batch_size,))
     x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
     y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
