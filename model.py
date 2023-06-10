@@ -73,7 +73,9 @@ class CausalSelfAttention(nn.Module):
         assert (
             config.n_embd % config.n_head == 0
         ), f"{config.n_embd=}, is not evenly divisble by {config.n_head=}"
+
         self.mesh = mesh
+        self.n_embd = config.n_embd
 
         # key, query, value projections for all heads, but in a batch
         self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
@@ -92,7 +94,9 @@ class CausalSelfAttention(nn.Module):
         else:
             self.tp_size = 1
 
-        self.n_embd = config.n_embd
+        # pre-calc num heads if using tp (if fsdp only, tp_size = 1 so inert)
+        self.tp_num_heads = self.n_head // self.tp_size
+
         self.dropout = config.dropout
         # flash attention make GPU go brrrrr but support is only in PyTorch nightly and still a bit scary
         self.flash = (
@@ -118,17 +122,16 @@ class CausalSelfAttention(nn.Module):
             C,
         ) = x.size()  # batch size, sequence length, embedding dimensionality (n_embd)
 
+        # pre-calc channel head size
+        channel_head_size = C // self.n_head
+
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k, v = self.c_attn(x).split(self.n_embd // self.tp_size, dim=2)
-        k = k.view(B, T, self.n_head // self.tp_size, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
-        q = q.view(B, T, self.n_head // self.tp_size, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head // self.tp_size, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
+        qkv = self.c_attn(x).split(self.n_embd // self.tp_size, dim=2)
+        for item in qkv:
+            item = item.view(B, T, self.tp_num_heads, channel_head_size).transpose(
+                1, 2
+            )  # ==>  (B, nh, T, hs)
+        q, k, v = qkv
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
@@ -143,9 +146,9 @@ class CausalSelfAttention(nn.Module):
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
             y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        y = (
-            y.transpose(1, 2).contiguous().view(B, T, C // self.tp_size)
-        )  # re-assemble all head outputs side by side
+
+        # re-assemble all head outputs side by side, accounting for tp sharding
+        y = y.transpose(1, 2).contiguous().view(B, T, C // self.tp_size)
 
         # output projection
         y = self.resid_dropout(self.c_proj(y))
@@ -452,13 +455,15 @@ class GPT(nn.Module):
             cfg.block_size,
         )
         flops_per_token = 6 * N + 12 * L * H * Q * T
+
         flops_per_fwdbwd = flops_per_token * T
         flops_per_iter = flops_per_fwdbwd * fwdbwd_per_iter
         # express our flops throughput as ratio of A100 bfloat16 peak flops or A10 bf16 flops
         flops_achieved = flops_per_iter * (1.0 / dt)  # per second
 
         flops_promised = 125e12  # A10 TFlops ....  312e12  A100 GPU bfloat16 peak flops is 312 TFLOPS
-        mfu = flops_achieved / flops_promised
+        mfu = (flops_achieved / flops_promised) / tp_size
+
         return mfu
 
     @torch.no_grad()

@@ -378,8 +378,7 @@ while local_iter_num < cfg.iters_to_run:
 
         mfu = model.estimate_mfu(
             _mfu_model_params,
-            cfg.batch_size
-            / _tp_size,  #  * world_size,  #  * gradient_accumulation_steps,
+            cfg.batch_size,  # / _fsdp_size * world_size,  #  * gradient_accumulation_steps,
             dt,
             config_file=model_config,
             tp_size=_tp_size,

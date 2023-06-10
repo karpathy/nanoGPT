@@ -22,14 +22,14 @@ import torch.distributed as dist
 class train_config(base_config):
     # current models = "10.5M", "124M", "201M", "774M", "1.5B"
     model_name: str = "774M"
-    use_tensor_parallel: bool = True
+    use_tensor_parallel: bool = False
 
     dataset = "openwebtext"  # options = shakespeare_char, openwebtext
     data_dir = "data"
 
     iters_to_run: int = 8
 
-    batch_size = 96
+    batch_size = 48
     block_size = 1024  # 256  # 1024 = gpt2, openwebtext, context of up to 256 previous characters
     use_bias: bool = False  # use bias in linear layers (recommend No)
     vocab_size: int = 50304  # use 65 for shakespeare, GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
