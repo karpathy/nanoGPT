@@ -20,8 +20,8 @@ import torch.distributed as dist
 
 @dataclass
 class train_config(base_config):
-    # current models = "10.5M", "124M", "201M", "774M", "1.5B"
-    model_name: str = "774M"
+    # current models = "10.5M", "124M", "201M", "1B", "1.5B"
+    model_name: str = "1B"
     use_tensor_parallel: bool = False
 
     dataset = "openwebtext"  # options = shakespeare_char, openwebtext
@@ -81,7 +81,7 @@ def build_model(cfg, tp_mesh=None, rank=None):
         n_head: int = 16
         n_embd: int = 1024
 
-    elif model_name == "774M":
+    elif model_name == "1B":
         n_layer: int = 48
         n_head: int = 20
         n_embd: int = 1280
