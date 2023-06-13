@@ -1,3 +1,5 @@
+# original file: https://github.com/karpathy/nanoGPT
+# updates # Copyright (c) Meta Platforms, Inc. and affiliates
 """
 This training script updates NanoGPT to run with either FSDP, or FSDP + Tensor Parallel (2D).
 Usage:

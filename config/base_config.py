@@ -1,3 +1,5 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates
+
 import functools
 from dataclasses import dataclass
 from torch.distributed.fsdp import (

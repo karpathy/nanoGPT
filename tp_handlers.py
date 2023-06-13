@@ -1,9 +1,11 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates
 from torch.distributed.tensor.parallel import (
-        ColwiseParallel,
-        RowwiseParallel,
-        PairwiseParallel,
-        parallelize_module,
-    )
+    ColwiseParallel,
+    RowwiseParallel,
+    PairwiseParallel,
+    parallelize_module,
+)
+
 
 def parallelize_model(model, model_config, twodim_mesh):
     for i in range(model_config.n_layer):
@@ -19,4 +21,4 @@ def parallelize_model(model, model_config, twodim_mesh):
             tp_mesh_dim=1,
         )
         block = parallelized_block
-    return i+1
+    return i + 1
