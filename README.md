@@ -1,7 +1,6 @@
 
 # nanoGPT - with PyTorch Tensor Parallel
-This repo updates the well known Andrej Karpathy NanoGPT, 
-and adds both Tensor Parallel and FSDP to allow you to run 2D Parallelism.  
+This repo updates the well known Andrej Karpathy NanoGPT with PyTorch's upcoming Tensor Parallel (alpha) and FSDP (beta) to allow you to run 2D Parallelism.  
 
 ![nanoGPT](assets/nanogpt.jpg)
 
