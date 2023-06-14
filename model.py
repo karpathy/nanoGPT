@@ -112,6 +112,108 @@ class Block(nn.Module):
         x = x + self.mlp(self.ln_2(x))
         return x
 
+
+def complex_relu(x_re, x_im):
+    """A guess at the complex equivalent of ReLU, holomorphic only for Re>0"""
+    return F.relu(x_re), x_im
+
+
+def complex_expm1(x_re, x_im):
+    """Sends 0 to 0, derivative 1 at the origin, holomorphic"""
+    return torch.exp(x_re) * torch.cos(x_im) - 1, torch.exp(x_re) * torch.sin(x_im)
+
+
+class ComplexCasualSelfAttention(nn.Module):
+
+    def __init__(self, config):
+        super().__init__()
+        assert config.n_embd % config.n_head == 0
+        # key[real, imaginary], query[real, imaginary], value[real, imaginary] projections for all heads, but in a batch
+        self.c_attn_re = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+        self.c_attn_im = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+        # output projection
+        self.c_proj_re = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.c_proj_im = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        # regularization
+        self.attn_dropout = nn.Dropout(config.dropout)
+        self.resid_dropout = nn.Dropout(config.dropout)
+        self.n_head = config.n_head
+        self.n_embd = config.n_embd
+        self.dropout = config.dropout
+        self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
+                             .view(1, 1, config.block_size, config.block_size))
+
+    def forward(self, x):
+        B, T, C = x.size()  # batch size, sequence length, embedding dimensionality (n_embd)
+        x_re, x_im = x.split(self.n_embd, dim=2)  # split real and imaginary parts
+
+        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
+        att_pre_split_re = self.c_attn_re(x_re) - self.c_attn_im(x_im)
+        att_pre_split_im = self.c_attn_re(x_im) + self.c_attn_im(x_re)
+        q_re, k_re, v_re = [l.view(B, T, self.n_head, C // 2 // self.n_head).transpose(1, 2) for l in att_pre_split_re.split(self.n_embd, dim=2)]
+        q_im, k_im, v_im = [l.view(B, T, self.n_head, C // 2 // self.n_head).transpose(1, 2) for l in att_pre_split_im.split(self.n_embd, dim=2)]
+        att_re = (q_re @ k_re.transpose(-2, -1) - q_im @ k_im.transpose(-2, -1)) / math.sqrt(k_re.size(-1))
+        att_im = (q_re @ k_im.transpose(-2, -1) + q_im @ k_re.transpose(-2, -1)) / math.sqrt(k_re.size(-1))
+        att_re = att_re.masked_fill(self.bias[:, :, :T, :T] == 0, float('-inf'))
+        att_re = F.softmax(att_re, dim=-1)
+        att_re = self.attn_dropout(att_re)
+        pre_phase_y_re = att_re @ v_re
+        pre_phase_y_im = att_re @ v_im
+        phase = att_re @ v_im + att_im @ v_re
+        att_cos_phase = torch.cos(phase)
+        att_sin_phase = torch.sin(phase)
+        y_re = pre_phase_y_re * att_cos_phase - pre_phase_y_im * att_sin_phase
+        y_im = pre_phase_y_re * att_sin_phase + pre_phase_y_im * att_cos_phase
+        y_re = y_re.transpose(1, 2).contiguous().view(B, T, C // 2)
+        y_im = y_im.transpose(1, 2).contiguous().view(B, T, C // 2)
+        y_re, y_im = self.c_proj_re(y_re) - self.c_proj_im(y_im), self.c_proj_re(y_im) + self.c_proj_im(y_re)
+        y = self.resid_dropout(torch.cat([y_re, y_im], dim=-1))
+        return y
+
+
+class ComplexMLP(nn.Module):
+
+    def __init__(self, config):
+        super().__init__()
+        # self.c_fc_re = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
+        # self.c_fc_im = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
+        # self.c_proj_re = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
+        # self.c_proj_im = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
+        self.fc_re = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.fc_im = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.n_embd = config.n_embd
+        self.dropout = nn.Dropout(config.dropout)
+
+    def forward(self, x):
+        x_re, x_im = x.split(self.n_embd, dim=2)  # split real and imaginary parts
+        # x_re, x_im = self.c_fc_re(x_re) - self.c_fc_im(x_im), self.c_fc_re(x_im) + self.c_fc_im(x_re)
+        # x_re, x_im = complex_relu(x_re, x_im)
+        # x_re, x_im = complex_expm1(x_re, x_im)
+        # x_re, x_im = self.c_proj_re(x_re) - self.c_proj_im(x_im), self.c_proj_re(x_im) + self.c_proj_im(x_re)
+        x_re, x_im = self.fc_re(x_re) - self.fc_im(x_im), self.fc_re(x_im) + self.fc_im(x_re)
+        x = self.dropout(torch.cat([x_re, x_im], dim=-1))
+        return x
+
+
+class ComplexBlock(nn.Module):
+
+    def __init__(self, config):
+        super().__init__()
+        self.ln_1 = LayerNorm(config.n_embd * 2, bias=config.bias)
+        self.attn = ComplexCasualSelfAttention(config)
+        # self.ln_2 = LayerNorm(config.n_embd * 2, bias=config.bias)
+        self.mlp = ComplexMLP(config)
+
+    def forward(self, x):
+        x = x + self.attn(self.ln_1(x))
+        # x = x + self.mlp(self.ln_2(x))
+        # x = x + self.attn(x)
+        x = x + self.mlp(x)
+
+
+        return x
+
+
 @dataclass
 class GPTConfig:
     block_size: int = 1024
@@ -121,6 +223,7 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    complex: bool = False
 
 class GPT(nn.Module):
 
@@ -130,26 +233,42 @@ class GPT(nn.Module):
         assert config.block_size is not None
         self.config = config
 
-        self.transformer = nn.ModuleDict(dict(
-            wte = nn.Embedding(config.vocab_size, config.n_embd),
-            wpe = nn.Embedding(config.block_size, config.n_embd),
-            drop = nn.Dropout(config.dropout),
-            h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
-            ln_f = LayerNorm(config.n_embd, bias=config.bias),
-        ))
-        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
-        # with weight tying when using torch.compile() some warnings get generated:
-        # "UserWarning: functional_call was passed multiple values for tied weights.
-        # This behavior is deprecated and will be an error in future versions"
-        # not 100% sure what this is, so far seems to be harmless. TODO investigate
-        self.transformer.wte.weight = self.lm_head.weight # https://paperswithcode.com/method/weight-tying
+        if config.complex:
+            self.transformer = nn.ModuleDict(dict(
+                wte = nn.Embedding(config.vocab_size, config.n_embd * 2),
+                wpe = nn.Embedding(config.block_size, config.n_embd * 2),
+                drop = nn.Dropout(config.dropout),
+                h = nn.ModuleList([ComplexBlock(config) for _ in range(config.n_layer)]),
+                ln_f = LayerNorm(config.n_embd * 2, bias=config.bias),
+            ))
+            self.lm_head = nn.Linear(config.n_embd * 2, config.vocab_size, bias=False)
+            # with weight tying when using torch.compile() some warnings get generated:
+            # "UserWarning: functional_call was passed multiple values for tied weights.
+            # This behavior is deprecated and will be an error in future versions"
+            # not 100% sure what this is, so far seems to be harmless. TODO investigate
+            self.transformer.wte.weight = self.lm_head.weight # https://paperswithcode.com/method/weight-tying
+        else:
+            self.transformer = nn.ModuleDict(dict(
+                wte=nn.Embedding(config.vocab_size, config.n_embd),
+                wpe=nn.Embedding(config.block_size, config.n_embd),
+                drop=nn.Dropout(config.dropout),
+                h=nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
+                ln_f=LayerNorm(config.n_embd, bias=config.bias),
+            ))
+            self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+            # with weight tying when using torch.compile() some warnings get generated:
+            # "UserWarning: functional_call was passed multiple values for tied weights.
+            # This behavior is deprecated and will be an error in future versions"
+            # not 100% sure what this is, so far seems to be harmless. TODO investigate
+            self.transformer.wte.weight = self.lm_head.weight  # https://paperswithcode.com/method/weight-tying
+
 
         # init all weights
         self.apply(self._init_weights)
         # apply special scaled init to the residual projections, per GPT-2 paper
         for pn, p in self.named_parameters():
             if pn.endswith('c_proj.weight'):
-                torch.nn.init.normal_(p, mean=0.0, std=0.02/math.sqrt(2 * config.n_layer))
+                torch.nn.init.normal_(p, mean=0.0, std=0.002/math.sqrt(2 * config.n_layer))
 
         # report number of parameters
         print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
@@ -168,11 +287,11 @@ class GPT(nn.Module):
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.002)
             if module.bias is not None:
                 torch.nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.002)
 
     def forward(self, idx, targets=None):
         device = idx.device
