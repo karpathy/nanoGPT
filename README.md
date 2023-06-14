@@ -1,14 +1,16 @@
 
 # nanoGPT - with PyTorch Tensor Parallel
-This repo updates the well known Andrej Karpathy NanoGPT with PyTorch's upcoming Tensor Parallel (alpha) and FSDP (beta) to allow you to run 2D Parallelism.
+This repo updates the well known [Andrej Karpathy's NanoGPT](https://github.com/karpathy/nanoGPT) with PyTorch's upcoming Tensor Parallel (alpha) and FSDP to allow you to run NanoGPT with 2D Parallelism.</br>
 A subset of OpenWebText is already included (40K entries) so that you can simply 'set and run' to get experience
 running PyTorch 2D directly and easily.  
 
-Usage:
-1 - Set number of GPUS = Update run_tp.sh with your gpu count (default is 4)
-2 - Set desired Model Size = You can control model size in config/config_2D.py 
-3 - Set Parallelism = You can toggle between Tensor Parallel + FSDP (2D) or only FSDP 
-with the 'use_tensor_parallel': bool flag in config_2D.py:
+
+
+Usage:</br>
+1 - Set number of GPUS = Update run_tp.sh with your gpu count (default is 4)</br>
+2 - Set desired Model Size = You can control model size in config/config_2D.py </br>
+3 - Set Parallelism = You can toggle between Tensor Parallel + FSDP (2D) or only FSDP </br>
+with the 'use_tensor_parallel': bool flag in config_2D.py:</br>
 
 4 - Run and review - use "bash run_tp.sh" in the command line to run. 
 
