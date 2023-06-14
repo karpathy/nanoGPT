@@ -1,24 +1,30 @@
 
 # nanoGPT - with PyTorch Tensor Parallel
-This repo updates the well known [Andrej Karpathy's NanoGPT](https://github.com/karpathy/nanoGPT) with PyTorch's upcoming Tensor Parallel (alpha) and FSDP to allow you to run NanoGPT with 2D Parallelism.</br>
-A subset of OpenWebText is already included (40K entries) so that you can simply 'set and run' to get experience
+This repo updates the well known [Andrej Karpathy's NanoGPT](https://github.com/karpathy/nanoGPT) with PyTorch's new Tensor Parallel (alpha) and FSDP to allow you to run NanoGPT with 2D Parallelism.</br></br>
+A small subset of OpenWebText is already included (40K entries) so that you can simply 'set and run' to get experience
 running PyTorch 2D directly and easily.  
 
 
 
-Usage:</br>
+## Usage:</br>
 1 - Set number of GPUS = Update run_tp.sh with your gpu count (default is 4)</br>
+![Adjust_gpu_count](assets/adjust_gpu_count.png)</br>
+</br>
 2 - Set desired Model Size = You can control model size in config/config_2D.py </br>
-3 - Set Parallelism = You can toggle between Tensor Parallel + FSDP (2D) or only FSDP </br>
-with the 'use_tensor_parallel': bool flag in config_2D.py:</br>
+3 - Set Parallelism = You can toggle between <b>Tensor Parallel + FSDP (2D)</b> or only <b>FSDP</b> </br>
+with the 'use_tensor_parallel': bool flag in config_2D.py:</br></br>
+![Adjust_model_size](assets/adjust_model_tp.png)</br>
+</br>
 
-4 - Run and review - use "bash run_tp.sh" in the command line to run. 
+4 - Run and review - use "bash run_tp.sh" in the command line to run. </br>
 
-Sample output:
+### Sample output:
+![sample_run_tp](assets/tp_tutorial_sample_run.png)</br>
 
 
 
 
+## Original Readme below:
 ![nanoGPT](assets/nanogpt.jpg)
 
 The simplest, fastest repository for training/finetuning medium-sized GPTs. It is a rewrite of [minGPT](https://github.com/karpathy/minGPT) that prioritizes teeth over education. Still under active development, but currently the file `train.py` reproduces GPT-2 (124M) on OpenWebText, running on a single 8XA100 40GB node in about 4 days of training. The code itself is plain and readable: `train.py` is a ~300-line boilerplate training loop and `model.py` a ~300-line GPT model definition, which can optionally load the GPT-2 weights from OpenAI. That's it.
