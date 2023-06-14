@@ -1,3 +1,4 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates
 import torch
 
 from torch.distributed.fsdp import (
@@ -9,8 +10,8 @@ import torch.distributed as dist
 import torch.cuda.nccl as nccl
 from distutils.version import LooseVersion
 
-def get_mixed_precision_policy():
 
+def get_mixed_precision_policy():
     bf16_ready = (
         torch.version.cuda
         and LooseVersion(torch.version.cuda) >= "11.0"
@@ -28,6 +29,8 @@ def get_mixed_precision_policy():
         )
         return bfSixteen
     else:
-        print (f"mixed precision = bfloat16, but this gpu or nccl version does not support native BF16\n")
+        print(
+            f"mixed precision = bfloat16, but this gpu or nccl version does not support native BF16\n"
+        )
 
     return None  # None policy = fp32

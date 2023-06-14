@@ -82,7 +82,7 @@ n_embd = 768
 dropout = 0.0  # for pretraining 0 is good, for finetuning try 0.1+
 bias = False  # do we use bias inside LayerNorm and Linear layers?
 # adamw optimizer
-learning_rate = 6e-4  # max learning rate
+learning_rate = 4e-4  # max learning rate
 max_iters = 600000  # total number of training iterations
 weight_decay = 1e-2
 beta1 = 0.9
@@ -153,7 +153,7 @@ if _2D_Ready and cfg.use_tensor_parallel:
         mesh=torch.arange(0, world_size).view(-1, tensor_parallel_size),
     )
 
-    rank_print(f"{twod_mesh=}")
+    rank_print(f"{twod_mesh=}\n")
 
 
 if master_process:
@@ -350,7 +350,8 @@ else:
 # print(f"{num_params=}")
 
 _gpu_mem_tracker.start()
-
+# just to add spacing
+print()
 while local_iter_num < cfg.iters_to_run:
     t0 = time.perf_counter()
     logits, loss = model(X, Y)
@@ -374,8 +375,9 @@ while local_iter_num < cfg.iters_to_run:
     dt = t1 - t0
     _gpu_mem_tracker.update()
 
+    lossf = loss.item()  # loss as float. note: this is a CPU-GPU sync point
+
     if iter_num >= warmup:
-        lossf = loss.item()  # loss as float. note: this is a CPU-GPU sync point
         # if local_iter_num >= 3:  # let the training loop settle a bit
 
         mfu = model.estimate_mfu(
@@ -391,9 +393,12 @@ while local_iter_num < cfg.iters_to_run:
         )
         iter_time_accumulator += dt
         iter_count += 1
+    else:
+        rank_print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms")
+
     iter_num += 1
     local_iter_num += 1
-    rank_print(f"iter {iter_num} completed...")
+    # rank_print(f"iter {iter_num} completed...")
 
     # termination conditions
     if iter_num > max_iters:
