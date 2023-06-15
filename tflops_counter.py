@@ -9,7 +9,12 @@ from collections import defaultdict
 from torch.utils._python_dispatch import TorchDispatchMode
 from math import prod
 
-__all__ = ["FlopCounterMode"]
+__all__ = ["FlopCounterMode", "get_total_flops"]
+
+
+def get_total_flops(mode):
+    return sum([v for _, v in mode.flop_counts["Global"].items()])
+
 
 aten = torch.ops.aten
 

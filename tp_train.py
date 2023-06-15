@@ -28,6 +28,9 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import config.config_2D as fsdp_config
 from model import GPT, GPTConfig
 
+# tflops
+from tflops_counter import FlopCounterMode, get_total_flops
+
 cfg = fsdp_config.train_config()
 
 _2D_Ready = False
@@ -357,22 +360,38 @@ else:
 _gpu_mem_tracker.start()
 # just to add spacing
 print()
-while local_iter_num < cfg.iters_to_run:
-    t0 = time.perf_counter()
-    logits, loss = model(X, Y)
-    # immediately async prefetch next batch while model is doing the forward pass on the GPU
-    X, Y = get_batch("train")
-    # backward pass, with gradient scaling if training in fp16
-    loss.backward()
-    # clip the gradient
-    # if grad_clip != 0.0:
-    #    scaler.unscale_(optimizer)
-    #    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-    # step the optimizer and scaler if training in fp16
-    optimizer.step()
 
-    # flush the gradients as soon as we can, no need for this memory anymore
-    optimizer.zero_grad(set_to_none=True)
+# flops
+_iter_get_flops = cfg.iters_to_run - 1  # last iter
+_tflops = None
+
+while local_iter_num < cfg.iters_to_run:
+    if cfg.use_flop_counter and local_iter_num == _iter_get_flops:
+        flop_counter = FlopCounterMode(rank=_rank)
+        with flop_counter:
+            t0 = time.perf_counter()
+            logits, loss = model(X, Y)
+            X, Y = get_batch("train")
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+        _tflops = get_total_flops(flop_counter) / 1e12
+    else:
+        t0 = time.perf_counter()
+        logits, loss = model(X, Y)
+        # immediately async prefetch next batch while model is doing the forward pass on the GPU
+        X, Y = get_batch("train")
+        # backward pass, with gradient scaling if training in fp16
+        loss.backward()
+        # clip the gradient
+        # if grad_clip != 0.0:
+        #    scaler.unscale_(optimizer)
+        #    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+        # step the optimizer and scaler if training in fp16
+        optimizer.step()
+
+        # flush the gradients as soon as we can, no need for this memory anymore
+        optimizer.zero_grad(set_to_none=True)
     torch.distributed.barrier()
 
     # timing and logging
@@ -398,6 +417,7 @@ while local_iter_num < cfg.iters_to_run:
         )
         iter_time_accumulator += dt
         iter_count += 1
+
     else:
         rank_print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms")
 
@@ -472,6 +492,8 @@ if _rank == 0:
 rank_print(f"\nModel Size:  {_current_model_params:.2f}M")
 rank_print(f"Run completed with {gpu_count} gpus, of type {gpu_type}")
 rank_print(f"Running MFU final = {running_mfu*100:.2f}%")
+if _tflops:
+    rank_print(f"TFlops = {_tflops:.4f}")
 iter_avg = round(iter_time_accumulator / iter_count, 4)
 rank_print(
     f"Avg iter speed (in seconds): {iter_avg}, with {iter_count} iterations averaged.\n"

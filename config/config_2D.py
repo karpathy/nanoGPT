@@ -37,6 +37,9 @@ class train_config(base_config):
     vocab_size: int = 50304  # use 65 for shakespeare, GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
     dropout: float = 0.0
 
+    # Calc TFlops
+    use_flop_counter: bool = True
+
     # FSDP specific
     use_rate_limiter: bool = True
     use_mixed_precision: bool = True
