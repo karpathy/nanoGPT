@@ -73,7 +73,8 @@ wandb_run_name = "gpt2"  # 'run' + str(time.time())
 # data
 dataset = "openwebtext"
 gradient_accumulation_steps = 1  # used to simulate larger batch sizes
-batch_size = 12  # if gradient_accumulation_steps > 1, this is the micro-batch size
+# batch_size = 12  # if gradient_accumulation_steps > 1, this is the micro-batch size
+
 block_size = 1024
 # model
 n_layer = 12
@@ -178,10 +179,13 @@ rank_print(f"{data_dir=}")
 train_data = np.memmap(os.path.join(data_dir, "train.bin"), dtype=np.uint16, mode="r")
 val_data = np.memmap(os.path.join(data_dir, "val.bin"), dtype=np.uint16, mode="r")
 
+_batch_size = cfg.batch_size
+rank_print(f"batch_size = {cfg.batch_size=}")
+
 
 def get_batch(split):
     data = train_data if split == "train" else val_data
-    ix = torch.randint(len(data) - block_size, (batch_size,))
+    ix = torch.randint(len(data) - block_size, (_batch_size,))
     x = torch.stack(
         [torch.from_numpy((data[i : i + block_size]).astype(np.int64)) for i in ix]
     )
@@ -253,6 +257,7 @@ model = FSDP(
     mixed_precision=mixed_precision_policy,
     device_id=device,
     process_group=fsdp_pg,
+    limit_all_gathers=cfg.use_rate_limiter,
 )
 
 
@@ -382,7 +387,7 @@ while local_iter_num < cfg.iters_to_run:
 
         mfu = model.estimate_mfu(
             _mfu_model_params,
-            cfg.batch_size,  # / _fsdp_size * world_size,  #  * gradient_accumulation_steps,
+            _batch_size,  # / _fsdp_size * world_size,  #  * gradient_accumulation_steps,
             dt,
             config_file=model_config,
             tp_size=_tp_size,
@@ -455,6 +460,7 @@ rank_print(
     f"\nTraining completed.  \nRun used tensor_parallel = {cfg.use_tensor_parallel}"
 )
 rank_print(f"FSDP Checkpointing?  {cfg.use_fsdp_activation_checkpointing}")
+rank_print(f"FSDP Rate Limiter?  {cfg.use_rate_limiter}")
 # display run stats
 gpu_type = torch.cuda.get_device_name(0)
 gpu_count = dist.get_world_size()

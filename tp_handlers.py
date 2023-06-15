@@ -20,5 +20,4 @@ def parallelize_model(model, model_config, twodim_mesh):
             },
             tp_mesh_dim=1,
         )
-        block = parallelized_block
     return i + 1
