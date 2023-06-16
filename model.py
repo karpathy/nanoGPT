@@ -41,6 +41,7 @@ class CausalSelfAttention(nn.Module):
         self.n_head = config.n_head
         self.n_embd = config.n_embd
         self.dropout = config.dropout
+        self.config = config
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
         if not self.flash:
@@ -48,6 +49,31 @@ class CausalSelfAttention(nn.Module):
             # causal mask to ensure that attention is only applied to the left in the input sequence
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
+    
+    @classmethod
+    def get_alibi_slopes(cls, n):
+        """
+        Compute ALiBi slopes for a given number of heads. Adopted from
+        https://github.com/ofirpress/attention_with_linear_biases.
+        """
+        def get_slopes_power_of_2(n):
+            start = (2**(-2**-(math.log2(n)-3)))
+            ratio = start
+            return [start*ratio**i for i in range(n)]
+
+        if math.log2(n).is_integer():
+            return get_slopes_power_of_2(n)                   #In the paper, we only train models that have 2^a heads for some a. This function has
+        else:                                                 #some good properties that only occur when the input is a power of 2. To maintain that even
+            closest_power_of_2 = 2**math.floor(math.log2(n))  #when the number of heads is not a power of 2, we use this workaround. 
+            return get_slopes_power_of_2(closest_power_of_2) + cls.get_alibi_slopes(2*closest_power_of_2)[0::2][:n-closest_power_of_2]
+    
+    @classmethod
+    def get_alibi_mask(cls, n_head, T):
+        """Compute the mask for ALiBi attention. See paper for more details."""
+        d = torch.arange(T) - torch.arange(T).view(-1, 1) # distance matrix (T, T)
+        s = torch.tensor(cls.get_alibi_slopes(n_head)) # scalars (nh,)
+        ds = d * s.view(-1, 1, 1) # (T, T) x (nh, 1, 1) -> (nh, T, T)
+        return ds
 
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
@@ -61,10 +87,27 @@ class CausalSelfAttention(nn.Module):
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
             # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
+            if self.config.pos_encoding == 'alibi':
+                # This is almost ALiBi attention. PyTorch's current (as of June
+                # 16, 2023) implementation of `scaled_dot_product_attention`
+                # does not allow us to omit the original scaling factor
+                # math.sqrt(Q.size(-1)). However, this will change once
+                # https://github.com/pytorch/pytorch/issues/96099 is done.
+                mask = self.get_alibi_mask(self.n_head, T)
+                mask = torch.tril(mask) # only attend to the previous tokens
+                y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=mask, dropout_p=self.dropout if self.training else 0)
+            else:
+                y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
         else:
             # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+            if self.config.pos_encoding == 'alibi':
+                # ALiBi attention (attention with linear biases)
+                att = q @ k.transpose(-2, -1) # (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
+                mask = self.get_alibi_mask(self.n_head, T) # (nh, T, T)
+                att += mask # (B, nh, T, T) + (nh, T, T) -> (B, nh, T, T)
+            else:
+                # (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
+                att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
             att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
@@ -114,7 +157,7 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
-    pos_encoding: str = 'learned' # 'learned', 'nope'
+    pos_encoding: str = 'learned' # 'learned', 'nope', 'alibi'
 
 class GPT(nn.Module):
 
@@ -181,7 +224,7 @@ class GPT(nn.Module):
             pos = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(0)
             pos_emb = self.transformer.wpe(pos) # position embeddings of shape (1, t, n_embd)
             x = tok_emb + pos_emb
-        elif self.config.pos_encoding == 'nope':
+        elif self.config.pos_encoding in ['nope', 'alibi']:
             x = tok_emb
         else:
             raise Exception("Invalid positional encoding type")
