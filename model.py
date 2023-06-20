@@ -93,9 +93,12 @@ class CausalSelfAttention(nn.Module):
                 # does not allow us to omit the original scaling factor
                 # math.sqrt(Q.size(-1)). However, this will change once
                 # https://github.com/pytorch/pytorch/issues/96099 is done.
-                mask = self.get_alibi_mask(self.n_head, T)
-                mask = torch.tril(mask) # only attend to the previous tokens
-                y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=mask, dropout_p=self.dropout if self.training else 0)
+                alibi_mask = self.get_alibi_mask(self.n_head, T)
+                # only attend to the previous tokens
+                causal_mask = torch.tril(torch.ones(T, T))
+                causal_mask = causal_mask.masked_fill(causal_mask==0, -float('inf'))
+                attn_mask = alibi_mask + causal_mask
+                y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=self.dropout if self.training else 0)
             else:
                 y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
         else:
