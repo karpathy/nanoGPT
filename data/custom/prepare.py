@@ -6,23 +6,6 @@ import sys
 import shutil
 
 
-# source txt path, /Downloads/filename
-#txt_file_path = sys.argv[1]
-#print(txt_file_path)
-##proj root
-#proj_root = '/mnt/barracuda/nanoGPT'
-#print(proj_root)
-#home dir
-#home = os.path.expanduser( '~' )
-#print(home)
-
-# copy txt to proj root repo
-#src = os.path.join(home, txt_file_path)
-#print(src)
-#dst = os.path.join(proj_root, txt_file_path.rsplit('/', 1)[-1])
-#print(dst)
-#shutil.copyfipyle(src, dst)
-
 # download the essay dataset
 input_file_path = sys.argv[1]
 print(input_file_path)
