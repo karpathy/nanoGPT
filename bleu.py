@@ -32,7 +32,7 @@ def bleu(ref, gen):
 def splice(text):
     '''
     splice(words.txt)
-    splits a test file into individaul letters
+    splits a text file into individaul words
     '''
     with open(text) as file:
         for line in file:
