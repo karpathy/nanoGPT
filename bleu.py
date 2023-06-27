@@ -1,10 +1,11 @@
 '''
     a script that measures the similarity between input
-    training text and output inferenced text using bleu score
+    training text and output inferenced text using bleu score,
+    WIP
 '''
 
-import nltk.translate.bleu_score as bs
 import re
+import nltk.translate.bleu_score as bs
 
 
 def bleu(ref, gen):
@@ -31,6 +32,7 @@ def bleu(ref, gen):
 def splice(text):
     '''
     splice(words.txt)
+    splits a test file into individaul letters
     '''
     with open(text) as file:
         for line in file:
