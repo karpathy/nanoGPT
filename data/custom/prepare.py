@@ -21,9 +21,9 @@ import shutil
 #print(src)
 #dst = os.path.join(proj_root, txt_file_path.rsplit('/', 1)[-1])
 #print(dst)
-#shutil.copyfile(src, dst)
+#shutil.copyfipyle(src, dst)
 
-# download the tiny essay dataset
+# download the essay dataset
 input_file_path = sys.argv[1]
 print(input_file_path)
 with open(input_file_path, 'r') as f:
