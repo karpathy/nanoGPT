@@ -3,7 +3,6 @@ import requests
 import tiktoken
 import numpy as np
 import sys
-import shutil
 
 
 # download the essay dataset
