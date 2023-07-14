@@ -39,7 +39,6 @@ eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 take_snapshots = False # if True, saves checkpoint snapshots to folder specified in snapshot_dir
-make_snapshots_on_checkpoint = False
 snapshot_dir = 'snapshots' # specifies folder *inside* out_dir to save snapshots to
 snapshot_interval = 500
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
@@ -288,7 +287,7 @@ while True:
                 }
                 print(f"saving checkpoint to {out_dir}")
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
-        if ((iter_num - last_saved) >= snapshot_interval) or (make_snapshots_on_checkpoint and (losses['val'] < best_val_loss or always_save_checkpoint)) and take_snapshots:
+        if (iter_num - last_saved) >= snapshot_interval and take_snapshots:
             print(f"saving snapshot to {snapshot_dir}")
             torch.save(checkpoint, os.path.join(out_dir, snapshot_dir, f"ckpt-{iter_num}-{losses['train']:.4f}-{losses['val']:.4f}.pt"))
             last_saved = iter_num
