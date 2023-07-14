@@ -107,7 +107,8 @@ print(f"tokens per iteration will be: {tokens_per_iter:,}")
 
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
-    os.makedirs(os.path.join(out_dir, "models"), exist_ok=True)
+    if take_snapshots:
+        os.makedirs(os.path.join(out_dir, snapshot_dir), exist_ok=True)
 torch.manual_seed(1337 + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
