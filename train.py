@@ -70,8 +70,8 @@ min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchi
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
-dtype = 'bfloat16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
-compile = False if os.name == "nt" else True # use PyTorch 2.0 to compile the model to be faster
+dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
+compile = False if os.name == "nt" else True  # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
@@ -89,8 +89,10 @@ if ddp:
     torch.cuda.set_device(device)
     master_process = ddp_rank == 0 # this process will do logging, checkpointing etc.
     seed_offset = ddp_rank # each process gets a different seed
-    assert gradient_accumulation_steps % torch.cuda.device_count() == 0
-    gradient_accumulation_steps //= torch.cuda.device_count()
+    # world_size number of processes will be training simultaneously, so we can scale
+    # down the desired gradient accumulation iterations per process proportionally
+    assert gradient_accumulation_steps % ddp_world_size == 0
+    gradient_accumulation_steps //= ddp_world_size
 else:
     # if not ddp, we are running on a single gpu, and one process
     master_process = True
