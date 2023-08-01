@@ -117,14 +117,17 @@ class GPTConfig:
 
 class GPT(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, config, embedding_matrix=None):
         super().__init__()
         assert config.vocab_size is not None
         assert config.block_size is not None
         self.config = config
-
+        if embedding_matrix != None: 
+                    wte = self.create_embedding_layer(embedding_matrix)
+        else:
+            wte = nn.Embedding(config.vocab_size, config.n_embd)
         self.transformer = nn.ModuleDict(dict(
-            wte = nn.Embedding(config.vocab_size, config.n_embd),
+            wte = wte,
             wpe = nn.Embedding(config.block_size, config.n_embd),
             drop = nn.Dropout(config.dropout),
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
@@ -146,6 +149,25 @@ class GPT(nn.Module):
 
         # report number of parameters
         print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
+    
+    def create_embedding_layer(self, embedding_matrix):
+        """
+        Create an embedding layer from a given embedding matrix.
+
+        Parameters
+        ----------
+        embedding_matrix : torch.Tensor
+            A matrix containing the embeddings for the vocabulary items.
+
+        Returns
+        -------
+        torch.nn.Module
+            An embedding layer that maps vocabulary items to their embeddings.
+        """
+        num_embeddings, embedding_dim = embedding_matrix.shape
+        emb_layer = nn.Embedding(num_embeddings, embedding_dim)
+        emb_layer.load_state_dict({"weight": embedding_matrix})
+        return emb_layer
 
     def get_num_params(self, non_embedding=True):
         """
@@ -328,5 +350,3 @@ class GPT(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
 
         return idx
-
-# prova

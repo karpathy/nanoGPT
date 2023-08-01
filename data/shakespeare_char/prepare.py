@@ -5,9 +5,42 @@ Will save train.bin, val.bin containing the ids, and meta.pkl containing the
 encoder and decoder and some other related info.
 """
 import os
+import torch
 import pickle
 import requests
 import numpy as np
+from torchtext.vocab import GloVe
+
+emb_dim = 200
+embedding_path = "/home/alessandro.zinni/emb_cache"
+global_vectors = GloVe(name='twitter.27B', dim=emb_dim, cache = embedding_path)
+def get_embedding_matrix(embedding, embedding_dim, vocab):
+    """
+    Create an embedding matrix from a given embedding dictionary.
+
+    Parameters
+    ----------
+    embedding : dict
+        A dictionary mapping vocabulary items to their embeddings.
+    embedding_dim : int
+        The dimensionality of the embeddings.
+
+    Returns
+    -------
+    torch.Tensor
+      A matrix of size (len(self.vocab), embedding_dim) containing the embeddings for the vocabulary items.
+    """
+    matrix_length = len(vocab)
+    embedding_matrix = np.zeros((matrix_length, embedding_dim))
+    # If I use torch.zeros directly it crashes (don't know why)
+    embedding_matrix = torch.from_numpy(embedding_matrix.copy())
+    null_embedding = torch.tensor([0.0]*embedding_dim)
+    for key, idx in vocab.items():
+      if torch.equal(embedding[key], null_embedding):
+        embedding_matrix[idx] = torch.randn(embedding_dim)
+      else:
+        embedding_matrix[idx] = embedding[key]
+    return embedding_matrix
 
 # download the tiny shakespeare dataset
 input_file_path = os.path.join(os.path.dirname(__file__), 'input.txt')
@@ -60,6 +93,9 @@ meta = {
 with open(os.path.join(os.path.dirname(__file__), 'meta.pkl'), 'wb') as f:
     pickle.dump(meta, f)
 
+
+emb_mat = get_embedding_matrix(global_vectors, emb_dim, stoi)
+torch.save(emb_mat, os.path.join(os.path.dirname(__file__), 'emb_mat.pt'))
 # length of dataset in characters:  1115394
 # all the unique characters:
 #  !$&',-.3:;?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
