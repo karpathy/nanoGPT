@@ -281,6 +281,11 @@ while True:
                 }
                 print(f"saving checkpoint to {out_dir}")
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+
+    # add a barrier here, so all GPUs are available for the training after the eval step
+    if ddp:
+        torch.distributed.barrier()
+
     if iter_num == 0 and eval_only:
         break
 
