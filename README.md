@@ -7,7 +7,7 @@ The simplest, fastest repository for training/finetuning medium-sized GPTs. It i
 
 ![repro124m](assets/gpt2_124M_loss.png)
 
-Because the code is so simple, it is very easy to hack to your needs, train new models from scratch, or finetune pretrained checkpoints (e.g. biggest one currently available as a starting point would be the GPT-2 1.3B model from OpenAI).
+Because the code is so simple, it is very easy to hack to your needs, train new models from scratch, or finetune pretrained checkpoints (e.g. biggest one currently available as a starting point would be the GPT-2 1.3B model from OpenAI). GPT2 similar to an text autocomplete model, for a more chatbot based model, look into [nanoChatGPT](https://github.com/VatsaDev/nanoChatGPT)
 
 ## install
 
