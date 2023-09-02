@@ -1,3 +1,5 @@
+# fmt: off
+
 """
 This training script can be run both on a single gpu in debug mode,
 and also in a larger training run with distributed data parallel (ddp).
@@ -28,6 +30,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
 from model import GPTConfig, GPT
+from sample import generate_sample
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -39,6 +42,7 @@ eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+output_sample = False  # print sample output for each eval
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = 'owt'
@@ -281,6 +285,16 @@ while True:
                 }
                 print(f"saving checkpoint to {out_dir}")
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+
+                if output_sample:
+                    sample = generate_sample(
+                        model=raw_model,
+                        max_new_tokens=250,
+                        device=device,
+                        meta_path=os.path.join("data", checkpoint["config"]["dataset"], "meta.pkl"),
+                    )
+                    print("sample:", sample.strip().replace("\n", " ")[:50] + "...")
+
     if iter_num == 0 and eval_only:
         break
 
