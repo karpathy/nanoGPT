@@ -23,6 +23,7 @@ import time
 import math
 import pickle
 from contextlib import nullcontext
+import atexit
 
 import numpy as np
 import torch
@@ -246,6 +247,9 @@ def get_lr(it):
 if wandb_log and master_process:
     import wandb
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
+    if output_sample:
+        sample_table = wandb.Table(columns=["Iteration", "Output"])
+        atexit.register(lambda: wandb.log({"output": sample_table}))
 
 # training loop
 X, Y = get_batch('train') # fetch the very first batch
@@ -294,6 +298,9 @@ while True:
                         meta_path=os.path.join("data", checkpoint["config"]["dataset"], "meta.pkl"),
                     )
                     print("sample:", sample.strip().replace("\n", " ")[:50] + "...")
+
+                    if wandb_log and sample:
+                        sample_table.add_data(iter_num, sample.strip())
 
     if iter_num == 0 and eval_only:
         break
