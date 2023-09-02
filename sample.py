@@ -30,8 +30,9 @@ def generate_sample(
     x = torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...]
 
     # Run generation
-    y = model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k)
-    return decode(y[0].tolist())
+    generator = model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k)
+    for token in generator:
+        yield decode([token])
 
 
 if __name__ == "__main__":
@@ -39,6 +40,7 @@ if __name__ == "__main__":
     init_from = 'resume' # either 'resume' (from an out_dir) or a gpt2 variant (e.g. 'gpt2-xl')
     out_dir = 'out' # ignored if init_from is not 'resume'
     start = "\n" # or "<|endoftext|>" or etc. Can also specify a file, use as: "FILE:prompt.txt"
+    streaming = True # print tokens one by one
     num_samples = 10 # number of samples to draw
     max_new_tokens = 500 # number of tokens generated in each sample
     temperature = 0.8 # 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
@@ -96,10 +98,10 @@ if __name__ == "__main__":
     # run generation
     with torch.no_grad():
         with ctx:
-            print("---------------")
+            print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
             for k in range(num_samples):
                 try:
-                    output = generate_sample(
+                    generator = generate_sample(
                         model=model,
                         start=start,
                         max_new_tokens=max_new_tokens,
@@ -108,8 +110,13 @@ if __name__ == "__main__":
                         device=device,
                         meta_path=meta_path,
                     )
-
-                    print(output + "...")
-                    print('---------------')
+                    if streaming:
+                        print(start, end='')
+                        for token in generator:
+                            print(token, end='', flush=True)
+                    else:
+                        print("".join(generator), end='')
+                    print("...")
+                    print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
                 except KeyboardInterrupt:
                     break

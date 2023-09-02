@@ -1,3 +1,5 @@
+# fmt: off
+
 """
 Full definition of a GPT Language Model, all of it in this single file.
 References:
@@ -326,5 +328,5 @@ class GPT(nn.Module):
             idx_next = torch.multinomial(probs, num_samples=1)
             # append sampled index to the running sequence and continue
             idx = torch.cat((idx, idx_next), dim=1)
-
-        return idx
+            # yield the last token
+            yield idx_next[0].item()
