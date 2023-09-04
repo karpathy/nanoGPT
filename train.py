@@ -291,11 +291,14 @@ while True:
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
 
                 if output_sample:
+                    meta_path = os.path.join("data", checkpoint["config"]["dataset"], "meta.pkl")
+                    if not os.path.exists(meta_path):
+                        meta_path = None
                     sample = generate_sample(
                         model=raw_model,
                         max_new_tokens=250,
                         device=device,
-                        meta_path=os.path.join("data", checkpoint["config"]["dataset"], "meta.pkl"),
+                        meta_path=meta_path,
                     )
                     print("sample:", sample.strip().replace("\n", " ")[:50] + "...")
 
