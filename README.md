@@ -222,6 +222,9 @@ For more questions/discussions feel free to stop by **#nanoGPT** on Discord:
 
 [![](https://dcbadge.vercel.app/api/server/3zy8kqD9Cp?compact=true&style=flat)](https://discord.gg/3zy8kqD9Cp)
 
+## Other references
+Aayush Shah's [repository](https://github.com/AayushSameerShah/Neural-Net-Zero-to-Hero-with-Andrej) on all lectures of my **Zero To Hero series** along with the [GPT from scratch notebook](https://github.com/AayushSameerShah/Neural-Net-Zero-to-Hero-with-Andrej/tree/main/07%20-%20GPT%20-%20Spelled%20Out)
+
 ## acknowledgements
 
 All nanoGPT experiments are powered by GPUs on [Lambda labs](https://lambdalabs.com), my favorite Cloud GPU provider. Thank you Lambda labs for sponsoring nanoGPT!
