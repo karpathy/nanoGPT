@@ -15,8 +15,6 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from flash_attn import flash_attn_qkvpacked_func
-
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
 
@@ -60,6 +58,7 @@ class CausalSelfAttention(nn.Module):
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash2:
             # efficient attention using Flash Attention CUDA kernels
+            from flash_attn import flash_attn_qkvpacked_func
             y = flash_attn_qkvpacked_func(qkv, dropout_p=self.dropout if self.training else 0, causal=True)
             # y: (B, T, nh, hs).
         else:
