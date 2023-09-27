@@ -21,6 +21,7 @@ import time
 import math
 import pickle
 from contextlib import nullcontext
+from datetime import datetime
 
 import numpy as np
 import torch
@@ -99,7 +100,7 @@ else:
     seed_offset = 0
     ddp_world_size = 1
 tokens_per_iter = gradient_accumulation_steps * ddp_world_size * batch_size * block_size
-print(f"tokens per iteration will be: {tokens_per_iter:,}")
+print(f"\ntokens per iteration will be: {tokens_per_iter:,}")
 
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
@@ -141,6 +142,7 @@ if os.path.exists(meta_path):
     print(f"found vocab_size = {meta_vocab_size} (inside {meta_path})")
 
 # model init
+print("\x1b[43m" "\x1b[30m" "Initializing Model" "\x1b[0m")
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
                   bias=bias, vocab_size=None, dropout=dropout) # start with model_args from command line
 if init_from == 'scratch':
@@ -213,9 +215,11 @@ if ddp:
 def estimate_loss():
     out = {}
     model.eval()
-    for split in ['train', 'val']:
+    split_sets = ['train', 'val']
+    for split in split_sets:
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
+            print(f"\restimating loss: \x1b[34msplit set\x1b[0m '{split}' {split_sets.index(split) + 1}/{len(split_sets)}, \x1b[34mEvaluation iteration\x1b[0m {k + 1}/{eval_iters}\t", end = "")
             X, Y = get_batch(split)
             with ctx:
                 logits, loss = model(X, Y)
@@ -246,9 +250,11 @@ if wandb_log and master_process:
 # training loop
 X, Y = get_batch('train') # fetch the very first batch
 t0 = time.time()
+lossf_0 = np.inf
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
+print("\x1b[43m" "\x1b[30m" "Training is starting!" "\x1b[0m")
 while True:
 
     # determine and set the learning rate for this iteration
@@ -258,8 +264,19 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
+        t0_el = time.time()
+        print(f"step {iter_num}: ...estimating losses", end = "")
         losses = estimate_loss()
-        print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        t1_el = time.time()
+        t0 -= t1_el - t0_el  # Subtract the costly estimate_loss() runtime from Δt per iter.
+        print(
+            "\r"
+            "\x1b[34m" f"step\x1b[0m {iter_num:{max(4, len(str(max_iters)))}}: "
+            "\x1b[34m" f"train loss\x1b[0m {losses['train']:.4f}, "
+            "\x1b[34m" f"val loss\x1b[0m " + ('\x1b[32m' if losses['val'] < best_val_loss else '\x1b[31m') + f"{losses['val']:.4f}\x1b[0m, "
+            f"Δt {datetime.fromtimestamp(t1_el) - datetime.fromtimestamp(t0_el)}",
+            end = "\t"
+            )
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
@@ -279,8 +296,10 @@ while True:
                     'best_val_loss': best_val_loss,
                     'config': config,
                 }
-                print(f"saving checkpoint to {out_dir}")
+                print(f"| Saving checkpoint to {out_dir}")
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+        else:
+            print()
     if iter_num == 0 and eval_only:
         break
 
@@ -310,18 +329,41 @@ while True:
     # flush the gradients as soon as we can, no need for this memory anymore
     optimizer.zero_grad(set_to_none=True)
 
-    # timing and logging
-    t1 = time.time()
-    dt = t1 - t0
-    t0 = t1
     if iter_num % log_interval == 0 and master_process:
+        _every_x_evals = 1  # Print the column header every x evals
+        if iter_num % (eval_interval * _every_x_evals) == 0:
+            print(
+                "\x1b[34m"
+                + " " * 5 + f"{'iter':{len(str(max_iters))}}"
+                + " " * 3 + f"loss"
+                + " " * 1 + "\x1b[0m" "(h:mm:ss.μs)" "\x1b[34m" " Δt"
+                + " " * 7 + f"mfu"
+                "\x1b[0m"
+                )
+        # Only reset t0 if printing dt, so we see the time since last print
+        # timing and logging
+        t1 = time.time()
+        dt = t1 - t0
+        t0 = t1
         # get loss as float. note: this is a CPU-GPU sync point
         # scale up to undo the division above, approximating the true total loss (exact would have been a sum)
         lossf = loss.item() * gradient_accumulation_steps
         if local_iter_num >= 5: # let the training loop settle a bit
             mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+        ansi = {
+            "red": "\x1b[31m",
+            "green": "\x1b[32m",
+
+        }
+
+        print(
+            f"     {iter_num:{max(4, len(str(max_iters)))}} "
+            f"{ansi['green' if lossf < lossf_0 else 'red']}{lossf:.4f}\x1b[0m "
+            f" {f'{datetime.fromtimestamp(t1) - datetime.fromtimestamp(t1 - dt)}'.lstrip('0:'):>14} ",
+            f"{running_mfu*100: 7.2f}%"
+            )
+        lossf_0 = lossf
     iter_num += 1
     local_iter_num += 1
 
