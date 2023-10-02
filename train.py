@@ -288,7 +288,7 @@ while True:
             f"{ansi['blue']}step{ansi['reset']} {iter_num:{max(4, len(str(max_iters)))}}:",
             f"{ansi['blue']}train loss{ansi['reset']} {losses['train']:.4f},",
             f"{ansi['blue']}val loss{ansi['reset']} {ansi['green' if losses['val'] < best_val_loss else 'red']}{losses['val']:.4f}{ansi['reset']},",
-            f"Δt {datetime.fromtimestamp(t1_el) - datetime.fromtimestamp(t0_el)}",
+            f"{ansi['blue']}Δt{ansi['reset']} {datetime.fromtimestamp(t1_el) - datetime.fromtimestamp(t0_el)}",
             end = " ")
         if wandb_log:
             wandb.log({
