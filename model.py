@@ -26,6 +26,10 @@ class LayerNorm(nn.Module):
     def forward(self, input):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
+def softermax(x, dim=-1):
+    e_x = torch.pow(2.0, x - x.max(dim=dim, keepdim=True).values)
+    return e_x / e_x.sum(dim=dim, keepdim=True)
+
 class CausalSelfAttention(nn.Module):
 
     def __init__(self, config):
@@ -43,6 +47,12 @@ class CausalSelfAttention(nn.Module):
         self.dropout = config.dropout
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
+        self.use_softermax = config.use_softermax
+        if self.use_softermax == True:
+            # TODO: Add softermax support into flashattention from pytorch 2.0
+            self.flash = False
+        else:
+            self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
         if not self.flash:
             print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
             # causal mask to ensure that attention is only applied to the left in the input sequence
@@ -66,7 +76,10 @@ class CausalSelfAttention(nn.Module):
             # manual implementation of attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
             att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
-            att = F.softmax(att, dim=-1)
+            if self.use_softermax:
+                att = softermax(att, dim=-1)
+            else:
+                att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
             y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
         y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
@@ -114,6 +127,7 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    use_softermax: bool = False # True: uses softermax; False uses softmax
 
 class GPT(nn.Module):
 
@@ -320,9 +334,13 @@ class GPT(nn.Module):
             if top_k is not None:
                 v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
                 logits[logits < v[:, [-1]]] = -float('Inf')
-            # apply softmax to convert logits to (normalized) probabilities
-            probs = F.softmax(logits, dim=-1)
-            # sample from the distribution
+
+            probs = None
+            if self.config.use_softermax:
+                probs = softermax(logits, dim=-1)
+            else:
+                probs = F.softmax(logits, dim=-1)
+            assert probs != None
             idx_next = torch.multinomial(probs, num_samples=1)
             # append sampled index to the running sequence and continue
             idx = torch.cat((idx, idx_next), dim=1)
