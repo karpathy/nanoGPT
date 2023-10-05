@@ -5,6 +5,8 @@ Well, I'm quite partial to a good squeeze of fresh lemon juice. It adds just the
 [INST] Do you have mayonnaise recipes? [/INST]"""
 
 llm = Llama(model_path="./models/mistral-7b-instruct-v0.1.Q5_K_M.gguf", n_ctx=2048,
-            n_threads=8, n_gpu_layers=300, verbose=True)
+            n_threads=8, n_gpu_layers=35, verbose=True)
+
 output = llm(text, max_tokens=256, stop=["[INST]"], echo=True)
+
 print(output)
