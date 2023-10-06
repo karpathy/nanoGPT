@@ -1,0 +1,3 @@
+[submodule "modules/llama.cpp"]
+	path = modules/llama.cpp
+	url = https://github.com/gkielian/llama.cpp.git
