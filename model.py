@@ -26,6 +26,18 @@ class LayerNorm(nn.Module):
     def forward(self, input):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
+class RMSNorm(nn.Module):
+    """RMS Normalization"""
+
+    def __init__(self, ndim):
+        super().__init__()
+        self.gain = nn.Parameter(torch.ones(ndim))
+
+    def forward(self, x):
+        rms = x.norm(2, dim=-1, keepdim=True) / math.sqrt(x.size(-1))
+        return x / rms * self.gain
+
+
 def softermax(x, dim=-1):
     e_x = torch.pow(2.0, x - x.max(dim=dim, keepdim=True).values)
     return e_x / e_x.sum(dim=dim, keepdim=True)
@@ -108,9 +120,14 @@ class Block(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
+        if config.use_rmsnorm:
+            self.ln_1 = RMSNorm(config.n_embd)
+            self.ln_2 = RMSNorm(config.n_embd)
+        else:
+            self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
+            self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
+
         self.attn = CausalSelfAttention(config)
-        self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
     def forward(self, x):
@@ -128,6 +145,7 @@ class GPTConfig:
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
     use_softermax: bool = False # True: uses softermax; False uses softmax
+    use_rmsnorm: bool = True # Add option for RMSNorm
 
 class GPT(nn.Module):
 
