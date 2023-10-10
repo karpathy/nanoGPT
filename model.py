@@ -14,6 +14,9 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+from torch.nn import init as init
+
+from axonn.intra_layer import Tensor_Parallel_Linear
 
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
@@ -26,15 +29,24 @@ class LayerNorm(nn.Module):
     def forward(self, input):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
+def init_fc(weight):
+    return init.kaiming_uniform_(weight, a=math.sqrt(5))
+
 class CausalSelfAttention(nn.Module):
 
     def __init__(self, config):
         super().__init__()
         assert config.n_embd % config.n_head == 0
         # key, query, value projections for all heads, but in a batch
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+        self.c_attn = Tensor_Parallel_Linear(config.n_embd, 
+                3 * config.n_embd,  
+                init_method=init_fc)
         # output projection
-        self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.c_proj = Tensor_Parallel_Linear(config.n_embd, 
+                config.n_embd, 
+
+                init_method=init_fc)
+
         # regularization
         self.attn_dropout = nn.Dropout(config.dropout)
         self.resid_dropout = nn.Dropout(config.dropout)
@@ -79,9 +91,13 @@ class MLP(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
+        self.c_fc    = Tensor_Parallel_Linear(config.n_embd, 
+                4 * config.n_embd, 
+                init_method=init_fc)
         self.gelu    = nn.GELU()
-        self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
+        self.c_proj  = Tensor_Parallel_Linear(4 * config.n_embd, 
+                config.n_embd, 
+                init_method=init_fc)
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
@@ -121,6 +137,7 @@ class GPT(nn.Module):
         super().__init__()
         assert config.vocab_size is not None
         assert config.block_size is not None
+        assert config.bias, "axonn doesn't support lack of bias"
         self.config = config
 
         self.transformer = nn.ModuleDict(dict(
