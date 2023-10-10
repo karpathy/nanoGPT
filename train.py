@@ -27,6 +27,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from fast_shampoo import Shampoo, ShampooHyperParams, LayerwiseGrafting
+from axonn import axonn as ax
 
 from model import GPTConfig, GPT
 
@@ -74,6 +75,11 @@ backend = 'nccl' # 'nccl', 'gloo', etc.
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
+
+# model parallelism args
+G_intra_r=1
+G_intra_c=1
+
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
@@ -105,15 +111,26 @@ def set_device_and_init_torch_dist():
     return local_rank
 
 local_rank = set_device_and_init_torch_dist()
-ddp = torch.distributed.get_world_size() > 0
+world_size = torch.distributed.get_world_size()
+world_rank = torch.distributed.get_rank()
+assert world_size % (G_intra_r * G_intra_c) == 0
+G_data = world_size // (G_intra_r * G_intra_c)
+ax.init( 
+        G_data=G_data,
+        G_inter=1,
+        G_intra_r=G_intra_r,
+        G_intra_c=G_intra_c
+    )
+
+print(f"G_data={G_data} x G_intra_r={G_intra_r} x G_intra_c={G_intra_c}")
+
+ddp = G_data > 1
 if ddp:
     #init_process_group(backend=backend)
-    ddp_rank = torch.distributed.get_rank()#int(os.environ['RANK'])
-    ddp_local_rank = local_rank #int(os.environ['LOCAL_RANK'])
-    ddp_world_size = torch.distributed.get_world_size()  # int(os.environ['WORLD_SIZE'])
-    device = f'cuda:{ddp_local_rank}'
-    torch.cuda.set_device(device)
-    master_process = ddp_rank == 0 # this process will do logging, checkpointing etc.
+    ddp_rank = ax.config.data_parallel_rank #int(os.environ['RANK'])
+    ddp_world_size = G_data
+    device = f'cuda:{local_rank}'
+    master_process = (ddp_rank == 0) # this process will do logging, checkpointing etc.
     seed_offset = ddp_rank # each process gets a different seed
     # world_size number of processes will be training simultaneously, so we can scale
     # down the desired gradient accumulation iterations per process proportionally
@@ -266,7 +283,7 @@ if compile:
 
 # wrap model into DDP container
 if ddp:
-    model = DDP(model, device_ids=[ddp_local_rank])
+    model = DDP(model, device_ids=[local_rank], process_group=ax.comm_handle.coll_nccl_comm)
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
