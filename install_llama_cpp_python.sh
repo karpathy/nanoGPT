@@ -9,9 +9,9 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 echo "This script will install llama-cpp-python with GPU support"
 
 # Check if llama module exists, prompt to initialize submodule
-if [ ! -d "$script_dir/modules/llama.cpp" ]; then
+if [ ! -d "$script_dir/modules/llama.cpp/models" ]; then
 
-  read -p "llama.cpp module not found. Download with git? [Y/n] " response
+  read -p "llama.cpp module not initialized. Download with git? [Y/n] " response
 
   response=${response,,}
 
@@ -37,6 +37,11 @@ if [ ! -d "$cuda_home" ]; then
   echo "Error: $cuda_home is not a valid directory"
   exit 1
 fi
+
+export CUDA_HOME="$cuda_home"
+export PATH="$cuda_home/bin:$PATH"
+export LLAMA_CUBLAS=on
+export LLAMA_CPP_LIB="$script_dir/modules/llama.cpp/libllama.so"
 
 read -p "Append CUDA settings to ~/.bashrc? [Y/n] " response
 
@@ -65,3 +70,4 @@ export LLAMA_CPP_LIB="$script_dir/modules/llama.cpp/libllama.so"
 CMAKE_ARGS="-DLLAMA_CUBLAS=on" python3 -m pip install llama-cpp-python --no-cache-dir
 
 echo "llama-cpp-python installed successfully"
+
