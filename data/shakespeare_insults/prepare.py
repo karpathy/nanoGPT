@@ -1,33 +1,117 @@
 # a rather small dataset of Shakespeare-an Insults
 import os
-import requests
+from typing import Any, List
 import tiktoken
+import pickle
 import numpy as np
 
-# it comes for FREE inside this repository
+# which comes for FREE inside this repository, pretty good deal!
 insults = ["A most notable coward, an infinite and endless liar, an hourly promise breaker, the owner of no one good quality.", "Away, you starvelling, you elf-skin, you dried neat’s-tongue, bull’s-pizzle, you stock-fish!", "Away, you three-inch fool! ", "Come, come, you froward and unable worms!", "Go, prick thy face, and over-red thy fear, Thou lily-liver’d boy.", "His wit’s as thick as a Tewkesbury mustard.", "I am pigeon-liver’d and lack gall.", "I am sick when I do look on thee", "I must tell you friendly in your ear, sell when you can, you are not for all markets", "If thou wilt needs marry, marry a fool; for wise men know well enough what monsters you make of them", "I’ll beat thee, but I would infect my hands", "I scorn you, scurvy companion.", "Methink’st thou art a general offence and every man should beat thee", "More of your conversation would infect my brain", "My wife’s a hobby horse", "Peace, ye fat guts", "Aroint thee: go away, rump-fed runion: slu", "The rankest compound of villainous smell that ever offended nostri", "The tartness of his face sours ripe grapes", "There’s no more faith in thee than in a stewed prune", "Thine forward voice, now, is to speak well of thine friend; thine backward voice is to utter foul speeches and to detract", "That trunk of humours, that bolting-hutch of beastliness, that swollen parcel of dropsies, that huge bombard of sack, that stuffed ", "cloak-bag of guts", "that roasted Manningtree ox with pudding in his belly", "that reverend vice" "Thine face is not worth sunburning", "This woman’s an easy glove, my lord, she goes off and on at pleasure", "Thou art a boil, a plague sor", "Was the Duke a flesh-monger, a fool and a coward", "Thou art as fat as butter", "Here is the babe, as loathsome as a toad", "Like the toad; ugly and venomous", "Thou art unfit for any place but hell", "Thou cream faced loo", "Thou clay-brained guts, thou knotty-pated fool, thou whoreson obscene greasy tallow-catch", "Thou damned and luxurious mountain goat", "Thou elvish-mark’d, abortive, rooting hog", "Thou leathern-jerkin, crystal-button, knot-pated, agatering, puke-stocking, caddis-garter, smooth-tongue, Spanish pouch", "Thou lump of foul deformit", "That poisonous bunch-back’d toad", "Thou sodden-witted lord! Thou hast no more brain than I have in mine elbows", "Thou subtle, perjur’d, false, disloyal man", "Thou whoreson zed , thou unnecessary letter", "Thy sin’s not accidental, but a trade", "Thy tongue outvenoms all the worms of Nile", "Would thou wert clean enough to spit upo", "Would thou wouldst burst", "You poor, base, rascally, cheating lack-linen mate!", "You are as a candle, the better burnt out", "You scullion! You rampallian! You fustilarian! I’ll tickle your catastrophe", "You starvelling, you eel-skin, you dried neat’s-tongue, you bull’s-pizzle, you stock-fish–O for breath to utter what is like ", "Your brain is as dry as the remainder biscuit after voyage", "Virginity breeds mites, much like a cheese", "Villain, I have done thy mothe", "Heaven truly knows that thou art false as hel", "Out of my sight! Thou dost infect mine eyes", "No longer from head to foot than from hip to hip, she is spherical, like a globe; I could find countries in her", "You have such a February face, So full of frost, of storm, and cloudiness"]
 
 n = len(insults)
 train_data = insults[:int(n*0.9)]
 val_data   = insults[int(n*0.9):]
 
-# TODO: wrap this tokenizer into a class with nice method for tokenizing incoming texts -- callable style
+# NOTE: this was written whilst in Panama!
 # here is a simple tokenizer
-tokenizer = {'A': 0, 'most': 1, 'notable': 2, 'coward,': 3, 'an': 4, 'infinite': 5, 'and': 6, 'endless': 7, 'liar,': 8, 'hourly': 9, 'promise': 10, 'breaker,': 11, 'the': 12, 'owner': 13, 'of': 14, 'no': 15, 'one': 16, 'good': 17, 'quality.': 18, 'Away,': 19, 'you': 20, 'starvelling,': 21, 'elf-skin,': 22, 'dried': 23, 'neat’s-tongue,': 24, 'bull’s-pizzle,': 25, 'stock-fish!': 26, 'three-inch': 27, 'fool!': 28, 'Come,': 29, 'come,': 30, 'froward': 31, 'unable': 32, 'worms!': 33, 'Go,': 34, 'prick': 35, 'thy': 36, 'face,': 37, 'over-red': 38, 'fear,': 39, 'Thou': 40, 'lily-liver’d': 41, 'boy.': 42, 'His': 43, 'wit’s': 44, 'as': 45, 'thick': 46, 'a': 47, 'Tewkesbury': 48, 'mustard.': 49, 'I': 50, 'am': 51, 'pigeon-liver’d': 52, 'lack': 53, 'gall.': 54, 'sick': 55, 'when': 56, 'do': 57, 'look': 58, 'on': 59, 'thee': 60, 'must': 61, 'tell': 62, 'friendly': 63, 'in': 64, 'your': 65, 'ear,': 66, 'sell': 67, 'can,': 68, 'are': 69, 'not': 70, 'for': 71, 'all': 72, 'markets': 73, 'If': 74, 'thou': 75, 'wilt': 76, 'needs': 77, 'marry,': 78, 'marry': 79, 'fool;': 80, 'wise': 81, 'men': 82, 'know': 83, 'well': 84, 'enough': 85, 'what': 86, 'monsters': 87, 'make': 88, 'them': 89, 'I’ll': 90, 'beat': 91, 'thee,': 92, 'but': 93, 'would': 94, 'infect': 95, 'my': 96, 'hands': 97, 'scorn': 98, 'you,': 99, 'scurvy': 100, 'companion.': 101, 'Methink’st': 102, 'art': 103, 'general': 104, 'offence': 105, 'every': 106, 'man': 107, 'should': 108, 'More': 109, 'conversation': 110, 'brain': 111, 'My': 112, 'wife’s': 113, 'hobby': 114, 'horse': 115, 'Peace,': 116, 'ye': 117, 'fat': 118, 'guts': 119, 'Aroint': 120, 'thee:': 121, 'go': 122, 'away,': 123, 'rump-fed': 124, 'runion:': 125, 'slu': 126, 'The': 127, 'rankest': 128, 'compound': 129, 'villainous': 130, 'smell': 131, 'that': 132, 'ever': 133, 'offended': 134, 'nostri': 135, 'tartness': 136, 'his': 137, 'face': 138, 'sours': 139, 'ripe': 140, 'grapes': 141, 'There’s': 142, 'more': 143, 'faith': 144, 'than': 145, 'stewed': 146, 'prune': 147, 'Thine': 148, 'forward': 149, 'voice,': 150, 'now,': 151, 'is': 152, 'to': 153, 'speak': 154, 'thine': 155, 'friend;': 156, 'backward': 157, 'voice': 158, 'utter': 159, 'foul': 160, 'speeches': 161, 'detract': 162, 'That': 163, 'trunk': 164, 'humours,': 165, 'bolting-hutch': 166, 'beastliness,': 167, 'swollen': 168, 'parcel': 169, 'dropsies,': 170, 'huge': 171, 'bombard': 172, 'sack,': 173, 'stuffed': 174, 'cloak-bag': 175, 'roasted': 176, 'Manningtree': 177, 'ox': 178, 'with': 179, 'pudding': 180, 'belly': 181, 'reverend': 182, 'viceThine': 183, 'worth': 184, 'sunburning': 185, 'This': 186, 'woman’s': 187, 'easy': 188, 'glove,': 189, 'lord,': 190, 'she': 191, 'goes': 192, 'off': 193, 'at': 194, 'pleasure': 195, 'boil,': 196, 'plague': 197, 'sor': 198, 'Was': 199, 'Duke': 200, 'flesh-monger,': 201, 'fool': 202, 'coward': 203, 'butter': 204, 'Here': 205, 'babe,': 206, 'loathsome': 207, 'toad': 208, 'Like': 209, 'toad;': 210, 'ugly': 211, 'venomous': 212, 'unfit': 213, 'any': 214, 'place': 215, 'hell': 216, 'cream': 217, 'faced': 218, 'loo': 219, 'clay-brained': 220, 'guts,': 221, 'knotty-pated': 222, 'fool,': 223, 'whoreson': 224, 'obscene': 225, 'greasy': 226, 'tallow-catch': 227, 'damned': 228, 'luxurious': 229, 'mountain': 230, 'goat': 231, 'elvish-mark’d,': 232, 'abortive,': 233, 'rooting': 234, 'hog': 235, 'leathern-jerkin,': 236, 'crystal-button,': 237, 'knot-pated,': 238, 'agatering,': 239, 'puke-stocking,': 240, 'caddis-garter,': 241, 'smooth-tongue,': 242, 'Spanish': 243, 'pouch': 244, 'lump': 245, 'deformit': 246, 'poisonous': 247, 'bunch-back’d': 248, 'sodden-witted': 249, 'lord!': 250, 'hast': 251, 'have': 252, 'mine': 253, 'elbows': 254, 'subtle,': 255, 'perjur’d,': 256, 'false,': 257, 'disloyal': 258, 'zed': 259, ',': 260, 'unnecessary': 261, 'letter': 262, 'Thy': 263, 'sin’s': 264, 'accidental,': 265, 'trade': 266, 'tongue': 267, 'outvenoms': 268, 'worms': 269, 'Nile': 270, 'Would': 271, 'wert': 272, 'clean': 273, 'spit': 274, 'upo': 275, 'wouldst': 276, 'burst': 277, 'You': 278, 'poor,': 279, 'base,': 280, 'rascally,': 281, 'cheating': 282, 'lack-linen': 283, 'mate!': 284, 'candle,': 285, 'better': 286, 'burnt': 287, 'out': 288, 'scullion!': 289, 'rampallian!': 290, 'fustilarian!': 291, 'tickle': 292, 'catastrophe': 293, 'eel-skin,': 294, 'stock-fish–O': 295, 'breath': 296, 'like': 297, 'Your': 298, 'dry': 299, 'remainder': 300, 'biscuit': 301, 'after': 302, 'voyage': 303, 'Virginity': 304, 'breeds': 305, 'mites,': 306, 'much': 307, 'cheese': 308, 'Villain,': 309, 'done': 310, 'mothe': 311, 'Heaven': 312, 'truly': 313, 'knows': 314, 'false': 315, 'hel': 316, 'Out': 317, 'sight!': 318, 'dost': 319, 'eyes': 320, 'No': 321, 'longer': 322, 'from': 323, 'head': 324, 'foot': 325, 'hip': 326, 'hip,': 327, 'spherical,': 328, 'globe;': 329, 'could': 330, 'find': 331, 'countries': 332, 'her': 333, 'such': 334, 'February': 335, 'So': 336, 'full': 337, 'frost,': 338, 'storm,': 339, 'cloudiness': 340}
+class InsultsTokenizer:
+    """ A tokenizer, specifically conjured from the ether to deal with these insults from shakespeare """
+    def __init__(self, dataset: List[str]=None, path: str=None) -> None:
+        unique_tokens = set()
+        if (path) and (os.path.exists(path)):
+            with open(path, "rb") as fileobj:
+                tsukemono = pickle.load(fileobj) #instance of pickle!
+            if type(tsukemono) == InsultsTokenizer:
+                self.__dict__ = tsukemono.__dict__
+        # assume import or constructing a new tokenizer for a given dataset
+        else:
+            assert dataset is not None, "no path provided and no dataset, what could we possibly be tokenizing?"
+            for sample in dataset:
+                toks = sample.lower().split(" ") #for simplicity sake, keep everything lowercase
+                unique_tokens.update(toks)
+            tokmap = {
+                "<eos>": 0, #add in an end of sequence token, model can decide to stop frying people
+                " ": 1,     #add in the space!
+                "<wtf>": 2, #for out of distribution tokens, lord knows what these might be
+            }
 
-# encode with tiktoken gpt2 bpe
-enc = tiktoken.get_encoding("gpt2")
-train_ids = enc.encode_ordinary(train_data)
-val_ids = enc.encode_ordinary(val_data)
-print(f"train has {len(train_ids):,} tokens")
-print(f"val has {len(val_ids):,} tokens")
+            # Special Tokens to use based on their meaning
+            self.eos_token_id = 0
+            self.space_token_id = 1
+            self.ood_token_id = 2
+
+            token_idx = len(tokmap) #number @ which we should add new tokens
+            for tok in list(unique_tokens):
+                tokmap[tok] = token_idx
+                token_idx += 1
+
+            self.map = tokmap
+            self.max_seq_len = 64 #manually looked @ dataset, set this num to allow for some leeway at inference time
+
+    def __call__(self, text: str, *args: Any, **kwargs: Any) -> Any:
+        text = text.lower() #keep everything lowercase here
+        text_chunks = text.split(" ")
+        tokens: List[int] = [] # our returnable
+
+        for chunk in text_chunks:
+            if chunk in self.map:
+                chunk_toks = [self.map[chunk], self.space_token_id]
+            else:
+                chunk_toks = [self.ood_token_id, self.space_token_id]
+            tokens.extend(chunk_toks)
+
+        # to teach the model to STOP espousing insults, we include a special end of sequence token
+        if ("pad" in kwargs) and (kwargs["pad"] == True):
+            remaining_seq_len = self.max_seq_len - len(tokens)
+            eos_seq = remaining_seq_len * [self.eos_token_id]
+            tokens.extend(eos_seq)
+
+        return tokens
+
+    def save(self, path: str=None):
+        """ dump the tokenizer to a path on disk """
+        assert path is not None
+        with open(path, "wb") as tsukemono:
+            pickle.dump(self, tsukemono)
+
+
+tokenizer = InsultsTokenizer(dataset=insults)
+
+# :::: Sample Usage of the Tokenizer ::::
+# tokenizing a string
+# s ="what in tarntation you whoreson" 
+# toks = tokenizer(s)
+# print(toks)
+# print(len(toks))
+
+# saving to disk
+# tmp_path = "tmp.pkl"
+# tokenizer.save(tmp_path)
+
+# loading from disk on init
+# t2 = InsultsTokenizer(path=tmp_path)
+
+
+# Tokenize the datasets and save the splits to disk
+train_ids = [tokenizer(sample, pad=True) for sample in train_data]
+total_training_toks = sum([len(i) for i in train_ids])
+val_ids = [tokenizer(sample, pad=True) for sample in val_data]
+total_val_toks = sum([len(i) for i in val_ids])
+print(f"train has {len(train_ids):,} instances with {total_training_toks} tokens")
+print(f"val has {len(val_ids):,} instances with {total_val_toks} tokens")
+
+
+# FIND THE MAX SEQLEN 
+results = map(tokenizer.__call__, insults)
+m = 0
+for i in results:
+    # print(len(i))
+    m = max(m, len(i))
+print("longest seqlen in dataset: ", m, "w/o padding...")
+    
 
 # export the tokenized data to bin files
 train_ids = np.array(train_ids, dtype=np.uint16)
 val_ids = np.array(val_ids, dtype=np.uint16)
 train_ids.tofile(os.path.join(os.path.dirname(__file__), 'train.bin'))
 val_ids.tofile(os.path.join(os.path.dirname(__file__), 'val.bin'))
-
-# TODO: get the token distributions
-# train.bin has N tokens
-# val.bin has N tokens
