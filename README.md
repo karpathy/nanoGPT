@@ -1,3 +1,49 @@
+# GPT for SAT Solving
+# Training Command
+
+## DPLL
+
+```bash
+python train.py config/train_sat_dpll.py --max_iters 200000
+```
+
+## CDCL
+
+```bash
+python train.py config/train_sat_cdcl.py --max_iters 200000
+```
+
+# Eval Command
+
+## DPLL (Assume Training complete)
+
+```bash
+python eval_sat.py --out_dir=model-ckpts/out-sat-dpll --prompts_file=data/SAT_DPLL/SAT_Dataset_DPLL_Balanced_Test.txt --num_samples=1000 --output_file=predictions/out-sat-dpll.txt
+```
+
+## CDCL (Assume Training complete)
+
+```bash
+python eval_sat.py --out_dir=model-ckpts/out-sat-cdcl --prompts_file=/home/lpan68/nanoGPT/data/SAT_CDCL/SAT_Dataset_CDCL_Balanced_Test.txt --num_samples=1000 --output_file=predictions/out-sat-dpll.txt
+```
+
+# Results
+
+## DPLL trace, 20000 epochs, Satisfiability Prediction
+
+F1 Score: 0.4444444444444445
+Accuracy: 0.55
+Precision: 0.5806451612903226
+Recall: 0.36
+
+predictions/out-sat-dpll.txt
+
+# TODO
+
+Current accuracy is very low (~55%) although the model outputs seemingly valid trace. This may be due using the entire string including both the original problem, the execution trace, the final SAT result, and the padding tokens for training. This training method dilutes the importance of trace and satisfiability prediction since they only occupy a small portion of tokens in the prediction task. Therefore, as next steps, we can:
+
+- Only compute loss for tokens of the trace and satisfiability prediction instead of the whole string (This may require discarding the use of mini-batches in training and make training more inefficient)
+
 
 # nanoGPT
 

@@ -20,7 +20,14 @@ seed = 1337
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32' or 'bfloat16' or 'float16'
 compile = False # use PyTorch 2.0 to compile the model to be faster
+sep = '' # separator between tokens during decoding, default: nothing, i.e. join with empty string
 exec(open('configurator.py').read()) # overrides from command line or config file
+if sep == 'SPACE':
+    sep = ' '
+if sep == 'NEWLINE':
+    sep = '\n'
+if sep == 'TAB':
+    sep = '\t'
 # -----------------------------------------------------------------------------
 
 torch.manual_seed(seed)
@@ -65,7 +72,7 @@ if load_meta:
     # TODO want to make this more general to arbitrary encoder/decoder schemes
     stoi, itos = meta['stoi'], meta['itos']
     encode = lambda s: [stoi[c] for c in s]
-    decode = lambda l: ''.join([itos[i] for i in l])
+    decode = lambda l: sep.join([itos[i] for i in l])
 else:
     # ok let's assume gpt-2 encodings by default
     print("No meta.pkl found, assuming GPT-2 encodings...")

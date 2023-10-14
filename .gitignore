@@ -8,3 +8,7 @@ __pycache__/
 *.pt
 *.pyc
 input.txt
+
+predictions/
+model-ckpts/
+
