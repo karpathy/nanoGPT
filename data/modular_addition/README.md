@@ -6,8 +6,8 @@ Modular arithmetic printed in different bases for training.
 
 - `tokens.txt` - Contains a set of characters to use for encoding
 - `prepare.py` - Script to encode the raw examples into ids and save in binary format
-- `print_mod_16.py` - Prints modulo arithmetic examples in different bases
-- `create_examples.sh` - Runs `print_mod_16.py` to generate the raw examples
+- `print_bases_mod_x.py` - Prints modulo arithmetic examples in different bases
+- `create_examples.sh` - Runs `print_bases_mod_x.py` to generate the raw examples
 - `data/` - Directory containing the raw arithmetic example files
 
 ## Creating Examples and Selecting Tokenisation Space
@@ -48,7 +48,7 @@ arithmetic.
 
 ## Details
 
-- `print_mod_16.py` generates examples like:
+- `print_bases_mod_x.py` generates examples like:
 
 ```
 1 1 2
