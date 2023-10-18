@@ -18,6 +18,7 @@ $ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 --master_addr=123.456.123
 
 import os
 import time
+from datetime import datetime
 import math
 import pickle
 from contextlib import nullcontext
@@ -27,7 +28,18 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
+from torch.utils.tensorboard import SummaryWriter
+
+
 from model import GPTConfig, GPT
+
+
+def log_tensorboard_metrics(writer, losses, lr, running_mfu, iter_num):
+    writer.add_scalars(
+        "loss", { "train": losses['train'], "val": losses['val'] }, iter_num
+        )
+    writer.add_scalar("mfu_pct", running_mfu * 100, iter_num)
+    writer.add_scalar("lr", lr, iter_num)
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -39,10 +51,6 @@ eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
-# wandb logging
-wandb_log = False # disabled by default
-wandb_project = 'owt'
-wandb_run_name = 'gpt2' # 'run' + str(time.time())
 # data
 dataset = 'openwebtext'
 gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
@@ -77,6 +85,12 @@ config_keys = [k for k,v in globals().items() if not k.startswith('_') and isins
 exec(open('configurator.py').read()) # overrides from command line or config file
 config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
+
+print(tensorboard_log)
+log_dir = 'logs/' + tensorboard_run_name
+timestamp = time.strftime("%Y%m%d-%H%M%S")
+log_subpath = os.path.join(log_dir, timestamp)
+writer = SummaryWriter(log_subpath)
 
 # various inits, derived attributes, I/O setup
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
@@ -249,6 +263,7 @@ t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
+checkpoint = {}
 while True:
 
     # determine and set the learning rate for this iteration
@@ -260,6 +275,8 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        if tensorboard_log:
+          log_tensorboard_metrics(writer, losses, lr, running_mfu, iter_num)
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
@@ -279,8 +296,9 @@ while True:
                     'best_val_loss': best_val_loss,
                     'config': config,
                 }
-                print(f"saving checkpoint to {out_dir}")
-                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+                if not only_save_checkpoint_at_end:
+                  print(f"saving checkpoint to {out_dir}")
+                  torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
     if iter_num == 0 and eval_only:
         break
 
@@ -327,7 +345,13 @@ while True:
 
     # termination conditions
     if iter_num > max_iters:
+        if only_save_checkpoint_at_end:
+          print(f"saving checkpoint to {out_dir}")
+          torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
         break
+
+writer.flush()
+writer.close()
 
 if ddp:
     destroy_process_group()
