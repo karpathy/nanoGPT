@@ -10,6 +10,7 @@ https://github.com/huggingface/transformers/blob/main/src/transformers/models/gp
 import math
 import inspect
 from dataclasses import dataclass
+from utils import get_interval_values
 
 import torch
 import torch.nn as nn
@@ -167,9 +168,10 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None):
+    def forward(self, idx, targets=None, intervals=None):
         # idx: Input sequence indices of shape (b,t)
         # targets: Output token indices of shape (b,t), shifted forward by 1 position
+        assert (intervals is None) or targets is not None, "if you use interval, you must provide targets"
         device = idx.device
         b, t = idx.size()
         assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
@@ -182,15 +184,18 @@ class GPT(nn.Module):
         for block in self.transformer.h:
             x = block(x) # (b, t, n_embd)
         x = self.transformer.ln_f(x) # LayerNorm, also doesn't change shape, (b, t, n_embd) 
-
-        if targets is not None:
+        if intervals is not None:
+            logits = self.lm_head(x) # (b, t, vocab_size)
+            target_logits = get_interval_values(logits, intervals - 1) # -1 because we want the previous token prediction
+            loss = F.cross_entropy(target_logits, targets)
+        elif targets is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x) # (b, t, vocab_size)
             # Compute loss for each token in targets of shape (b, t)
             # Reshape logits to be a long list of logits of shape (b * t, vocab_size)
             # Reshape targets to be a long list of token ids of shape (b * t)
             # Computed loss is a scalar
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1) 
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(x[:, [-1], :]) # note: using list [-1] to preserve the time dim

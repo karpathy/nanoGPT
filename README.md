@@ -1,4 +1,21 @@
 # GPT for SAT Solving
+## Update Oct 19 2023
+Create train_sat.py that only computes loss for tokens after the `[SEP]` token and before the padding. This is done by finding the indices of the `[SEP]` and `[PAD\]` tokens in `get_batch()` in train_sat.py and using the indices to extract the tokens and logis of interest in `get_interval_values()` in `utils.py`. However, this training procedure becomes extremely slow for unknown reasons.
+
+To reproduce, run the command
+```
+python train_sat.py config/train_sat_dpll.py
+```
+This should take forever to run.
+However,
+```
+python train.py config/train_sat_dpll.py
+```
+You can do a diff between train.py and train_sat.py to see the exact differences.
+
+
+TODO: Investigate the cause of this and modify the training method to effectively train on only the trace portion and not the padding or original formula portion.
+
 # Training Command
 
 ## DPLL
@@ -24,7 +41,7 @@ python eval_sat.py --out_dir=model-ckpts/out-sat-dpll --prompts_file=data/SAT_DP
 ## CDCL (Assume Training complete)
 
 ```bash
-python eval_sat.py --out_dir=model-ckpts/out-sat-cdcl --prompts_file=/home/lpan68/nanoGPT/data/SAT_CDCL/SAT_Dataset_CDCL_Balanced_Test.txt --num_samples=1000 --output_file=predictions/out-sat-dpll.txt
+python eval_sat.py --out_dir=model-ckpts/out-sat-cdcl --prompts_file=/home/lpan68/nanoGPT/data/SAT_CDCL/SAT_Dataset_CDCL_Balanced_Test.txt --num_samples=1000 --output_file=predictions/out-sat-cdcl.txt
 ```
 
 # Results
@@ -37,6 +54,12 @@ Precision: 0.5806451612903226
 Recall: 0.36
 
 predictions/out-sat-dpll.txt
+
+## CDCL trace, 20000 epochs, Satisfiability Prediction
+F1 Score: 0.6969696969696971
+Accuracy: 0.6
+Precision: 0.5609756097560976
+Recall: 0.92
 
 # TODO
 
