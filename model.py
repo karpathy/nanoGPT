@@ -15,6 +15,8 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
 
@@ -41,8 +43,12 @@ class CausalSelfAttention(nn.Module):
         self.n_head = config.n_head
         self.n_embd = config.n_embd
         self.dropout = config.dropout
+        #tiling
+        self.bc=config.bc
+        self.br=config.br
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
+        
         if not self.flash:
             print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
             # causal mask to ensure that attention is only applied to the left in the input sequence
@@ -57,23 +63,75 @@ class CausalSelfAttention(nn.Module):
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-
+        
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
             # efficient attention using Flash Attention CUDA kernels
             y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
         else:
-            # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
-            att = F.softmax(att, dim=-1)
-            att = self.attn_dropout(att)
-            y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+            if self.use_tiling
+                if self.training:
+                    # manual implementation of attention
+                    att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+                    att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+                    att = F.softmax(att, dim=-1)
+                    att = self.attn_dropout(att)
+                    y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+                else:
+                    #start here while inferencing with tiling......
+                    tr=math.ceil(T/self.br)
+                    tc=math.ceil(T/self.bc)
+                    #initializing matrix
+                    o = torch.zeros(k.size(),device=device)
+                    l = torch.zeros(k.size()[:3], device=device)
+                    m = torch.full(k.size()[:3], float('-inf'), device=device)
+                    
+                    #tiling
+                    for j in range(1, tc+1):
+                        kj=k[:, :, (j-1)*self.bc:(j*self.bc), :]
+                        vj=v[:, :, (j-1)*self.bc:(j*self.bc), :]
+                        for i in range(1,tr+1):
+                            #load from DRAM to onchip sram
+                            qi=q[:, :, (i-1)*self.br:(i*self.br), :]
+                            oi=o[:, :, (i-1)*self.br:(i*self.br), :]
+                            li=l[:, :, (i-1)*self.br:(i*self.br)] #(B, nh, br)
+                            mi=m[:, :, (i-1)*self.br:(i*self.br)]
+    
+                            
+                            #compute
+                            sij = qi @ kj.transpose(-2,-1) * (1.0 / math.sqrt(k.size(-1))) #(B, nh, br, bc)
+                            mij, _ = sij.max(dim=-1) #(B, nh, br)
+                            pij =torch.exp(sij-mij.unsqueeze(-1))#(B, nh, br, bc)
+                            lij = pij.sum(dim=3)#(B, nh, br)
+                            #update
+                            mi_new = torch.max(mi,mij)
+                            li_new = torch.exp(mi-mi_new)*li+torch.exp(mij-mi_new)*lij
+                            #write to DRAM
+                            o[:, :, (i-1)*self.br:(i*self.br), :] = self.diag(torch.reciprocal(li_new))@(self.diag(li*torch.exp(mi-mi_new))@oi+torch.exp(mij-mi_new).unsqueeze(-1)*(pij@vj))
+                            print("o_subblock generated",j,i)
+                            l[:, :, (i-1)*self.br:(i*self.br)]=li_new
+                            m[:, :, (i-1)*self.br:(i*self.br)]=mi_new
+                    y = o
+            else
+                attn = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+                attn = attn.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+                att = F.softmax(att, dim=-1)
+                att = self.attn_dropout(att)
+                y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+                
         y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
-
         # output projection
         y = self.resid_dropout(self.c_proj(y))
         return y
+              
+      
+    
+    def diag(self, vec):
+        li_diagonal = torch.zeros((vec.size(0), vec.size(1), self.br, self.br),device=device)
+        for b in range(vec.size(0)):
+            for n in range(vec.size(1)):
+                li_diagonal[b, n] = torch.diag_embed(vec[b, n])
+        return li_diagonal
 
 class MLP(nn.Module):
 
@@ -114,6 +172,10 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    
+    bc: int = 128 #Tiling block size in flash attention
+    br: int = 128 #Tiling block size in flash attention
+    use_tiling: bool = True #Tiling when running inference
 
 class GPT(nn.Module):
 
