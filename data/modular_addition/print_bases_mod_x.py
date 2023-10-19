@@ -51,7 +51,10 @@ def max_digits_modulo_in_base(digits, base):
 
 def convert_to_base(num, base, digits):
     if base == 1:
-        return "1" * num
+        if num == 0:
+          return str(int("0")).zfill(digits)[::-1]
+        else:
+          return str(int("1" * num)).zfill(digits)[::-1]
     elif base == 2:
         return str(bin(num)[2:].zfill(max_digits_modulo_in_base(digits, base)))[::-1]
     elif base == 4:
@@ -59,7 +62,8 @@ def convert_to_base(num, base, digits):
     elif base == 8:
         return str(oct(num)[2:].zfill(max_digits_modulo_in_base(digits, base)))[::-1]
     else:
-        return hex(num)[2:]
+        return str(hex(num)[2:].zfill(max_digits_modulo_in_base(digits, base)))[::-1]
+
 
 
 def main(args):
