@@ -9,6 +9,3 @@ __pycache__/
 *.pyc
 input.txt
 
-predictions/
-model-ckpts/
-
