@@ -5,7 +5,6 @@ cores=$(nproc)
 
 # Languages
 declare -A langs=(
-  [en]="English"
   [ar]="Arabic"
   [az]="Azerbaijani"
   [ca]="Catalan"
