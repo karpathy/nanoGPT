@@ -48,13 +48,17 @@ datasets
 The stories and summaries can be output in plain text format or as a JSON file.
 The stories can also optionally be translated to another language as well.
 
-### Install and Get Langauge Packages
+### Install and Get Language Packages
 
 ```bash
 python3 -m pip install argostranslate
 python3 tests/argos_translation_test.py --all # downloads all from english translators
-
 ```
+
+Note: It is important to download all packages first (e.g. with the
+`python3 argos_translation_test.py --all`) as attempting to install a new
+package will interrupt any concurrently running Argos processes.
+
 ### Usage
 
 After installation and getting each of the langauge packages, use the following
