@@ -10,8 +10,10 @@ create and augment datasets using fully open source tools and models.
 
 ## TOC
 
+* [TOC](#toc)
 * [Download TinyStories Dataset](#download-tinystories-dataset)
 * [Running Dataset Translation on TinyStories json](#running-dataset-translation-on-tinystories-json)
+  * [Install and Get Langauge Packages](#install-and-get-langauge-packages)
   * [Usage](#usage)
   * [Input JSON Format](#input-json-format)
   * [Output JSON Format](#output-json-format)
@@ -46,9 +48,19 @@ datasets
 The stories and summaries can be output in plain text format or as a JSON file.
 The stories can also optionally be translated to another language as well.
 
-### Usage
+### Install and Get Langauge Packages
+
+```bash
+python3 -m pip install argostranslate
+python3 tests/argos_translation_test.py --all # downloads all from english translators
+
 ```
-aug_translation.py [-h] [-i INPUT] [-o OUTPUT] [-j] [-t] [-l {es,zh,ja}]
+### Usage
+
+After installation and getting each of the langauge packages, use the following
+script to translate an entire json file:
+```
+python3 aug_translation.py [-h] [-i INPUT] [-o OUTPUT] [-j] [-t] [-l]
 ```
 
 **Required arguments:**
@@ -67,19 +79,19 @@ aug_translation.py [-h] [-i INPUT] [-o OUTPUT] [-j] [-t] [-l {es,zh,ja}]
 - Generate text and print to stdout:
 
 ```
-aug_translation.py -i data00.json
+python3 aug_translation.py -i data00.json
 ```
 
 - Generates JSON and saves to specified file:
 
 ```
-aug_translation.py -i data00.json -o data00_en.json -j
+python3 aug_translation.py -i data00.json -o data00_en.json -j
 ```
 
 - Translate stories to Spanish, output JSON format:
 
 ```
-aug_translation.py -i data00.json -o data00_es.json -j -t -l es
+python3 aug_translation.py -i data00.json -o data00_es.json -j -t -l es
 ```
 
 ### Input JSON Format
