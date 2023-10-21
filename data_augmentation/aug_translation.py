@@ -10,7 +10,7 @@ def parse_args():
     parser.add_argument("-o", "--output", help="Output JSON file")
     parser.add_argument("-j", "--json", action="store_true", help="Create json")
     parser.add_argument("-t", "--translate", action="store_true", help="Enable translation")
-    parser.add_argument('-l', "--to_code", choices=["es", "zh", "ja"], help="Translate to language code")
+    parser.add_argument('-l', "--to_code", help="Translate to language code")
 
     # Parse arguments
     return parser.parse_args()
