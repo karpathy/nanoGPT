@@ -16,13 +16,14 @@ comes up with a better simple Python solution I am all ears.
 
 import sys
 from ast import literal_eval
+from utils import printwar
 
 for arg in sys.argv[1:]:
     if '=' not in arg:
         # assume it's the name of a config file
         assert not arg.startswith('--')
         config_file = arg
-        print(f"Overriding config with {config_file}:")
+        printwar(f"Overriding config with {config_file}:")
         with open(config_file) as f:
             print(f.read())
         exec(open(config_file).read())
