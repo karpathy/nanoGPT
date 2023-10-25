@@ -31,6 +31,7 @@ def get_language_choices():
         "ja": "Japanese",
         "ko": "Korean",
         "fa": "Persian",
+        "pl": "Polish",
         "pt": "Portuguese",
         "ru": "Russian",
         "sk": "Slovak",
@@ -39,6 +40,7 @@ def get_language_choices():
         "th": "Thai",
         "tr": "Turkish",
         "uk": "Ukrainian",
+        "zh": "Mandarin",
     }
 
 
