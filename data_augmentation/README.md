@@ -13,8 +13,11 @@ create and augment datasets using fully open source tools and models.
 * [TOC](#toc)
 * [Download TinyStories Dataset](#download-tinystories-dataset)
 * [Running Dataset Translation on TinyStories json](#running-dataset-translation-on-tinystories-json)
-  * [Install and Get Langauge Packages](#install-and-get-langauge-packages)
-  * [Usage](#usage)
+  * [Install and Get Language Packages](#install-and-get-language-packages)
+  * [General Usage](#general-usage)
+  * [Bulk Translation](#bulk-translation)
+    * [Step 1 Make sure to install all language packages](#step-1-make-sure-to-install-all-language-packages)
+    * [Step 2 Run the following script](#step-2-run-the-following-script)
   * [Input JSON Format](#input-json-format)
   * [Output JSON Format](#output-json-format)
 * [Running Mistral 7B](#running-mistral-7b)
@@ -50,7 +53,10 @@ The stories can also optionally be translated to another language as well.
 
 ### Install and Get Language Packages
 
+Note: For these scripts you'll need to run in an conda env.
+
 ```bash
+conda activate <your env name>
 python3 -m pip install argostranslate
 python3 tests/argos_translation_test.py --all # downloads all from english translators
 ```
@@ -59,7 +65,7 @@ Note: It is important to download all packages first (e.g. with the
 `python3 argos_translation_test.py --all`) as attempting to install a new
 package will interrupt any concurrently running Argos processes.
 
-### Usage
+### General Usage
 
 After installation and getting each of the langauge packages, use the following
 script to translate an entire json file:
@@ -96,6 +102,31 @@ python3 aug_translation.py -i data00.json -o data00_en.json -j
 
 ```
 python3 aug_translation.py -i data00.json -o data00_es.json -j -t -l es
+```
+
+### Bulk Translation
+
+
+#### Step 1 Make sure to install all language packages
+
+In other words, installing a new language package (e.g. english to german) while
+other processes are running may interrupt those processes.
+
+First, make sure to run through all of the languages using the instructions in
+the above section [Install and Get Language Packages](#install-and-get-language-packages).
+
+#### Step 2 Run the following script
+
+To start translating all of the json files to French(for example):
+```bash
+bash argos_lang.sh fr
+```
+
+However, as you see you will need to know the two letter language code for your target language.
+
+To get a list of all languages supported and their language codes run:
+```bash
+bash argos_lang.sh -l
 ```
 
 ### Input JSON Format
