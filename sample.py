@@ -6,12 +6,15 @@ import pickle
 from contextlib import nullcontext
 import torch
 import tiktoken
+import sys
+
 from model import GPTConfig, GPT
+from utils import HiddenPrints
 
 # -----------------------------------------------------------------------------
 init_from = 'resume' # either 'resume' (from an out_dir) or a gpt2 variant (e.g. 'gpt2-xl')
-out_dir = 'out' # ignored if init_from is not 'resume'
-start = "\n" # or "<|endoftext|>" or etc. Can also specify a file, use as: "FILE:prompt.txt"
+out_dir = 'insulted_inital_test_6k' # ignored if init_from is not 'resume'
+start = "A most notable" # or "<|endoftext|>" or etc. Can also specify a file, use as: "FILE:prompt.txt"
 num_samples = 10 # number of samples to draw
 max_new_tokens = 500 # number of tokens generated in each sample
 temperature = 0.8 # 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
@@ -21,6 +24,7 @@ device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32' or 'bfloat16' or 'float16'
 compile = False # use PyTorch 2.0 to compile the model to be faster
 exec(open('configurator.py').read()) # overrides from command line or config file
+calculate_perplexity = True #CKG added, should figure out how to calc ppl @ generation time
 # -----------------------------------------------------------------------------
 
 torch.manual_seed(seed)
@@ -58,7 +62,8 @@ load_meta = False
 if init_from == 'resume' and 'config' in checkpoint and 'dataset' in checkpoint['config']: # older checkpoints might not have these...
     meta_path = os.path.join('data', checkpoint['config']['dataset'], 'meta.pkl')
     load_meta = os.path.exists(meta_path)
-if load_meta:
+# originale method of loading in a character level tokenizer from a meta.pkl
+if (load_meta and "shakespeare_insults" not in meta_path):
     print(f"Loading meta from {meta_path}...")
     with open(meta_path, 'rb') as f:
         meta = pickle.load(f)
@@ -66,6 +71,18 @@ if load_meta:
     stoi, itos = meta['stoi'], meta['itos']
     encode = lambda s: [stoi[c] for c in s]
     decode = lambda l: ''.join([itos[i] for i in l])
+# Alt method, for insults & the custom tokenizer
+elif (load_meta and "shakespeare_insults" in meta_path):
+    print(f"Loading in the 'shakespeare_insults' tokenizer, from {meta_path}...")
+    modpath = meta_path.replace("meta.pkl", "") #dir which contains the tokenizer data + class def
+    tkznrpath = meta_path.replace("meta.pkl", "insults-tokenizer.pkl")
+    # this should not see the light of the good lord
+    with HiddenPrints():
+        sys.path.insert(1, modpath)
+        from prepare import tokenizer
+        # print(tokenizer.__dict__)
+    encode = tokenizer.__call__
+    decode = tokenizer.decode
 else:
     # ok let's assume gpt-2 encodings by default
     print("No meta.pkl found, assuming GPT-2 encodings...")
@@ -84,6 +101,8 @@ x = (torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...])
 with torch.no_grad():
     with ctx:
         for k in range(num_samples):
+
             y = model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k)
             print(decode(y[0].tolist()))
             print('---------------')
+            exit(42) #ckg added, early stop
