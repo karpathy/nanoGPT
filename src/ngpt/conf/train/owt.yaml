@@ -1,4 +1,5 @@
 _target_: configs.TrainConfig
+
 framework: pytorch          # ML framework to use: one of 'pytorch', 'tensorflow'
 backend: 'DDP'              # Backend to use for distributed training
 # ds_config_path: null
@@ -9,15 +10,13 @@ ngpus: null
 precision: null
 use_wandb: true
 wandb_project: nanoGPT
-out_dir: 'out'
 eval_interval: 2000
-log_interval: 5
+log_interval: 20
 eval_iters: 200
 eval_only: false
 always_save_checkpoint: false
 init_from: scratch
-dataset: openwebtext
-max_iters: 600000
+max_iters: 50000
 warmup_iters: 2000
 dtype: bfloat16
 compile: true
