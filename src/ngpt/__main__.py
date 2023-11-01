@@ -15,27 +15,31 @@ import os
 import sys
 
 import hydra
+from pathlib import Path
 from omegaconf import OmegaConf
 from enrich import get_logger
-# import logging
 
 from hydra.utils import instantiate
 from omegaconf.dictconfig import DictConfig
 
 from ezpz.dist import setup, setup_wandb
-from ngpt.configs import ExperimentConfig
-# from ezpz.configs import TrainConfig, git_ds_info
+from ngpt.configs import ExperimentConfig, PROJECT_ROOT
 from ngpt.trainer import Trainer
 
-# log = logging.getLogger(__name__)
 log = get_logger(__name__, level="INFO")
+
+
+def include_file(f):
+    fp = Path(f)
+    return (
+        'venv' not in fp.as_posix()
+        and fp.suffix in ['.py', '.log', '.yaml']
+    )
 
 
 @hydra.main(version_base=None, config_path='./conf', config_name='config')
 def main(cfg: DictConfig) -> int:
-    log.info(OmegaConf.to_yaml(cfg))
     config: ExperimentConfig = instantiate(cfg)
-    # assert isinstance(config, (ExperimentConfig, ngpt.configs.ExperimentConfig)
     rank = setup(
         framework=config.train.framework,
         backend=config.train.backend,
@@ -45,12 +49,17 @@ def main(cfg: DictConfig) -> int:
         log.setLevel("CRITICAL")
     else:
         from rich import print_json
-        print_json(config.to_json())
         if config.train.use_wandb:
             setup_wandb(
                 project_name=config.train.wandb_project,
                 config=cfg,
             )
+        if wandb.run is not None:
+            wandb.run.log_code(PROJECT_ROOT, include_fn=include_file)
+            wandb.run.config['tokens_per_iter'] = config.tokens_per_iter
+            wandb.run.config['samples_per_iter'] = config.samples_per_iter
+        log.info(OmegaConf.to_yaml(cfg))
+        print_json(config.to_json())
     log.info(f'Output dir: {os.getcwd()}')
     trainer = Trainer(config)
     trainer.train()
@@ -61,7 +70,6 @@ def main(cfg: DictConfig) -> int:
 
 if __name__ == '__main__':
     import wandb
-    # wandb.require(experiment='service')
     rank = main()
     if wandb.run is not None:
         wandb.finish(0)
