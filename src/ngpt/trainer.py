@@ -40,10 +40,11 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 # from torch.distributed import init_process_group, destroy_process_group
 
 from ngpt.model import GPT
+from rich.text import Text
 from enrich import get_logger
 # from ezpz import get_local_rank, get_rank, get_world_size
 from ezpz import get_rank, get_world_size
-from ngpt.configs import ExperimentConfig, ModelConfig
+from ngpt.configs import ExperimentConfig, ModelConfig, add_to_ckpts_file
 # from ngpt.configs import ModelConfig, TrainConfig, Config
 
 # log = logging.getLogger(__name__)
@@ -395,6 +396,7 @@ class Trainer:
             ckpt,
             Path(os.getcwd()).joinpath('ckpt.pt').as_posix()
         )
+        add_to_ckpts_file(Path(os.getcwd()))
 
     def train(self):
         x, y = self.get_batch('train')
@@ -404,7 +406,7 @@ class Trainer:
         assert isinstance(raw_model, GPT)
         running_mfu = -1.0
         # while True:
-        train_iterable = trange(self.config.train.max_iters, disable=(RANK != 0))
+        train_iterable = trange(self.config.train.max_iters, disable=(WORLD_SIZE>1))
         output = {'x': x, 'y': y}
         t0 = time.perf_counter()
         losses = {}
@@ -422,7 +424,14 @@ class Trainer:
             output = self.train_step(x=output['x'], y=output['y'])
             t1 = time.perf_counter()
             dt = t1 - t0
+            tokens_per_sec = self.config.tokens_per_iter / dt
+            samples_per_sec = self.config.samples_per_iter / dt
             t0 = t1
+            output['timers'] |= {
+                'dt_iter': dt,
+                'tokens_per_sec': tokens_per_sec,
+                'samples_per_sec': samples_per_sec,
+            }
             postfix = output['metrics']
             postfix |= output['timers']
             postfix['elapsed'] = dt
@@ -447,27 +456,27 @@ class Trainer:
                     )
                 current = {
                     'step': self.config.iter_num,
+                    'loss': lossf,
+                    'dt': dt * 1000,
+                    # 'dt(ms)': dt * 1000,
+                    # 'dt(×10³)': dt * 1000,
+                    'sps': samples_per_sec,
+                    'mfu': running_mfu * 100,
                     'train_loss': losses['train'].item(),
                     'val_loss': losses['val'],
-                    'dt': dt,
-                    'mfu': running_mfu
                 }
                 summary = summarize_dict(current)
-                log.info(summary)
-                # mstr = ', '.join([
-                #     f'step: {self.config.iter_num}',
-                #     f'train_loss: {losses["train"].item():.4f}',
-                #     f'val_loss: {losses["val"]:.4f}',
-                #     f'dt: {dt*1000:.4f}ms',
-                #     f'mfu: {running_mfu*100:.2f}%'
-                # ])
-                # log.info(mstr)
+                log.info(Text(summary))
                 if wandb.run is not None:
                     losses |= {
                         'lossf': lossf,
+                        'mfu': running_mfu * 100,
                         'iter': self.config.iter_num,
                     }
                     losses['lossf'] = lossf
                     losses['iter'] = self.config.iter_num
-                    wandb.log({'losses': losses}, commit=False)
-                    wandb.log({'train': postfix})
+                    wandb.run.log({
+                        'losses': losses,
+                        'metrics': output['metrics'],
+                        'timers': output['timers']
+                    })
