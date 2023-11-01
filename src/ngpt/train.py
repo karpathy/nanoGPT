@@ -32,10 +32,10 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from model import GPT
+from ngpt.model import GPT
 from enrich import get_logger
 from ezpz import setup_torch
-from config import TrainConfig, ModelConfig, OptimizerConfig
+from ngpt.configs import TrainConfig, ModelConfig, OptimizerConfig
 
 # log = logging.getLogger(__name__)
 log = get_logger(__name__, level="INFO")

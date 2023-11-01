@@ -1,0 +1,4 @@
+_target_: configs.DataConfig
+
+dataset: openwebtext
+out_dir: 'out-openwebtext'

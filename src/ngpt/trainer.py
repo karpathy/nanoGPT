@@ -39,16 +39,18 @@ from torch.cuda.amp.grad_scaler import GradScaler
 from torch.nn.parallel import DistributedDataParallel as DDP
 # from torch.distributed import init_process_group, destroy_process_group
 
-from model import GPT
+from ngpt.model import GPT
 from enrich import get_logger
-from ezpz import get_local_rank, get_rank, get_world_size
-from configs import ModelConfig, TrainConfig
+# from ezpz import get_local_rank, get_rank, get_world_size
+from ezpz import get_rank, get_world_size
+from ngpt.configs import ExperimentConfig, ModelConfig
+# from ngpt.configs import ModelConfig, TrainConfig, Config
 
 # log = logging.getLogger(__name__)
 log = get_logger(__name__, level="INFO")
 
 # RANK = setup_torch(backend='DDP')
-LOCAL_RANK = get_local_rank()
+# LOCAL_RANK = get_local_rank()
 RANK = get_rank()
 WORLD_SIZE = get_world_size()
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -69,32 +71,32 @@ def summarize_dict(d: dict) -> str:
 
 
 class Trainer:
-    def __init__(self, config: TrainConfig):
+    def __init__(self, config: ExperimentConfig):
         self.config = config
         self.ckpt = None
         self._gas = self.config.optimizer.gradient_accumulation_steps
         self._lr = self.config.optimizer.learning_rate
         self._min_lr = self.config.optimizer.min_lr
         self._diters = self.config.optimizer.lr_decay_iters
-        self._witers = self.config.warmup_iters
-        if self.config.init_from == 'scratch':
+        self._witers = self.config.train.warmup_iters
+        if self.config.train.init_from == 'scratch':
             log.info('Initializing a new model from scratch')
             model = GPT(self.config.model)
-        elif self.config.init_from == 'resume':
+        elif self.config.train.init_from == 'resume':
             model, ckpt = self.restore_from_ckpt()
             self.ckpt = ckpt
             self.config.set_iter_num(ckpt.get('iter_num', 0))
             self.config.set_best_val_loss(ckpt.get('best_val_loss', 1e9))
-        elif self.config.init_from.startswith('gpt2'):
-            log.info(f'Initializing from OpenAI GPT-2 Weights: {self.config.init_from}')
+        elif self.config.train.init_from.startswith('gpt2'):
+            log.info(f'Initializing from OpenAI GPT-2 Weights: {self.config.train.init_from}')
             override_args = {'dropout': self.config.model.dropout}
-            model = GPT.from_pretrained(self.config.init_from, override_args)
+            model = GPT.from_pretrained(self.config.train.init_from, override_args)
             model_cfg = {}
             for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
                 model_cfg[k] = getattr(model.config, k)
             self.config.reset_model_config(ModelConfig(**model_cfg))
         else:
-            raise ValueError(f'Unexpected `init_from` = {self.config.init_from}. Exiting!')
+            raise ValueError(f'Unexpected `init_from` = {self.config.train.init_from}. Exiting!')
         self.model = model
         self.model.to(DEVICE)
         assert isinstance(self.model, GPT)
@@ -103,7 +105,7 @@ class Trainer:
             self.model.crop_block_size(self.config.model.block_size)
             self.config.model.set_block_size(self.config.model.block_size)
         # self.model.to(self.config.device)
-        self.scaler = GradScaler(enabled=(self.config.dtype == 'float16'))
+        self.scaler = GradScaler(enabled=(self.config.train.dtype == 'float16'))
         self.optimizer = self.model.configure_optimizers(
             weight_decay=self.config.optimizer.weight_decay,
             learning_rate=self.config.optimizer.learning_rate,
@@ -113,7 +115,7 @@ class Trainer:
             ),
             device_type=self.config.device_type,
         )
-        if self.config.init_from == 'resume':
+        if self.config.train.init_from == 'resume':
             assert (
                 self.ckpt is not None
                 and isinstance(self.ckpt, dict)
@@ -121,11 +123,11 @@ class Trainer:
             )
             self.optimizer.load_state_dict(self.ckpt['optimizer'])
             self.ckpt = None  # free up memory
-        if self.config.compile:
+        if self.config.train.compile:
             # unoptimized_model = self.model
             self.model = torch.compile(model)
         # if WORLD_SIZE > 1:
-        self.model = DDP(model, device_ids=get_local_rank())
+        self.model = DDP(model)  # , device_ids=get_local_rank())
 
     def get_batch(self, split: str) -> tuple[torch.Tensor, torch.Tensor]:
         data = self.config.train_data if split == 'train' else self.config.val_data
@@ -147,11 +149,11 @@ class Trainer:
             ]
         )
         if self.config.device_type == 'cuda':
-            x = x.pin_memory().to(self.config.device, non_blocking=True)
-            y = y.pin_memory().to(self.config.device, non_blocking=True)
+            x = x.pin_memory().to(self.config.train.device, non_blocking=True)
+            y = y.pin_memory().to(self.config.train.device, non_blocking=True)
         else:
-            x = x.to(self.config.device)
-            y = y.to(self.config.device)
+            x = x.to(self.config.train.device)
+            y = y.to(self.config.train.device)
         return x, y
 
     def get_lr(self, it: int) -> float:
@@ -169,8 +171,8 @@ class Trainer:
         out = {}
         self.model.eval()
         for split in ['train', 'val']:
-            losses = torch.zeros(self.config.eval_iters)
-            for k in range(self.config.eval_iters):
+            losses = torch.zeros(self.config.train.eval_iters)
+            for k in range(self.config.train.eval_iters):
                 x, y = self.get_batch(split)
                 with self.config.ctx:
                     _, loss = self.model(x, y)
@@ -184,11 +186,11 @@ class Trainer:
             self,
             ckpt_dir: Optional[str | PathLike] = None
     ) -> tuple[torch.nn.Module, dict]:
-        log.info(f'Resuming training from {self.config.out_dir}')
-        ckpt_dir = str(self.config.out_dir) if ckpt_dir is None else ckpt_dir
+        log.info(f'Resuming training from {self.config.data.out_dir}')
+        ckpt_dir = str(self.config.data.out_dir) if ckpt_dir is None else ckpt_dir
         assert ckpt_dir is not None
         ckpt_path = Path(ckpt_dir).joinpath('ckpt.pt')
-        checkpoint = torch.load(ckpt_path, map_location=self.config.device)
+        checkpoint = torch.load(ckpt_path, map_location=self.config.train.device)
         ckpt_model = checkpoint['model_args']
         model_config = ModelConfig(
             n_layer=ckpt_model['n_layer'],
@@ -312,28 +314,27 @@ class Trainer:
             Path(os.getcwd()).joinpath('ckpt.pt').as_posix()
         )
 
-
     def train(self):
         x, y = self.get_batch('train')
         t0 = time.perf_counter()
         # local_iter_num = 0
-        raw_model = self.model.module if WORLD_SIZE > 1 else self.model
+        raw_model = self.model.module  #  if WORLD_SIZE > 1 else self.model
         assert isinstance(raw_model, GPT)
         running_mfu = -1.0
         # while True:
-        train_iterable = trange(self.config.max_iters, disable=(RANK != 0))
+        train_iterable = trange(self.config.train.max_iters, disable=(RANK != 0))
         output = {'x': x, 'y': y}
         t0 = time.perf_counter()
         losses = {}
         for train_iter in train_iterable:
-            if self.config.iter_num == 0 and self.config.eval_only:
+            if self.config.iter_num == 0 and self.config.train.eval_only:
                 return
-            if self.config.iter_num % self.config.eval_interval == 0 and RANK == 0:
+            if self.config.iter_num % self.config.train.eval_interval == 0 and RANK == 0:
                 losses = self.estimate_loss()
                 if (
                     self.config.iter_num > 0
                     and (losses['val'] < self.config.best_val_loss
-                         or self.config.always_save_checkpoint)
+                         or self.config.train.always_save_checkpoint)
                 ):
                     self.save_ckpt(raw_model)
             output = self.train_step(x=output['x'], y=output['y'])
@@ -349,7 +350,7 @@ class Trainer:
             # 'x': x,
             # 'y': y,
             if (
-                    self.config.iter_num % self.config.log_interval == 0
+                    self.config.iter_num % self.config.train.log_interval == 0
                     and (RANK == 0)
             ):
                 lossf = output['loss'].item() * self._gas

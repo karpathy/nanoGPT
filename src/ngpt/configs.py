@@ -4,7 +4,7 @@ nanoGPT/config.py
 from __future__ import absolute_import, annotations, division, print_function
 from abc import ABC, abstractmethod
 from contextlib import nullcontext
-from dataclasses import dataclass, asdict, field
+from dataclasses import dataclass, asdict
 import json
 import os
 from pathlib import Path
@@ -18,6 +18,7 @@ import numpy as np
 import rich.repr
 import torch
 from hydra.core.config_store import ConfigStore
+from transformers import data
 
 log = get_logger(__name__)
 
@@ -32,13 +33,13 @@ else:
 # -- Configure useful Paths -----------------------
 # warnings.filterwarnings('ignore')
 HERE = Path(os.path.abspath(__file__)).parent
-PROJECT_DIR = HERE
+PROJECT_DIR = HERE.parent.parent
 PROJECT_ROOT = PROJECT_DIR
 CONF_DIR = HERE.joinpath('conf')
-DATA_DIR = HERE.joinpath('data')
+DATA_DIR = PROJECT_DIR.joinpath('data')
 CKPT_DIR = HERE.joinpath('ckpts')
 DS_CONFIG_PATH = CONF_DIR.joinpath('ds_config.yaml')
-LOGS_DIR = PROJECT_DIR.joinpath('logs')
+LOGS_DIR = HERE.joinpath('logs')
 OUTPUTS_DIR = HERE.joinpath('outputs')
 # QUARTO_OUTPUTS_DIR = PROJECT_DIR.joinpath('qmd', 'outputs')
 
@@ -218,13 +219,39 @@ class OptimizerConfig(BaseConfig):
 
 
 @dataclass
+class DataConfig(BaseConfig):
+    out_dir: str = 'out'
+    dataset: str = 'openwebtext'
+
+    def to_str(self):
+        return f'dset-{self.dataset}'
+
+    def __post_init__(self):
+        self.data_dir = DATA_DIR.joinpath(self.dataset)
+        self.ckpt_dir = CKPT_DIR.joinpath(self.out_dir)
+        self.meta_path = self.data_dir.joinpath('meta.pkl')
+        self.meta_vocab_size = None
+        if self.meta_path.is_file():
+            with self.meta_path.open('rb') as f:
+                meta = pickle.load(f)
+            self.meta_vocab_size = meta['vocab_size']
+
+
+@dataclass
 class TrainConfig(BaseConfig):
-    model: ModelConfig
-    optimizer: OptimizerConfig
+    # model: ModelConfig
+    # optimizer: OptimizerConfig
+    # data: DataConfig
     framework: str = "pytorch"
     backend: str = "DDP"
+    device: Optional[str] = None
+    seed: Optional[int] = None
+    port: Optional[str] = None
+    # ds_config_path: Optional[os.PathLike] = None
+    # wandb_project_name: Optional[str] = None
+    precision: Optional[str] = None
+    ngpus: Optional[int] = None
     use_wandb: bool = True
-    out_dir: str = 'out'
     eval_interval: int = 2000
     log_interval: int = 1
     eval_iters: int = 200
@@ -234,27 +261,35 @@ class TrainConfig(BaseConfig):
     # wandb_log: bool = True
     wandb_project: str = 'nanoGPT'
     # wandb_run_name: str = 'gpt2'
-    dataset: str = 'openwebtext'
     max_iters: int = 600000
     warmup_iters: int = 2000
     # backend: str = 'nccl'
     dtype: str = 'bfloat16'
     compile: bool = True
-    device: Optional[str] = None
-    seed: Optional[int] = None
-    port: Optional[str] = None
-    # ds_config_path: Optional[os.PathLike] = None
-    # wandb_project_name: Optional[str] = None
-    precision: Optional[str] = None
-    ngpus: Optional[int] = None
 
     def to_str(self):
         return '_'.join([
             self.wandb_project,
             # self.wandb_run_name,
-            f'dset-{self.dataset}',
+            # f'dset-{self.dataset}',
             f'dtype-{self.dtype}',
             f'init-{self.init_from}',
+        ])
+
+
+@dataclass
+class ExperimentConfig(BaseConfig):
+    train: TrainConfig
+    model: ModelConfig
+    data: DataConfig
+    optimizer: OptimizerConfig
+
+    def to_str(self):
+        return '_'.join([
+            self.train.to_str(),
+            self.model.to_str(),
+            self.data.to_str(),
+            self.optimizer.to_str(),
         ])
 
     def reset_model_config(self, model_config: ModelConfig):
@@ -274,6 +309,10 @@ class TrainConfig(BaseConfig):
         )
         self.best_val_loss = best_val_loss
 
+    # def build_model(self, model_config: ModelConfig) -> torch.nn.Module:
+    #         self.model = GPT(model_config)
+    #         # gptconf = GPTConfig()
+    #
     def __post_init__(self):
         self.rank = RANK
         self.world_size = get_world_size()
@@ -287,34 +326,26 @@ class TrainConfig(BaseConfig):
         log.info(f'Tokens per iteration: {self.tokens_per_iter:,}')
         self.iter_num = 0
         self.best_val_loss = 1e9
-        self.data_dir = DATA_DIR.joinpath(self.dataset)
-        self.ckpt_dir = CKPT_DIR.joinpath(self.out_dir)
-        self.meta_path = self.data_dir.joinpath('meta.pkl')
-        self.meta_vocab_size = None
-        if self.meta_path.is_file():
-            with self.meta_path.open('rb') as f:
-                meta = pickle.load(f)
-            self.meta_vocab_size = meta['vocab_size']
         if self.model.vocab_size is None:
             self.model.vocab_size = (
-                self.meta_vocab_size
-                if self.meta_vocab_size is not None
+                self.data.meta_vocab_size
+                if self.data.meta_vocab_size is not None
                 else 50304
             )
         self.train_data = np.memmap(
-            self.data_dir.joinpath('train.bin'),
+            self.data.data_dir.joinpath('train.bin'),
             dtype=np.uint16,
             mode='r'
         )
         self.val_data = np.memmap(
-            self.data_dir.joinpath('val.bin'),
+            self.data.data_dir.joinpath('val.bin'),
             dtype=np.uint16,
             mode='r'
         )
-        self._out_dir = Path(self.out_dir)
+        self._out_dir = Path(self.data.out_dir)
         self._out_dir.mkdir(parents=True, exist_ok=True)
         self.device_type = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.ptdtype = PT_DTYPES[self.dtype]
+        self.ptdtype = PT_DTYPES[self.train.dtype]
         self.ctx = (
             nullcontext() if self.device_type == 'cpu'
             else torch.amp.autocast(
@@ -322,20 +353,25 @@ class TrainConfig(BaseConfig):
                 dtype=self.ptdtype
             )
         )
-        if self.init_from == 'scratch':
+        if self.train.init_from == 'scratch':
             log.info('Initializing a new model from scratch')
-            if self.meta_vocab_size is None:
+            if self.data.meta_vocab_size is None:
                 log.info(
                     'Defaulting to vocab_size of GPT-2 to 50304 '
                     '(50257 rounded up for efficiency)'
                 )
-            self.vocab_size = self.meta_vocab_size if self.meta_vocab_size is not None else 50304
+            self.vocab_size = (
+                self.data.meta_vocab_size 
+                if self.data.meta_vocab_size is not None 
+                else 50304
+            )
         #     self.model = GPT(self.model_config)
 
-    # def build_model(self, model_config: ModelConfig) -> torch.nn.Module:
-    #         self.model = GPT(model_config)
-    #         # gptconf = GPTConfig()
-    #
 
 cs = ConfigStore.instance()
+cs.store(name='experiment_config', node=ExperimentConfig)
 cs.store(name='train_config', node=TrainConfig)
+cs.store(name='model_config', node=ModelConfig)
+cs.store(name='data_config', node=DataConfig)
+cs.store(name='optimizer_config', node=OptimizerConfig)
+# cs.store(name='train_config', node=TrainConfig)

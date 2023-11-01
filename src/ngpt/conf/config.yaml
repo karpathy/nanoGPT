@@ -1,0 +1,30 @@
+---
+# @package _global_
+_target_: configs.experimentConfig
+
+# train: owt.yaml
+# data: owt.yaml
+# model: default.yaml
+# optimizer: default.yaml
+
+defaults:
+  - _self_
+  - train: owt.yaml
+  - data: owt.yaml
+  - model: default.yaml
+  - optimizer: default.yaml
+  - logdir: default.yaml    # Defines where to run experiment using info from cfg
+  - override hydra/hydra_logging: colorlog
+  - override hydra/job_logging: custom  # colorlog
+  # - override hydra/launcher: joblib
+  # https://hydra.cc/docs/tutorials/basic/running_your_app/logging/
+  # use this to set level of only chosen command line loggers to 'DEBUG'
+  # verbose: [src.train, src.utils]
+  # - debug: true
+  # - verbose: true
+# debug: true
+hydra:
+  # verbose: true
+  job:
+    chdir: true
+...

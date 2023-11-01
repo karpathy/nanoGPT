@@ -1,0 +1,10 @@
+_target_: configs.ModelConfig
+
+n_layer: 6
+n_head: 6
+n_embd: 384
+batch_size: 64
+block_size: 256
+dropout: 0.2
+bias: false
+vocab_size: null

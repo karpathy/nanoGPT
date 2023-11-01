@@ -1,0 +1,4 @@
+_target_: configs.DataConfig
+
+dataset: shakespeare_char
+out_dir: 'out-shakespeare-char'
