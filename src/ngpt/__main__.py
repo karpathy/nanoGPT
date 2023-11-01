@@ -60,9 +60,9 @@ def main(cfg: DictConfig) -> int:
 
 
 if __name__ == '__main__':
-    # import wandb
+    import wandb
     # wandb.require(experiment='service')
     rank = main()
-    # if wandb.run is not None:
-    #     wandb.finish(0)
+    if wandb.run is not None:
+        wandb.finish(0)
     sys.exit(0)
