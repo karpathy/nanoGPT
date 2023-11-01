@@ -21,7 +21,7 @@ do
   # Loop datasets
   for i in {00..49}
   do
-    input="./datasets/json_stories/data${i}.json"
+    input="./datasets/json_stories/archive/data${i}.json"
     output="./datasets/json_stories/${lang}/data${i}_${lang}.json"
 
     # Check if already translated
@@ -34,7 +34,7 @@ do
       fi
 
       # Construct command
-      ./venv/bin/python3 aug_translation.py -i ${input} -o ${output} -j -l ${lang}&
+      python3 aug_translation.py -i ${input} -o ${output} -j -l ${lang}&
       processes=$((processes+1))
       echo "number processes is $processes"
 
