@@ -346,13 +346,20 @@ class ExperimentConfig(BaseConfig):
         self._out_dir.mkdir(parents=True, exist_ok=True)
         self.device_type = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.ptdtype = PT_DTYPES[self.train.dtype]
+        # self.device_type == 'cpu'
         self.ctx = (
-            nullcontext() if self.device_type == 'cpu'
-            else torch.amp.autocast(
+            nullcontext() if not torch.cuda.is_available()
+            else torch.autocast(  # type:ignore
+                dtype=self.ptdtype,
+                # enabled=self.enable_autocast,
                 device_type=self.device_type,
-                dtype=self.ptdtype
             )
         )
+        log.info(f'Using {self.ctx}')
+        # else torch.amp.autocast(
+        #     device_type=self.device_type,
+        #     dtype=self.ptdtype
+        # )
         if self.train.init_from == 'scratch':
             log.info('Initializing a new model from scratch')
             if self.data.meta_vocab_size is None:
