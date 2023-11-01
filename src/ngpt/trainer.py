@@ -20,7 +20,7 @@ from os import PathLike
 
 import os
 import wandb
-from typing import Optional, Union
+from typing import Any, Optional, Union
 import time
 from tqdm.auto import trange
 import math
@@ -68,6 +68,85 @@ def format_pair(k: str, v: ScalarLike) -> str:
 
 def summarize_dict(d: dict) -> str:
     return ' '.join([format_pair(k, v) for k, v in d.items()])
+
+
+def grab_tensor(x: Any) -> np.ndarray | ScalarLike | None:
+    if x is None:
+        return None
+    if isinstance(x, (int, float, bool, np.floating)):
+        return x
+    if isinstance(x, list):
+        if isinstance(x[0], torch.Tensor):
+            return grab_tensor(torch.stack(x))
+        elif isinstance(x[0], np.ndarray):
+            return np.stack(x)
+        else:
+            import tensorflow as tf
+            if isinstance(x[0], tf.Tensor):
+                return grab_tensor(tf.stack(x))
+    elif isinstance(x, np.ndarray):
+        return x
+    elif isinstance(x, torch.Tensor):
+        return x.detach().cpu().numpy()
+    elif callable(getattr(x, 'numpy', None)):
+        assert callable(getattr(x, 'numpy'))
+        return x.numpy()
+    raise ValueError
+
+
+def _average(val):
+    if isinstance(val, (list, tuple)):
+        if isinstance(val[0], torch.Tensor):
+            val = grab_tensor(torch.stack(val))
+        elif isinstance(val, np.ndarray):
+            val = np.stack(val)
+        else:
+            val = val
+    if isinstance(val, torch.Tensor):
+        val = grab_tensor(val)
+    # try:
+    #     self.history[key].append(val)
+    # except KeyError:
+    #     self.history[key] = [val]
+
+    # ScalarLike = Union[float, int, bool, np.floating]
+    if isinstance(val, (float, int, bool, np.floating, np.integer)):
+        return val
+    # if (
+    #         isinstance(
+    #             val,
+    #             (float, int, bool, np.floating, np.integer)
+    #         )
+    #         # or key in ['era', 'epoch']
+    #         # or 'step' in key
+    # ):
+    #     # assert val is not None and isinstance(val, ScalarLike)
+    #     return val
+    try:
+        avg = np.mean(val).real  # type: ignore
+        assert isinstance(avg, np.floating)
+        return avg
+    except Exception:
+        log.exception(f'Failed to average {val}')
+        log.warning('Returning val as is')
+        return val
+
+
+def average_dict(d: dict) -> dict:
+    avgs = {}
+    avg = 0.0
+    for key, val in d.items():
+        if val is None:
+            continue
+        if isinstance(val, dict):
+            for k, v in val.items():
+                kk = f'{key}/{k}'
+                avg = _average(v)
+                avgs[kk] = avg
+        else:
+            avg = _average(val)
+            avgs[key] = avg
+    return avgs
 
 
 class Trainer:
@@ -347,7 +426,7 @@ class Trainer:
             postfix = output['metrics']
             postfix |= output['timers']
             postfix['elapsed'] = dt
-            train_iterable.set_postfix(postfix)
+            # train_iterable.set_postfix(postfix)
             # 'metrics': metrics,
             # 'timers': timers,
             # 'x': x,
@@ -366,14 +445,23 @@ class Trainer:
                         mfu if running_mfu == -1.0
                         else 0.9 * running_mfu + 0.1 * mfu
                     )
-                mstr = ', '.join([
-                    f'step: {self.config.iter_num}',
-                    f'train_loss: {losses["train"]:.4f}',
-                    f'val_loss: {losses["val"]:.4f}',
-                    f'dt: {dt*1000:.4f}ms',
-                    f'mfu: {running_mfu*100:.2f}%'
-                ])
-                log.info(mstr)
+                current = {
+                    'step': self.config.iter_num,
+                    'train_loss': losses['train'].item(),
+                    'val_loss': losses['val'],
+                    'dt': dt,
+                    'mfu': running_mfu
+                }
+                summary = summarize_dict(current)
+                log.info(summary)
+                # mstr = ', '.join([
+                #     f'step: {self.config.iter_num}',
+                #     f'train_loss: {losses["train"].item():.4f}',
+                #     f'val_loss: {losses["val"]:.4f}',
+                #     f'dt: {dt*1000:.4f}ms',
+                #     f'mfu: {running_mfu*100:.2f}%'
+                # ])
+                # log.info(mstr)
                 if wandb.run is not None:
                     losses |= {
                         'lossf': lossf,
