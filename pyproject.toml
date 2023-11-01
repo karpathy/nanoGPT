@@ -1,0 +1,113 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ngpt"
+description = ''
+readme = "README.md"
+requires-python = ">=3.8"
+license = ""
+keywords = []
+authors = [
+  { name = "Sam Foreman", email = "saforem2@gmail.com" },
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = [
+  "mpi4py",
+  "torch",
+  # "bokeh",
+  # "h5py",
+  # "pillow",
+  # "xarray",
+  # "celerite",
+  "joblib",
+  "rich",
+  "hydra-core",
+  # "wandb",
+  # "arviz",
+  "hydra-colorlog",
+  "transformers",
+  "datasets",
+  "tiktoken",
+  "wandb",
+  "tqdm",
+  # "ipympl",
+  "ezpz @ git+https://github.com/saforem2/ezpz",
+  "enrich @ git+https://github.com/saforem2/enrich",
+]
+
+dynamic = ["version"]
+
+[project.optional-dependencies]
+dev = [
+  "pudb",
+  "matplotx",
+  "nodejs",
+  "pynvim",
+  "neovim",
+  "pyright",
+  "ruff",
+  "ruff-lsp",
+  "ipython",
+  "ptipython",
+]
+
+[project.urls]
+Documentation = "https://github.com/saforem2/nanoGPT"
+Issues = "https://github.com/saforem2/nanoGPT/issues"
+Source = "https://github.com/saforem2/nanoGPT"
+
+[tool.hatch.version]
+path = "src/ngpt/__about__.py"
+
+[tool.hatch.build]
+exclude = [
+  "src/ngpt/outputs/",
+  "**old**",
+]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+
+[tool.hatch.build.targets.sdist]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ngpt"]
+
+[tool.hatch.envs.default]
+dependencies = [
+  "pytest",
+  "pytest-cov",
+]
+[tool.hatch.envs.default.scripts]
+cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/ngpt --cov=tests"
+no-cov = "cov --no-cov"
+
+[[tool.hatch.envs.test.matrix]]
+python = ["38", "39", "310", "311"]
+
+[tool.coverage.run]
+branch = true
+parallel = true
+omit = [
+  "ngpt/__about__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+]
