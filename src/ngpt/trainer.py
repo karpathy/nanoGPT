@@ -353,7 +353,7 @@ class Trainer:
                     self.config.iter_num % self.config.train.log_interval == 0
                     and (RANK == 0)
             ):
-                lossf = output['loss'].item() * self._gas
+                lossf = output['metrics']['loss'].item() * self._gas
                 if train_iter >= 5:
                     mfu = raw_model.estimate_mfu(
                         (self.config.model.batch_size * self._gas),
