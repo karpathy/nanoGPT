@@ -98,8 +98,11 @@ class Trainer:
         else:
             raise ValueError(f'Unexpected `init_from` = {self.config.train.init_from}. Exiting!')
         self.model = model
-        self.model.to(DEVICE)
+        if torch.cuda.is_available():
+            self.model.cuda()
+
         assert isinstance(self.model, GPT)
+        assert issubclass(GPT, torch.nn.Module)
         # model_block_size = int(self.model.config.block_size)
         if self.config.model.block_size < self.model.config.block_size:
             self.model.crop_block_size(self.config.model.block_size)
@@ -149,11 +152,11 @@ class Trainer:
             ]
         )
         if self.config.device_type == 'cuda':
-            x = x.pin_memory().to(self.config.train.device, non_blocking=True)
-            y = y.pin_memory().to(self.config.train.device, non_blocking=True)
+            x = x.pin_memory().to(self.config.device_type, non_blocking=True)
+            y = y.pin_memory().to(self.config.device_type, non_blocking=True)
         else:
-            x = x.to(self.config.train.device)
-            y = y.to(self.config.train.device)
+            x = x.to(self.config.device_type)
+            y = y.to(self.config.device_type)
         return x, y
 
     def get_lr(self, it: int) -> float:
