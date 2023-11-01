@@ -1,0 +1,66 @@
+---
+dump_state: false
+gradient_accumulation_steps: 1
+wall_clock_breakdown: true
+# prescale_gradients: false
+# zero_allow_untested_optimizer: true
+# optimizer:
+#   type: OneBitAdam
+#   params:
+#     lr: 0.0004
+# optimizer:
+#   type: Adam
+#   params:
+#     lr: 0.001
+# optimizer:
+#   type: AdamW
+#   params:
+#     lr: 0.001
+# flops_profiler:
+#   enabled: false
+#   profile_step: 1
+#   module_depth: -1
+#   top_modules: 1
+#   detailed: false
+#   output_file: null
+fp16:
+  enabled: false
+  # min_loss_scale: 0
+# bf16:
+#   enabled: false
+# comms_logger:
+#   enabled: false
+#   verbose: false
+#   prof_all: false
+#   debug: false
+wandb:
+  enabled: false
+# autotuning:
+#   enabled: false
+#   arg_mappings:
+#     train_micro_batch_size_per_gpu: --per_device_train_batch_size
+#     gradient_accumulation_steps: --gradient_accumulation_steps
+# checkpo
+# zero_optimization:
+#   # offload_optimizer:
+#   #   device: cpu
+#   #   pin_memory: true
+#   # allgather_bucket_size: 5E8
+#   # reduce_bucket_size: 5e8
+#   stage: 0
+#   allgather_partitions: true
+#   reduce_scatter: true
+#   overlap_comm: true
+#   contiguous_gradients: true
+#   offload_param:
+#     # nvme_path: /raid/scratch
+#     device: cpu
+
+# activation_checkpointing:
+#   partition_activations: true
+#   cpu_checkpointing: true
+#   contigutous_memory_optimization: true
+#   number_checkpoints: null
+#   synchronize_checkpoint_boundary: false
+#   profile: true
+...
