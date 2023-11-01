@@ -1,3 +1,8 @@
+.jukit/
+cache/
+outputs/
+venvs/
+wandb/
 .DS_Store
 .idea
 .ipynb_checkpoints/
