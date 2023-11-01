@@ -17,7 +17,9 @@ create and augment datasets using fully open source tools and models.
   * [General Usage](#general-usage)
   * [Bulk Translation](#bulk-translation)
     * [Step 1 Make sure to install all language packages](#step-1-make-sure-to-install-all-language-packages)
-    * [Step 2 Run the following script](#step-2-run-the-following-script)
+    * [Step 2 Translate all json files into a specified language](#step-2-translate-all-json-files-into-a-specified-language)
+  * [Refactoring the original English langauge Stories into the new format](#refactoring-the-original-english-langauge-stories-into-the-new-format)
+* [JSON Formats](#json-formats)
   * [Input JSON Format](#input-json-format)
   * [Output JSON Format](#output-json-format)
 * [Running Mistral 7B](#running-mistral-7b)
@@ -106,7 +108,6 @@ python3 aug_translation.py -i data00.json -o data00_es.json -j -t -l es
 
 ### Bulk Translation
 
-
 #### Step 1 Make sure to install all language packages
 
 In other words, installing a new language package (e.g. english to german) while
@@ -115,7 +116,7 @@ other processes are running may interrupt those processes.
 First, make sure to run through all of the languages using the instructions in
 the above section [Install and Get Language Packages](#install-and-get-language-packages).
 
-#### Step 2 Run the following script
+#### Step 2 Translate all json files into a specified language
 
 To start translating all of the json files to French(for example):
 ```bash
@@ -128,6 +129,20 @@ To get a list of all languages supported and their language codes run:
 ```bash
 bash argos_lang.sh -l
 ```
+### Refactoring the original English langauge Stories into the new format
+
+This is a much faster process.
+To create a set of english language jsons in the same format, run:
+
+```bash
+bash tinystories_en.sh
+```
+
+This creates a parallelized task for extracting the high quality stories from the
+TinyStories dataset and places them into an `en` folder along side other
+languages.
+
+## JSON Formats
 
 ### Input JSON Format
 
