@@ -92,13 +92,13 @@ def flatten_dict(d: dict, sep: str = '/', pre='') -> dict:
 
 def add_to_outdirs_file(outdir: os.PathLike):
     with open(OUTDIRS_FILE, 'a') as f:
-        f.write(Path(outdir).resolve.as_posix() + '\n')
+        f.write(Path(outdir).resolve().as_posix() + '\n')
 
 
 def add_to_ckpts_file(outdir: os.PathLike):
     log.info(f'Appending {outdir} to {CKPTS_FILE}')
     with open(CKPTS_FILE, 'a') as f:
-        f.write(Path(outdir).resolve.as_posix() + '\n')
+        f.write(Path(outdir).resolve().as_posix() + '\n')
 
 
 
@@ -210,12 +210,13 @@ class OptimizerConfig(BaseConfig):
         return '_'.join(strs)
 
     def __post_init__(self):
-        assert self.gradient_accumulation_steps % WORLD_SIZE == 0
-        log.info(
-            f"Rescaling GAS -> GAS // WORLD_SIZE "
-            f"= {self.gradient_accumulation_steps} // {WORLD_SIZE}"
-        )
-        self.gradient_accumulation_steps //= WORLD_SIZE
+        # assert self.gradient_accumulation_steps % WORLD_SIZE == 0
+        # log.info(
+        #     f"Rescaling GAS -> GAS // WORLD_SIZE "
+        #     f"= {self.gradient_accumulation_steps} // {WORLD_SIZE}"
+        # )
+        # self.gradient_accumulation_steps //= WORLD_SIZE
+        pass
 
 
 @dataclass
@@ -322,6 +323,10 @@ class ExperimentConfig(BaseConfig):
             * WORLD_SIZE
             * self.model.batch_size
             * self.model.block_size
+        )
+        self.samples_per_iter = (
+            self.optimizer.gradient_accumulation_steps
+            * WORLD_SIZE
         )
         log.info(f'Tokens per iteration: {self.tokens_per_iter:,}')
         self.iter_num = 0
