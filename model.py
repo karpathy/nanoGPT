@@ -37,7 +37,6 @@ class RMSNorm(nn.Module):
         rms = x.norm(2, dim=-1, keepdim=True) / math.sqrt(x.size(-1))
         return x / rms * self.gain
 
-
 def softermax(x, dim=-1):
     e_x = torch.pow(2.0, x - x.max(dim=dim, keepdim=True).values)
     return e_x / e_x.sum(dim=dim, keepdim=True)
@@ -100,12 +99,28 @@ class CausalSelfAttention(nn.Module):
         y = self.resid_dropout(self.c_proj(y))
         return y
 
+class SquaredReLU(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return torch.pow(torch.relu(x), 2)
+
 class MLP(nn.Module):
 
     def __init__(self, config):
         super().__init__()
         self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
-        self.gelu    = nn.GELU()
+        # TODO: Change name of self.gelu to something like "self.activation_variant"
+        if config.use_relu:
+          print("Use ReLU")
+          self.gelu = nn.ReLU()
+        elif config.use_squared_relu:
+          print("Use Squared ReLU")
+          self.gelu = SquaredReLU()
+        else:
+          print("Use GELU")
+          self.gelu    = nn.GELU()
         self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
 
@@ -143,9 +158,11 @@ class GPTConfig:
     n_head: int = 12
     n_embd: int = 768
     dropout: float = 0.0
-    bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    bias: bool = False # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
     use_softermax: bool = False # True: uses softermax; False uses softmax
     use_rmsnorm: bool = True # Add option for RMSNorm
+    use_relu: bool = True # True: utilize regular relu, False: do not utilize this
+    use_squared_relu: bool = False #True: utilize relu squared, False: do not utilize
 
 class GPT(nn.Module):
 
