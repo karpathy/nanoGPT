@@ -1,3 +1,4 @@
+src/ngpt/ckpts/*
 .jukit/
 cache/
 outputs/
