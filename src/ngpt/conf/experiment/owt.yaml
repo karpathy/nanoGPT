@@ -1,0 +1,25 @@
+# @package _global_
+_target_: configs.ExperimentConfig
+
+defaults:
+  - _self_
+  - override /train: owt.yaml
+  - override /data: owt.yaml
+  - override /model: default.yaml
+  - override /optimizer: default.yaml
+  # - optimizer: shakespeare.yaml
+  - override /logdir: ../logdir/owt.yaml
+  # - override /train: shakespeare.yaml
+  # - override /data: shakespeare.yaml
+  # - override /model: shakespeare.yaml
+  # - override /optimizer: shakespeare.yaml
+  # - override /logdir: shakespeare.yaml
+  - override /hydra/hydra_logging: colorlog
+  - override /hydra/job_logging: custom  # colorlog
+# debug: true
+hydra:
+  # verbose: true
+  job:
+    chdir: true
+...
+
