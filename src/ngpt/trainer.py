@@ -180,9 +180,11 @@ class Trainer:
         self.model = model
         if torch.cuda.is_available():
             self.model.cuda()
-
         assert isinstance(self.model, GPT)
         assert issubclass(GPT, torch.nn.Module)
+        num_params = self.model.get_num_params()
+        if wandb.run is not None:
+            wandb.run.config['num_params'] = num_params
         # model_block_size = int(self.model.config.block_size)
         if self.config.model.block_size < self.model.config.block_size:
             self.model.crop_block_size(self.config.model.block_size)
@@ -391,12 +393,17 @@ class Trainer:
             'best_val_loss': self.config.best_val_loss,
             'config': asdict(self.config),
         }
+        ckptfile = Path(os.getcwd()).joinpath('ckpt.pt')
+        modelfile = Path(os.getcwd()).joinpath('model.pth')
         log.info(f'Saving checkpoint to: {os.getcwd()}')
-        torch.save(
-            ckpt,
-            Path(os.getcwd()).joinpath('ckpt.pt').as_posix()
-        )
+        log.info(f'Saving model to: {modelfile}')
+        torch.save(raw_model.state_dict(), modelfile.as_posix())
+        torch.save(ckpt, ckptfile.as_posix())
         add_to_ckpts_file(Path(os.getcwd()))
+        if wandb.run is not None:
+            artifact = wandb.Artifact('model', type='model')
+            artifact.add_file(modelfile.as_posix())
+            wandb.run.log_artifact(artifact)
 
     def train(self):
         x, y = self.get_batch('train')
