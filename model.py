@@ -37,9 +37,20 @@ class RMSNorm(nn.Module):
         rms = x.norm(2, dim=-1, keepdim=True) / math.sqrt(x.size(-1))
         return x / rms * self.gain
 
-def softermax(x, dim=-1):
-    e_x = torch.pow(2.0, x - x.max(dim=dim, keepdim=True).values)
-    return e_x / e_x.sum(dim=dim, keepdim=True)
+# Softmax base 2, with option to remove max subtraction
+class Softermax(nn.Module):
+    """ Base-2 Softmax with option to remove max subtraction"""
+    def __init__(self, dim=-1, subtract_max=True):
+        super().__init__()
+        self.dim = dim
+        self.subtract_max = subtract_max
+
+    def forward(self, x):
+        if self.subtract_max:
+            max_x = x.max(dim=self.dim, keepdim=True).values
+            x = x - max_x
+        e_x = torch.pow(2.0, x)
+        return e_x / e_x.sum(dim=self.dim, keepdim=True)
 
 class CausalSelfAttention(nn.Module):
 
@@ -61,6 +72,7 @@ class CausalSelfAttention(nn.Module):
         self.use_softermax = config.use_softermax
         if self.use_softermax == True:
             # TODO: Add softermax support into flashattention from pytorch 2.0
+            self.softermax_layer = Softermax(config.use_softermax_xmax_subtract)
             self.flash = False
         else:
             self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
@@ -160,6 +172,7 @@ class GPTConfig:
     dropout: float = 0.0
     bias: bool = False # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
     use_softermax: bool = False # True: uses softermax; False uses softmax
+    use_softermax_xmax_subtract: bool = True # True: uses (x - x_max) normalization; False: removes normalization (potential overflow)
     use_rmsnorm: bool = True # Add option for RMSNorm
     use_relu: bool = True # True: utilize regular relu, False: do not utilize this
     use_squared_relu: bool = False #True: utilize relu squared, False: do not utilize
@@ -179,6 +192,7 @@ class GPT(nn.Module):
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
             ln_f = LayerNorm(config.n_embd, bias=config.bias),
         ))
+        self.softermax_layer = Softermax(self.config.use_softermax_xmax_subtract)
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         # with weight tying when using torch.compile() some warnings get generated:
         # "UserWarning: functional_call was passed multiple values for tied weights.
@@ -372,9 +386,9 @@ class GPT(nn.Module):
 
             probs = None
             if self.config.use_softermax:
-                probs = softermax(logits, dim=-1)
+                probs = self.softermax_layer(logits)
             else:
-                probs = F.softmax(logits, dim=-1)
+                probs = F.softmax(logits, dim=0)
             assert probs != None
             idx_next = torch.multinomial(probs, num_samples=1)
             # append sampled index to the running sequence and continue
