@@ -36,6 +36,9 @@ HERE = Path(os.path.abspath(__file__)).parent
 PROJECT_DIR = HERE.parent.parent
 PROJECT_ROOT = PROJECT_DIR
 CONF_DIR = HERE.joinpath('conf')
+CACHE_DIR = PROJECT_DIR.joinpath('.cache')
+WB_CACHE_DIR = CACHE_DIR.joinpath('wandb')
+HF_DATASETS_CACHE_DIR = CACHE_DIR.joinpath('huggingface', 'datasets')
 DATA_DIR = PROJECT_DIR.joinpath('data')
 CKPT_DIR = HERE.joinpath('ckpts')
 DS_CONFIG_PATH = CONF_DIR.joinpath('ds_config.yaml')
@@ -45,6 +48,9 @@ OUTPUTS_DIR = HERE.joinpath('outputs')
 
 CKPT_DIR.mkdir(exist_ok=True, parents=True)
 CONF_DIR.mkdir(exist_ok=True, parents=True)
+CACHE_DIR.mkdir(exist_ok=True, parents=True)
+WB_CACHE_DIR.mkdir(exist_ok=True, parents=True)
+HF_DATASETS_CACHE_DIR.mkdir(exist_ok=True, parents=True)
 LOGS_DIR.mkdir(exist_ok=True, parents=True)
 # QUARTO_OUTPUTS_DIR.mkdir(exist_ok=True, parents=True)
 OUTPUTS_DIR.mkdir(exist_ok=True, parents=True)
@@ -56,6 +62,9 @@ PT_DTYPES = {
     'bfloat16': torch.bfloat16,
     'float16': torch.float16
 }
+
+os.environ['WANDB_CACHE_DIR'] = WB_CACHE_DIR.as_posix()
+os.environ['HF_DATASETS_CACHE'] = HF_DATASETS_CACHE_DIR.as_posix()
 
 
 
@@ -197,7 +206,7 @@ class OptimizerConfig(BaseConfig):
     decay_lr: bool = True
     lr_decay_iters: int = 600000
     min_lr: float = 6e-5
-    gradient_accumulation_steps: int = 1
+    gradient_accumulation_steps: Optional[int] = None
 
     def to_str(self):
         strs = [
@@ -210,12 +219,15 @@ class OptimizerConfig(BaseConfig):
         return '_'.join(strs)
 
     def __post_init__(self):
-        # assert self.gradient_accumulation_steps % WORLD_SIZE == 0
-        # log.info(
-        #     f"Rescaling GAS -> GAS // WORLD_SIZE "
-        #     f"= {self.gradient_accumulation_steps} // {WORLD_SIZE}"
-        # )
-        # self.gradient_accumulation_steps //= WORLD_SIZE
+        if self.gradient_accumulation_steps is None or self.gradient_accumulation_steps == 1:
+            self.gradient_accumulation_steps = WORLD_SIZE
+        assert self.gradient_accumulation_steps % WORLD_SIZE == 0
+        log.info(
+            f"Rescaling GAS -> GAS // WORLD_SIZE "
+            f"= {self.gradient_accumulation_steps} // {WORLD_SIZE}"
+        )
+        self.gradient_accumulation_steps //= WORLD_SIZE
+        self.gas = self.gradient_accumulation_steps
         pass
 
 

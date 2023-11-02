@@ -24,34 +24,22 @@ from typing import Any, Optional, Union
 import time
 from tqdm.auto import trange
 import math
-# import pickle
-# from contextlib import nullcontext
 from pathlib import Path
 from dataclasses import asdict
-# from typing import Optional
 
 import numpy as np
 import torch
 from torch.cuda.amp.grad_scaler import GradScaler
-# import logging
-# from dataclasses import dataclass
-# from pathlib import Path
 from torch.nn.parallel import DistributedDataParallel as DDP
-# from torch.distributed import init_process_group, destroy_process_group
 
 from ngpt.model import GPT
 from rich.text import Text
 from enrich import get_logger
-# from ezpz import get_local_rank, get_rank, get_world_size
 from ezpz import get_rank, get_world_size
 from ngpt.configs import ExperimentConfig, ModelConfig, add_to_ckpts_file
-# from ngpt.configs import ModelConfig, TrainConfig, Config
 
-# log = logging.getLogger(__name__)
 log = get_logger(__name__, level="INFO")
 
-# RANK = setup_torch(backend='DDP')
-# LOCAL_RANK = get_local_rank()
 RANK = get_rank()
 WORLD_SIZE = get_world_size()
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -105,24 +93,9 @@ def _average(val):
             val = val
     if isinstance(val, torch.Tensor):
         val = grab_tensor(val)
-    # try:
-    #     self.history[key].append(val)
-    # except KeyError:
-    #     self.history[key] = [val]
 
-    # ScalarLike = Union[float, int, bool, np.floating]
     if isinstance(val, (float, int, bool, np.floating, np.integer)):
         return val
-    # if (
-    #         isinstance(
-    #             val,
-    #             (float, int, bool, np.floating, np.integer)
-    #         )
-    #         # or key in ['era', 'epoch']
-    #         # or 'step' in key
-    # ):
-    #     # assert val is not None and isinstance(val, ScalarLike)
-    #     return val
     try:
         avg = np.mean(val).real  # type: ignore
         assert isinstance(avg, np.floating)
@@ -384,23 +357,39 @@ class Trainer:
             'y': y,
         }
 
-    def save_ckpt(self, raw_model):
+    def save_ckpt(
+            self,
+            raw_model: Optional[torch.nn.Module | GPT] = None,
+            add_to_wandb: bool = False
+    ):
+        if raw_model is None:
+            model = self.model.module  # type:ignore
+        else:
+            model = raw_model  # type:ignore
+        assert model is not None
+        assert isinstance(model, GPT)
+        assert issubclass(GPT,  torch.nn.Module)
         ckpt = {
-            'model': raw_model.state_dict(),
+            'model': model.state_dict(),
             'optimizer': self.optimizer.state_dict(),
             'model_args': asdict(self.config.model),
             'iter_num': self.config.iter_num,
             'best_val_loss': self.config.best_val_loss,
             'config': asdict(self.config),
         }
+        # assert (
+        #     isinstance(model, GPT)
+        #     and issubclass(GPT, torch.nn.Module)
+        # )
+        # assert raw_model is not None
         ckptfile = Path(os.getcwd()).joinpath('ckpt.pt')
         modelfile = Path(os.getcwd()).joinpath('model.pth')
         log.info(f'Saving checkpoint to: {os.getcwd()}')
         log.info(f'Saving model to: {modelfile}')
-        torch.save(raw_model.state_dict(), modelfile.as_posix())
+        torch.save(model.state_dict(), modelfile.as_posix())
         torch.save(ckpt, ckptfile.as_posix())
         add_to_ckpts_file(Path(os.getcwd()))
-        if wandb.run is not None:
+        if add_to_wandb and wandb.run is not None:
             artifact = wandb.Artifact('model', type='model')
             artifact.add_file(modelfile.as_posix())
             wandb.run.log_artifact(artifact)
@@ -427,7 +416,7 @@ class Trainer:
                     and (losses['val'] < self.config.best_val_loss
                          or self.config.train.always_save_checkpoint)
                 ):
-                    self.save_ckpt(raw_model)
+                    self.save_ckpt(add_to_wandb=False)
             output = self.train_step(x=output['x'], y=output['y'])
             t1 = time.perf_counter()
             dt = t1 - t0
@@ -454,7 +443,7 @@ class Trainer:
                 lossf = output['metrics']['loss'].item() * self._gas
                 if train_iter >= 5:
                     mfu = raw_model.estimate_mfu(
-                        (self.config.model.batch_size * self._gas),
+                        (self.config.model.batch_size * self.config.optimizer.gas),
                         dt=dt
                     )
                     running_mfu = (
@@ -468,6 +457,7 @@ class Trainer:
                     # 'dt(ms)': dt * 1000,
                     # 'dt(×10³)': dt * 1000,
                     'sps': samples_per_sec,
+                    'mtps': tokens_per_sec / int(1e6),
                     'mfu': running_mfu * 100,
                     'train_loss': losses['train'].item(),
                     'val_loss': losses['val'],
