@@ -29,12 +29,25 @@ from ngpt.trainer import Trainer
 log = get_logger(__name__, level="INFO")
 
 
-def include_file(f):
+def include_file(f) -> bool:
     fp = Path(f)
-    return (
-        'venv' not in fp.as_posix()
-        and fp.suffix in ['.py', '.log', '.yaml']
+    exclude_ = (
+        'venv/' not in fp.as_posix()
+        and 'old/' not in fp.as_posix()
+        and 'outputs/' not in fp.as_posix()
+        and 'wandb/' not in fp.as_posix()
+        and 'data/' not in fp.as_posix()
+        and 'cache/' not in fp.as_posix()
+        and fp.suffix not in ['.pt', '.pth']
     )
+    include_ = fp.suffix in ['.py', '.log', '.yaml']
+    # return (
+    #     exclude_ and include_
+    #     # 'venv' not in fp.as_posix()
+    #     # and fp.suffix in ['.py', '.log', '.yaml']
+    # )
+    return (exclude_ and include_)
+
 
 
 @hydra.main(version_base=None, config_path='./conf', config_name='config')
@@ -54,15 +67,19 @@ def main(cfg: DictConfig) -> int:
                 project_name=config.train.wandb_project,
                 config=cfg,
             )
-        if wandb.run is not None:
-            wandb.run.log_code(PROJECT_ROOT, include_fn=include_file)
-            wandb.run.config['tokens_per_iter'] = config.tokens_per_iter
-            wandb.run.config['samples_per_iter'] = config.samples_per_iter
+            if wandb.run is not None:
+                wandb.run.config['tokens_per_iter'] = config.tokens_per_iter
+                wandb.run.config['samples_per_iter'] = config.samples_per_iter
         log.info(OmegaConf.to_yaml(cfg))
         print_json(config.to_json())
     log.info(f'Output dir: {os.getcwd()}')
     trainer = Trainer(config)
     trainer.train()
+    if wandb.run is not None:
+        wandb.run.log_code(PROJECT_ROOT, include_fn=include_file)
+        # raw_module = trainer.model.module
+        # assert isinstance(raw_module, torch.nn.Module)
+        trainer.save_ckpt(add_to_wandb=True)
     # if rank == 0 and config.backend.lower() in ['ds', 'dspeed', 'deepspeed']:
     #     git_ds_info()
     return rank
@@ -73,4 +90,4 @@ if __name__ == '__main__':
     rank = main()
     if wandb.run is not None:
         wandb.finish(0)
-    sys.exit(0)
+    # sys.exit(0)
