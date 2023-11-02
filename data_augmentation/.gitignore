@@ -1,0 +1,6 @@
+# Make sure not to check in datasets or archives
+*.json
+*.txt
+*.tar
+*.tar.gz
+*.tgz
