@@ -37,9 +37,50 @@ class RMSNorm(nn.Module):
         rms = x.norm(2, dim=-1, keepdim=True) / math.sqrt(x.size(-1))
         return x / rms * self.gain
 
-def softermax(x, dim=-1):
-    e_x = torch.pow(2.0, x - x.max(dim=dim, keepdim=True).values)
-    return e_x / e_x.sum(dim=dim, keepdim=True)
+# Softmax base 2, with option to remove max subtraction
+class Softermax(nn.Module):
+    """ Base-2 Softmax with option to remove max subtraction"""
+    def __init__(self, dim=-1, subtract_max=True):
+        super().__init__()
+        self.dim = dim
+        self.subtract_max = subtract_max
+
+    def forward(self, x):
+        if self.subtract_max:
+            max_x = x.max(dim=self.dim, keepdim=True).values
+            x = x - max_x
+        e_x = torch.pow(2.0, x)
+        return e_x / e_x.sum(dim=self.dim, keepdim=True)
+
+# SigSoftmax from https://arxiv.org/abs/1805.10829
+class SigSoftmax(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, inputs):
+        exp_x = torch.exp(inputs)
+        sig_x = torch.sigmoid(inputs)
+        numerator = exp_x * sig_x
+        denominator = torch.sum(exp_x * sig_x, dim=-1, keepdim=True)
+        return numerator / denominator
+
+# Base2 variant of SigSoftmax from https://arxiv.org/abs/1805.10829
+class SigSoftmaxBase2(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, inputs):
+
+        # Base 2 exponent
+        exp2_x = torch.pow(2, inputs)
+
+        # Base 2 sigmoid approximation
+        sig2_x = 1 / (1 + torch.pow(2, -inputs))
+
+        numerator = exp2_x * sig2_x
+        denominator = torch.sum(exp2_x * sig2_x, dim=-1, keepdim=True)
+
+        return numerator / denominator
 
 class CausalSelfAttention(nn.Module):
 
@@ -58,12 +99,29 @@ class CausalSelfAttention(nn.Module):
         self.dropout = config.dropout
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
-        self.use_softermax = config.use_softermax
-        if self.use_softermax == True:
+
+        # Softmax Variant Selection
+        self.use_softmax_variant = config.use_softmax_variant
+        self.softmax_variant = config.softmax_variant
+        if self.use_softmax_variant == True:
             # TODO: Add softermax support into flashattention from pytorch 2.0
+            # Select softmax variant
+            self.softmax_variant = config.softmax_variant
+
+            if self.softmax_variant == "softermax":
+              self.use_softermax_xmax = config.use_softermax_xmax
+              self.softmax_layer = Softermax(subtract_max=self.use_softermax_xmax)
+
+            if self.softmax_variant == "sigsoftmax":
+              self.softmax_layer = SigSoftmax()
+
+            if self.softmax_variant == "sigsoftmax_base2":
+              self.softmax_layer = SigSoftmaxBase2()
+
             self.flash = False
         else:
             self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
+
         if not self.flash:
             print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
             # causal mask to ensure that attention is only applied to the left in the input sequence
@@ -87,8 +145,8 @@ class CausalSelfAttention(nn.Module):
             # manual implementation of attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
             att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
-            if self.use_softermax:
-                att = softermax(att, dim=-1)
+            if self.use_softmax_variant:
+                att = self.softmax_layer(att)
             else:
                 att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
@@ -158,11 +216,17 @@ class GPTConfig:
     n_head: int = 12
     n_embd: int = 768
     dropout: float = 0.0
-    bias: bool = False # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
-    use_softermax: bool = False # True: uses softermax; False uses softmax
-    use_rmsnorm: bool = True # Add option for RMSNorm
-    use_relu: bool = True # True: utilize regular relu, False: do not utilize this
+
+    # Softmax Alternatives and Options
+    use_softmax_variant = False
+    softmax_variant: str = "softermax" # Choices: "softermax" "sigsoftmax" "sigsoftmax_base2"
+    use_softermax_xmax: bool = True # Softermax Option active is softermax selected - True: uses (x - x_max) normalization; False: removes normalization (potential overflow)
+
+    # Layernorm Alternatives and Options
+    use_rmsnorm: bool = True # Add option for RMSNorm in place of LayerNorm: https://arxiv.org/abs/1910.07467
+    use_relu: bool = True #True: relu squared, False: do not utilize
     use_squared_relu: bool = False #True: utilize relu squared, False: do not utilize
+    bias: bool = False # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
 
 class GPT(nn.Module):
 
@@ -179,6 +243,24 @@ class GPT(nn.Module):
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
             ln_f = LayerNorm(config.n_embd, bias=config.bias),
         ))
+
+        self.use_softmax_variant = config.use_softmax_variant
+        self.softmax_variant = config.softmax_variant
+
+        if self.use_softmax_variant == True:
+            # Select softmax variant
+            self.softmax_variant = config.softmax_variant
+
+            if self.softmax_variant == "softermax":
+              self.use_softermax_xmax = config.use_softermax_xmax
+              self.softmax_layer = Softermax(subtract_max=self.use_softermax_xmax)
+
+            if self.softmax_variant == "sigsoftmax":
+              self.softmax_layer = SigSoftmax()
+
+            if self.softmax_variant == "sigsoftmax_base2":
+              self.softmax_layer = SigSoftmaxBase2()
+
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         # with weight tying when using torch.compile() some warnings get generated:
         # "UserWarning: functional_call was passed multiple values for tied weights.
@@ -371,8 +453,8 @@ class GPT(nn.Module):
                 logits[logits < v[:, [-1]]] = -float('Inf')
 
             probs = None
-            if self.config.use_softermax:
-                probs = softermax(logits, dim=-1)
+            if self.config.use_softmax_variant:
+                probs = self.softmax_layer(logits)
             else:
                 probs = F.softmax(logits, dim=-1)
             assert probs != None
