@@ -1,0 +1,11 @@
+_target_: configs.OptimizerConfig
+
+learning_rate: 0.0006
+weight_decay: 0.1
+beta1: 0.9
+beta2: 0.95
+grad_clip: 1.0
+decay_lr: true
+lr_decay_iters: 600000
+min_lr: 0.00006
+gradient_accumulation_steps: null

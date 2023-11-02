@@ -1,0 +1,12 @@
+_target_: configs.ModelConfig
+
+# n_layer=48, n_head=25, n_embd=1600
+# 1558M parameters
+n_layer: 48
+n_head: 25
+n_embd: 1600
+batch_size: 1
+block_size: 1024
+dropout: 0.0
+bias: false
+vocab_size: null
