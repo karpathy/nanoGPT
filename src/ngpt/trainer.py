@@ -35,6 +35,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from ngpt.model import GPT
 from rich.text import Text
 from enrich import get_logger
+# from ngpt import get_logger
 from ezpz import get_rank, get_world_size
 from ngpt.configs import ExperimentConfig, ModelConfig, add_to_ckpts_file
 
@@ -238,7 +239,6 @@ class Trainer:
             out[split] = losses.mean()
         self.model.train()
         return out
-
 
     def restore_from_ckpt(
             self,
