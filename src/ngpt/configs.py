@@ -13,6 +13,7 @@ from typing import Optional
 from copy import deepcopy
 
 from enrich import get_logger
+# from ngpt import get_logger
 from ezpz import get_rank, get_world_size
 import numpy as np
 import rich.repr
@@ -20,14 +21,14 @@ import torch
 from hydra.core.config_store import ConfigStore
 from transformers import data
 
-log = get_logger(__name__)
+log = get_logger(__name__, 'INFO')
 
 RANK = get_rank()
 WORLD_SIZE = get_world_size()
-if RANK == 0:
-    log.setLevel("INFO")
-else:
-    log.setLevel("CRITICAL")
+# if RANK == 0:
+#     log.setLevel("INFO")
+# else:
+#     log.setLevel("CRITICAL")
 
 
 # -- Configure useful Paths -----------------------
@@ -248,6 +249,11 @@ class DataConfig(BaseConfig):
             with self.meta_path.open('rb') as f:
                 meta = pickle.load(f)
             self.meta_vocab_size = meta['vocab_size']
+
+
+@dataclass
+class SampleConfig(BaseConfig):
+    pass
 
 
 @dataclass
