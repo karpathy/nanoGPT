@@ -57,7 +57,7 @@ def display_colored_text(sentence: List[int], color_values, cmap: Union[List[str
     cb = mpl.colorbar.ColorbarBase(cbar_ax, cmap=cmap, norm=norm, orientation='vertical')
     cb.set_label("PPL Values", loc="center", font=font_config["fontname"])
     # plt.show()
-    plt.savefig(outfilename)
+    plt.savefig(outfilename, format="png", dpi=1200)
 
 
 def normalize_data(color_values):
