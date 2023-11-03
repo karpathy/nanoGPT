@@ -1,0 +1,20 @@
+---
+version: 1
+formatters:
+  simple:
+    format: '[%(asctime)s][%(name)s][%(levelname)s] - %(message)s'
+handlers:
+  console:
+    class: logging.FileHandler
+    formatter: simple
+    filename: ${hydra.job.name}.log
+    level: INFO
+    mode: w
+  term:
+    class: enrich.handler.RichHandler
+    level: INFO
+root:
+  handlers: [console, term]
+disable_existing_loggers: false
+...
+
