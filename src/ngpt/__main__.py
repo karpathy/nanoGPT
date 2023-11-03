@@ -12,12 +12,14 @@ from __future__ import (
     unicode_literals
 )
 import os
-import sys
+# import sys
 
 import hydra
 from pathlib import Path
 from omegaconf import OmegaConf
 from enrich import get_logger
+# from ezpz import get_logger
+# from ngpt import get_logger
 
 from hydra.utils import instantiate
 from omegaconf.dictconfig import DictConfig
@@ -26,7 +28,7 @@ from ezpz.dist import setup, setup_wandb
 from ngpt.configs import ExperimentConfig, PROJECT_ROOT
 from ngpt.trainer import Trainer
 
-log = get_logger(__name__, level="INFO")
+log = get_logger(__name__, "DEBUG")
 
 
 def include_file(f) -> bool:
@@ -52,15 +54,20 @@ def include_file(f) -> bool:
 
 @hydra.main(version_base=None, config_path='./conf', config_name='config')
 def main(cfg: DictConfig) -> int:
-    config: ExperimentConfig = instantiate(cfg)
     rank = setup(
-        framework=config.train.framework,
-        backend=config.train.backend,
-        seed=config.train.seed
+        framework=cfg.train.framework,
+        backend=cfg.train.backend,
+        seed=cfg.train.seed,
+        # framework=config.train.framework,
+        # backend=config.train.backend,
+        # seed=config.train.seed
     )
+    config: ExperimentConfig = instantiate(cfg)
     if rank != 0:
         log.setLevel("CRITICAL")
+    # if rank == 0:
     else:
+        log.setLevel("DEBUG")
         from rich import print_json
         if config.train.use_wandb:
             setup_wandb(
@@ -70,9 +77,9 @@ def main(cfg: DictConfig) -> int:
             if wandb.run is not None:
                 wandb.run.config['tokens_per_iter'] = config.tokens_per_iter
                 wandb.run.config['samples_per_iter'] = config.samples_per_iter
-        log.info(OmegaConf.to_yaml(cfg))
+        log.critical(OmegaConf.to_yaml(cfg))
         print_json(config.to_json())
-    log.info(f'Output dir: {os.getcwd()}')
+    log.critical(f'Output dir: {os.getcwd()}')
     trainer = Trainer(config)
     trainer.train()
     if wandb.run is not None:
