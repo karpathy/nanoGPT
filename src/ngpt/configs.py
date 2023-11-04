@@ -11,6 +11,7 @@ from pathlib import Path
 import pickle
 from typing import Optional
 from copy import deepcopy
+import tiktoken
 
 from enrich import get_logger
 # from ngpt import get_logger
@@ -245,10 +246,22 @@ class DataConfig(BaseConfig):
         self.ckpt_dir = CKPT_DIR.joinpath(self.out_dir)
         self.meta_path = self.data_dir.joinpath('meta.pkl')
         self.meta_vocab_size = None
-        if self.meta_path.is_file():
+        self._load_meta = self.meta_path.is_file()
+        self.stoi = None
+        self.itos = None
+        if self._load_meta:
             with self.meta_path.open('rb') as f:
                 meta = pickle.load(f)
             self.meta_vocab_size = meta['vocab_size']
+            self._stoi = meta['stoi']
+            self._itos = meta['itos']
+            self.encode = lambda s: [self._stoi[c] for c in s]
+            self.decode = lambda s: ''.join([self._itos[i] for i in s])
+        else:
+            log.warning('No meta.pkl found, assuming GPT-2 encodings...')
+            self._enc = tiktoken.get_encoding('gpt2')
+            self.encode = lambda s: self._enc.encode(s, allowed_special={'<|endoftext|>'})
+            self.decode = lambda z: self._enc.decode(z)
 
 
 @dataclass
