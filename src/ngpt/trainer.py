@@ -490,13 +490,24 @@ class Trainer:
             max_new_tokens = 500,
             temperature: float = 0.8,
             top_k: int = 200,
-            seed: Optional[int] = None,
         ):
+        # seed: Optional[int] = None,
+        assert isinstance(self.model.module, GPT)
+        assert issubclass(GPT, torch.nn.Module)
         self.model.eval()
+        outputs = []
         with torch.no_grad():
             start_ids = self.config.data.encode(s)
-            x = (torch.tensor(start_ids, dtype=torch.long, device=DEVICE)[]
-            for k in range(num_samples):
-                y = self.model.generate(s)
-                log.info(decode(y[0].tolist()))
-            log.info(100 * '-')
+            x = (torch.tensor(start_ids, dtype=torch.long, device=DEVICE)[None, ...])
+            for _ in range(num_samples):
+                y = self.model.module.generate(
+                    x,
+                    max_new_tokens,
+                    temperature=temperature,
+                    top_k=top_k
+                )
+                response = self.config.data.decode(y[0].tolist())
+                outputs.append(response)
+                log.info(f'[prompt]: "{s}"')
+                log.info(f'> "{response}"')
+                log.info(100 * '-')
