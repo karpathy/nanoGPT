@@ -128,7 +128,12 @@ class Trainer:
     def __init__(self, config: ExperimentConfig):
         self.config = config
         self.ckpt = None
-        self._gas = self.config.optimizer.gradient_accumulation_steps
+        # NOTE: ---------------------------------------------------------
+        # config.optimizer.gas = (
+        #     1 if config.optimizer.gradient_accumulation_steps is None
+        #     else config.optimizer.gradient_accumulation_steps
+        # ) -------------------------------------------------------------
+        self._gas = self.config.optimizer.gas
         self._lr = self.config.optimizer.learning_rate
         self._min_lr = self.config.optimizer.min_lr
         self._diters = self.config.optimizer.lr_decay_iters
@@ -477,3 +482,21 @@ class Trainer:
                         'metrics': output['metrics'],
                         'timers': output['timers']
                     })
+
+    def evaluate(
+            self,
+            s: str,
+            num_samples: int = 10,
+            max_new_tokens = 500,
+            temperature: float = 0.8,
+            top_k: int = 200,
+            seed: Optional[int] = None,
+        ):
+        self.model.eval()
+        with torch.no_grad():
+            start_ids = self.config.data.encode(s)
+            x = (torch.tensor(start_ids, dtype=torch.long, device=DEVICE)[]
+            for k in range(num_samples):
+                y = self.model.generate(s)
+                log.info(decode(y[0].tolist()))
+            log.info(100 * '-')
