@@ -8,4 +8,8 @@ __pycache__/
 *.pt
 *.pyc
 input.txt
+train.npy
+val.npy
+meta.pkl
+
 
