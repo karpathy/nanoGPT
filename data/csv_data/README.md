@@ -1,17 +1,24 @@
 # Data-Shuffler for ML Permutation Invariance
 
-This Python script processes time-series data from a CSV file and writes it to a
-text file. Each row in the CSV becomes a single line in the text file, with each
-cell represented by a unique lowercase letter (starting from 'a') followed by
-the value from the cell.
+These Python scripts process time-series data from a CSV file to add permutation
+invariance to the csv's data fields.
 
-You have the option to shuffle the letter-value pairs in each line, using a command-line flag.
+Each row in the CSV becomes a single line in the text file, with each cell
+represented by a unique lowercase letter (starting from 'a') followed by the
+value from the cell.
 
-Training on this data with the shuffle option, will yield a form of in-frame-permutation
-invariance.
+One has the option to shuffle the letter-value pairs in each line, using a
+command-line flag.
 
-This will give data the freedom to move around and unlock special capabilities
-otherwise not available to fixed-frame trained networks.
+Training on this data with the shuffle option, will create a form of
+in-frame-permutation invariance.
+
+This will give -- during inference -- data the freedom to move around and unlock
+special capabilities otherwise not available to fixed-frame trained networks.
+
+For example, one can utilize a beam search for each of the labels to determine
+which of the letter value pairs gives the strongest certainty of data points in
+this frame, and build the next frame up incrementally using this technique.
 
 ## Getting Started
 
@@ -19,44 +26,54 @@ otherwise not available to fixed-frame trained networks.
 
 - Python (3.6 or above)
 
-### Installing
-
-Clone the repository or download the script to your local machine.
-
-```sh
-git clone <repository-url>
-```
-
-Or, simply create a new Python file, for example, `process_csv.py`, and copy the above Python code into this file.
-
 ## Usage
 
-Navigate to the directory where the script is located and run the following command:
+1. Separate your file into one with timestamp columns and one with data columns.
+
+2. Navigate to the directory where the script is located and run process_csv on
+   one's data-column file:
 
 ```sh
-python process_csv.py <input_file> <output_file> [--shuffle]
+python3 process_csv.py <data_column_file> <processed_data_file> --shuffle --exclude e
 ```
+
+3. Recombine the output file from process_csv.py with the time column data.
+
+
+```sh
+python3 combine_csvs.py <time_column_file> <processed_data_file> <processed_csv>
+```
+
+4. Prepare the processed_data_file for training
+
+```sh
+python3 prepare.py -i <processed_data_file>
+```
+
+5. `cd` to the `explorations` folder, and utilize the script to run training:
+
+
+```sh
+cd ../../explorations
+bash run_csv_data_training.sh
+```
+
+6. [Optional] Create an exploration script to test training and inference with
+   and without with and without shuffling.
 
 ### Arguments
 
 - `input_file`: The path to the input CSV file containing time-series data.
 - `output_file`: The path to the output text file.
 - `--shuffle`: Optional flag to shuffle the order of letter-value pairs in each line.
+- `--exclude`: Optional flag to remove any letters used by the dataset (e.g. `e`
+    for scientific notation)
 
 ### Example
 
-To process a CSV file without shuffling the letter-value pairs:
+For a full example see the `main.sh` script on generated sine + noise data.
 
-```sh
-python process_csv.py input.csv output.txt
-
-
-To process a CSV file and shuffle the letter-value pairs:
-
-```sh
-python process_csv.py input.csv output.txt --shuffle
-```
 ## License
 
-This project is licensed under the Apache 2.0 License - see the [LICENSE.md](LICENSE.md) file for details
+This project is licensed under the MIT License
 
