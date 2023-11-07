@@ -1,0 +1,34 @@
+name: Basic Pytorch Installation, Data Prep, CPU Training, CPU Inference
+on: [push, pull_request]
+jobs:
+  Install-Dependencies_Data-Prep_CPU-Training_CPU-Inference:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - run: echo "${{ github.repository }} repository has been cloned to the runner."
+      - run: echo "Currently on ${{ github.ref }} branch"
+      - name: ls of directory
+        run: |
+          ls ${{ github.workspace }}
+             # Caching pip dependencies
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements_cpu.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      - name: Install CPU Dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+          python3 -m pip install -r requirements_cpu.txt
+      - name: Run Small Network on CPU
+        run: |
+          python3 data/shakespeare_char/prepare.py
+          python3 train.py --out_dir=out --device=cpu --eval_interval=2 --log_interval=1 --block_size=2 --batch_size=2 --n_layer=2 --n_head=2 --n_embd=16 --max_iters=3 --lr_decay_iters=2 --dropout=0.0
+      - name: Run CPU Inference
+        run: |
+          python3 sample.py --device=cpu --out_dir="out"
+
