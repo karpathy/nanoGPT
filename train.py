@@ -194,7 +194,9 @@ class Trainer:
 
         # Tensorboard
         if self.args.tensorboard_log:
-            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            timestamp = time.strftime("%Y%m%d-%H%M%S" + "_" +
+                                      self.args.tensorboard_project + "_" +
+                                      self.args.tensorboard_run_name)
             log_subpath = os.path.join(self.args.tensorboard_log_dir, timestamp)
             self.writer = SummaryWriter(log_subpath)
 
