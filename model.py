@@ -52,6 +52,22 @@ class Softermax(nn.Module):
         e_x = torch.pow(2.0, x)
         return e_x / e_x.sum(dim=self.dim, keepdim=True)
 
+# Softmax base 2, with constant denominator, and option to remove max subtraction
+class Constantmax(nn.Module):
+    """ Base-2 Softmax with option to remove max subtraction"""
+    def __init__(self, dim=-1, subtract_max=True, constant=1000):
+        super().__init__()
+        self.dim = dim
+        self.subtract_max = subtract_max
+        self.constant = constant
+
+    def forward(self, x):
+        if self.subtract_max:
+            max_x = x.max(dim=self.dim, keepdim=True).values
+            x = x - max_x
+        e_x = torch.pow(2.0, x)
+        return e_x / self.constant
+
 # SigSoftmax from https://arxiv.org/abs/1805.10829
 class SigSoftmax(nn.Module):
     def __init__(self):
@@ -111,6 +127,11 @@ class CausalSelfAttention(nn.Module):
             if self.softmax_variant == "softermax":
               self.use_softermax_xmax = config.use_softermax_xmax
               self.softmax_layer = Softermax(subtract_max=self.use_softermax_xmax)
+
+            if self.softmax_variant == "constantmax":
+              self.use_softermax_xmax = config.use_softermax_xmax
+              self.constantmax_constant = config.constantmax_constant
+              self.softmax_layer = Constantmax(subtract_max=self.use_softermax_xmax, constant=self.constantmax_constant)
 
             if self.softmax_variant == "sigsoftmax":
               self.softmax_layer = SigSoftmax()
@@ -218,9 +239,10 @@ class GPTConfig:
     dropout: float = 0.0
 
     # Softmax Alternatives and Options
-    use_softmax_variant = False
-    softmax_variant: str = "softermax" # Choices: "softermax" "sigsoftmax" "sigsoftmax_base2"
+    use_softmax_variant = True 
+    softmax_variant: str = "constantmax" # Choices: "softermax" "sigsoftmax" "sigsoftmax_base2" "constantmax"
     use_softermax_xmax: bool = True # Softermax Option active is softermax selected - True: uses (x - x_max) normalization; False: removes normalization (potential overflow)
+    constantmax_constant: int = 1000 # denominator to utilize for Constantmax
 
     # Layernorm Alternatives and Options
     use_rmsnorm: bool = True # Add option for RMSNorm in place of LayerNorm: https://arxiv.org/abs/1910.07467
@@ -254,6 +276,11 @@ class GPT(nn.Module):
             if self.softmax_variant == "softermax":
               self.use_softermax_xmax = config.use_softermax_xmax
               self.softmax_layer = Softermax(subtract_max=self.use_softermax_xmax)
+
+            if self.softmax_variant == "constantmax":
+              self.use_softermax_xmax = config.use_softermax_xmax
+              self.constantmax_constant = config.constantmax_constant
+              self.softmax_layer = Constantmax(subtract_max=self.use_softermax_xmax, constant=self.constantmax_constant)
 
             if self.softmax_variant == "sigsoftmax":
               self.softmax_layer = SigSoftmax()
