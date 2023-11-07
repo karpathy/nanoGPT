@@ -1,0 +1,11 @@
+# folders
+__pycache__/
+logs/
+
+# file extensions
+*.pkl
+*.bin
+*.txt
+
+# checkpoint directories
+out*/
