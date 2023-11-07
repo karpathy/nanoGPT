@@ -128,11 +128,11 @@ pred_label = []
 with torch.no_grad():
     with ctx:
         for prompt, label in load_sat_tokens(prompts_file, stoi):
+            if sample_cnt >= num_samples:
+                break
             if eval_labels is not None:
                 true_label.append(label)
                 continue
-            if sample_cnt >= num_samples:
-                break
             sample_cnt += 1
             prompt = (torch.tensor(prompt, dtype=torch.long, device=device)[None, ...])
             y = model.generate(prompt, max_new_tokens, temperature=temperature, top_k=top_k)
