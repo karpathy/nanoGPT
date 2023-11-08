@@ -68,6 +68,41 @@ class Constantmax(nn.Module):
         e_x = torch.pow(2.0, x)
         return e_x / self.constant
 
+# Polynomial estimate of Softmax
+class Polymax(nn.Module):
+    def __init__(self, x_intercept=-100, y_intercept=1, power=2, divisor=1000.0):
+        super().__init__()
+
+        assert(x_intercept < 0) # ensure x_intercepts strictly left of the y-axis
+        self.x_intercept = x_intercept # where to transition from y=0 to m*x+b
+        self.y_intercept = y_intercept # where teh graph crosses y-axis
+
+        self.power = power
+        self.divisor = divisor
+
+        # TODO: create single location for printing the model settings
+        print("Use polymax")
+
+    def forward(self, x):
+        # Overview:
+        # Flat section:       -inf < x < x_intercept
+        # Linear section:     x_intercept <= x <= 0
+        # Polynomial section: 0 < x < inf
+
+        # Flat section
+        flat_piece = torch.where(x < self.x_intercept, torch.tensor(0.0, device=x.device), torch.tensor(0.0, device=x.device))
+
+        # Linear section
+        m = self.y_intercept/self.x_intercept # aka 'slope', also x intercept !=0
+        b = self.y_intercept
+        linear_piece = torch.where((x >= self.x_intercept) & (x <= 0), m * x + b, torch.tensor(0.0, device=x.device))
+
+        # Polynomial section
+        poly_piece = torch.where(x > 0, x**self.power + self.y_intercept, torch.tensor(0.0, device=x.device))
+
+        # Combine sections
+        return (poly_piece + linear_piece + flat_piece)/self.divisor
+
 # SigSoftmax from https://arxiv.org/abs/1805.10829
 class SigSoftmax(nn.Module):
     def __init__(self):
@@ -132,6 +167,9 @@ class CausalSelfAttention(nn.Module):
               self.use_softermax_xmax = config.use_softermax_xmax
               self.constantmax_constant = config.constantmax_constant
               self.softmax_layer = Constantmax(subtract_max=self.use_softermax_xmax, constant=self.constantmax_constant)
+
+            if self.softmax_variant == "polymax":
+              self.softmax_layer = Polymax()
 
             if self.softmax_variant == "sigsoftmax":
               self.softmax_layer = SigSoftmax()
@@ -239,7 +277,7 @@ class GPTConfig:
     dropout: float = 0.0
 
     # Softmax Alternatives and Options
-    use_softmax_variant = True 
+    use_softmax_variant = True
     softmax_variant: str = "constantmax" # Choices: "softermax" "sigsoftmax" "sigsoftmax_base2" "constantmax"
     use_softermax_xmax: bool = True # Softermax Option active is softermax selected - True: uses (x - x_max) normalization; False: removes normalization (potential overflow)
     constantmax_constant: int = 1000 # denominator to utilize for Constantmax
@@ -281,6 +319,9 @@ class GPT(nn.Module):
               self.use_softermax_xmax = config.use_softermax_xmax
               self.constantmax_constant = config.constantmax_constant
               self.softmax_layer = Constantmax(subtract_max=self.use_softermax_xmax, constant=self.constantmax_constant)
+
+            if self.softmax_variant == "polymax":
+              self.softmax_layer = Polymax()
 
             if self.softmax_variant == "sigsoftmax":
               self.softmax_layer = SigSoftmax()
