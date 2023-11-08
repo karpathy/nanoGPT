@@ -21,85 +21,92 @@ from model import GPTConfig, GPT
 def parse_args():
     parser = argparse.ArgumentParser()
 
+    # argparse groups
+    model_group = parser.add_argument_group('model_group')
+    training_group = parser.add_argument_group('training_group')
+    logging_group = parser.add_argument_group('logging_group')
+
     # I/O args
-    parser.add_argument('--out_dir', default='out', type=str)
-    parser.add_argument('--eval_interval', default=250, type=int)
-    parser.add_argument('--log_interval', default=10, type=int)
-    parser.add_argument('--eval_iters', default=200, type=int)
-    parser.add_argument('--eval_only', action='store_true')
+    training_group.add_argument('--out_dir', default='out', type=str)
+    training_group.add_argument('--eval_interval', default=250, type=int)
+    training_group.add_argument('--log_interval', default=10, type=int)
+    training_group.add_argument('--eval_iters', default=200, type=int)
+    training_group.add_argument('--eval_only', action='store_true')
 
     # Checkpoint args
-    parser.add_argument('--only_save_checkpoint_at_end', action='store_true')
-    parser.add_argument('--always_save_checkpoint', action='store_true',
-                        default=False)
-    parser.add_argument('--init_from', default='scratch', choices=['scratch', 'resume', 'gpt2*'], type=str)
+    training_group.add_argument('--only_save_checkpoint_at_end', action='store_true')
+    training_group.add_argument('--always_save_checkpoint', action='store_true')
+    training_group.add_argument('--init_from', default='scratch', choices=['scratch', 'resume', 'gpt2*'], type=str)
 
     # Data args
-    parser.add_argument('--dataset', default='shakespeare_char', type=str)
-    parser.add_argument('--gradient_accumulation_steps', default=1, type=int)
-    parser.add_argument('--batch_size', default=64, type=int)
-    parser.add_argument('--block_size', default=256, type=int)
+    training_group.add_argument('--dataset', default='shakespeare_char', type=str)
+    training_group.add_argument('--gradient_accumulation_steps', default=1, type=int)
+    training_group.add_argument('--batch_size', default=64, type=int)
 
     # Model args
-    parser.add_argument('--n_layer', default=6, type=int)
-    parser.add_argument('--n_head', default=6, type=int)
-    parser.add_argument('--n_embd', default=384, type=int)
-    parser.add_argument('--dropout', default=0.2, type=float)
-    parser.add_argument('--bias', action='store_true', default=False)
+    model_group.add_argument('--block_size', default=256, type=int)
+    model_group.add_argument('--n_layer', default=6, type=int)
+    model_group.add_argument('--n_head', default=6, type=int)
+    model_group.add_argument('--n_embd', default=384, type=int)
+    model_group.add_argument('--dropout', default=0.2, type=float)
+    model_group.add_argument('--bias', default=False, action=argparse.BooleanOptionalAction)
 
     # Norm variations
-    parser.add_argument('--use_rmsnorm', type=bool, default=True)
+    model_group.add_argument('--use_rmsnorm', default=True, action=argparse.BooleanOptionalAction)
 
     # Softmax variations
-    parser.add_argument('--use_softmax_variant', type=bool, default=False)
-    parser.add_argument("--softmax_variant", type=str, choices=["polymax", "strongermax", "softermax", "sigsoftmax", "sigsoftmax_base2"])
-    parser.add_argument("--strongermax_strength", type=int, default=2)
-    parser.add_argument("--use_softermax_xmax", type=bool, default=True)
+    model_group.add_argument('--use_softmax_variant', default=False, action=argparse.BooleanOptionalAction)
+    model_group.add_argument("--softmax_variant", type=str, default="softermax", choices=["polymax", "strongermax", "softermax", "sigsoftmax", "sigsoftmax_base2"])
+
+    # Custom Softmax Variation Options
+    model_group.add_argument('--use_softermax_xmax', default=False, action=argparse.BooleanOptionalAction)
+    model_group.add_argument("--strongermax_strength", type=int, default=2)
 
     # Optimizer args
-    parser.add_argument('--learning_rate', default=1e-3, type=float)
-    parser.add_argument('--max_iters', default=5000, type=int)
-    parser.add_argument('--weight_decay', default=1e-1, type=float)
-    parser.add_argument('--beta1', default=0.9, type=float)
-    parser.add_argument('--beta2', default=0.99, type=float)
-    parser.add_argument('--grad_clip', default=1.0, type=float)
+    training_group.add_argument('--learning_rate', default=1e-3, type=float)
+    training_group.add_argument('--max_iters', default=5000, type=int)
+    training_group.add_argument('--weight_decay', default=1e-1, type=float)
+    training_group.add_argument('--beta1', default=0.9, type=float)
+    training_group.add_argument('--beta2', default=0.99, type=float)
+    training_group.add_argument('--grad_clip', default=1.0, type=float)
 
     # LR schedule args
-    parser.add_argument('--decay_lr', action='store_true')
-    parser.add_argument('--warmup_iters', default=100, type=int)
-    parser.add_argument('--lr_decay_iters', default=5000, type=int)
-    parser.add_argument('--min_lr', default=1e-4, type=float)
+    training_group.add_argument('--decay_lr', action='store_true')
+    training_group.add_argument('--warmup_iters', default=100, type=int)
+    training_group.add_argument('--lr_decay_iters', default=5000, type=int)
+    training_group.add_argument('--min_lr', default=1e-4, type=float)
 
     # DDP args
-    parser.add_argument('--backend', default='nccl', type=str)
+    training_group.add_argument('--backend', default='nccl', type=str)
 
     # System args
-    parser.add_argument('--device', default='cuda', type=str)
-    parser.add_argument('--dtype', default='float16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16', type=str)
-    parser.add_argument('--compile', action='store_true', default=True)
+    training_group.add_argument('--device', default='cuda', type=str)
+    training_group.add_argument('--dtype', default='float16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16', type=str)
+    training_group.add_argument('--compile', type=bool, default=False)
 
     # Logging args
-    parser.add_argument('--log_project', default='out-test', type=str)
-    parser.add_argument('--log_run_name', default='logs-test', type=str)
+    logging_group.add_argument('--log_project', default='out-test', type=str)
+    logging_group.add_argument('--log_run_name', default='logs-test', type=str)
 
     # Tensorboard args
-    parser.add_argument('--tensorboard_log', action='store_true', default=True)
-    parser.add_argument('--tensorboard_log_dir', type=str, default='logs')
-    parser.add_argument('--tensorboard_project', type=str, default='out-test')
-    parser.add_argument('--tensorboard_run_name', type=str, default='logs-test')
+    logging_group.add_argument('--tensorboard_log', type=bool, default=True)
+    logging_group.add_argument('--tensorboard_log_dir', type=str, default='logs')
+    logging_group.add_argument('--tensorboard_project', type=str, default='out-test')
+    logging_group.add_argument('--tensorboard_run_name', type=str, default='logs-test')
 
-    # Tensorboard args
-    parser.add_argument('--wandb_log', action='store_true', default=False)
-    parser.add_argument('--wandb_project', type=str, default='out-test')
-    parser.add_argument('--wandb_run_name', type=str, default='logs-test')
+    # Wandb args
+    logging_group.add_argument('--wandb_log', type=bool, default=False)
+    logging_group.add_argument('--wandb_project', type=str, default='out-test')
+    logging_group.add_argument('--wandb_run_name', type=str, default='logs-test')
 
     args = parser.parse_args()
-    return args
+    return args, model_group, training_group, logging_group
 
 
 class Trainer:
-    def __init__(self, args):
+    def __init__(self, args, model_group):
         self.args = args
+        self.model_group = model_group
         self.setup()
 
     def setup(self):
@@ -148,13 +155,9 @@ class Trainer:
 
         # Model
         # TODO only add if they are defined from the argparse
-        self.model_args = dict(n_layer=self.args.n_layer, n_head=self.args.n_head, n_embd=self.args.n_embd,
-                          block_size=self.args.block_size, bias=self.args.bias, vocab_size=None,
-                          dropout=self.args.dropout,
-                               use_rmsnorm=self.args.use_rmsnorm,
-                               use_softmax_variant=self.args.use_softmax_variant,
-                               strongermax_strength=self.args.strongermax_strength,
-                               softmax_variant=self.args.softmax_variant)
+        self.model_args = {action.dest: getattr(self.args, action.dest) for action in self.model_group._group_actions}
+        print(self.model_args)
+        self.model_args['vocab_size'] = None
 
         if self.args.init_from == 'scratch':
             self.model_args['vocab_size'] = self.meta_vocab_size if self.meta_vocab_size is not None else 50304
@@ -362,9 +365,8 @@ class Trainer:
             wandb.finish()
 
 def main():
-    args = parse_args()
-    print(args.device)
-    trainer = Trainer(args)
+    args, model_group, _, _ = parse_args()
+    trainer = Trainer(args, model_group)
     trainer.train()
 
     if trainer.ddp:

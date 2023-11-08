@@ -297,8 +297,8 @@ class GPTConfig:
     dropout: float = 0.0
 
     # Softmax Alternatives and Options
-    use_softmax_variant = True
-    softmax_variant: str = "constantmax" # Choices: "softermax" "sigsoftmax" "sigsoftmax_base2" "polymax" "strongermax" "constantmax"
+    use_softmax_variant: bool = False
+    softmax_variant: str = "softermax" # Choices: "softermax" "sigsoftmax" "sigsoftmax_base2" "polymax" "strongermax" "constantmax"
     use_softermax_xmax: bool = True # Softermax Option active is softermax selected - True: uses (x - x_max) normalization; False: removes normalization (potential overflow)
     constantmax_constant: int = 1000 # denominator to utilize for Constantmax
     strongermax_strength: int = 2 # Softermax Option active is softermax selected - True: uses (x - x_max) normalization; False: removes normalization (potential overflow)
