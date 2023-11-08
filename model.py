@@ -68,6 +68,22 @@ class Constantmax(nn.Module):
         e_x = torch.pow(2.0, x)
         return e_x / self.constant
 
+# Like softermax, but parameterized to permit exploration of bases greater than 2
+class Strongermax(nn.Module):
+    """ Base-2 Softmax with option to remove max subtraction"""
+    def __init__(self, dim=-1, subtract_max=True, strength=2):
+        super().__init__()
+        self.strength = strength
+        self.dim = dim
+        self.subtract_max = subtract_max
+
+    def forward(self, x):
+        if self.subtract_max:
+            max_x = x.max(dim=self.dim, keepdim=True).values
+            x = x - max_x
+        e_x = torch.pow(self.strength, x)
+        return e_x / e_x.sum(dim=self.dim, keepdim=True)
+
 # Polynomial estimate of Softmax
 class Polymax(nn.Module):
     def __init__(self, x_intercept=-100, y_intercept=1, power=2, divisor=1000.0):
@@ -167,6 +183,10 @@ class CausalSelfAttention(nn.Module):
               self.use_softermax_xmax = config.use_softermax_xmax
               self.constantmax_constant = config.constantmax_constant
               self.softmax_layer = Constantmax(subtract_max=self.use_softermax_xmax, constant=self.constantmax_constant)
+
+            if self.softmax_variant == "strongermax":
+              self.use_softermax_xmax = config.use_softermax_xmax
+              self.softmax_layer = Strongermax(subtract_max=self.use_softermax_xmax,strength=config.strongermax_strength)
 
             if self.softmax_variant == "polymax":
               self.softmax_layer = Polymax()
@@ -278,13 +298,14 @@ class GPTConfig:
 
     # Softmax Alternatives and Options
     use_softmax_variant = True
-    softmax_variant: str = "constantmax" # Choices: "softermax" "sigsoftmax" "sigsoftmax_base2" "constantmax"
+    softmax_variant: str = "constantmax" # Choices: "softermax" "sigsoftmax" "sigsoftmax_base2" "polymax" "strongermax" "constantmax"
     use_softermax_xmax: bool = True # Softermax Option active is softermax selected - True: uses (x - x_max) normalization; False: removes normalization (potential overflow)
     constantmax_constant: int = 1000 # denominator to utilize for Constantmax
+    strongermax_strength: int = 2 # Softermax Option active is softermax selected - True: uses (x - x_max) normalization; False: removes normalization (potential overflow)
 
     # Layernorm Alternatives and Options
     use_rmsnorm: bool = True # Add option for RMSNorm in place of LayerNorm: https://arxiv.org/abs/1910.07467
-    use_relu: bool = True #True: relu squared, False: do not utilize
+    use_relu: bool = False #True: relu squared, False: do not utilize
     use_squared_relu: bool = False #True: utilize relu squared, False: do not utilize
     bias: bool = False # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
 
@@ -319,6 +340,10 @@ class GPT(nn.Module):
               self.use_softermax_xmax = config.use_softermax_xmax
               self.constantmax_constant = config.constantmax_constant
               self.softmax_layer = Constantmax(subtract_max=self.use_softermax_xmax, constant=self.constantmax_constant)
+
+            if self.softmax_variant == "strongermax":
+              self.use_softermax_xmax = config.use_softermax_xmax
+              self.softmax_layer = Strongermax(subtract_max=self.use_softermax_xmax, strength=config.strongermax_strength)
 
             if self.softmax_variant == "polymax":
               self.softmax_layer = Polymax()
