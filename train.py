@@ -47,8 +47,14 @@ def parse_args():
     parser.add_argument('--dropout', default=0.2, type=float)
     parser.add_argument('--bias', action='store_true', default=False)
 
-    # Model variations
-    parser.add_argument('--use_rmsnorm', action='store_true', default=True)
+    # Norm variations
+    parser.add_argument('--use_rmsnorm', type=bool, default=True)
+
+    # Softmax variations
+    parser.add_argument('--use_softmax_variant', type=bool, default=False)
+    parser.add_argument("--softmax_variant", type=str, choices=["polymax", "strongermax", "softermax", "sigsoftmax", "sigsoftmax_base2"])
+    parser.add_argument("--strongermax_strength", type=int, default=2)
+    parser.add_argument("--use_softermax_xmax", type=bool, default=True)
 
     # Optimizer args
     parser.add_argument('--learning_rate', default=1e-3, type=float)
@@ -141,9 +147,14 @@ class Trainer:
             self.meta_vocab_size = meta['vocab_size']
 
         # Model
+        # TODO only add if they are defined from the argparse
         self.model_args = dict(n_layer=self.args.n_layer, n_head=self.args.n_head, n_embd=self.args.n_embd,
                           block_size=self.args.block_size, bias=self.args.bias, vocab_size=None,
-                          dropout=self.args.dropout, use_rmsnorm=self.args.use_rmsnorm)
+                          dropout=self.args.dropout,
+                               use_rmsnorm=self.args.use_rmsnorm,
+                               use_softmax_variant=self.args.use_softmax_variant,
+                               strongermax_strength=self.args.strongermax_strength,
+                               softmax_variant=self.args.softmax_variant)
 
         if self.args.init_from == 'scratch':
             self.model_args['vocab_size'] = self.meta_vocab_size if self.meta_vocab_size is not None else 50304
