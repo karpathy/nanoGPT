@@ -56,7 +56,7 @@ def parse_args():
 
     # Positional Embedding variations
     model_group.add_argument('--use_rotary_embeddings', default=True, action=argparse.BooleanOptionalAction)
-    model_group.add_argument("--rope_variant", type=str, default="shortrope", choices=["shortrope", "rope"])
+    model_group.add_argument("--rope_variant", type=str, default="rope", choices=["shortrope", "rope"])
     model_group.add_argument("--shortrope_length", type=int, default="16", help="number of embeddings to use with rope, must be <= length, and be even")
     model_group.add_argument('--use_abs_pos_embeddings', default=False, action=argparse.BooleanOptionalAction)
 
