@@ -20,6 +20,7 @@ from os import PathLike
 
 import os
 import wandb
+import logging
 from typing import Any, Optional, Union
 import time
 from tqdm.auto import trange
@@ -34,12 +35,13 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from ngpt.model import GPT
 from rich.text import Text
-from enrich import get_logger
+# from enrich import get_logger
 # from ngpt import get_logger
 from ezpz import get_rank, get_world_size
 from ngpt.configs import ExperimentConfig, ModelConfig, add_to_ckpts_file
 
-log = get_logger(__name__, level="INFO")
+# log = get_logger(__name__, level="INFO")
+log = logging.getLogger(__name__)
 
 RANK = get_rank()
 WORLD_SIZE = get_world_size()
