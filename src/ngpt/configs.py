@@ -89,6 +89,16 @@ BACKENDS = {
 #     dropout: float = 0.0
 #     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
 
+def build_experiment(overrides: Optional[str | list[str]] = None):
+    import warnings
+    warnings.filterwarnings('ignore')
+    from l2hmc.configs import get_config
+    if isinstance(overrides, str):
+        overrides = [overrides]
+    cfg = get_config(overrides)
+    return get_experiment(cfg=cfg)
+
+
 def dict_to_list_of_overrides(d: dict):
     return [f'{k}={v}' for k, v in flatten_dict(d, sep='.').items()]
 
@@ -111,6 +121,23 @@ def add_to_ckpts_file(outdir: os.PathLike):
     with open(CKPTS_FILE, 'a') as f:
         f.write(Path(outdir).resolve().as_posix() + '\n')
 
+
+
+def get_config(overrides: Optional[list[str]] = None):
+    from hydra import (
+        initialize_config_dir,
+        compose
+    )
+    from hydra.core.global_hydra import GlobalHydra
+    GlobalHydra.instance().clear()
+    overrides = [] if overrides is None else overrides
+    with initialize_config_dir(
+            CONF_DIR.absolute().as_posix(),
+            version_base=None,
+    ):
+        cfg = compose('config', overrides=overrides)
+
+    return cfg
 
 
 @dataclass
