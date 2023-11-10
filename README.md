@@ -46,13 +46,23 @@ python eval_sat.py --out_dir=model-ckpts/out-sat-cdcl --prompts_file=/home/lpan6
 
 # Results
 
-## CDCL trace, 600000 epochs, Satisfiability Prediction, single-token, 20-layer
+## CDCL trace, 600000 epochs, Satisfiability Prediction, single-token difference, 20-layer
+F1 Score: 0.8952380952380952
+Accuracy: 0.89
+Precision: 0.8545454545454545
+Recall: 0.94
 
-## CDCL trace, 600000 epochs, Satisfiability Prediction, single-token, 12-layer
+## CDCL trace, 600000 epochs, Satisfiability Prediction, single-token difference, 12-layer
 F1 Score: 0.7716535433070867
 Accuracy: 0.71
 Precision: 0.6363636363636364
 Recall: 0.98
+
+## CDCL trace, 600000 epochs, Satisfiability Prediction, Random Formula, 12-layer
+F1 Score: 1.0
+Accuracy: 1.0
+Precision: 1.0
+Recall: 1.0
 
 ## DPLL trace, 20000 epochs, Satisfiability Prediction
 

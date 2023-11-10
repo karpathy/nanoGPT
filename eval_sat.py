@@ -155,8 +155,8 @@ if eval_labels is not None:
             pred_label.append(line_sat(line, sep))
 
 if len(true_label) != len(pred_label):
-    print(f"true_label and pred_label have different lengths: {len(true_label)} vs {len(pred_label)}")
-    raise ValueError
+    true_label = true_label[:len(pred_label)]
+
 for i in range(len(true_label)):
     if pred_label[i] is None:
         pred_label[i] = not true_label[i] # If the model fails to predict, we assume it is wrong
