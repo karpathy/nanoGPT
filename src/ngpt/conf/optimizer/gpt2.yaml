@@ -1,4 +1,4 @@
-_target_: configs.OptimizerConfig
+_target_: ngpt.configs.OptimizerConfig
 
 learning_rate: 0.0006
 weight_decay: 0.1

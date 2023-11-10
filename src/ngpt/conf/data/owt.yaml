@@ -1,4 +1,4 @@
-_target_: configs.DataConfig
+_target_: ngpt.configs.DataConfig
 
 dataset: openwebtext
 out_dir: 'out-openwebtext'

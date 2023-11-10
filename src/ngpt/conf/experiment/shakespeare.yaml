@@ -1,5 +1,5 @@
 # @package _global_
-_target_: configs.ExperimentConfig
+_target_: ngpt.configs.ExperimentConfig
 
 defaults:
   - _self_

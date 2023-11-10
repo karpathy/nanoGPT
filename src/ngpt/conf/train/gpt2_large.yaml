@@ -1,4 +1,4 @@
-_target_: configs.TrainConfig
+_target_: ngpt.configs.TrainConfig
 
 framework: pytorch          # ML framework to use: one of 'pytorch', 'tensorflow'
 backend: 'DDP'              # Backend to use for distributed training

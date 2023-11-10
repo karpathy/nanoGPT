@@ -1,4 +1,4 @@
-_target_: configs.ModelConfig
+_target_: ngpt.configs.ModelConfig
 
 n_layer: 12
 n_head: 12
