@@ -11,7 +11,7 @@ precision: null
 use_wandb: true
 wandb_project: nanoGPT
 eval_interval: 2000
-log_interval: 10
+log_interval: 100
 eval_iters: 100
 eval_only: false
 always_save_checkpoint: false
