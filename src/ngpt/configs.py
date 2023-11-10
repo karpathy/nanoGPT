@@ -5,7 +5,7 @@ from __future__ import absolute_import, annotations, division, print_function
 from abc import ABC, abstractmethod
 from contextlib import nullcontext
 from dataclasses import dataclass, asdict
-import logging
+# import logging
 import json
 import os
 from pathlib import Path
@@ -14,7 +14,7 @@ from typing import Optional
 from copy import deepcopy
 import tiktoken
 
-# from enrich import get_logger
+from enrich import get_logger
 # from ngpt import get_logger
 from ezpz import get_rank, get_world_size
 import numpy as np
@@ -23,8 +23,8 @@ import torch
 from hydra.core.config_store import ConfigStore
 from transformers import data
 
-# log = get_logger(__name__, 'INFO')
-log = logging.getLogger(__name__)
+log = get_logger(__name__, 'INFO')
+# log = logging.getLogger(__name__)
 
 RANK = get_rank()
 WORLD_SIZE = get_world_size()
