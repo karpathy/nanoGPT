@@ -51,9 +51,7 @@ def include_file(f) -> bool:
     return (exclude_ and include_)
 
 
-
-@hydra.main(version_base=None, config_path='./conf', config_name='config')
-def main(cfg: DictConfig) -> int:
+def build_trainer(cfg: DictConfig) -> Trainer:
     rank = setup(
         framework=cfg.train.framework,
         backend=cfg.train.backend,
@@ -79,8 +77,12 @@ def main(cfg: DictConfig) -> int:
                 wandb.run.config['samples_per_iter'] = config.samples_per_iter
         log.critical(OmegaConf.to_yaml(cfg))
         print_json(config.to_json())
-    log.critical(f'Output dir: {os.getcwd()}')
-    trainer = Trainer(config)
+    log.warning(f'Output dir: {os.getcwd()}')
+    return Trainer(config)
+
+
+def train(cfg: DictConfig) -> Trainer:
+    trainer = build_trainer(cfg)
     trainer.train()
     if wandb.run is not None:
         wandb.run.log_code(PROJECT_ROOT, include_fn=include_file)
@@ -89,7 +91,13 @@ def main(cfg: DictConfig) -> int:
         trainer.save_ckpt(add_to_wandb=True)
     # if rank == 0 and config.backend.lower() in ['ds', 'dspeed', 'deepspeed']:
     #     git_ds_info()
-    return rank
+    return trainer
+
+
+
+@hydra.main(version_base=None, config_path='./conf', config_name='config')
+def main(cfg: DictConfig) -> Trainer:
+    return train(cfg)
 
 
 if __name__ == '__main__':
