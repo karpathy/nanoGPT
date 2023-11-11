@@ -21,7 +21,7 @@ import numpy as np
 import rich.repr
 import torch
 from hydra.core.config_store import ConfigStore
-from transformers import data
+# from transformers import data
 
 log = get_logger(__name__, 'INFO')
 # log = logging.getLogger(__name__)
@@ -90,6 +90,14 @@ BACKENDS = {
 #     n_embd: int = 768
 #     dropout: float = 0.0
 #     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+
+def is_interactive() -> bool:
+    from IPython.core.getipython import get_ipython
+    # from IPython import get_ipython
+    eval = os.environ.get('INTERACTIVE', None) is not None
+    bval = get_ipython() is not None
+    return (eval or bval)
+
 
 def build_experiment(overrides: Optional[str | list[str]] = None):
     import warnings
