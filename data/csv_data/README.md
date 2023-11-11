@@ -20,6 +20,14 @@ For example, one can utilize a beam search for each of the labels to determine
 which of the letter value pairs gives the strongest certainty of data points in
 this frame, and build the next frame up incrementally using this technique.
 
+# TOC
+
+* [Getting Started](#getting-started)
+  * [Prerequisites](#prerequisites)
+* [Usage](#usage)
+  * [Arguments](#arguments)
+  * [Example](#example)
+
 ## Getting Started
 
 ### Prerequisites
@@ -58,7 +66,15 @@ cd ../../explorations
 bash run_csv_data_training.sh
 ```
 
-6. [Optional] Create an exploration script to test training and inference with
+
+6. After running training, use the `unprocess.py` script to prepare the data for
+   graphing.
+
+```bash
+python3 unprocess.py -i <processed_data_file> -o forecast.csv --convert_to_csv
+```
+
+7. [Optional] Create an exploration script to test training and inference with
    and without with and without shuffling.
 
 ### Arguments
