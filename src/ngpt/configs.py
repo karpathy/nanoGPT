@@ -28,10 +28,10 @@ log = get_logger(__name__, 'INFO')
 
 RANK = get_rank()
 WORLD_SIZE = get_world_size()
-# if RANK == 0:
-#     log.setLevel("INFO")
-# else:
-#     log.setLevel("CRITICAL")
+if RANK == 0:
+    log.setLevel("INFO")
+else:
+    log.setLevel("CRITICAL")
 
 
 # -- Configure useful Paths -----------------------
@@ -48,18 +48,17 @@ CKPT_DIR = HERE.joinpath('ckpts')
 DS_CONFIG_PATH = CONF_DIR.joinpath('ds_config.yaml')
 LOGS_DIR = HERE.joinpath('logs')
 OUTPUTS_DIR = HERE.joinpath('outputs')
-# QUARTO_OUTPUTS_DIR = PROJECT_DIR.joinpath('qmd', 'outputs')
+
+OUTDIRS_FILE = OUTPUTS_DIR.joinpath('outdirs.log')
+CKPTS_FILE = CKPT_DIR.joinpath('checkpoints.log')
 
 CKPT_DIR.mkdir(exist_ok=True, parents=True)
 CONF_DIR.mkdir(exist_ok=True, parents=True)
+LOGS_DIR.mkdir(exist_ok=True, parents=True)
 CACHE_DIR.mkdir(exist_ok=True, parents=True)
+OUTPUTS_DIR.mkdir(exist_ok=True, parents=True)
 WB_CACHE_DIR.mkdir(exist_ok=True, parents=True)
 HF_DATASETS_CACHE_DIR.mkdir(exist_ok=True, parents=True)
-LOGS_DIR.mkdir(exist_ok=True, parents=True)
-# QUARTO_OUTPUTS_DIR.mkdir(exist_ok=True, parents=True)
-OUTPUTS_DIR.mkdir(exist_ok=True, parents=True)
-OUTDIRS_FILE = OUTPUTS_DIR.joinpath('outdirs.log')
-CKPTS_FILE = CKPT_DIR.joinpath('checkpoints.log')
 
 PT_DTYPES = {
     'float32': torch.float32,
