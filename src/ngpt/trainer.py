@@ -23,22 +23,35 @@ import wandb
 # import logging
 from typing import Any, Optional, Union
 import time
-from tqdm.auto import trange
 import math
 from pathlib import Path
 from dataclasses import asdict
+# from enrich.console import get_console
 
 import numpy as np
 import torch
 from torch.cuda.amp.grad_scaler import GradScaler
 from torch.nn.parallel import DistributedDataParallel as DDP
+# import logging
 
 from ngpt.model import GPT
 from rich.text import Text
 from enrich import get_logger
 # from ngpt import get_logger
+from ezpz.history import BaseHistory
 from ezpz import get_rank, get_world_size
 from ngpt.configs import ExperimentConfig, ModelConfig, add_to_ckpts_file
+
+from tqdm.auto import trange
+# if is_interactive():
+#     from tqdm.notebook import trange
+# else:
+#     from tqdm.auto import trange
+# from tqdm.autonotebook import trange
+# from tqdm import tqdm
+# from tqdm import trange
+
+
 
 log = get_logger(__name__, level="INFO")
 # log = logging.getLogger(__name__)
@@ -48,6 +61,26 @@ WORLD_SIZE = get_world_size()
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 ScalarLike = Union[float, int, np.floating, bool]
+
+
+# class TqdmLoggingHandler(logging.StreamHandler):
+#     """Avoid tqdm progress bar interruption by logger's output to console"""
+#     # see logging.StreamHandler.eval method:
+#     # https://github.com/python/cpython/blob/d2e2534751fd675c4d5d3adc208bf4fc984da7bf/Lib/logging/__init__.py#L1082-L1091
+#     # and tqdm.write method:
+#     # https://github.com/tqdm/tqdm/blob/f86104a1f30c38e6f80bfd8fb16d5fcde1e7749f/tqdm/std.py#L614-L620
+#
+#     def emit(self, record):
+#         try:
+#             msg = self.format(record)
+#             tqdm.write(msg, end=self.terminator)
+#         except RecursionError:
+#             raise
+#         except Exception:
+#             self.handleError(record)
+
+
+# log.addHandler(TqdmLoggingHandler())
 
 
 def format_pair(k: str, v: ScalarLike) -> str:
@@ -128,6 +161,7 @@ def average_dict(d: dict) -> dict:
 
 class Trainer:
     def __init__(self, config: ExperimentConfig):
+        # self.console = get_console()
         self.config = config
         self.ckpt = None
         # NOTE: ---------------------------------------------------------
@@ -135,6 +169,7 @@ class Trainer:
         #     1 if config.optimizer.gradient_accumulation_steps is None
         #     else config.optimizer.gradient_accumulation_steps
         # ) -------------------------------------------------------------
+        self.train_history = BaseHistory()
         self._gas = self.config.optimizer.gas
         self._lr = self.config.optimizer.learning_rate
         self._min_lr = self.config.optimizer.min_lr
@@ -344,10 +379,13 @@ class Trainer:
             dt.append(dtf + dtb)
         timers = {
             'iter': self.config.iter_num,
+            'dt': np.array(dt),
             'dt_tot': np.sum(dt),
             'dt_avg': np.mean(dt),
+            'dtf': np.array(dtf),
             'dtf_tot': np.sum(dtf),
             'dtf_avg': np.mean(dtf),
+            'dtb': np.array(dtb),
             'dtb_tot': np.sum(dtb),
             'dtb_avg': np.mean(dtb)
         }
@@ -401,19 +439,28 @@ class Trainer:
             artifact.add_file(modelfile.as_posix())
             wandb.run.log_artifact(artifact)
 
-    def train(self):
+    def train(
+            self,
+            train_iters: Optional[int] = None,
+    ):
         x, y = self.get_batch('train')
         t0 = time.perf_counter()
         # local_iter_num = 0
         raw_model = self.model.module  #  if WORLD_SIZE > 1 else self.model
         assert isinstance(raw_model, GPT)
         running_mfu = -1.0
-        # while True:
-        train_iterable = trange(self.config.train.max_iters, disable=(WORLD_SIZE>1))
         output = {'x': x, 'y': y}
         t0 = time.perf_counter()
         losses = {}
-        for train_iter in train_iterable:
+        train_iters = (
+            self.config.train.max_iters
+            if train_iters is None else train_iters
+        )
+        for train_iter in trange(
+                train_iters,
+                disable=(RANK != 0),
+                total=train_iters,
+        ):
             if self.config.iter_num == 0 and self.config.train.eval_only:
                 return
             if self.config.iter_num % self.config.train.eval_interval == 0 and RANK == 0:
@@ -435,19 +482,17 @@ class Trainer:
                 'tokens_per_sec': tokens_per_sec,
                 'samples_per_sec': samples_per_sec,
             }
-            postfix = output['metrics']
-            postfix |= output['timers']
-            postfix['elapsed'] = dt
-            # train_iterable.set_postfix(postfix)
-            # 'metrics': metrics,
-            # 'timers': timers,
-            # 'x': x,
-            # 'y': y,
+            # metrics = output['metrics']
+            # metrics |= output['timers']
+            lossf = output['metrics']['loss'].item() * self._gas
+            output['metrics']['loss_tot'] = lossf
+            _ = self.train_history.update(output['timers'])
+            _ = self.train_history.update(output['metrics'])
+            zero = torch.tensor(0.0)
             if (
                     self.config.iter_num % self.config.train.log_interval == 0
                     and (RANK == 0)
             ):
-                lossf = output['metrics']['loss'].item() * self._gas
                 if train_iter >= 5:
                     mfu = raw_model.estimate_mfu(
                         (self.config.model.batch_size * self.config.optimizer.gas),
@@ -457,19 +502,17 @@ class Trainer:
                         mfu if running_mfu == -1.0
                         else 0.9 * running_mfu + 0.1 * mfu
                     )
-                current = {
+                pvars = {
                     'step': self.config.iter_num,
                     'loss': lossf,
                     'dt': dt * 1000,
-                    # 'dt(ms)': dt * 1000,
-                    # 'dt(×10³)': dt * 1000,
                     'sps': samples_per_sec,
                     'mtps': tokens_per_sec / int(1e6),
                     'mfu': running_mfu * 100,
-                    'train_loss': losses['train'].item(),
-                    'val_loss': losses['val'],
+                    'train_loss': losses.get('train', zero).item(),
+                    'val_loss': losses.get('val', zero).item(),
                 }
-                summary = summarize_dict(current)
+                summary = summarize_dict(pvars)
                 log.info(Text(summary))
                 if wandb.run is not None:
                     losses |= {
@@ -479,11 +522,31 @@ class Trainer:
                     }
                     losses['lossf'] = lossf
                     losses['iter'] = self.config.iter_num
-                    wandb.run.log({
-                        'losses': losses,
-                        'metrics': output['metrics'],
-                        'timers': output['timers']
-                    })
+                    # wbmetrics = {
+                    #     f'training/{k}': v for k, v in metrics.items()
+                    # }
+                    wbmetrics = {
+                        f'Training/{k}': (
+                            (wandb.Histogram(v.tolist())
+                                if isinstance(v, np.ndarray) else v)
+                        ) for k, v in output['metrics'].items()
+                    }
+                    wbmetrics |= {
+                        f'Timing/{k}': (
+                            (wandb.Histogram(v.tolist())
+                                if isinstance(v, np.ndarray) else v)
+                        ) for k, v in output['timers'].items()
+                    }
+                    wbmetrics |= {
+                        f'Loss/{k}': v for k, v in losses.items()
+                    }
+                    wandb.run.log(wbmetrics)
+                    # wandb.run.log({
+                    #     'losses': losses,
+                    #     'metrics': output['metrics'],
+                    #     'timers': output['timers'],
+                    #     # 'training': metrics,
+                    # })
 
     def evaluate(
             self,
@@ -492,16 +555,17 @@ class Trainer:
             max_new_tokens = 500,
             temperature: float = 0.8,
             top_k: int = 200,
-        ):
+            display: Optional[bool] = True,
+    ) -> dict[str, str]:
         # seed: Optional[int] = None,
         assert isinstance(self.model.module, GPT)
         assert issubclass(GPT, torch.nn.Module)
         self.model.eval()
-        outputs = []
+        outputs = {}
         with torch.no_grad():
             start_ids = self.config.data.encode(s)
             x = (torch.tensor(start_ids, dtype=torch.long, device=DEVICE)[None, ...])
-            for _ in range(num_samples):
+            for idx in range(num_samples):
                 y = self.model.module.generate(
                     x,
                     max_new_tokens,
@@ -509,7 +573,25 @@ class Trainer:
                     top_k=top_k
                 )
                 response = self.config.data.decode(y[0].tolist())
-                outputs.append(response)
-                log.info(f'[prompt]: "{s}"')
-                log.info(f'> "{response}"')
-                log.info(100 * '-')
+                # outputs.append(response)
+                response_ = [i for i in response.split('\n')]
+                prompt = response_[0]
+                responses = [*response_[1:]]
+                ret0 = fr"[prompt]: '{prompt}'"
+                ret1 = '> ' + '\n> '.join(responses)
+                if display:
+                    log.info(f'{ret0}')
+                    log.info(f'{ret1}')
+                outputs[f'{idx}'] = {
+                    'raw': response,
+                    'prompt': Text(ret0, style='string'),
+                    'formatted': Text(ret1, style='blockquote'),
+                }
+                # log.info(f'[prompt]: "{s}"')
+                # # responses = reponse.split('\n ')
+                # log.info('> "' + '\n> '.join(response.split('\n ')) + '"')
+                #
+                # log.info('\n'.join)
+                # log.info(f'> "{response}"')
+                # log.info(100 * '-')
+        return outputs
