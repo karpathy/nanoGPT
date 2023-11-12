@@ -4,9 +4,11 @@ import re
 def unshuffle_data(data, labels, convert_to_csv=False):
     """
     Unshuffles data based on the specified labels and prepends the part left of the first label to each line.
+    Adds empty values for missing labels to maintain column structure.
 
     :param data: List of strings containing shuffled data.
     :param labels: List of labels to order the data by.
+    :param convert_to_csv: Boolean flag to convert output to CSV format.
     :return: List of strings with data unshuffled and prepended with the part left of the first label.
     """
     unshuffled_data = []
@@ -15,23 +17,20 @@ def unshuffle_data(data, labels, convert_to_csv=False):
         # Extracting the part before the first label
         prefix = re.match(r"[^" + "".join(labels) + "]*", line).group()
 
-        # Extracting and sorting the parts with labels
-        parts = re.findall(r"([" + "".join(labels) + "])(-?\d+\.\d+e[+-]\d+)", line)
+        # Extracting the parts with labels
+        parts_dict = {label: "" for label in labels}  # Initialize all labels with empty values
+        for label, value in re.findall(r"([" + "".join(labels) + "])(-?\d+\.\d+e[+-]\d+)", line):
+            parts_dict[label] = value
 
-        sorted_parts = sorted(
-            parts, key=lambda x: labels.index(x[0]) if x[0] in labels else len(labels)
-        )
-
+        # Forming the unshuffled line
         if convert_to_csv:
-          # Prepending the prefix and forming the unshuffled line
-          unshuffled_line = prefix + "".join(
-              f",{value}" for label, value in sorted_parts
-          )
+            unshuffled_line = prefix + "".join(
+                f",{parts_dict[label]}" for label in labels
+            )
         else:
-          # Prepending the prefix and forming the unshuffled line
-          unshuffled_line = prefix + "".join(
-              f"{label}{value}" for label, value in sorted_parts
-          )
+            unshuffled_line = prefix + "".join(
+                f"{label}{parts_dict[label]}" for label in labels
+            )
 
         unshuffled_data.append(unshuffled_line)
 
