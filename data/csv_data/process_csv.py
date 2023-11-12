@@ -15,9 +15,10 @@ def process_csv(input_file: str, output_file: str, shuffle: bool, exclude: list)
         csv_reader = csv.reader(csv_file)
 
         for row in csv_reader:
-            # Use the letter mapping to assign letters to values
+            # Use the letter mapping to assign letters to values, skipping empty values
             letter_value_pairs = [
-                f"{letter_mapping[i]}{val}" for i, val in enumerate(row) if i in letter_mapping
+                f"{letter_mapping[i]}{val}" for i, val in enumerate(row)
+                if i in letter_mapping and val.strip()  # Added check for non-empty values
             ]
 
             if shuffle:
