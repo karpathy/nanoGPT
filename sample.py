@@ -1,5 +1,5 @@
 """
-Sample from a trained model
+Sample generations from a trained model
 """
 import os
 import pickle
@@ -9,14 +9,14 @@ import tiktoken
 import sys
 
 from model import GPTConfig, GPT
-from utils import HiddenPrints
+from utils import HiddenPrints, printok, printerr
 
 # -----------------------------------------------------------------------------
 init_from = 'resume' # either 'resume' (from an out_dir) or a gpt2 variant (e.g. 'gpt2-xl')
 out_dir = 'insulted_inital_test_6k' # ignored if init_from is not 'resume'
-start = "A most notable" # or "<|endoftext|>" or etc. Can also specify a file, use as: "FILE:prompt.txt"
+start = "A most notable" # or "<|endoftext|>" or etc. Can also specify a file, use the following: "FILE:prompt.txt" where 'prompt.txt' is the actual filename
 num_samples = 10 # number of samples to draw
-max_new_tokens = 500 # number of tokens generated in each sample
+max_new_tokens = 12 # number of tokens generated in each sample
 temperature = 0.8 # 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
 top_k = 200 # retain only the top_k most likely tokens, clamp others to have 0 probability
 seed = 1337
@@ -71,7 +71,7 @@ if (load_meta and "shakespeare_insults" not in meta_path):
     stoi, itos = meta['stoi'], meta['itos']
     encode = lambda s: [stoi[c] for c in s]
     decode = lambda l: ''.join([itos[i] for i in l])
-# Alt method, for insults & the custom tokenizer
+# Alt method, for work with the insults & the custom tokenizer class
 elif (load_meta and "shakespeare_insults" in meta_path):
     print(f"Loading in the 'shakespeare_insults' tokenizer, from {meta_path}...")
     modpath = meta_path.replace("meta.pkl", "") #dir which contains the tokenizer data + class def
@@ -81,6 +81,7 @@ elif (load_meta and "shakespeare_insults" in meta_path):
         sys.path.insert(1, modpath)
         from prepare import tokenizer
         # print(tokenizer.__dict__)
+    # tokenization funcs, taken from the upstream class definition
     encode = tokenizer.__call__
     decode = tokenizer.decode
 else:
@@ -96,13 +97,53 @@ if start.startswith('FILE:'):
         start = f.read()
 start_ids = encode(start)
 x = (torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...])
+    # x shape: [1, seq_len]
+
 
 # run generation
 with torch.no_grad():
     with ctx:
         for k in range(num_samples):
+            x = x[:, :]
+            print("input shape: ", x.shape)
+            y = model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k, return_token_logprobs=False)
+            output_strings = decode(y[0].tolist())
 
-            y = model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k)
-            print(decode(y[0].tolist()))
+            # get the ppl @ each step in the full sequence
+            if calculate_perplexity:
+                seq_logprobs = []
+                logits, loss = model.forward(y, y) 
+                    # Shapes:
+                    # logits: (seq_len, vocab_dim) 
+                    #   loss: (1) --> scalar
+                logprobs = torch.log_softmax(logits, dim=1)
+
+                # TODO: calculate perplexity correctly @ each step in the sequence (up to that step)
+                #       get a list of the ppls and a way to get at the output distributions nicely
+                # TODO: also make it optional to save visualizations for sampled generations
+                # investigate the output distribution
+                for idx, tok_id in enumerate(y[0]):
+                    # logits[:, idx, tok_id] #alleged idx'ing of token score
+                    tok_logprob = logprobs[:, idx, tok_id]
+                    seq_logprobs.append(tok_logprob)
+
+                    worst, best = torch.min(logprobs[:, idx, :]), torch.max(logprobs[:, idx, :])
+                    worst_idx, best_idx = torch.argmin(logprobs[:, idx, :]), torch.argmax(logprobs[:, idx, :])
+                    worst_str, best_str = tokenizer.decode([worst_idx.item()]), tokenizer.decode([best_idx.item()])
+                    # Fancy printing of the sequence
+                    token_str = decode([tok_id.item()])[0]
+                    print("".join(output_strings[:idx]), sep="", end="")
+                    printok(token_str if token_str != " " else "_")
+                    print(f"  current token: {tok_id} should be followed by {y[0, idx+1]}")
+                    # print(f"   min -- token: {worst_idx} score: {worst} str: {worst_str}")
+                    # print(f"   max -- token: {best_idx} score: {best} str: {best_str}")
+                    print(f"  ppl @ this point: {torch.exp(sum(seq_logprobs)/len(seq_logprobs)).item()}")
+
+                print("logits: ", logits.shape)
+                print("  loss: ", loss)
+                print("y shape: ", y.shape, y)
+
+
+            print(output_strings)
             print('---------------')
             exit(42) #ckg added, early stop
