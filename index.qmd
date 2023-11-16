@@ -1,15 +1,15 @@
 ---
-citation:
-   author: Sam Foreman
-   type: webpage
-   title: "nanoGPT"
-   url: https://saforem2.github.io/nanoGPT
-author: ""
-date: ""
-author-title: ""
-affiliation-title: ""
-published-title: ""
-modified-title: ""
+# citation:
+#    author: Sam Foreman
+#    type: webpage
+#    title: "nanoGPT"
+#    url: https://saforem2.github.io/nanoGPT
+# author: ""
+# date: ""
+# author-title: ""
+# affiliation-title: ""
+# published-title: ""
+# modified-title: ""
 site-url: https://saforem2.github.io/nanoGPT
 website:
   open-graph: true
@@ -17,7 +17,7 @@ website:
   page-navigation: true
   title: "nanoGPT"
   # title: "Sam Foreman"
-  site-url: "https:"
+  site-url: "https:saforem2.github.io/nanoGPT"
   favicon: "./favicon.svg"
   back-to-top-navigation: true
   repo-url: https://github.com/saforem2/nanoGPT
@@ -36,7 +36,7 @@ website:
       - icon: github
         menu:
           - text: Source Code
-            url: https://github.com/saforem2/nanoGPT/blob/main/index.qmd
+            url: https://github.com/saforem2/nanoGPT/blob/master/index.qmd
           - text: New Issue
             url: https://github.com/saforem2/nanoGPT/issues/new/choose
 editor:
@@ -67,9 +67,14 @@ A minimal LLM implementation for research and education.
 #| echo: false
 import datetime
 from rich import print
+now = datetime.datetime.now()
+day = now.strftime('%m/%d/%Y')
+time = now.strftime('%H:%M:%S')
 print(' '.join([
   "[dim italic]Last Updated[/]:",
-  f"{datetime.datetime.now().strftime('%m/%d/%Y @ %H:%M:%S')}"
+  f"[#F06292]{day}[/]",
+  f"[dim]@[/]",
+  f"[#1A8FFF]{time}[/]"
 ]))
 ```
 

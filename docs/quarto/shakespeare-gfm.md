@@ -1,7 +1,10 @@
 # Shakespeare
 Sam Foreman
-[<span class="orcid-green">{{< ai orcid >}}</span>](https://orcid.org/0000-0002-9981-0876)
+[<span class="orcid-green"></span>](https://orcid.org/0000-0002-9981-0876)
 2023-11-15
+
+<span style="text-align:left;">[![Open In
+Collab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/saforem2/nanoGPT/blob/master/notebooks/ngpt-shakespeare.ipynb)</span>
 
 - [`nanoGPT`](#nanogpt)
 - [Install / Setup](#install--setup)

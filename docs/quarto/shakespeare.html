@@ -79,6 +79,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="../site_libs/bootstrap/bootstrap.min.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
 <link href="../site_libs/bootstrap/bootstrap-dark.min.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="../site_libs/quarto-contrib/academicons-1.9.2/all.css" rel="stylesheet">
+<link href="../site_libs/quarto-contrib/academicons-1.9.2/size.css" rel="stylesheet">
 <script src="../site_libs/quarto-contrib/iconify-1.0.7/iconify-icon.min.js"></script>
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
@@ -117,6 +119,7 @@ gtag('config', 'G-XVM2Y822Y1', { 'anonymize_ip': true});
 <link rel="stylesheet" href="../css/profile.css">
 <meta property="og:title" content="nanoGPT - Shakespeare">
 <meta property="og:description" content="">
+<meta property="og:image" content="https://colab.research.google.com/assets/colab-badge.svg">
 <meta property="og:site-name" content="nanoGPT">
 <meta name="twitter:title" content="nanoGPT - Shakespeare">
 <meta name="twitter:description" content="">
@@ -253,7 +256,7 @@ gtag('config', 'G-XVM2Y822Y1', { 'anonymize_ip': true});
     <div>
     <div class="quarto-title-meta-heading"></div>
     <div class="quarto-title-meta-contents">
-             <p><a href="https://samforeman.me">Sam Foreman </a><a href="https://orcid.org/0000-0002-9981-0876"><span class="orcid-green"></span></a> </p>
+             <p><a href="https://samforeman.me">Sam Foreman </a><a href="https://orcid.org/0000-0002-9981-0876"><span class="orcid-green"><i class="ai  ai-orcid"></i></span></a> </p>
           </div>
   </div>
     
@@ -270,6 +273,7 @@ gtag('config', 'G-XVM2Y822Y1', { 'anonymize_ip': true});
 
 </header>
 
+<p><span style="text-align:left;"><a href="https://colab.research.google.com/github/saforem2/nanoGPT/blob/master/notebooks/ngpt-shakespeare.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" class="img-fluid" alt="Open In Collab"></a></span></p>
 <ul>
 <li><a href="#nanogpt"><code>nanoGPT</code></a></li>
 <li><a href="#install--setup">Install / Setup</a></li>
@@ -287,24 +291,24 @@ gtag('config', 'G-XVM2Y822Y1', { 'anonymize_ip': true});
 <p>We need to install <code>ngpt</code> and setup the Shakespeare dataset</p>
 <p>This will need to be ran the first time you are running this notebook.</p>
 <p>Following the</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="op">!</span>python3 <span class="op">-</span>m pip install nanoGPT</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1"></a><span class="op">!</span>python3 <span class="op">-</span>m pip install nanoGPT</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <p>you will need to restart your runtime (Runtime -&gt; Restart runtime)</p>
 <p>After this, you should be able to</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="im">import</span> ngpt</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> ngpt.<span class="va">__file__</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co">'/content/nanoGPT/src/ngpt/__init__.py'</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">%%bash</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-c</span> <span class="st">'import ngpt; print(ngpt.__file__)'</span> <span class="dv">2</span><span class="op">&gt;</span> <span class="st">'/dev/null'</span></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">[[</span> <span class="va">$?</span> <span class="ot">-eq</span> 0 <span class="kw">]];</span> <span class="cf">then</span></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="bu">echo</span> <span class="st">"Has ngpt installed. Nothing to do."</span></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="cf">else</span></span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="bu">echo</span> <span class="st">"Does not have ngpt installed. Installing..."</span></span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">git</span> clone <span class="st">'https://github.com/saforem2/nanoGPT'</span></span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="ex">python3</span> nanoGPT/data/shakespeare_char/prepare.py</span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="ex">python3</span> <span class="at">-m</span> pip install <span class="at">-e</span> nanoGPT <span class="at">-vvv</span></span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="cf">fi</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb2"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="im">import</span> ngpt</span>
+<span id="cb2-2"><a href="#cb2-2"></a><span class="op">&gt;&gt;&gt;</span> ngpt.<span class="va">__file__</span></span>
+<span id="cb2-3"><a href="#cb2-3"></a><span class="co">'/content/nanoGPT/src/ngpt/__init__.py'</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb3"><pre class="sourceCode numberSource bash number-lines code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1"></a><span class="ex">%%bash</span></span>
+<span id="cb3-2"><a href="#cb3-2"></a></span>
+<span id="cb3-3"><a href="#cb3-3"></a><span class="ex">python3</span> <span class="at">-c</span> <span class="st">'import ngpt; print(ngpt.__file__)'</span> <span class="dv">2</span><span class="op">&gt;</span> <span class="st">'/dev/null'</span></span>
+<span id="cb3-4"><a href="#cb3-4"></a></span>
+<span id="cb3-5"><a href="#cb3-5"></a><span class="cf">if</span> <span class="kw">[[</span> <span class="va">$?</span> <span class="ot">-eq</span> 0 <span class="kw">]];</span> <span class="cf">then</span></span>
+<span id="cb3-6"><a href="#cb3-6"></a>    <span class="bu">echo</span> <span class="st">"Has ngpt installed. Nothing to do."</span></span>
+<span id="cb3-7"><a href="#cb3-7"></a><span class="cf">else</span></span>
+<span id="cb3-8"><a href="#cb3-8"></a>    <span class="bu">echo</span> <span class="st">"Does not have ngpt installed. Installing..."</span></span>
+<span id="cb3-9"><a href="#cb3-9"></a>    <span class="fu">git</span> clone <span class="st">'https://github.com/saforem2/nanoGPT'</span></span>
+<span id="cb3-10"><a href="#cb3-10"></a>    <span class="ex">python3</span> nanoGPT/data/shakespeare_char/prepare.py</span>
+<span id="cb3-11"><a href="#cb3-11"></a>    <span class="ex">python3</span> <span class="at">-m</span> pip install <span class="at">-e</span> nanoGPT <span class="at">-vvv</span></span>
+<span id="cb3-12"><a href="#cb3-12"></a><span class="cf">fi</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-display">
 <pre><code>/lus/grand/projects/datascience/foremans/locations/thetaGPU/projects/saforem2/nanoGPT/src/ngpt/__init__.py
 Has ngpt installed. Nothing to do.</code></pre>
@@ -314,15 +318,15 @@ Has ngpt installed. Nothing to do.</code></pre>
 <section id="post-install" class="level2">
 <h2 class="anchored" data-anchor-id="post-install">Post Install</h2>
 <p>If installed correctly, you should be able to:</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="im">import</span> ngpt</span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> ngpt.<span class="va">__file__</span></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="co">'/path/to/nanoGPT/src/ngpt/__init__.py'</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext autoreload</span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> ngpt</span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> rich <span class="im">import</span> <span class="bu">print</span></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(ngpt.<span class="va">__file__</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb5"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="im">import</span> ngpt</span>
+<span id="cb5-2"><a href="#cb5-2"></a><span class="op">&gt;&gt;&gt;</span> ngpt.<span class="va">__file__</span></span>
+<span id="cb5-3"><a href="#cb5-3"></a><span class="co">'/path/to/nanoGPT/src/ngpt/__init__.py'</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb6"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1"></a><span class="op">%</span>load_ext autoreload</span>
+<span id="cb6-2"><a href="#cb6-2"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
+<span id="cb6-3"><a href="#cb6-3"></a></span>
+<span id="cb6-4"><a href="#cb6-4"></a><span class="im">import</span> ngpt</span>
+<span id="cb6-5"><a href="#cb6-5"></a><span class="im">from</span> rich <span class="im">import</span> <span class="bu">print</span></span>
+<span id="cb6-6"><a href="#cb6-6"></a><span class="bu">print</span>(ngpt.<span class="va">__file__</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-display">
 <pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:monospace">
     The autoreload extension is already loaded. To reload it, use:
@@ -342,36 +346,36 @@ Has ngpt installed. Nothing to do.</code></pre>
 <li>Instnatiate <code>config: ExperimentConfig = instantiate(cfg)</code></li>
 <li>Build <code>trainer = Trainer(config)</code></li>
 </ol>
-<div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> os</span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> ezpz <span class="im">import</span> setup_torch</span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> hydra.utils <span class="im">import</span> instantiate</span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> ngpt.configs <span class="im">import</span> get_config, PROJECT_ROOT</span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> ngpt.trainer <span class="im">import</span> Trainer</span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> enrich.console <span class="im">import</span> get_console</span>
-<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>console <span class="op">=</span> get_console()</span>
-<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>HF_DATASETS_CACHE <span class="op">=</span> PROJECT_ROOT.joinpath(<span class="st">'.cache'</span>, <span class="st">'huggingface'</span>)</span>
-<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>HF_DATASETS_CACHE.mkdir(exist_ok<span class="op">=</span><span class="va">True</span>, parents<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>os.environ[<span class="st">'MASTER_PORT'</span>] <span class="op">=</span> <span class="st">'5432'</span></span>
-<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>os.environ[<span class="st">'HF_DATASETS_CACHE'</span>] <span class="op">=</span> HF_DATASETS_CACHE.as_posix()</span>
-<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>rank <span class="op">=</span> setup_torch(<span class="st">'DDP'</span>, seed<span class="op">=</span><span class="dv">1234</span>)</span>
-<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>cfg <span class="op">=</span> get_config(</span>
-<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>    [</span>
-<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>        <span class="st">'data=shakespeare'</span>,</span>
-<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>        <span class="st">'model=shakespeare'</span>,</span>
-<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>        <span class="st">'optimizer=shakespeare'</span>,</span>
-<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>        <span class="st">'train=shakespeare'</span>,</span>
-<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>        <span class="st">'train.dtype=bfloat16'</span>,</span>
-<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>        <span class="st">'train.max_iters=5000'</span>,</span>
-<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>        <span class="st">'train.log_interval=250'</span>,</span>
-<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>        <span class="st">'train.eval_interval=1000'</span>,</span>
-<span id="cb7-27"><a href="#cb7-27" aria-hidden="true" tabindex="-1"></a>    ]</span>
-<span id="cb7-28"><a href="#cb7-28" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb7-29"><a href="#cb7-29" aria-hidden="true" tabindex="-1"></a>config <span class="op">=</span> instantiate(cfg)</span>
-<span id="cb7-30"><a href="#cb7-30" aria-hidden="true" tabindex="-1"></a>trainer <span class="op">=</span> Trainer(config)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb7"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1"></a><span class="im">import</span> os</span>
+<span id="cb7-2"><a href="#cb7-2"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb7-3"><a href="#cb7-3"></a><span class="im">from</span> ezpz <span class="im">import</span> setup_torch</span>
+<span id="cb7-4"><a href="#cb7-4"></a><span class="im">from</span> hydra.utils <span class="im">import</span> instantiate</span>
+<span id="cb7-5"><a href="#cb7-5"></a><span class="im">from</span> ngpt.configs <span class="im">import</span> get_config, PROJECT_ROOT</span>
+<span id="cb7-6"><a href="#cb7-6"></a><span class="im">from</span> ngpt.trainer <span class="im">import</span> Trainer</span>
+<span id="cb7-7"><a href="#cb7-7"></a><span class="im">from</span> enrich.console <span class="im">import</span> get_console</span>
+<span id="cb7-8"><a href="#cb7-8"></a></span>
+<span id="cb7-9"><a href="#cb7-9"></a>console <span class="op">=</span> get_console()</span>
+<span id="cb7-10"><a href="#cb7-10"></a>HF_DATASETS_CACHE <span class="op">=</span> PROJECT_ROOT.joinpath(<span class="st">'.cache'</span>, <span class="st">'huggingface'</span>)</span>
+<span id="cb7-11"><a href="#cb7-11"></a>HF_DATASETS_CACHE.mkdir(exist_ok<span class="op">=</span><span class="va">True</span>, parents<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb7-12"><a href="#cb7-12"></a></span>
+<span id="cb7-13"><a href="#cb7-13"></a>os.environ[<span class="st">'MASTER_PORT'</span>] <span class="op">=</span> <span class="st">'5432'</span></span>
+<span id="cb7-14"><a href="#cb7-14"></a>os.environ[<span class="st">'HF_DATASETS_CACHE'</span>] <span class="op">=</span> HF_DATASETS_CACHE.as_posix()</span>
+<span id="cb7-15"><a href="#cb7-15"></a></span>
+<span id="cb7-16"><a href="#cb7-16"></a>rank <span class="op">=</span> setup_torch(<span class="st">'DDP'</span>, seed<span class="op">=</span><span class="dv">1234</span>)</span>
+<span id="cb7-17"><a href="#cb7-17"></a>cfg <span class="op">=</span> get_config(</span>
+<span id="cb7-18"><a href="#cb7-18"></a>    [</span>
+<span id="cb7-19"><a href="#cb7-19"></a>        <span class="st">'data=shakespeare'</span>,</span>
+<span id="cb7-20"><a href="#cb7-20"></a>        <span class="st">'model=shakespeare'</span>,</span>
+<span id="cb7-21"><a href="#cb7-21"></a>        <span class="st">'optimizer=shakespeare'</span>,</span>
+<span id="cb7-22"><a href="#cb7-22"></a>        <span class="st">'train=shakespeare'</span>,</span>
+<span id="cb7-23"><a href="#cb7-23"></a>        <span class="st">'train.dtype=bfloat16'</span>,</span>
+<span id="cb7-24"><a href="#cb7-24"></a>        <span class="st">'train.max_iters=5000'</span>,</span>
+<span id="cb7-25"><a href="#cb7-25"></a>        <span class="st">'train.log_interval=250'</span>,</span>
+<span id="cb7-26"><a href="#cb7-26"></a>        <span class="st">'train.eval_interval=1000'</span>,</span>
+<span id="cb7-27"><a href="#cb7-27"></a>    ]</span>
+<span id="cb7-28"><a href="#cb7-28"></a>)</span>
+<span id="cb7-29"><a href="#cb7-29"></a>config <span class="op">=</span> instantiate(cfg)</span>
+<span id="cb7-30"><a href="#cb7-30"></a>trainer <span class="op">=</span> Trainer(config)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-display">
 <pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:monospace,Menlo,'DejaVu Sans Mono',consolas,'Courier New'">
     --------------------------------------------------------------------------
@@ -403,10 +407,10 @@ Has ngpt installed. Nothing to do.</code></pre>
 </section>
 <section id="prompt-prior-to-training" class="level2">
 <h2 class="anchored" data-anchor-id="prompt-prior-to-training">Prompt (<strong>prior</strong> to training)</h2>
-<div class="sourceCode" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>query <span class="op">=</span> <span class="st">"What is a supercomputer?"</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>outputs <span class="op">=</span> trainer.evaluate(query, num_samples<span class="op">=</span><span class="dv">1</span>, display<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>console.<span class="bu">print</span>(<span class="vs">fr'\[prompt]: "</span><span class="sc">{</span>query<span class="sc">}</span><span class="vs">"'</span>)</span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>console.<span class="bu">print</span>(<span class="st">"\[response]:</span><span class="ch">\n\n</span><span class="st">"</span> <span class="op">+</span> <span class="vs">fr"</span><span class="sc">{</span>outputs[<span class="st">'0'</span>][<span class="st">'raw'</span>]<span class="sc">}</span><span class="vs">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb8"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1"></a>query <span class="op">=</span> <span class="st">"What is a supercomputer?"</span></span>
+<span id="cb8-2"><a href="#cb8-2"></a>outputs <span class="op">=</span> trainer.evaluate(query, num_samples<span class="op">=</span><span class="dv">1</span>, display<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb8-3"><a href="#cb8-3"></a>console.<span class="bu">print</span>(<span class="vs">fr'\[prompt]: "</span><span class="sc">{</span>query<span class="sc">}</span><span class="vs">"'</span>)</span>
+<span id="cb8-4"><a href="#cb8-4"></a>console.<span class="bu">print</span>(<span class="st">"\[response]:</span><span class="ch">\n\n</span><span class="st">"</span> <span class="op">+</span> <span class="vs">fr"</span><span class="sc">{</span>outputs[<span class="st">'0'</span>][<span class="st">'raw'</span>]<span class="sc">}</span><span class="vs">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-display">
 <pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:monospace,Menlo,'DejaVu Sans Mono',consolas,'Courier New'">
     <span style="font-weight: bold">[</span>prompt<span style="font-weight: bold">]</span>: <span style="color: #008000; text-decoration-color: #008000">"What is a supercomputer?"</span>
@@ -469,7 +473,7 @@ Has ngpt installed. Nothing to do.</code></pre>
 </section>
 <section id="train-model" class="level2">
 <h2 class="anchored" data-anchor-id="train-model">Train Model</h2>
-<div class="sourceCode" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>trainer.train()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb9"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1"></a>trainer.train()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-display">
 <pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:monospace,Menlo,'DejaVu Sans Mono',consolas,'Courier New'">
     <span style="color:#838383">[2023-11-15 09:34:03]</span><span style="color:#2196F3">[INFO]</span><span style="color:#777777">[trainer.py:516</span><span style="color:#777777">]</span> - <i><span style="color:#55F">step</span></i>=<span style="color:#A0A">250</span> <i><span style="color:#55F">loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.064</span> <i><span style="color:#55F">dt</span></i>=<span style="color:#A0A">27</span><span style="color:#A0A">.412</span> <i><span style="color:#55F">sps</span></i>=<span style="color:#A0A">36</span><span style="color:#A0A">.481</span> <i><span style="color:#55F">mtps</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.598</span> <i><span style="color:#55F">mfu</span></i>=<span style="color:#A0A">13</span><span style="color:#A0A">.594</span> <i><span style="color:#55F">train_loss</span></i>=<span style="color:#A0A">4</span><span style="color:#A0A">.299</span> <i><span style="color:#55F">val_loss</span></i>=<span style="color:#A0A">4</span><span style="color:#A0A">.291</span>
@@ -559,10 +563,10 @@ Has ngpt installed. Nothing to do.</code></pre>
 </section>
 <section id="evaluate-model" class="level2">
 <h2 class="anchored" data-anchor-id="evaluate-model">Evaluate Model</h2>
-<div class="sourceCode" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>query <span class="op">=</span> <span class="st">"What is a supercomputer?"</span></span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>outputs <span class="op">=</span> trainer.evaluate(query, num_samples<span class="op">=</span><span class="dv">1</span>, display<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>console.<span class="bu">print</span>(<span class="vs">fr'\[prompt]: "</span><span class="sc">{</span>query<span class="sc">}</span><span class="vs">"'</span>)</span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>console.<span class="bu">print</span>(<span class="st">"\[response]:</span><span class="ch">\n\n</span><span class="st">"</span> <span class="op">+</span> <span class="vs">fr"</span><span class="sc">{</span>outputs[<span class="st">'0'</span>][<span class="st">'raw'</span>]<span class="sc">}</span><span class="vs">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb10"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1"></a>query <span class="op">=</span> <span class="st">"What is a supercomputer?"</span></span>
+<span id="cb10-2"><a href="#cb10-2"></a>outputs <span class="op">=</span> trainer.evaluate(query, num_samples<span class="op">=</span><span class="dv">1</span>, display<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb10-3"><a href="#cb10-3"></a>console.<span class="bu">print</span>(<span class="vs">fr'\[prompt]: "</span><span class="sc">{</span>query<span class="sc">}</span><span class="vs">"'</span>)</span>
+<span id="cb10-4"><a href="#cb10-4"></a>console.<span class="bu">print</span>(<span class="st">"\[response]:</span><span class="ch">\n\n</span><span class="st">"</span> <span class="op">+</span> <span class="vs">fr"</span><span class="sc">{</span>outputs[<span class="st">'0'</span>][<span class="st">'raw'</span>]<span class="sc">}</span><span class="vs">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-display">
 <pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:monospace,Menlo,'DejaVu Sans Mono',consolas,'Courier New'">
     <span style="font-weight: bold">[</span>prompt<span style="font-weight: bold">]</span>: <span style="color: #008000; text-decoration-color: #008000">"What is a supercomputer?"</span>
@@ -1042,10 +1046,10 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
     <a class="nav-link" href="mailto:///foremans@anl.gov"><span style="font-size: 1.25em;"></span></a>
   </li>  
     <li class="nav-item">
-    <a class="nav-link" href="https://scholar.google.com/citations?user=vV_1zDwAAAAJ&amp;hl=en"><span style="font-size: 1.25em;"></span></a>
+    <a class="nav-link" href="https://scholar.google.com/citations?user=vV_1zDwAAAAJ&amp;hl=en"><span style="font-size: 1.25em;"><i class="ai  ai-google-scholar"></i></span></a>
   </li>  
     <li class="nav-item">
-    <a class="nav-link" href="https://orcid.org/0000-0002-9981-0876"><span style="font-size: 1.25em;"></span></a>
+    <a class="nav-link" href="https://orcid.org/0000-0002-9981-0876"><span style="font-size: 1.25em;"><i class="ai  ai-orcid"></i></span></a>
   </li>  
     <li class="nav-item">
     <a class="nav-link" href="https://www.last.fm/user/saforem2"><span style="font-size: 1.25em;"></span></a>

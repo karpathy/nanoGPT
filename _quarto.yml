@@ -61,9 +61,9 @@ website:
     title: "<code>nanoGPT</code>"
     style: floating
     contents:
-      - "./quarto/shakespeare.qmd"
-      - "./quarto/gpt2-medium.qmd"
-      - "./quarto/gpt2-xl.qmd"
+      - url: "./quarto/shakespeare.qmd"
+      - url: "./quarto/gpt2-medium.qmd"
+      - url: "./quarto/gpt2-xl.qmd"
   # sidebar:
   #   style: floating
   #   contents: auto
@@ -133,7 +133,7 @@ format:
   html:
     callout-appearance: simple
     code-link: true
-    code-line-numbers: false
+    code-line-numbers: true
     toc: true
     self-contained: false
     toc-location: right

@@ -1,0 +1,115 @@
+.ai-tiny {
+  font-size: 0.5em;
+}
+
+.ai-scriptsize {
+  font-size: 0.7em;
+}
+
+.ai-footnotesize {
+  font-size: 0.8em;
+}
+
+.ai-small {
+  font-size: 0.9em;
+}
+
+.ai-normalsize {
+  font-size: 1em;
+}
+
+.ai-large {
+  font-size: 1.2em;
+}
+
+.ai-Large {
+  font-size: 1.5em;
+}
+
+.ai-LARGE {
+  font-size: 1.75em;
+}
+
+.ai-huge {
+  font-size: 2em;
+}
+
+.ai-Huge {
+  font-size: 2.5em;
+}
+
+.ai-1x {
+  font-size: 1em;
+}
+
+.ai-2x {
+  font-size: 2em;
+}
+
+.ai-3x {
+  font-size: 3em;
+}
+
+.ai-4x {
+  font-size: 4em;
+}
+
+.ai-5x {
+  font-size: 5em;
+}
+
+.ai-6x {
+  font-size: 6em;
+}
+
+.ai-7x {
+  font-size: 7em;
+}
+
+.ai-8x {
+  font-size: 8em;
+}
+
+.ai-9x {
+  font-size: 9em;
+}
+
+.ai-10x {
+  font-size: 10em;
+}
+
+.ai-2xs {
+  font-size: 0.625em;
+  line-height: 0.1em;
+  vertical-align: 0.225em;
+}
+
+.ai-xs {
+  font-size: 0.75em;
+  line-height: 0.08333em;
+  vertical-align: 0.125em;
+}
+
+.ai-sm {
+  font-size: 0.875em;
+  line-height: 0.07143em;
+  vertical-align: 0.05357em;
+}
+
+.ai-lg {
+  font-size: 1.25em;
+  line-height: 0.05em;
+  vertical-align: -0.075em;
+}
+
+.ai-xl {
+  font-size: 1.5em;
+  line-height: 0.04167em;
+  vertical-align: -0.125em;
+}
+
+.ai-2xl {
+  font-size: 2em;
+  line-height: 0.03125em;
+  vertical-align: -0.1875em;
+}

@@ -9,7 +9,7 @@
 <meta name="author" content="Sam Foreman ">
 <meta name="dcterms.date" content="2023-11-15">
 
-<title>nanoGPT - GPT-2 Medium</title>
+<title>nanoGPT</title>
 <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -116,11 +116,10 @@ gtag('config', 'G-XVM2Y822Y1', { 'anonymize_ip': true});
 <link rel="stylesheet" href="../css/default.css">
 <link rel="stylesheet" href="../css/callouts.css">
 <link rel="stylesheet" href="../css/profile.css">
-<meta property="og:title" content="nanoGPT - GPT-2 Medium">
-<meta property="og:description" content="">
+<meta property="og:title" content="nanoGPT">
+<meta property="og:image" content="https://colab.research.google.com/assets/colab-badge.svg">
 <meta property="og:site-name" content="nanoGPT">
-<meta name="twitter:title" content="nanoGPT - GPT-2 Medium">
-<meta name="twitter:description" content="">
+<meta name="twitter:title" content="nanoGPT">
 <meta name="twitter:image" content="https://saforem2.github.io/nanoGPT/quarto/assets/thumbnail.png">
 <meta name="twitter:creator" content="@saforem2">
 <meta name="twitter:site" content="@saforem2">
@@ -187,7 +186,7 @@ gtag('config', 'G-XVM2Y822Y1', { 'anonymize_ip': true});
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar,#quarto-sidebar-glass" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-      <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../quarto/gpt2-medium.html">GPT-2 Medium</a></li></ol></nav>
+      <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../quarto/gpt2-medium.html">nanoGPT</a></li></ol></nav>
       <a class="flex-grow-1" role="button" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar,#quarto-sidebar-glass" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
       </a>
     </div>
@@ -208,13 +207,13 @@ gtag('config', 'G-XVM2Y822Y1', { 'anonymize_ip': true});
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../quarto/gpt2-medium.html" class="sidebar-item-text sidebar-link active">
- <span class="menu-text">GPT-2 Medium</span></a>
+ <span class="menu-text">nanoGPT</span></a>
   </div>
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../quarto/gpt2-xl.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">GPT-2 XL</span></a>
+ <span class="menu-text">nanoGPT</span></a>
   </div>
 </li>
     </ul>
@@ -227,7 +226,9 @@ gtag('config', 'G-XVM2Y822Y1', { 'anonymize_ip': true});
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#install-setup" id="toc-install-setup" class="nav-link active" data-scroll-target="#install-setup">Install / Setup</a>
+  <li><a href="#gpt-2-medium-open-in-colab" id="toc-gpt-2-medium-open-in-colab" class="nav-link active" data-scroll-target="#gpt-2-medium-open-in-colab">GPT-2 Medium <img src="https://colab.research.google.com/assets/colab-badge.svg" class="img-fluid" alt="Open In Colab"></a>
+  <ul class="collapse">
+  <li><a href="#install-setup" id="toc-install-setup" class="nav-link" data-scroll-target="#install-setup">Install / Setup</a>
   <ul class="collapse">
   <li><a href="#first-time-running" id="toc-first-time-running" class="nav-link" data-scroll-target="#first-time-running">First Time Running</a></li>
   </ul></li>
@@ -237,6 +238,7 @@ gtag('config', 'G-XVM2Y822Y1', { 'anonymize_ip': true});
   <li><a href="#train-model" id="toc-train-model" class="nav-link" data-scroll-target="#train-model">Train Model</a></li>
   <li><a href="#evaluate-model" id="toc-evaluate-model" class="nav-link" data-scroll-target="#evaluate-model">Evaluate Model</a></li>
   <li><a href="#train-a-bit-more" id="toc-train-a-bit-more" class="nav-link" data-scroll-target="#train-a-bit-more">Train a bit more??</a></li>
+  </ul></li>
   </ul>
 <div class="toc-actions"><div><i class="bi bi-github"></i></div><div class="action-links"><p><a href="https://github.com/saforem2/nanoGPT/blob/main/quarto/gpt2-medium.qmd" class="toc-action">View source</a></p><p><a href="https://github.com/saforem2/nanoGPT/edit/main/quarto/gpt2-medium.qmd" class="toc-action">Edit this page</a></p><p><a href="https://github.com/saforem2/nanoGPT/issues/new" class="toc-action">Report an issue</a></p></div></div><div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="gpt2-medium-gfm.md"><i class="bi bi-file-code"></i>Github (GFM)</a></li></ul></div></nav>
     </div>
@@ -245,7 +247,7 @@ gtag('config', 'G-XVM2Y822Y1', { 'anonymize_ip': true});
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<div class="quarto-title-block"><div><h1 class="title">GPT-2 Medium</h1><button type="button" class="btn code-tools-button" id="quarto-code-tools-source" data-quarto-source-url="https://github.com/saforem2/nanoGPT/blob/main/quarto/gpt2-medium.qmd"><i class="bi"></i></button></div></div>
+<div class="quarto-title-block"><div><h1 class="title">nanoGPT</h1><button type="button" class="btn code-tools-button" id="quarto-code-tools-source" data-quarto-source-url="https://github.com/saforem2/nanoGPT/blob/main/quarto/gpt2-medium.qmd"><i class="bi"></i></button></div></div>
 </div>
 
 
@@ -272,6 +274,8 @@ gtag('config', 'G-XVM2Y822Y1', { 'anonymize_ip': true});
 
 </header>
 
+<section id="gpt-2-medium-open-in-colab" class="level1">
+<h1>GPT-2 Medium <a href="https://colab.research.google.com/github/saforem2/nanoGPT/blob/master/notebooks/ngpt-gpt2-xl.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" class="img-fluid" alt="Open In Colab"></a></h1>
 <section id="install-setup" class="level2">
 <h2 class="anchored" data-anchor-id="install-setup">Install / Setup</h2>
 <section id="first-time-running" class="level3">
@@ -1136,6 +1140,7 @@ gtag('config', 'G-XVM2Y822Y1', { 'anonymize_ip': true});
 
 
 </section>
+</section>
 
 
 <a onclick="window.scrollTo(0, 0); return false;" role="button" id="quarto-back-to-top"><i class="bi bi-arrow-up"></i> Back to top</a><div id="quarto-appendix" class="default"><section id="footnotes" class="footnotes footnotes-end-of-document" role="doc-endnotes"><h2 class="anchored quarto-appendix-heading">Footnotes</h2>
@@ -1560,7 +1565,7 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
   </div>
   <div class="nav-page nav-page-next">
       <a href="../quarto/gpt2-xl.html" class="pagination-link">
-        <span class="nav-page-text">GPT-2 XL</span> <i class="bi bi-arrow-right-short"></i>
+        <span class="nav-page-text">nanoGPT</span> <i class="bi bi-arrow-right-short"></i>
       </a>
   </div>
 </nav>

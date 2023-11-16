@@ -1,0 +1,738 @@
+/*
+ *  Academicons 1.9.4 by James Walsh (https://github.com/jpswalsh) and Katja Bercic (https://github.com/katjabercic)
+ *  Fonts generated using FontForge - https://fontforge.org
+ *  Square icons designed to be used alongside Font Awesome square icons - https://fortawesome.github.io/Font-Awesome/
+ *  Licenses - Font: SIL OFL 1.1, CSS: MIT License
+ */
+@font-face {
+  font-family: 'Academicons';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('1e21o67/academicons.eot');
+  src: url('1e21o67/academicons.eot') format('embedded-opentype'),
+    url('1e21o67/academicons.ttf') format('truetype'),
+    url('1e21o67/academicons.woff') format('woff'),
+    url('1e21o67/academicons.svg') format('svg');
+}
+
+.ai {
+  font-family: 'Academicons';
+  font-weight: 400;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-font-smoothing: antialiased;
+  display: inline-block;
+  font-style: normal;
+  font-variant: normal;
+  text-rendering: auto;
+  line-height: 1;
+}
+
+.ai-academia:before {
+  content: "\e9af";
+}
+
+.ai-academia-square:before {
+  content: "\e93d";
+}
+
+.ai-acclaim:before {
+  content: "\e92e";
+}
+
+.ai-acclaim-square:before {
+  content: "\e93a";
+}
+
+.ai-acm:before {
+  content: "\e93c";
+}
+
+.ai-acm-square:before {
+  content: "\e95d";
+}
+
+.ai-acmdl:before {
+  content: "\e96a";
+}
+
+.ai-acmdl-square:before {
+  content: "\e9d3";
+}
+
+.ai-ads:before {
+  content: "\e9cb";
+}
+
+.ai-ads-square:before {
+  content: "\e94a";
+}
+
+.ai-africarxiv:before {
+  content: "\e91b";
+}
+
+.ai-africarxiv-square:before {
+  content: "\e90b";
+}
+
+.ai-archive:before {
+  content: "\e955";
+}
+
+.ai-archive-square:before {
+  content: "\e956";
+}
+
+.ai-arxiv:before {
+  content: "\e974";
+}
+
+.ai-arxiv-square:before {
+  content: "\e9a6";
+}
+
+.ai-biorxiv:before {
+  content: "\e9a2";
+}
+
+.ai-biorxiv-square:before {
+  content: "\e98b";
+}
+
+.ai-ceur:before {
+  content: "\e96d";
+}
+
+.ai-ceur-square:before {
+  content: "\e92f";
+}
+
+.ai-ciencia-vitae:before {
+  content: "\e912";
+}
+
+.ai-ciencia-vitae-square:before {
+  content: "\e913";
+}
+
+.ai-clarivate:before {
+  content: "\e924";
+}
+
+.ai-clarivate-square:before {
+  content: "\e925";
+}
+
+.ai-closed-access:before {
+  content: "\e942";
+}
+
+.ai-closed-access-square:before {
+  content: "\e943";
+}
+
+.ai-conversation:before {
+  content: "\e94c";
+}
+
+.ai-conversation-square:before {
+  content: "\e915";
+}
+
+.ai-coursera:before {
+  content: "\e95f";
+}
+
+.ai-coursera-square:before {
+  content: "\e97f";
+}
+
+.ai-crossref:before {
+  content: "\e918";
+}
+
+.ai-crossref-square:before {
+  content: "\e919";
+}
+
+.ai-cv:before {
+  content: "\e9a5";
+}
+
+.ai-cv-square:before {
+  content: "\e90a";
+}
+
+.ai-datacite:before {
+  content: "\e91c";
+}
+
+.ai-datacite-square:before {
+  content: "\e91d";
+}
+
+.ai-dataverse:before {
+  content: "\e9f7";
+}
+
+.ai-dataverse-square:before {
+  content: "\e9e4";
+}
+
+.ai-dblp:before {
+  content: "\e94f";
+}
+
+.ai-dblp-square:before {
+  content: "\e93f";
+}
+
+.ai-depsy:before {
+  content: "\e97a";
+}
+
+.ai-depsy-square:before {
+  content: "\e94b";
+}
+
+.ai-doi:before {
+  content: "\e97e";
+}
+
+.ai-doi-square:before {
+  content: "\e98f";
+}
+
+.ai-dryad:before {
+  content: "\e97c";
+}
+
+.ai-dryad-square:before {
+  content: "\e98c";
+}
+
+.ai-elsevier:before {
+  content: "\e961";
+}
+
+.ai-elsevier-square:before {
+  content: "\e910";
+}
+
+.ai-figshare:before {
+  content: "\e981";
+}
+
+.ai-figshare-square:before {
+  content: "\e9e7";
+}
+
+.ai-google-scholar:before {
+  content: "\e9d4";
+}
+
+.ai-google-scholar-square:before {
+  content: "\e9f9";
+}
+
+.ai-hal:before {
+  content: "\e92c";
+}
+
+.ai-hal-square:before {
+  content: "\e92d";
+}
+
+.ai-hypothesis:before {
+  content: "\e95a";
+}
+
+.ai-hypothesis-square:before {
+  content: "\e95b";
+}
+
+.ai-ideas-repec:before {
+  content: "\e9ed";
+}
+
+.ai-ideas-repec-square:before {
+  content: "\e9f8";
+}
+
+.ai-ieee:before {
+  content: "\e929";
+}
+
+.ai-ieee-square:before {
+  content: "\e9b9";
+}
+
+.ai-impactstory:before {
+  content: "\e9cf";
+}
+
+.ai-impactstory-square:before {
+  content: "\e9aa";
+}
+
+.ai-inaturalist:before {
+  content: "\e900";
+}
+
+.ai-inaturalist-square:before {
+  content: "\e901";
+}
+
+.ai-inpn:before {
+  content: "\e902";
+}
+
+.ai-inpn-square:before {
+  content: "\e903";
+}
+
+.ai-inspire:before {
+  content: "\e9e9";
+}
+
+.ai-inspire-square:before {
+  content: "\e9fe";
+}
+
+.ai-isidore:before {
+  content: "\e936";
+}
+
+.ai-isidore-square:before {
+  content: "\e954";
+}
+
+.ai-isni:before {
+  content: "\e957";
+}
+
+.ai-isni-square:before {
+  content: "\e958";
+}
+
+.ai-jstor:before {
+  content: "\e938";
+}
+
+.ai-jstor-square:before {
+  content: "\e944";
+}
+
+.ai-lattes:before {
+  content: "\e9b3";
+}
+
+.ai-lattes-square:before {
+  content: "\e99c";
+}
+
+.ai-mathoverflow:before {
+  content: "\e9f6";
+}
+
+.ai-mathoverflow-square:before {
+  content: "\e97b";
+}
+
+.ai-mendeley:before {
+  content: "\e9f0";
+}
+
+.ai-mendeley-square:before {
+  content: "\e9f3";
+}
+
+.ai-moodle:before {
+  content: "\e907";
+}
+
+.ai-moodle-square:before {
+  content: "\e908";
+}
+
+.ai-mtmt:before {
+  content: "\e950";
+}
+
+.ai-mtmt-square:before {
+  content: "\e951";
+}
+
+.ai-nakala:before {
+  content: "\e940";
+}
+
+.ai-nakala-square:before {
+  content: "\e941";
+}
+
+.ai-obp:before {
+  content: "\e92a";
+}
+
+.ai-obp-square:before {
+  content: "\e92b";
+}
+
+.ai-open-access:before {
+  content: "\e939";
+}
+
+.ai-open-access-square:before {
+  content: "\e9f4";
+}
+
+.ai-open-data:before {
+  content: "\e966";
+}
+
+.ai-open-data-square:before {
+  content: "\e967";
+}
+
+.ai-open-materials:before {
+  content: "\e968";
+}
+
+.ai-open-materials-square:before {
+  content: "\e969";
+}
+
+.ai-openedition:before {
+  content: "\e946";
+}
+
+.ai-openedition-square:before {
+  content: "\e947";
+}
+
+.ai-orcid:before {
+  content: "\e9d9";
+}
+
+.ai-orcid-square:before {
+  content: "\e9c3";
+}
+
+.ai-osf:before {
+  content: "\e9ef";
+}
+
+.ai-osf-square:before {
+  content: "\e931";
+}
+
+.ai-overleaf:before {
+  content: "\e914";
+}
+
+.ai-overleaf-square:before {
+  content: "\e98d";
+}
+
+.ai-philpapers:before {
+  content: "\e98a";
+}
+
+.ai-philpapers-square:before {
+  content: "\e96f";
+}
+
+.ai-piazza:before {
+  content: "\e99a";
+}
+
+.ai-piazza-square:before {
+  content: "\e90c";
+}
+
+.ai-preregistered:before {
+  content: "\e906";
+}
+
+.ai-preregistered-square:before {
+  content: "\e96b";
+}
+
+.ai-protocols:before {
+  content: "\e952";
+}
+
+.ai-protocols-square:before {
+  content: "\e953";
+}
+
+.ai-psyarxiv:before {
+  content: "\e90e";
+}
+
+.ai-psyarxiv-square:before {
+  content: "\e90f";
+}
+
+.ai-publons:before {
+  content: "\e937";
+}
+
+.ai-publons-square:before {
+  content: "\e94e";
+}
+
+.ai-pubmed:before {
+  content: "\e99f";
+}
+
+.ai-pubmed-square:before {
+  content: "\e97d";
+}
+
+.ai-pubpeer:before {
+  content: "\e922";
+}
+
+.ai-pubpeer-square:before {
+  content: "\e923";
+}
+
+.ai-researcherid:before {
+  content: "\e91a";
+}
+
+.ai-researcherid-square:before {
+  content: "\e95c";
+}
+
+.ai-researchgate:before {
+  content: "\e95e";
+}
+
+.ai-researchgate-square:before {
+  content: "\e99e";
+}
+
+.ai-ror:before {
+  content: "\e948";
+}
+
+.ai-ror-square:before {
+  content: "\e949";
+}
+
+.ai-sci-hub:before {
+  content: "\e959";
+}
+
+.ai-sci-hub-square:before {
+  content: "\e905";
+}
+
+.ai-scirate:before {
+  content: "\e98e";
+}
+
+.ai-scirate-square:before {
+  content: "\e99d";
+}
+
+.ai-scopus:before {
+  content: "\e91e";
+}
+
+.ai-scopus-square:before {
+  content: "\e91f";
+}
+
+.ai-semantic-scholar:before {
+  content: "\e96e";
+}
+
+.ai-semantic-scholar-square:before {
+  content: "\e96c";
+}
+
+.ai-springer:before {
+  content: "\e928";
+}
+
+.ai-springer-square:before {
+  content: "\e99b";
+}
+
+.ai-ssrn:before {
+  content: "\e916";
+}
+
+.ai-ssrn-square:before {
+  content: "\e917";
+}
+
+.ai-stackoverflow:before {
+  content: "\e920";
+}
+
+.ai-stackoverflow-square:before {
+  content: "\e921";
+}
+
+.ai-viaf:before {
+  content: "\e933";
+}
+
+.ai-viaf-square:before {
+  content: "\e934";
+}
+
+.ai-wiley:before {
+  content: "\e926";
+}
+
+.ai-wiley-square:before {
+  content: "\e927";
+}
+
+.ai-zenodo:before {
+  content: "\e911";
+}
+
+.ai-zotero:before {
+  content: "\e962";
+}
+
+.ai-zotero-square:before {
+  content: "\e932";
+}
+
+/*  Duplication of the FontAwesome style classes using 'ai' in place of 'fa'. */
+.ai-lg {
+  font-size: 1.33333em;
+  line-height: 0.75em;
+  vertical-align: -.0667em;
+}
+
+.ai-xs {
+  font-size: .75em;
+}
+
+.ai-sm {
+  font-size: .875em;
+}
+
+.ai-1x {
+  font-size: 1em;
+}
+
+.ai-2x {
+  font-size: 2em;
+}
+
+.ai-3x {
+  font-size: 3em;
+}
+
+.ai-4x {
+  font-size: 4em;
+}
+
+.ai-5x {
+  font-size: 5em;
+}
+
+.ai-6x {
+  font-size: 6em;
+}
+
+.ai-7x {
+  font-size: 7em;
+}
+
+.ai-8x {
+  font-size: 8em;
+}
+
+.ai-9x {
+  font-size: 9em;
+}
+
+.ai-10x {
+  font-size: 10em;
+}
+
+.ai-fw {
+  text-align: center;
+  width: 1.25em;
+}
+
+.ai-ul {
+  list-style-type: none;
+  margin-left: 2.5em;
+  padding-left: 0;
+}
+
+.ai-ul>li {
+  position: relative;
+}
+
+.ai-li {
+  left: -2em;
+  position: absolute;
+  text-align: center;
+  width: 2em;
+  line-height: inherit;
+}
+
+.ai-border {
+  border: solid 0.08em #eee;
+  border-radius: .1em;
+  padding: .2em .25em .15em;
+}
+
+.ai-pull-left {
+  float: left;
+}
+
+.ai-pull-right {
+  float: right;
+}
+
+.ai.ai-pull-left {
+  margin-right: .3em;
+}
+
+.ai.ai-pull-right {
+  margin-right: .3em;
+}
+
+.ai-stack {
+  display: inline-block;
+  height: 2em;
+  line-height: 2em;
+  position: relative;
+  vertical-align: middle;
+  width: 2.5em;
+}
+
+.ai-stack-1x,
+.ai-stack-2x {
+  left: 0;
+  position: absolute;
+  text-align: center;
+  width: 100%;
+}
+
+.ai-stack-1x {
+  line-height: inherit;
+}
+
+.ai-stack-2x {
+  font-size: 2em;
+}
+
+.ai-inverse {
+  color: #fff;
+}
