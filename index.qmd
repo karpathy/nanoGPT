@@ -23,7 +23,7 @@ website:
   repo-url: https://github.com/saforem2/nanoGPT
   repo-actions: [source, edit, issue]
   google-analytics: G-XVM2Y822Y1
-  sidebar: false
+  # sidebar: false
   twitter-card:
     image: "./assets/thumbnail.png"
     site: "@saforem2"

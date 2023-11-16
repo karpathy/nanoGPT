@@ -1,4 +1,4 @@
-# <code>nanoGPT</code>: Shakespeare
+# Shakespeare
 Sam Foreman
 [<span class="orcid-green">{{< ai orcid >}}</span>](https://orcid.org/0000-0002-9981-0876)
 2023-11-15

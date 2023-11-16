@@ -51,25 +51,33 @@ website:
   repo-url: https://github.com/saforem2/nanoGPT
   repo-actions: [source, edit, issue]
   google-analytics: G-XVM2Y822Y1
-  sidebar: false
+  # sidebar: false
   twitter-card:
     image: "./assets/thumbnail.png"
     site: "@saforem2"
     creator: "@saforem2"
+  sidebar:
+    # header: "<code>nanoGPT</code>"
+    title: "<code>nanoGPT</code>"
+    style: floating
+    contents:
+      - "./quarto/shakespeare.qmd"
+      - "./quarto/gpt2-medium.qmd"
+      - "./quarto/gpt2-xl.qmd"
   # sidebar:
-  #   style: docked
+  #   style: floating
   #   contents: auto
   navbar:
     logo: "./favicon.svg"
     background: "#222222"
     foregound: "#838383"
-    left:
-      - href: "./quarto/shakespeare.qmd"
-        text: "[{{< iconify line-md pencil >}}]{.red-text style='font-size: 1.0em;'} Shakespeare"
-      - href: "./quarto/gpt2-medium.qmd"
-        text: "[{{< iconify line-md pencil >}}]{.red-text style='font-size: 1.0em;'} GPT2-Medium"
-      - href: "./quarto/gpt2-xl.qmd"
-        text: "[{{< iconify line-md pencil >}}]{.red-text style='font-size: 1.0em;'} GPT2-XL"
+    # left:
+    #   - href: "./quarto/shakespeare.qmd"
+    #     text: "[{{< iconify line-md pencil >}}]{.red-text style='font-size: 1.0em;'} Shakespeare"
+    #   - href: "./quarto/gpt2-medium.qmd"
+    #     text: "[{{< iconify line-md pencil >}}]{.red-text style='font-size: 1.0em;'} GPT2-Medium"
+    #   - href: "./quarto/gpt2-xl.qmd"
+    #     text: "[{{< iconify line-md pencil >}}]{.red-text style='font-size: 1.0em;'} GPT2-XL"
     #   - href: "./qmd/slides.qmd"
     #     text: "[{{< iconify line-md image >}}]{.green-text style='font-size: 1.0em;'} Talks"
     #   - href: "./qmd/projects.qmd"
@@ -129,6 +137,7 @@ format:
     toc: true
     self-contained: false
     toc-location: right
+    page-layout: full
     grid:
       body-width: 1150px
     fig-responsive: true
