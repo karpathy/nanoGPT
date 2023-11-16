@@ -156,8 +156,8 @@ class RotaryEmbedding(nn.Module):
         self.dim = config.n_embd
 
         # Register frequencies directly as buffers
-        self.register_buffer('freq_left', 1.0 / (10000 ** (torch.arange(0, self.dim//2).float() / self.dim//2)))
-        self.register_buffer('freq_right', 1.0 / (10000 ** (torch.arange(0, self.dim//2).float() / self.dim//2)))
+        self.register_buffer('freq_left', (10000 ** (torch.arange(0, self.dim//2).float() / self.dim//2)))
+        self.register_buffer('freq_right',(10000 ** (torch.arange(0, self.dim//2).float() / self.dim//2)))
 
     def forward(self, x):
         seq_len = x.shape[-2]
@@ -187,8 +187,8 @@ class ShortRope(nn.Module):
         self.dim = config.n_embd
 
         # Generate freqs of size n rather than full dim
-        self.register_buffer('freq_left', 1.0 / (10000 ** (torch.arange(0, self.n//2).float() / self.n//2)))
-        self.register_buffer('freq_right', 1.0 / (10000 ** (torch.arange(0, self.n//2).float() / self.n//2)))
+        self.register_buffer('freq_left', (10000 ** (torch.arange(0, self.n//2).float() / self.n//2)))
+        self.register_buffer('freq_right', (10000 ** (torch.arange(0, self.n//2).float() / self.n//2)))
 
     def forward(self, x):
         # Step 1: Get the input tensor shape
