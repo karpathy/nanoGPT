@@ -1,0 +1,1576 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.3.450">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Sam Foreman ">
+<meta name="dcterms.date" content="2023-11-15">
+
+<title>nanoGPT - nanoGPT: GPT-2 Medium</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../">
+<link href=".././favicon.svg" rel="icon" type="image/svg+xml">
+<script src="../site_libs/quarto-html/quarto.js"></script>
+<script src="../site_libs/quarto-html/popper.min.js"></script>
+<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-dark.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../site_libs/bootstrap/bootstrap.min.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="../site_libs/bootstrap/bootstrap-dark.min.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<script src="../site_libs/quarto-contrib/iconify-1.0.7/iconify-icon.min.js"></script>
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 20,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<script async="" src="https://www.googletagmanager.com/gtag/js?id=G-XVM2Y822Y1"></script>
+
+<script type="text/javascript">
+
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-XVM2Y822Y1', { 'anonymize_ip': true});
+</script>
+<link href="https://pvinis.github.io/iosevka-webfont/3.4.1/iosevka.css" rel="stylesheet">
+
+
+<link rel="stylesheet" href="../css/default.css">
+<link rel="stylesheet" href="../css/callouts.css">
+<link rel="stylesheet" href="../css/profile.css">
+<meta property="og:title" content="nanoGPT - nanoGPT: GPT-2 Medium">
+<meta property="og:description" content="">
+<meta property="og:site-name" content="nanoGPT">
+<meta name="twitter:title" content="nanoGPT - nanoGPT: GPT-2 Medium">
+<meta name="twitter:description" content="">
+<meta name="twitter:image" content="https://saforem2.github.io/nanoGPT/quarto/assets/thumbnail.png">
+<meta name="twitter:creator" content="@saforem2">
+<meta name="twitter:site" content="@saforem2">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="citation_title" content="nanoGPT">
+<meta name="citation_author" content="Sam Foreman">
+<meta name="citation_publication_date" content="2023-11-15">
+<meta name="citation_cover_date" content="2023-11-15">
+<meta name="citation_year" content="2023">
+<meta name="citation_online_date" content="2023-11-15">
+<meta name="citation_fulltext_html_url" content="https://saforem2.github.io/nanoGPT">
+<meta name="citation_language" content="en">
+<meta name="citation_reference" content="citation_title=The climate risk &amp;amp;amp; resilience portal (ClimRR) metadata and data dictionary;,citation_author=C. Burdi;,citation_author=Wall. T Branham;,citation_publication_date=2023;,citation_cover_date=2023;,citation_year=2023;,citation_fulltext_html_url=https://dub.sh/ClimRR-Metadata;">
+<meta name="citation_reference" content="citation_title=Progress on (g-2)_\mu from lattice QCD;,citation_author=Hartmut Wittig;,citation_publication_date=2023;,citation_cover_date=2023;,citation_year=2023;,citation_fulltext_html_url=https://arxiv.org/abs/2306.04165;">
+<meta name="citation_reference" content="citation_title=Hybrid Monte Carlo;,citation_author=S. Duane;,citation_author=A. D. Kennedy;,citation_author=B. J. Pendleton;,citation_author=D. Roweth;,citation_publication_date=1987;,citation_cover_date=1987;,citation_year=1987;,citation_doi=10.1016/0370-2693(87)91197-X;,citation_volume=195;,citation_journal_title=Phys. Lett. B;">
+<meta name="citation_reference" content="citation_title=Snowmass 2021 Computational Frontier CompF03 Topical Group Report: Machine Learning;,citation_author=Phiala Shanahan;,citation_author=others;,citation_publication_date=2022-09;,citation_cover_date=2022-09;,citation_year=2022;,citation_fulltext_html_url=https://arxiv.org/abs/2209.07559;">
+<meta name="citation_reference" content="citation_title=Applications of Machine Learning to Lattice Quantum Field Theory;,citation_author=Denis Boyda;,citation_author=others;,citation_publication_date=2022-02;,citation_cover_date=2022-02;,citation_year=2022;,citation_fulltext_html_url=https://arxiv.org/abs/2202.05838;,citation_conference_title=Snowmass 2021;">
+<meta name="citation_reference" content="citation_title=HMC with Normalizing Flows;,citation_author=Sam Foreman;,citation_author=Taku Izubuchi;,citation_author=Luchang Jin;,citation_author=Xiao-Yong Jin;,citation_author=James C. Osborn;,citation_author=Akio Tomiya;,citation_publication_date=2022;,citation_cover_date=2022;,citation_year=2022;,citation_fulltext_html_url=https://arxiv.org/abs/2112.01586;,citation_doi=10.22323/1.396.0073;,citation_volume=LATTICE2021;,citation_journal_title=PoS;">
+<meta name="citation_reference" content="citation_title=LeapfrogLayers: A Trainable Framework for Effective Topological Sampling;,citation_author=Sam Foreman;,citation_author=Xiao-Yong Jin;,citation_author=James C. Osborn;,citation_publication_date=2022;,citation_cover_date=2022;,citation_year=2022;,citation_fulltext_html_url=https://arxiv.org/abs/2112.01582;,citation_doi=10.22323/1.396.0508;,citation_volume=LATTICE2021;,citation_journal_title=PoS;">
+<meta name="citation_reference" content="citation_title=Deep Learning Hamiltonian Monte Carlo;,citation_author=Sam Foreman;,citation_author=Xiao-Yong Jin;,citation_author=James C. Osborn;,citation_publication_date=2021-05;,citation_cover_date=2021-05;,citation_year=2021;,citation_fulltext_html_url=https://arxiv.org/abs/2105.03418;,citation_conference_title=9th International Conference on Learning Representations;">
+<meta name="citation_reference" content="citation_title=Energy Justice Analysis of Climate Data with ClimRR;,citation_author=Sam Foreman;,citation_publication_date=2023-08-07;,citation_cover_date=2023-08-07;,citation_year=2023;,citation_fulltext_html_url=https://saforem2.github.io/climate-analysis;,citation_language=en;">
+<meta name="citation_reference" content="citation_author=Sam Foreman;,citation_publication_date=2023-08-19;,citation_cover_date=2023-08-19;,citation_year=2023;,citation_fulltext_html_url=https://saforem2.github.io/l2hmc-qcd;,citation_language=en;">
+<meta name="citation_reference" content="citation_title=Deep learning hamiltonian monte carlo;,citation_author=Sam Foreman;,citation_author=Xiao-Yong Jin;,citation_author=James C. Osborn;,citation_publication_date=2021;,citation_cover_date=2021;,citation_year=2021;,citation_fulltext_html_url=https://arxiv.org/abs/2105.03418;">
+<meta name="citation_reference" content="citation_title=MLMC: Machine learning monte carlo for lattice gauge theory;,citation_author=Sam Foreman;,citation_author=Xiao-Yong Jin;,citation_author=James Osborn;,citation_publication_date=00;,citation_cover_date=00;,citation_year=0;,citation_conference_title=40th international symposium on lattice field theory (lattice 2023) (batavia, IL, united states, 07/31/2023 - 08/04/2023);">
+</head>
+
+<body class="nav-fixed">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg navbar-dark ">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container">
+    <a href="../index.html" class="navbar-brand navbar-brand-logo">
+    <img src=".././favicon.svg" alt="" class="navbar-logo">
+    </a>
+    <a class="navbar-brand" href="../index.html">
+    <span class="navbar-title">nanoGPT</span>
+    </a>
+  </div>
+            <div id="quarto-search" class="" title="Search"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll me-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="../quarto/shakespeare.html" rel="" target="">
+ <span class="menu-text"><span class="red-text" style="font-size: 1.0em;"><iconify-icon inline="" icon="line-md:pencil"></iconify-icon></span> Shakespeare</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link active" href="../quarto/gpt2-medium.html" rel="" target="" aria-current="page">
+ <span class="menu-text"><span class="red-text" style="font-size: 1.0em;"><iconify-icon inline="" icon="line-md:pencil"></iconify-icon></span> GPT2-Medium</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../quarto/gpt2-xl.html" rel="" target="">
+ <span class="menu-text"><span class="red-text" style="font-size: 1.0em;"><iconify-icon inline="" icon="line-md:pencil"></iconify-icon></span> GPT2-XL</span></a>
+  </li>  
+</ul>
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="https://twitter.com/saforem2" rel="" target="">
+ <span class="menu-text"><span style="font-size: 1.15em;"><iconify-icon inline="" icon="line-md:twitter"></iconify-icon></span></span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="https://github.com/saforem2/personal_site" rel="" target="">
+ <span class="menu-text"><span style="font-size: 1.15em;"><iconify-icon inline="" icon="line-md:github-loop"></iconify-icon></span></span></a>
+  </li>  
+</ul>
+            <div class="quarto-navbar-tools">
+  <a href="" class="quarto-color-scheme-toggle quarto-navigation-tool  px-1" onclick="window.quartoToggleColorScheme(); return false;" title="Toggle dark mode"><i class="bi"></i></a>
+</div>
+          </div> <!-- /navcollapse -->
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#install-setup" id="toc-install-setup" class="nav-link active" data-scroll-target="#install-setup">Install / Setup</a>
+  <ul class="collapse">
+  <li><a href="#first-time-running" id="toc-first-time-running" class="nav-link" data-scroll-target="#first-time-running">First Time Running</a></li>
+  </ul></li>
+  <li><a href="#post-install" id="toc-post-install" class="nav-link" data-scroll-target="#post-install">Post Install</a></li>
+  <li><a href="#build-trainer" id="toc-build-trainer" class="nav-link" data-scroll-target="#build-trainer">Build Trainer</a></li>
+  <li><a href="#prompt-prior-to-training" id="toc-prompt-prior-to-training" class="nav-link" data-scroll-target="#prompt-prior-to-training">Prompt (<strong>prior</strong> to training)</a></li>
+  <li><a href="#train-model" id="toc-train-model" class="nav-link" data-scroll-target="#train-model">Train Model</a></li>
+  <li><a href="#evaluate-model" id="toc-evaluate-model" class="nav-link" data-scroll-target="#evaluate-model">Evaluate Model</a></li>
+  <li><a href="#train-a-bit-more" id="toc-train-a-bit-more" class="nav-link" data-scroll-target="#train-a-bit-more">Train a bit more??</a></li>
+  </ul>
+<div class="toc-actions"><div><i class="bi bi-github"></i></div><div class="action-links"><p><a href="https://github.com/saforem2/nanoGPT/blob/main/quarto/gpt2-medium.qmd" class="toc-action">View source</a></p><p><a href="https://github.com/saforem2/nanoGPT/edit/main/quarto/gpt2-medium.qmd" class="toc-action">Edit this page</a></p><p><a href="https://github.com/saforem2/nanoGPT/issues/new" class="toc-action">Report an issue</a></p></div></div><div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="gpt2-medium-gfm.md"><i class="bi bi-file-code"></i>Github (GFM)</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<div class="quarto-title-block"><div><h1 class="title"><code>nanoGPT</code>: GPT-2 Medium</h1><button type="button" class="btn code-tools-button" id="quarto-code-tools-source" data-quarto-source-url="https://github.com/saforem2/nanoGPT/blob/main/quarto/gpt2-medium.qmd"><i class="bi"></i></button></div></div>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading"></div>
+    <div class="quarto-title-meta-contents">
+             <p><a href="https://samforeman.me">Sam Foreman </a><a href="https://orcid.org/0000-0002-9981-0876"><span class="orcid-green"></span></a> </p>
+          </div>
+  </div>
+    
+    <div>
+    <div class="quarto-title-meta-heading"></div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">November 15, 2023</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+</header>
+
+<section id="install-setup" class="level2">
+<h2 class="anchored" data-anchor-id="install-setup">Install / Setup</h2>
+<section id="first-time-running" class="level3">
+<h3 class="anchored" data-anchor-id="first-time-running">First Time Running</h3>
+<p>We need to install <code>ngpt</code> and setup the Shakespeare dataset</p>
+<p>This will need to be ran the first time you are running this notebook.</p>
+<p>Following the</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="op">!</span>python3 <span class="op">-</span>m pip install nanoGPT</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>you will need to restart your runtime (Runtime -&gt; Restart runtime)</p>
+<p>After this, you should be able to</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="im">import</span> ngpt</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> ngpt.<span class="va">__file__</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co">'/content/nanoGPT/src/ngpt/__init__.py'</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">%%bash</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-c</span> <span class="st">'import ngpt; print(ngpt.__file__)'</span> <span class="dv">2</span><span class="op">&gt;</span> <span class="st">'/dev/null'</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">[[</span> <span class="va">$?</span> <span class="ot">-eq</span> 0 <span class="kw">]];</span> <span class="cf">then</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="bu">echo</span> <span class="st">"Has ngpt installed. Nothing to do."</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="cf">else</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="bu">echo</span> <span class="st">"Does not have ngpt installed. Installing..."</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">git</span> clone <span class="st">'https://github.com/saforem2/nanoGPT'</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="ex">python3</span> nanoGPT/data/shakespeare_char/prepare.py</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="ex">python3</span> <span class="at">-m</span> pip install <span class="at">-e</span> nanoGPT <span class="at">-vvv</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="cf">fi</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display">
+<pre style="white-space:pre;">
+    /lus/grand/projects/datascience/foremans/locations/thetaGPU/projects/saforem2/nanoGPT/src/ngpt/__init__.py
+    Has ngpt installed. Nothing to do.
+
+</pre>
+</div>
+</section>
+</section>
+<section id="post-install" class="level2">
+<h2 class="anchored" data-anchor-id="post-install">Post Install</h2>
+<p>If installed correctly, you should be able to:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="im">import</span> ngpt</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> ngpt.<span class="va">__file__</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="co">'/path/to/nanoGPT/src/ngpt/__init__.py'</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext autoreload</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> ngpt</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> rich <span class="im">import</span> <span class="bu">print</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(ngpt.<span class="va">__file__</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display">
+<pre style="white-space:pre;">
+    The autoreload extension is already loaded. To reload it, use:
+      %reload_ext autoreload
+
+    <span style="color: #800080; text-decoration-color: #800080">/lus/grand/projects/datascience/foremans/locations/thetaGPU/projects/saforem2/nanoGPT/src/ngpt/</span><span style="color: #ff00ff; text-decoration-color: #ff00ff">__init__.py</span>
+
+</pre>
+</div>
+</section>
+<section id="build-trainer" class="level2">
+<h2 class="anchored" data-anchor-id="build-trainer">Build Trainer</h2>
+<p>Explicitly, we:</p>
+<ol type="1">
+<li><code>setup_torch(...)</code></li>
+<li>Build <code>cfg: DictConfig = get_config(...)</code></li>
+<li>Instnatiate <code>config: ExperimentConfig = instantiate(cfg)</code></li>
+<li>Build <code>trainer = Trainer(config)</code></li>
+</ol>
+<div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> os</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> ezpz <span class="im">import</span> setup_torch</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> hydra.utils <span class="im">import</span> instantiate</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> ngpt.configs <span class="im">import</span> get_config, PROJECT_ROOT</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> ngpt.trainer <span class="im">import</span> Trainer</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> enrich.console <span class="im">import</span> get_console</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>console <span class="op">=</span> get_console()</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>HF_DATASETS_CACHE <span class="op">=</span> PROJECT_ROOT.joinpath(<span class="st">'.cache'</span>, <span class="st">'huggingface'</span>)</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>HF_DATASETS_CACHE.mkdir(exist_ok<span class="op">=</span><span class="va">True</span>, parents<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>os.environ[<span class="st">'MASTER_PORT'</span>] <span class="op">=</span> <span class="st">'5127'</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>os.environ[<span class="st">'HF_DATASETS_CACHE'</span>] <span class="op">=</span> HF_DATASETS_CACHE.as_posix()</span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>SEED <span class="op">=</span> np.random.randint(<span class="dv">2</span><span class="op">**</span><span class="dv">32</span>)</span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>console.log(<span class="ss">f'SEED: </span><span class="sc">{</span>SEED<span class="sc">}</span><span class="ss">'</span>)</span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>rank <span class="op">=</span> setup_torch(<span class="st">'DDP'</span>, seed<span class="op">=</span><span class="dv">1234</span>)</span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>cfg <span class="op">=</span> get_config(</span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>    [</span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a>        <span class="st">'data=owt'</span>,</span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a>        <span class="st">'model=gpt2_medium'</span>,</span>
+<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>        <span class="st">'optimizer=gpt2_medium'</span>,</span>
+<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a>        <span class="st">'train=gpt2_medium'</span>,</span>
+<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a>        <span class="st">'train.dtype=bfloat16'</span>,</span>
+<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a>        <span class="st">'train.max_iters=1000'</span>,</span>
+<span id="cb6-28"><a href="#cb6-28" aria-hidden="true" tabindex="-1"></a>        <span class="st">'train.log_interval=100'</span>,</span>
+<span id="cb6-29"><a href="#cb6-29" aria-hidden="true" tabindex="-1"></a>        <span class="st">'train.init_from=gpt2-medium'</span>,</span>
+<span id="cb6-30"><a href="#cb6-30" aria-hidden="true" tabindex="-1"></a>    ]</span>
+<span id="cb6-31"><a href="#cb6-31" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb6-32"><a href="#cb6-32" aria-hidden="true" tabindex="-1"></a>config <span class="op">=</span> instantiate(cfg)</span>
+<span id="cb6-33"><a href="#cb6-33" aria-hidden="true" tabindex="-1"></a>trainer <span class="op">=</span> Trainer(config)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display">
+<pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:monospace,Menlo,'DejaVu Sans Mono',consolas,'Courier New'">
+    --------------------------------------------------------------------------
+    WARNING: There was an error initializing an OpenFabrics device.
+
+      Local host:   thetagpu23
+      Local device: mlx5_0
+    --------------------------------------------------------------------------
+    2023-11-15 09:48:20.191135: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  SSE3 SSE4.1 SSE4.2 AVX AVX2 FMA
+    To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+
+    <span style="color: #838383; text-decoration-color: #838383">[09:48:22] </span>SEED: <span style="color: #800080; text-decoration-color: #800080">627182480</span>
+    <span style="color:#838383">[2023-11-15 09:48:23]</span><span style="color:var(--orange-text)">[WARNING]</span><span style="color:#777777">[configs.py:297</span><span style="color:#777777">]</span> - No meta.pkl found, assuming GPT-<span style="color:#A0A">2</span> encodings<span style="color:var(--orange-text)">...</span>
+    <span style="color:#838383">[2023-11-15 09:48:26]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[configs.py:263</span><span style="color:#777777">]</span> - Rescaling GAS -&gt; GAS <span style="color:#0A0">/</span><span style="color:#0A0">/</span> WORLD_SIZE = <span style="color:#A0A">1</span> <span style="color:#0A0">/</span><span style="color:#0A0">/</span> <span style="color:#A0A">1</span>
+    <span style="color:#838383">[2023-11-15 09:48:26]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[configs.py:398</span><span style="color:#777777">]</span> - Tokens per iteration: <span style="color:#A0A">4</span>,<span style="color:#A0A">096</span>
+    <span style="color:#838383">[2023-11-15 09:48:26]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[configs.py:430</span><span style="color:#777777">]</span> - Using <b>&lt;</b><b><span style="color:#F5F">torch.amp.autocast_mode.autocast</span></b><span style="color:#FFF"> object at </span><span style="color:#A0A">0x7fcbf3a11930</span><b>&gt;</b>
+    <span style="color:#838383">[2023-11-15 09:48:26]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[trainer.py:187</span><span style="color:#777777">]</span> - Initializing from OpenAI GPT-<span style="color:#A0A">2</span> Weights: gpt2-medium
+    [2023-11-15 09:48:32,281] [INFO] [real_accelerator.py:158:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+    <span style="color:#838383">[2023-11-15 09:48:49]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[model.py:225</span><span style="color:#777777">]</span> - loading weights from pretrained gpt: gpt2-medium
+    <span style="color:#838383">[2023-11-15 09:48:49]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[model.py:234</span><span style="color:#777777">]</span> - forcing <i><span style="color:#55F">vocab_size</span></i>=<span style="color:#A0A">50257</span>, <i><span style="color:#55F">block_size</span></i>=<span style="color:#A0A">1024</span>, <i><span style="color:#55F">bias</span></i>=<i><span style="color:#5F5">True</span></i>
+    <span style="color:#838383">[2023-11-15 09:48:49]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[model.py:240</span><span style="color:#777777">]</span> - overriding dropout rate to <span style="color:#A0A">0.0</span>
+    <span style="color:#838383">[2023-11-15 09:48:55]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[model.py:160</span><span style="color:#777777">]</span> - number of parameters: <span style="color:#A0A">353.</span>77M
+    Downloading (…)lve/main/config.json:   0%|| 0.00/718 [00:00<!--?, ?B/s]
+    Downloading (…)"pytorch_model.bin";:   0%|| 0.00/1.52G [00:00<?, ?B/s]
+    Downloading (…)neration_config.json:   0%|| 0.00/124 [00:00<?, ?B/s]
+    <span style="color:#838383"-->[2023-11-15 09:49:16]<span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[model.py:290</span><span style="color:#777777">]</span> - num decayed parameter tensors: <span style="color:#A0A">98</span>, with <span style="color:#A0A">354</span>,<span style="color:#A0A">501</span>,<span style="color:#A0A">632</span> parameters
+    <span style="color:#838383">[2023-11-15 09:49:16]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[model.py:291</span><span style="color:#777777">]</span> - num non-decayed parameter tensors: <span style="color:#A0A">194</span>, with <span style="color:#A0A">321</span>,<span style="color:#A0A">536</span> parameters
+    <span style="color:#838383">[2023-11-15 09:49:17]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[model.py:297</span><span style="color:#777777">]</span> - using fused AdamW: <i><span style="color:#5F5">True</span></i>
+
+</pre>
+</div>
+</section>
+<section id="prompt-prior-to-training" class="level2">
+<h2 class="anchored" data-anchor-id="prompt-prior-to-training">Prompt (<strong>prior</strong> to training)</h2>
+<div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>query <span class="op">=</span> <span class="st">"What is a supercomputer? Explain like I'm a child, and speak clearly. Double check your logic.."</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>outputs <span class="op">=</span> trainer.evaluate(query, num_samples<span class="op">=</span><span class="dv">1</span>, display<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>console.<span class="bu">print</span>(<span class="vs">fr'\[prompt]: "</span><span class="sc">{</span>query<span class="sc">}</span><span class="vs">"'</span>)</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>console.<span class="bu">print</span>(<span class="st">"\[response]:</span><span class="ch">\n\n</span><span class="st">"</span> <span class="op">+</span> <span class="vs">fr"</span><span class="sc">{</span>outputs[<span class="st">'0'</span>][<span class="st">'raw'</span>]<span class="sc">}</span><span class="vs">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display">
+<pre style="white-space:pre;">
+    <span style="font-weight: bold">[</span>prompt<span style="font-weight: bold">]</span>: <span style="color: #008000; text-decoration-color: #008000">"What is a supercomputer? Explain like I'm a child, and speak clearly. Double check your logic.."</span>
+
+    <span style="font-weight: bold">[</span>response<span style="font-weight: bold">]</span>:
+
+    What is a supercomputer? Explain like I'm a child, and speak clearly. Double check your logic.. When I ask you to describe your computer, this is what you know: a computer that runs a quantum computer to run a computer program. There are now two supercomputers that can do quantum computations, so how can you explain quantum computing? We will get into what quantum computing is first, and then we are going to talk to you about what is a supercomputer. You will learn how to explain quantum computing to a child, and you will find out that quantum computing is what is called artificial intelligence <span style="font-weight: bold">(</span>AI<span style="font-weight: bold">)</span>. Do you understand quantum computing?
+    Follow up – Answering the Quantum Computing Questions
+    Cognitive scientists are trying to define what is called artificial intelligence <span style="font-weight: bold">(</span>AI<span style="font-weight: bold">)</span>. They are trying to understand what computers can do. At the heart of the argument are the following three questions:
+    What is AI and how does it apply to science?
+    What if I say, <span style="color: #008000; text-decoration-color: #008000">"A computer can tell me if I am an elf, a lion, a fox, or a squirrel?"</span>. Can I make a decision?
+    How does AI fit into the human condition?
+    Have you ever thought about what is intelligence? Have you ever wondered, <span style="color: #008000; text-decoration-color: #008000">"What if I want to create a computer that can build me an AI, and that computer is smarter than me? How will the AI affect my life?"</span>.
+    Before you even begin…
+    BECAUSE YOU HAVE NOT BEEN PURCHASED
+    This is where you may want to get an answer to a question that you have never had the opportunity to ask, and which is too big to ask right now. Think about it. Will I be able to make decisions? Will I be able to ask questions? Do I have the right to be an AI?
+    With an intelligent AI, you can have the ability to run my brain. You can have your mind, and you can control it. You can control your body, you can control your thoughts, and you can control your actions. That will make you a living being. If you are able to experience the world like the rest of us, you will have a better understanding of what it means to be alive; a living being. You will have the ability to observe, dream, and experience. All this will be possible to you if you are created as an intelligent being.
+    By creating an AI, this will be easier. It will be easy for someone to create an AI, and then run it as if
+
+</pre>
+</div>
+<div id="tbl-legend" class="anchored">
+<table class="table-striped table-hover table-bordered table">
+<caption>Table&nbsp;1: Legend</caption>
+<thead>
+<tr class="header">
+<th style="text-align: center;">Name</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: center;"><code>step</code></td>
+<td style="text-align: left;"><em>Current training step</em></td>
+</tr>
+<tr class="even">
+<td style="text-align: center;"><code>loss</code></td>
+<td style="text-align: left;"><em>Loss value</em></td>
+</tr>
+<tr class="odd">
+<td style="text-align: center;"><code>dt</code></td>
+<td style="text-align: left;"><em>Time per step</em> (in <strong>ms</strong>)</td>
+</tr>
+<tr class="even">
+<td style="text-align: center;"><code>sps</code></td>
+<td style="text-align: left;"><em>Samples per second</em></td>
+</tr>
+<tr class="odd">
+<td style="text-align: center;"><code>mtps</code></td>
+<td style="text-align: left;"><em>(million) Tokens per sec</em></td>
+</tr>
+<tr class="even">
+<td style="text-align: center;"><code>mfu</code></td>
+<td style="text-align: left;"><em>Model Flops utilization</em><a href="#fn1" class="footnote-ref" id="fnref1" role="doc-noteref"><sup>1</sup></a></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="train-model" class="level2">
+<h2 class="anchored" data-anchor-id="train-model">Train Model</h2>
+<div class="sourceCode" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>trainer.model.module.train()</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>trainer.train()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display">
+<pre style="white-space:pre;">
+    <span style="color:#838383">[2023-11-15 09:50:50]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[trainer.py:516</span><span style="color:#777777">]</span> - <i><span style="color:#55F">step</span></i>=<span style="color:#A0A">100</span> <i><span style="color:#55F">loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.791</span> <i><span style="color:#55F">dt</span></i>=<span style="color:#A0A">387</span><span style="color:#A0A">.530</span> <i><span style="color:#55F">sps</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.580</span> <i><span style="color:#55F">mtps</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.011</span> <i><span style="color:#55F">mfu</span></i>=<span style="color:#A0A">24</span><span style="color:#A0A">.642</span> <i><span style="color:#55F">train_loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.837</span> <i><span style="color:#55F">val_loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.826</span>
+    <span style="color:#838383">[2023-11-15 09:51:28]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[trainer.py:516</span><span style="color:#777777">]</span> - <i><span style="color:#55F">step</span></i>=<span style="color:#A0A">200</span> <i><span style="color:#55F">loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.716</span> <i><span style="color:#55F">dt</span></i>=<span style="color:#A0A">375</span><span style="color:#A0A">.216</span> <i><span style="color:#55F">sps</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.665</span> <i><span style="color:#55F">mtps</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.011</span> <i><span style="color:#55F">mfu</span></i>=<span style="color:#A0A">24</span><span style="color:#A0A">.722</span> <i><span style="color:#55F">train_loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.837</span> <i><span style="color:#55F">val_loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.826</span>
+    <span style="color:#838383">[2023-11-15 09:52:07]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[trainer.py:516</span><span style="color:#777777">]</span> - <i><span style="color:#55F">step</span></i>=<span style="color:#A0A">300</span> <i><span style="color:#55F">loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.701</span> <i><span style="color:#55F">dt</span></i>=<span style="color:#A0A">398</span><span style="color:#A0A">.145</span> <i><span style="color:#55F">sps</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.512</span> <i><span style="color:#55F">mtps</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.010</span> <i><span style="color:#55F">mfu</span></i>=<span style="color:#A0A">24</span><span style="color:#A0A">.649</span> <i><span style="color:#55F">train_loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.837</span> <i><span style="color:#55F">val_loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.826</span>
+    <span style="color:#838383">[2023-11-15 09:52:45]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[trainer.py:516</span><span style="color:#777777">]</span> - <i><span style="color:#55F">step</span></i>=<span style="color:#A0A">400</span> <i><span style="color:#55F">loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.858</span> <i><span style="color:#55F">dt</span></i>=<span style="color:#A0A">376</span><span style="color:#A0A">.159</span> <i><span style="color:#55F">sps</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.658</span> <i><span style="color:#55F">mtps</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.011</span> <i><span style="color:#55F">mfu</span></i>=<span style="color:#A0A">24</span><span style="color:#A0A">.722</span> <i><span style="color:#55F">train_loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.837</span> <i><span style="color:#55F">val_loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.826</span>
+    <span style="color:#838383">[2023-11-15 09:53:24]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[trainer.py:516</span><span style="color:#777777">]</span> - <i><span style="color:#55F">step</span></i>=<span style="color:#A0A">500</span> <i><span style="color:#55F">loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.542</span> <i><span style="color:#55F">dt</span></i>=<span style="color:#A0A">422</span><span style="color:#A0A">.272</span> <i><span style="color:#55F">sps</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.368</span> <i><span style="color:#55F">mtps</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.010</span> <i><span style="color:#55F">mfu</span></i>=<span style="color:#A0A">24</span><span style="color:#A0A">.512</span> <i><span style="color:#55F">train_loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.837</span> <i><span style="color:#55F">val_loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.826</span>
+    <span style="color:#838383">[2023-11-15 09:54:03]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[trainer.py:516</span><span style="color:#777777">]</span> - <i><span style="color:#55F">step</span></i>=<span style="color:#A0A">600</span> <i><span style="color:#55F">loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.912</span> <i><span style="color:#55F">dt</span></i>=<span style="color:#A0A">406</span><span style="color:#A0A">.393</span> <i><span style="color:#55F">sps</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.461</span> <i><span style="color:#55F">mtps</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.010</span> <i><span style="color:#55F">mfu</span></i>=<span style="color:#A0A">24</span><span style="color:#A0A">.410</span> <i><span style="color:#55F">train_loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.837</span> <i><span style="color:#55F">val_loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.826</span>
+    <span style="color:#838383">[2023-11-15 09:54:42]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[trainer.py:516</span><span style="color:#777777">]</span> - <i><span style="color:#55F">step</span></i>=<span style="color:#A0A">700</span> <i><span style="color:#55F">loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.862</span> <i><span style="color:#55F">dt</span></i>=<span style="color:#A0A">369</span><span style="color:#A0A">.661</span> <i><span style="color:#55F">sps</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.705</span> <i><span style="color:#55F">mtps</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.011</span> <i><span style="color:#55F">mfu</span></i>=<span style="color:#A0A">24</span><span style="color:#A0A">.552</span> <i><span style="color:#55F">train_loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.837</span> <i><span style="color:#55F">val_loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.826</span>
+    <span style="color:#838383">[2023-11-15 09:55:21]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[trainer.py:516</span><span style="color:#777777">]</span> - <i><span style="color:#55F">step</span></i>=<span style="color:#A0A">800</span> <i><span style="color:#55F">loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.849</span> <i><span style="color:#55F">dt</span></i>=<span style="color:#A0A">336</span><span style="color:#A0A">.193</span> <i><span style="color:#55F">sps</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.974</span> <i><span style="color:#55F">mtps</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.012</span> <i><span style="color:#55F">mfu</span></i>=<span style="color:#A0A">24</span><span style="color:#A0A">.938</span> <i><span style="color:#55F">train_loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.837</span> <i><span style="color:#55F">val_loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.826</span>
+    <span style="color:#838383">[2023-11-15 09:56:00]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[trainer.py:516</span><span style="color:#777777">]</span> - <i><span style="color:#55F">step</span></i>=<span style="color:#A0A">900</span> <i><span style="color:#55F">loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.586</span> <i><span style="color:#55F">dt</span></i>=<span style="color:#A0A">387</span><span style="color:#A0A">.251</span> <i><span style="color:#55F">sps</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.582</span> <i><span style="color:#55F">mtps</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.011</span> <i><span style="color:#55F">mfu</span></i>=<span style="color:#A0A">24</span><span style="color:#A0A">.910</span> <i><span style="color:#55F">train_loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.837</span> <i><span style="color:#55F">val_loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.826</span>
+    <span style="color:#838383">[2023-11-15 09:56:38]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[trainer.py:516</span><span style="color:#777777">]</span> - <i><span style="color:#55F">step</span></i>=<span style="color:#A0A">1000</span> <i><span style="color:#55F">loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.763</span> <i><span style="color:#55F">dt</span></i>=<span style="color:#A0A">373</span><span style="color:#A0A">.859</span> <i><span style="color:#55F">sps</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.675</span> <i><span style="color:#55F">mtps</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.011</span> <i><span style="color:#55F">mfu</span></i>=<span style="color:#A0A">24</span><span style="color:#A0A">.973</span> <i><span style="color:#55F">train_loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.837</span> <i><span style="color:#55F">val_loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.826</span>
+
+</pre>
+</div>
+</section>
+<section id="evaluate-model" class="level2">
+<h2 class="anchored" data-anchor-id="evaluate-model">Evaluate Model</h2>
+<div class="sourceCode" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>query <span class="op">=</span> <span class="st">"What is a supercomputer? Explain like I'm a child, and speak clearly. Double check your logic.."</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>outputs <span class="op">=</span> trainer.evaluate(query, num_samples<span class="op">=</span><span class="dv">1</span>, display<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>console.<span class="bu">print</span>(<span class="vs">fr'\[prompt]: "</span><span class="sc">{</span>query<span class="sc">}</span><span class="vs">"'</span>)</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>console.<span class="bu">print</span>(<span class="st">"\[response]:</span><span class="ch">\n\n</span><span class="st">"</span> <span class="op">+</span> <span class="vs">fr"</span><span class="sc">{</span>outputs[<span class="st">'0'</span>][<span class="st">'raw'</span>]<span class="sc">}</span><span class="vs">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display">
+<pre style="white-space:pre;">
+    <span style="font-weight: bold">[</span>prompt<span style="font-weight: bold">]</span>: <span style="color: #008000; text-decoration-color: #008000">"What is a supercomputer? Explain like I'm a child, and speak clearly. Double check your logic.."</span>
+
+    <span style="font-weight: bold">[</span>response<span style="font-weight: bold">]</span>:
+
+    What is a supercomputer? Explain like I'm a child, and speak clearly. Double check your logic.. Does it say that when you say <span style="color: #008000; text-decoration-color: #008000">"I want to be famous"</span> that you should be famous as a songwriter too? Does it say that you should have a place in your life or in an organization? Is it saying that you should be regarded as a <span style="color: #008000; text-decoration-color: #008000">"supercomputer"</span> and have access to the best software on earth?
+
+    Is it saying that you are a computer programmer?
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer scientist"</span>?
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer scientist"</span>?
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer"</span>?
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer"</span>?
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer"</span>?
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer"</span>?
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer"</span>?
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer"</span>?
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer"</span>?
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer?"</span>
+
+     does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer?"</span>
+
+    does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer?"</span>
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer"</span>?
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer"</span>?
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer"</span>?
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer"</span>?
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer"</span>?
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer"</span>?
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer"</span>?
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer?"</span>
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer?"</span>
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer"</span>?
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer"</span>?
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer?"</span>
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer"</span>?
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer"</span>?
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer?"</span>
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer?"</span>
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer?"</span>
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer"</span>?
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer?"</span>
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer"</span>?<span style="color: #008000; text-decoration-color: #008000">" Doesn it say "</span>you are a computer programmer?"
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer?"</span>
+
+    Does it say <span style="color: #008000; text-decoration-color: #008000">"you are a computer programmer?"</span>
+
+    Does
+
+</pre>
+</div>
+</section>
+<section id="train-a-bit-more" class="level2">
+<h2 class="anchored" data-anchor-id="train-a-bit-more">Train a bit more??</h2>
+<div class="sourceCode" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>trainer.model.module.train()</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="bu">iter</span> <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">10</span>):</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    console.rule(<span class="ss">f'iter: </span><span class="sc">{</span><span class="bu">iter</span><span class="sc">}</span><span class="ss">'</span>)</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>    trainer.train(train_iters<span class="op">=</span><span class="dv">100</span>)</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>    query <span class="op">=</span> <span class="st">"What is a supercomputer?"</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    outputs <span class="op">=</span> trainer.evaluate(query, num_samples<span class="op">=</span><span class="dv">1</span>, display<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>    console.<span class="bu">print</span>(<span class="vs">fr'\[prompt]: "</span><span class="sc">{</span>query<span class="sc">}</span><span class="vs">"'</span>)</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>    console.<span class="bu">print</span>(<span class="st">"\[response]:</span><span class="ch">\n\n</span><span class="st">"</span> <span class="op">+</span> <span class="vs">fr"</span><span class="sc">{</span>outputs[<span class="st">'0'</span>][<span class="st">'raw'</span>]<span class="sc">}</span><span class="vs">"</span>)</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>    console.rule()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display">
+<pre style="white-space:pre;">
+    <span style="color: #00ff00; text-decoration-color: #00ff00">───────────────────────────────────────────────────── </span>iter: <span style="color: #800080; text-decoration-color: #800080">0</span><span style="color: #00ff00; text-decoration-color: #00ff00"> ─────────────────────────────────────────────────────</span>
+
+    <span style="color:#838383">[2023-11-15 09:58:35]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[trainer.py:516</span><span style="color:#777777">]</span> - <i><span style="color:#55F">step</span></i>=<span style="color:#A0A">1100</span> <i><span style="color:#55F">loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.939</span> <i><span style="color:#55F">dt</span></i>=<span style="color:#A0A">356</span><span style="color:#A0A">.182</span> <i><span style="color:#55F">sps</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.808</span> <i><span style="color:#55F">mtps</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.011</span> <i><span style="color:#55F">mfu</span></i>=<span style="color:#A0A">26</span><span style="color:#A0A">.810</span> <i><span style="color:#55F">train_loss</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.000</span> <i><span style="color:#55F">val_loss</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.000</span>
+
+    <span style="font-weight: bold">[</span>prompt<span style="font-weight: bold">]</span>: <span style="color: #008000; text-decoration-color: #008000">"What is a supercomputer?"</span>
+
+    <span style="font-weight: bold">[</span>response<span style="font-weight: bold">]</span>:
+
+    What is a supercomputer?
+
+    A supercomputer consists of two parts: “a processor and a network of interconnected graphics processors, called supercomputers,” said Richard Andrews, a computer scientist at the University of Edinburgh.
+
+    Image copyright PA Image caption The first three are the biggest computers in the world, but they’re all fitted with a touchscreen
+
+    The processor is a small computer, usually a single-core one. Usually it is made of silicon and it’s the first, and most expensive, part of the complex system. The other two parts of the system are: a chip to power the processor and a memory and software stack to allow for the system to interact on the internet.
+
+    The first is the processor. It runs a complex combination of algorithms. These algorithms work to compress higher-level data, but also do some processing to understand the lower levels of the system.
+
+    According to the Oxford computer science textbook, algorithms are:
+
+    It’s a special structure which allows a system to achieve a particular level of efficiency, such as a faster processor or a faster system of atoms or molecules.
+
+    Researchers use algorithms to implement certain types of systems like computers or medicine. But a supercomputer can also work faster, or faster, to solve problems.
+
+    Image copyright PA Image caption The supercomputer in the US can run things like social networks and video games
+
+    A supercomputer has a processor inside, but there is also a memory and software to process it. This allows a system to do something faster. This is called a supercomputer’s memory.
+
+    Image copyright Getty Images Image caption Computing power has increased, but it’s also improved the power of computers in recent years
+
+    The second piece of the system is the computer network. This is a computer system that works together to perform calculations.
+
+    This is a huge system. It is where all the computers in the world - computers in different countries, continents and different time zones - work together.
+
+    The network works and converts the data on the computers into calculations. This is the core of a supercomputer.
+
+    What goes on inside a supercomputer?
+
+    Image copyright PA Image caption The supercomputer works together to work out human intelligence
+
+    It can interact with the computer network via a touchscreen.
+
+    The other pieces of the system are:
+
+    A computer system can send and receive data through a touchscreen. It is
+
+    <span style="color: #00ff00; text-decoration-color: #00ff00">───────────────────────────────────────────────────────────────────────────────────────────────────────────────────</span>
+
+    <span style="color: #00ff00; text-decoration-color: #00ff00">───────────────────────────────────────────────────── </span>iter: <span style="color: #800080; text-decoration-color: #800080">1</span><span style="color: #00ff00; text-decoration-color: #00ff00"> ─────────────────────────────────────────────────────</span>
+
+    <span style="color:#838383">[2023-11-15 09:59:28]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[trainer.py:516</span><span style="color:#777777">]</span> - <i><span style="color:#55F">step</span></i>=<span style="color:#A0A">1200</span> <i><span style="color:#55F">loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.907</span> <i><span style="color:#55F">dt</span></i>=<span style="color:#A0A">400</span><span style="color:#A0A">.617</span> <i><span style="color:#55F">sps</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.496</span> <i><span style="color:#55F">mtps</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.010</span> <i><span style="color:#55F">mfu</span></i>=<span style="color:#A0A">23</span><span style="color:#A0A">.837</span> <i><span style="color:#55F">train_loss</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.000</span> <i><span style="color:#55F">val_loss</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.000</span>
+
+    <span style="font-weight: bold">[</span>prompt<span style="font-weight: bold">]</span>: <span style="color: #008000; text-decoration-color: #008000">"What is a supercomputer?"</span>
+
+    <span style="font-weight: bold">[</span>response<span style="font-weight: bold">]</span>:
+
+    What is a supercomputer?
+
+    One supercomputer is a super computer that is capable of the supercomputing of supercomputers and other machines.
+
+    Where is the supercomputer on the circuit?
+
+    The supercomputer is made up of several supercomputers.
+
+    A supercomputer is the most advanced computer that has ever been built.
+
+    It is so powerful that it can do so much work.
+
+    It is the highest powered supercomputer.
+
+    It is very powerful.
+
+    It can do so much.
+
+    It is capable of doing so much.
+
+    It is supercomputer.
+
+    It is supercomputer.
+
+    It is supercomputer.
+
+    It is supercomputer.
+
+    It is supercomputer.
+
+    Supercomputer.
+
+    If you want a break-down of what a supercomputer is, read this.
+
+    You might also want to read this.
+
+    The diagram below shows that the supercomputer is connected to the circuit.
+
+    What does that diagram look like?
+
+    A pretty huge diagram, right? Well, it's a diagram that even the best supercomputer doesn't have. It is a diagram that only the best supercomputer has.
+
+    And that is why it's called a diagram.
+
+    It is called a diagram.
+
+    A diagram is an electrical diagram.
+
+    The diagram on the circuit has an electrical diagram of it's components.
+
+    When you see an electrical diagram it means the diagram on the circuit has an electrical diagram of it's components.
+
+    This diagram doesn't imply that the components on the circuit are connected.
+
+    It just means that the diagram on the circuit has an electrical diagram of it's components.
+
+    This diagram doesn't imply that the components on the circuit are connected.
+
+    It just means that the diagram on the circuit has an electrical diagram of it's components.
+
+    The diagram on the circuit has an electrical diagram of it's components.
+
+    The diagram on the circuit has an electrical diagram of it's components.
+
+    The diagram on the circuit has an electrical diagram of it's components.
+
+    The diagram on the circuit has an electrical diagram of it's components.
+
+    The diagram on the circuit has an electrical diagram of it's components.
+
+    This diagram doesn't imply that the components on the circuit are connected.
+
+    It just means that the diagram on the circuit has an electrical diagram of it
+
+    <span style="color: #00ff00; text-decoration-color: #00ff00">───────────────────────────────────────────────────────────────────────────────────────────────────────────────────</span>
+
+    <span style="color: #00ff00; text-decoration-color: #00ff00">───────────────────────────────────────────────────── </span>iter: <span style="color: #800080; text-decoration-color: #800080">2</span><span style="color: #00ff00; text-decoration-color: #00ff00"> ─────────────────────────────────────────────────────</span>
+
+    <span style="color:#838383">[2023-11-15 10:00:22]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[trainer.py:516</span><span style="color:#777777">]</span> - <i><span style="color:#55F">step</span></i>=<span style="color:#A0A">1300</span> <i><span style="color:#55F">loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.941</span> <i><span style="color:#55F">dt</span></i>=<span style="color:#A0A">423</span><span style="color:#A0A">.726</span> <i><span style="color:#55F">sps</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.360</span> <i><span style="color:#55F">mtps</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.010</span> <i><span style="color:#55F">mfu</span></i>=<span style="color:#A0A">22</span><span style="color:#A0A">.537</span> <i><span style="color:#55F">train_loss</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.000</span> <i><span style="color:#55F">val_loss</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.000</span>
+
+    <span style="font-weight: bold">[</span>prompt<span style="font-weight: bold">]</span>: <span style="color: #008000; text-decoration-color: #008000">"What is a supercomputer?"</span>
+
+    <span style="font-weight: bold">[</span>response<span style="font-weight: bold">]</span>:
+
+    What is a supercomputer? Supercomputing machines are extremely powerful and cheap. They are also cheap to upgrade, and they are incredibly easy to install - and they can handle any challenge you throw at them. You can even rent out one for a few hours in a day <span style="font-weight: bold">(</span>after all, you need a supercomputer in the first place<span style="font-weight: bold">)</span>.
+
+    Read more about supercomputing in our article on computing history.<span style="font-weight: bold">&lt;</span><span style="color: #ff00ff; text-decoration-color: #ff00ff; font-weight: bold">|endoftext|</span><span style="color: #000000; text-decoration-color: #000000">&gt;An estimated </span><span style="color: #800080; text-decoration-color: #800080">130</span><span style="color: #000000; text-decoration-color: #000000"> people were killed and at least </span><span style="color: #800080; text-decoration-color: #800080">200</span><span style="color: #000000; text-decoration-color: #000000"> wounded by militants in the attack.</span>
+
+    <span style="color: #000000; text-decoration-color: #000000">The attack started near the scene of Friday's explosions, which killed two women and a child.</span>
+
+    <span style="color: #000000; text-decoration-color: #000000">A bomber had targeted a residential area next to the scene of Friday's blasts.</span>
+
+    <span style="color: #000000; text-decoration-color: #000000">The suicide bomber also targeted the building in the village of Bishnagar, which has a military installation.</span>
+
+    <span style="color: #000000; text-decoration-color: #000000">There's no estimate of how many people were killed or wounded.</span>
+
+    <span style="color: #000000; text-decoration-color: #000000">The blasts took place near the village of Bishnagar, which has a military installation. </span><span style="color: #000000; text-decoration-color: #000000; font-weight: bold">(</span><span style="color: #000000; text-decoration-color: #000000">Photo/AP</span><span style="color: #000000; text-decoration-color: #000000; font-weight: bold">)</span>
+
+    <span style="color: #000000; text-decoration-color: #000000">One of the explosions took place near the building in the village of Bishnagar, which has a military installation. </span><span style="color: #000000; text-decoration-color: #000000; font-weight: bold">(</span><span style="color: #000000; text-decoration-color: #000000">Photo/AP</span><span style="color: #000000; text-decoration-color: #000000; font-weight: bold">)</span>
+
+    <span style="color: #000000; text-decoration-color: #000000">The explosions took place near the building in the village of Bishnagar, which has a military installation. </span><span style="color: #000000; text-decoration-color: #000000; font-weight: bold">(</span><span style="color: #000000; text-decoration-color: #000000">Photo/AP</span><span style="color: #000000; text-decoration-color: #000000; font-weight: bold">)</span><span style="color: #000000; text-decoration-color: #000000">&lt;|endoftext|</span><span style="font-weight: bold">&gt;</span>How do you know what's happening on your computer? The days are long and the weeks are long, but once in a while, it's nice to get a peek inside the code behind what you’re doing. The difference between a good and a bad computer is usually the code behind its parts. It’s also a good sign that the developer is smart and is playing a skilled game of communication with a user. But you don’t have to play a game of communication to understand and understand how a code is actually interacting with the real world. If this sounds like a bit of a stretch, consider this: Google Chrome has evolved into a fast-paced browser focused on gaming and entertainment. Apple’s Safari was once full of the same stuff, but now it’s mostly silent.
+
+    That’s a good thing, but it doesn’t explain why Apple’s mobile operating system is so focused on gaming. To the best of my knowledge, there’s not much meaningfully different about what the developer's thinking is as it relates to the development of Safari. Maybe it’s a good thing they�
+
+    <span style="color: #00ff00; text-decoration-color: #00ff00">───────────────────────────────────────────────────────────────────────────────────────────────────────────────────</span>
+
+    <span style="color: #00ff00; text-decoration-color: #00ff00">───────────────────────────────────────────────────── </span>iter: <span style="color: #800080; text-decoration-color: #800080">3</span><span style="color: #00ff00; text-decoration-color: #00ff00"> ─────────────────────────────────────────────────────</span>
+
+    <span style="color:#838383">[2023-11-15 10:01:14]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[trainer.py:516</span><span style="color:#777777">]</span> - <i><span style="color:#55F">step</span></i>=<span style="color:#A0A">1400</span> <i><span style="color:#55F">loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.948</span> <i><span style="color:#55F">dt</span></i>=<span style="color:#A0A">366</span><span style="color:#A0A">.042</span> <i><span style="color:#55F">sps</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.732</span> <i><span style="color:#55F">mtps</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.011</span> <i><span style="color:#55F">mfu</span></i>=<span style="color:#A0A">26</span><span style="color:#A0A">.088</span> <i><span style="color:#55F">train_loss</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.000</span> <i><span style="color:#55F">val_loss</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.000</span>
+
+    <span style="font-weight: bold">[</span>prompt<span style="font-weight: bold">]</span>: <span style="color: #008000; text-decoration-color: #008000">"What is a supercomputer?"</span>
+
+    <span style="font-weight: bold">[</span>response<span style="font-weight: bold">]</span>:
+
+    What is a supercomputer?
+
+    A supercomputer is an object that is built around a central processor.
+
+    Although its size and weight may not be as strong as a human body, it is still far from the feeble components of a regular computer and is the same power as a small power station.
+
+    The technology is called a supercomputer because it is capable of storing and processing huge amounts of data. If our supercomputer is not powerful enough to perform the calculations of a single human, it is equipped with the ability to run the complex software written in the instructions of the operating system.
+
+    We have managed to get a number of super computers ready for testing, and they live up to their names.
+
+    We are talking about super computers that take <span style="color: #800080; text-decoration-color: #800080">10</span>,<span style="color: #800080; text-decoration-color: #800080">000</span> times the power of the entire computer, and are equipped with a powerful combination of processors and big memory storage.
+
+    They are capable of running the complex software written in the instructions of the operating system.
+
+    You can call an IBM super computer a super computer because it has the power of all of a human being.
+
+    How well does it work?
+
+    IBM super computers are so powerful that they can run our own software. They are incredibly fast, are very long-lasting, they are able to communicate with each other and are connected with our WiFi network.
+
+    The super computer of yours is a super computer that has a massive amount of memory and power, which is very much more powerful than a human average.
+
+    That means it can run our programs, which are made of thousands of Java code.
+
+    It is equipped with the power of a human at <span style="color: #800080; text-decoration-color: #800080">1</span>,<span style="color: #800080; text-decoration-color: #800080">500</span> times their humanweight.
+
+    You can call an IBM super computer a super computer because it has the power of all of a human being.
+
+    So, if you are a human being, and you have a super computer, will you be able to run a program that people might not have seen on a super computer?
+
+    It is the same question as every other question.
+
+    We have made a number of super computers for different purposes.
+
+    We have shown to humans the power of running an ultra-fast super computer, such as a supercomputer of this kind.
+
+    It is possible to run a program written in Java that is <span style="color: #800080; text-decoration-color: #800080">10</span>,<span style="color: #800080; text-decoration-color: #800080">000</span> times the power of the entire computer.
+
+    We know that we have managed to get a number of super computers ready for testing.
+
+    <span style="color: #00ff00; text-decoration-color: #00ff00">───────────────────────────────────────────────────────────────────────────────────────────────────────────────────</span>
+
+    <span style="color: #00ff00; text-decoration-color: #00ff00">───────────────────────────────────────────────────── </span>iter: <span style="color: #800080; text-decoration-color: #800080">4</span><span style="color: #00ff00; text-decoration-color: #00ff00"> ─────────────────────────────────────────────────────</span>
+
+    <span style="color:#838383">[2023-11-15 10:02:07]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[trainer.py:516</span><span style="color:#777777">]</span> - <i><span style="color:#55F">step</span></i>=<span style="color:#A0A">1500</span> <i><span style="color:#55F">loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.871</span> <i><span style="color:#55F">dt</span></i>=<span style="color:#A0A">341</span><span style="color:#A0A">.233</span> <i><span style="color:#55F">sps</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.931</span> <i><span style="color:#55F">mtps</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.012</span> <i><span style="color:#55F">mfu</span></i>=<span style="color:#A0A">27</span><span style="color:#A0A">.985</span> <i><span style="color:#55F">train_loss</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.000</span> <i><span style="color:#55F">val_loss</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.000</span>
+
+    <span style="font-weight: bold">[</span>prompt<span style="font-weight: bold">]</span>: <span style="color: #008000; text-decoration-color: #008000">"What is a supercomputer?"</span>
+
+    <span style="font-weight: bold">[</span>response<span style="font-weight: bold">]</span>:
+
+    What is a supercomputer?
+
+    A supercomputer is a computer that is able to do complex calculations faster than a human can.
+
+    A supercomputer is a computer that is able to do complex calculations faster than a human can.
+
+    A supercomputer can have more cores than a human.
+
+    A supercomputer is not a memory. It is a super computer. Once you have one, you can use it as an efficient computer.
+
+    A supercomputer can be the fastest computer on the planet.
+
+    <span style="font-weight: bold">(</span>Click through the gallery for a larger view.<span style="font-weight: bold">)</span>
+
+    <span style="color: #008000; text-decoration-color: #008000">"We have high-performance supercomputers that are very fast and very efficient. The problem is that, because of modern computing technology, we can do multiple tasks at the same time,"</span> said Thomas DeLong, a computer scientist at the University of Michigan and a computer scientist at the University of California, Berkeley, who is one of the first members of the UNDP supercomputing committee.
+
+    <span style="color: #008000; text-decoration-color: #008000">"This is not a supercomputer. It is a supercomputer. It is fast enough to do certain things that other computers cannot. That is the power of super computers."</span>
+
+    DeLong's group has been working to upgrade super computers to get a better computing power. Their goal is to make the supercomputer that is needed for the next generation of computing on the planet -- the next generation that is computing the vast majority of the world's information -- the fastest supercomputer on the planet.
+
+    <span style="color: #008000; text-decoration-color: #008000">"We have high-performance supercomputers that are very fast and very efficient. The problem is that, because of modern computing technology, we can do multiple tasks at the same time. That is the power of super computers,"</span> said Thomas DeLong, a computer scientist at the University of Michigan and a computer scientist at the University of California, Berkeley, who is one of the first members of the UNDP supercomputing committee. <span style="color: #008000; text-decoration-color: #008000">"That is what super computers are all about."</span>
+
+    Dewey said that it's so easy to see why super computers could be faster than humans -- as an example.
+
+    <span style="color: #008000; text-decoration-color: #008000">"Super computers are very fast computers. If you run a program that you're fast enough, you can live with it. It's not any longer a supercomputer, but a supercomputer, which is the next evolutionary step,"</span> said Dewey.
+
+    Dewey said super computers are more powerful than the average human -- especially when there's more to computing.
+
+    "The supercomputer
+
+    <span style="color: #00ff00; text-decoration-color: #00ff00">───────────────────────────────────────────────────────────────────────────────────────────────────────────────────</span>
+
+    <span style="color: #00ff00; text-decoration-color: #00ff00">───────────────────────────────────────────────────── </span>iter: <span style="color: #800080; text-decoration-color: #800080">5</span><span style="color: #00ff00; text-decoration-color: #00ff00"> ─────────────────────────────────────────────────────</span>
+
+    <span style="color:#838383">[2023-11-15 10:03:00]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[trainer.py:516</span><span style="color:#777777">]</span> - <i><span style="color:#55F">step</span></i>=<span style="color:#A0A">1600</span> <i><span style="color:#55F">loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.997</span> <i><span style="color:#55F">dt</span></i>=<span style="color:#A0A">416</span><span style="color:#A0A">.252</span> <i><span style="color:#55F">sps</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.402</span> <i><span style="color:#55F">mtps</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.010</span> <i><span style="color:#55F">mfu</span></i>=<span style="color:#A0A">22</span><span style="color:#A0A">.941</span> <i><span style="color:#55F">train_loss</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.000</span> <i><span style="color:#55F">val_loss</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.000</span>
+
+    <span style="font-weight: bold">[</span>prompt<span style="font-weight: bold">]</span>: <span style="color: #008000; text-decoration-color: #008000">"What is a supercomputer?"</span>
+
+    <span style="font-weight: bold">[</span>response<span style="font-weight: bold">]</span>:
+
+    What is a supercomputer?
+
+    A supercomputer is a computer for which a large number of computers are required to run programs. A supercomputer is a computer with an operating system that is modified to reduce the number of computers required to run programs.
+
+    For example, a supercomputer is a computer with a Windows operating system that meets the standard of performance of a modern computer. This is roughly equivalent to a computer of similar size that runs an operating system that runs an operating system that doubles as a computer. This is the very computer that is needed to read and write programs and monitor them, and uses the internet to connect to a computer.
+
+    Some examples of supercomputers are:
+
+    Microsoft
+
+    Google
+
+    Apple
+
+    Apple
+
+    Another example of a computer with an operating system that also includes operating systems and applications that run on the internet is:
+
+    Microsoft
+
+    Google
+
+    Apple
+
+    Google
+
+    Apple
+
+    To communicate with a computer, a computer needs two sources of data:
+
+    data directly from the command line
+
+    data from libraries
+
+    If you have a computer with more than two accounts on the command line, you want to take advantage of the power of the three-way communication paradigm developed by the World Wide Web. If you have any other system you're running <span style="font-weight: bold">(</span>e.g. a mobile device or laptop computer<span style="font-weight: bold">)</span>, you should see that the above is a more appropriate example of communication with a computer.
+
+    Don't forget to get some free training on how to set up an email server on your computer, and learn how to use a command line terminal or graphical user interface on your computer. That way you can do all of this without having to install any new software on your computer.
+
+    Or, if you are running a modern computer, you can download and install the free software that is needed for running an operating system on the command line from a single computer.
+
+    When you're running a modern computer, you need to use software that is capable of running a modern operating system. If you are writing a program that uses the command line, you should read the content of the installation instructions to make sure that the correct software is installed. If the installation instructions don't mention the proper path for the software you are writing, you want to be sure you have the correct software installed. If you're using an older computer <span style="font-weight: bold">(</span>i.e. before the end of <span style="color: #800080; text-decoration-color: #800080">2010</span><span style="font-weight: bold">)</span>, you may need to install extra software that is
+
+    <span style="color: #00ff00; text-decoration-color: #00ff00">───────────────────────────────────────────────────────────────────────────────────────────────────────────────────</span>
+
+    <span style="color: #00ff00; text-decoration-color: #00ff00">───────────────────────────────────────────────────── </span>iter: <span style="color: #800080; text-decoration-color: #800080">6</span><span style="color: #00ff00; text-decoration-color: #00ff00"> ─────────────────────────────────────────────────────</span>
+
+    <span style="color:#838383">[2023-11-15 10:03:53]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[trainer.py:516</span><span style="color:#777777">]</span> - <i><span style="color:#55F">step</span></i>=<span style="color:#A0A">1700</span> <i><span style="color:#55F">loss</span></i>=<span style="color:#A0A">3</span><span style="color:#A0A">.223</span> <i><span style="color:#55F">dt</span></i>=<span style="color:#A0A">392</span><span style="color:#A0A">.194</span> <i><span style="color:#55F">sps</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.550</span> <i><span style="color:#55F">mtps</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.010</span> <i><span style="color:#55F">mfu</span></i>=<span style="color:#A0A">24</span><span style="color:#A0A">.349</span> <i><span style="color:#55F">train_loss</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.000</span> <i><span style="color:#55F">val_loss</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.000</span>
+
+    <span style="font-weight: bold">[</span>prompt<span style="font-weight: bold">]</span>: <span style="color: #008000; text-decoration-color: #008000">"What is a supercomputer?"</span>
+
+    <span style="font-weight: bold">[</span>response<span style="font-weight: bold">]</span>:
+
+    What is a supercomputer?
+
+    A supercomputer is computer that can run instructions that are cheaper to run than the typical computer.
+
+    But how does the supercomputer perform?
+
+    In the early days of computers, supercomputers were just very powerful computers, essentially.
+
+    Then, in the early days of computers, supercomputers were just very powerful computers.
+
+    Today, computers performed three services.
+
+    It performed the simple tasks that we all perform.
+
+    It could run and read programs.
+
+    It could output an image.
+
+    It could track specific objects, such as a physical object when it was moved and moved.
+
+    It could create a software program.
+
+    And it could create a program.
+
+    At least that's what the supercomputer did.
+
+    What's one of the most common supercomputers?
+
+    You have a lot of supercomputers.
+
+    That's because supercomputers are just massive computers.
+
+    Different computers perform different tasks.
+
+    What are the most common supercomputers?
+
+    Computers are just computers.
+
+    What are the most inexpensive supercomputers?
+
+    Computers are everywhere.
+
+    What's the cost to build a supercomputer that can do the most complicated tasks?
+
+    The supercomputer is made out of three parts.
+
+    It's made of silicon <span style="font-weight: bold">(</span>the most common material<span style="font-weight: bold">)</span>
+
+    It's made of metal, the second most common
+
+    The last one is probably a little hard to work with that is
+
+    The first one is a lot based on silicon
+
+    Its starting price is around $<span style="color: #800080; text-decoration-color: #800080">50</span>, not that expensive
+
+    The second one is the most expensive
+
+    What's the cost to build a supercomputer that can run more complicated software than today's computers?
+
+    Computers are super computers.
+
+    But what about the cost to build a supercomputer that can do more complex software than today's computers?
+
+    The price is a lot
+
+    What's the cost to build a supercomputer that can perform more complex tasks than today's computers?
+
+    The cost is just over $<span style="color: #800080; text-decoration-color: #800080">100</span>
+
+    What happens if you build it to work alone?
+
+    When you build it to perform alone, you'll have a supercomputer
+
+    What's the cost of building a supercomputer that can do more complex software than today's computers?
+
+    The price of a supercomputer that can perform more complex software
+
+    <span style="color: #00ff00; text-decoration-color: #00ff00">───────────────────────────────────────────────────────────────────────────────────────────────────────────────────</span>
+
+    <span style="color: #00ff00; text-decoration-color: #00ff00">───────────────────────────────────────────────────── </span>iter: <span style="color: #800080; text-decoration-color: #800080">7</span><span style="color: #00ff00; text-decoration-color: #00ff00"> ─────────────────────────────────────────────────────</span>
+
+    <span style="color:#838383">[2023-11-15 10:04:45]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[trainer.py:516</span><span style="color:#777777">]</span> - <i><span style="color:#55F">step</span></i>=<span style="color:#A0A">1800</span> <i><span style="color:#55F">loss</span></i>=<span style="color:#A0A">3</span><span style="color:#A0A">.046</span> <i><span style="color:#55F">dt</span></i>=<span style="color:#A0A">353</span><span style="color:#A0A">.265</span> <i><span style="color:#55F">sps</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.831</span> <i><span style="color:#55F">mtps</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.012</span> <i><span style="color:#55F">mfu</span></i>=<span style="color:#A0A">27</span><span style="color:#A0A">.032</span> <i><span style="color:#55F">train_loss</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.000</span> <i><span style="color:#55F">val_loss</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.000</span>
+
+    <span style="font-weight: bold">[</span>prompt<span style="font-weight: bold">]</span>: <span style="color: #008000; text-decoration-color: #008000">"What is a supercomputer?"</span>
+
+    <span style="font-weight: bold">[</span>response<span style="font-weight: bold">]</span>:
+
+    What is a supercomputer?
+
+    A supercomputer is a computer that can control and control all of your work. It is essentially a computer that is able to do everything a computer can do. There are a few different names for a supercomputer <span style="font-weight: bold">(</span>or supercomputer<span style="font-weight: bold">)</span>. In this article, we will focus on one that is nearly ubiquitous, the supercomputer. We will look at the specific tools and software that can be used to create these machines.
+
+    Defining a supercomputer
+
+    Intelligent and flexible
+
+    At its most basic, a supercomputer is an computer that is able to control and control all of your work, all of which happens in the real world. What you would call a computer is a computer that is able to go through your work and store what you have done. This is what most people think of as a computer, when they think of the word. That is not a computer, however, what you are really talking about is your computer.
+
+    At the end of the day, a supercomputer is a computer that is able to run your work and store what you have done.
+
+    The programming language used in a supercomputer is text based. You may have heard of a program like C programming language. In this article, I will spend a lot of time explaining how to use C programming language. I will also show you how to use Visual Studio <span style="color: #800080; text-decoration-color: #800080">2016</span> which is just as simple as using C programming language. I will also show you how to develop an MVP of your MVP, which is also what I am talking about in this article.
+
+    Some examples of programs that might use C programming language include:
+
+    Creating a supercomputer with C coding language
+
+    Using C programming language
+
+    Using C-based programming language
+
+    Modifying a supercomputer that is able to control all of your work
+
+    Modifying a supercomputer that is able to control all of your work
+
+    Modifying a supercomputer that is able to control all of your work
+
+    Modifying a supercomputer that is able to control all of your work
+
+    Modifying a supercomputer that is able to control all of your work
+
+    Modifying a supercomputer that is able to control all of your work
+
+    Modifying an MVP of your MVP that is also able to control all of your work
+
+    Modifying a MVP of your MVP that is able to control all of your work
+
+    Modifying a MVP of your MVP that is able to control all
+
+    <span style="color: #00ff00; text-decoration-color: #00ff00">───────────────────────────────────────────────────────────────────────────────────────────────────────────────────</span>
+
+    <span style="color: #00ff00; text-decoration-color: #00ff00">───────────────────────────────────────────────────── </span>iter: <span style="color: #800080; text-decoration-color: #800080">8</span><span style="color: #00ff00; text-decoration-color: #00ff00"> ─────────────────────────────────────────────────────</span>
+
+    <span style="color:#838383">[2023-11-15 10:05:37]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[trainer.py:516</span><span style="color:#777777">]</span> - <i><span style="color:#55F">step</span></i>=<span style="color:#A0A">1900</span> <i><span style="color:#55F">loss</span></i>=<span style="color:#A0A">3</span><span style="color:#A0A">.108</span> <i><span style="color:#55F">dt</span></i>=<span style="color:#A0A">413</span><span style="color:#A0A">.097</span> <i><span style="color:#55F">sps</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.421</span> <i><span style="color:#55F">mtps</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.010</span> <i><span style="color:#55F">mfu</span></i>=<span style="color:#A0A">23</span><span style="color:#A0A">.116</span> <i><span style="color:#55F">train_loss</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.000</span> <i><span style="color:#55F">val_loss</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.000</span>
+
+    <span style="font-weight: bold">[</span>prompt<span style="font-weight: bold">]</span>: <span style="color: #008000; text-decoration-color: #008000">"What is a supercomputer?"</span>
+
+    <span style="font-weight: bold">[</span>response<span style="font-weight: bold">]</span>:
+
+    What is a supercomputer?
+
+    A supercomputer is not just a computer. It is an instrument that allows us to perform an algorithm. A supercomputer can be used by scientists, researchers, and computing experts. A supercomputer can be used by our lives to perform mathematical tasks such as addition and subtraction, while also being useful as a tool for fun.
+
+    What's a supercomputer like?
+
+    There is a very specific reason why super computers are super computers. Super computers are often referred to as chips, or chips with chips.
+
+    What's a supercomputer like?
+
+    Super computers are designed for deep learning. They can be used by any researcher who wants to understand how information works on a large scale. Although super computers often have a single chip, it has a huge number of chips.
+
+    What's a supercomputer like?
+
+    Super computers are designed to be used by the military. Scientists use super computers to detect and track enemy aircraft. A supercomputer can also be used to run the full search engine on a large server.
+
+    What's a supercomputer like?
+
+    Super computers are being used by academics, who are using the technology to develop tools for research. In particular, super computers have been used to check in on the behavior of the human brain.
+
+    What's a supercomputer like?
+
+    Super machines have been used to run a wide range of research, such as the Human Genome Project, where the focus is on understanding what happens in the brain.
+
+    What's a supercomputer like?
+
+    Superputers can be used by medical professionals to run an automated treatment program. A supercomputer could be used as a tool to find bugs in a patient's brain.
+
+    What's a supercomputer like?
+
+    Super computers are being used by astronomers to study the stars. A supercomputer can also be used as a tool to find bugs in a patient's brain.
+
+    What's a supercomputer like?
+
+    As the name of the video game, Supercomputer and Supercomputer. Supercomputer in the name of Super Computer and Supercomputer in the name of Supercomputer and Supercomputer.
+
+    What's a supercomputer like?
+
+    Superputers can be used by computer scientists to analyze the structure of stars. A supercomputer can also be used as a tool to find bugs in a patient's brain.
+
+    What's a supercomputer like?
+
+    Superputers can be used by computer
+
+    <span style="color: #00ff00; text-decoration-color: #00ff00">───────────────────────────────────────────────────────────────────────────────────────────────────────────────────</span>
+
+    <span style="color: #00ff00; text-decoration-color: #00ff00">───────────────────────────────────────────────────── </span>iter: <span style="color: #800080; text-decoration-color: #800080">9</span><span style="color: #00ff00; text-decoration-color: #00ff00"> ─────────────────────────────────────────────────────</span>
+
+    <span style="color:#838383">[2023-11-15 10:06:30]</span><span style="color:var(--blue-text)">[INFO]</span><span style="color:#777777">[trainer.py:516</span><span style="color:#777777">]</span> - <i><span style="color:#55F">step</span></i>=<span style="color:#A0A">2000</span> <i><span style="color:#55F">loss</span></i>=<span style="color:#A0A">3</span><span style="color:#A0A">.133</span> <i><span style="color:#55F">dt</span></i>=<span style="color:#A0A">378</span><span style="color:#A0A">.236</span> <i><span style="color:#55F">sps</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.644</span> <i><span style="color:#55F">mtps</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.011</span> <i><span style="color:#55F">mfu</span></i>=<span style="color:#A0A">25</span><span style="color:#A0A">.247</span> <i><span style="color:#55F">train_loss</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.000</span> <i><span style="color:#55F">val_loss</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.000</span>
+
+    <span style="font-weight: bold">[</span>prompt<span style="font-weight: bold">]</span>: <span style="color: #008000; text-decoration-color: #008000">"What is a supercomputer?"</span>
+
+    <span style="font-weight: bold">[</span>response<span style="font-weight: bold">]</span>:
+
+    What is a supercomputer?
+
+    Supercomputing is the concept of processing and storing information such as programs and images into a computer.
+
+    What kind of information can supercomputing access?
+
+    When used in supercomputing, it can access the entire computer.
+
+    What is the most powerful reason to allow supercomputing to access data?
+
+    Supercomputing can access all the data that a computer can read.
+
+    What are the most challenging aspects of supercomputing?
+
+    Most supercomputing tasks require only a basic understanding of CPU instructions.
+
+    What are the advantages of using supercomputing?
+
+    It’s a fully accessible method, which makes it accessible and easy to use.<span style="font-weight: bold">&lt;</span><span style="color: #ff00ff; text-decoration-color: #ff00ff; font-weight: bold">|endoftext|</span><span style="font-weight: bold">&gt;</span>The Denver Broncos had a four-year contract with former Denver Broncos offensive coordinator Bill O’Brien out. The Broncos never hired Broncos offensive coordinator Bill O’Brien as Broncos offensive coordinator. O’Brien brought in Broncos offensive coordinator Mike Klis to be the Broncos offensive coordinator. Klis was a Broncos offensive coordinator for two seasons.
+
+    The Broncos hired Broncos offensive coordinator Mike Klis to be the Broncos offensive coordinator. Denver fired Bill O’Brien as Broncos offensive coordinator.
+
+     Denver had a four-year contract with Bill O’Brien out. The Broncos never hired Bill O’Brien as Broncos offensive coordinator. O’Brien brought in Broncos offensive coordinator Mike Klis to be the Broncos offensive coordinator.
+
+    In <span style="color: #800080; text-decoration-color: #800080">2009</span>, the Broncos hired Mike Klis, who was the Broncos offensive coordinator for two seasons.
+
+     Broncos coach Bill O’Brien, left, and Mike Klis, right, in the Broncos offense. In <span style="color: #800080; text-decoration-color: #800080">2009</span>, Broncos coach Bill O’Brien, left, and Mike Klis, right, in the Broncos offense.
+
+    It’s a matter of fact that Bill O’Brien brought in Peyton Manning to be the Broncos offensive coordinator. Broncos offensive coordinator Mike Klis , left, and Mike Klis, right, in the Broncos offense.
+
+    DENVER Broncos coach Bill O’Brien, left, and Mike Klis, right, were the Broncos offensive coordinators. Broncos coach Bill O’Brien, left, and Mike Klis, right.
+
+    Denver coaches Mike Klis and Mike Klis and Broncos offensive coordinator Mike Klis.
+
+    Denver coaches Mike Klis and Mike Klis, left. Denver coaches Mike Klis and Mike Klis
+
+    <span style="color: #00ff00; text-decoration-color: #00ff00">───────────────────────────────────────────────────────────────────────────────────────────────────────────────────</span>
+
+</pre>
+</div>
+
+
+</section>
+
+
+<a onclick="window.scrollTo(0, 0); return false;" role="button" id="quarto-back-to-top"><i class="bi bi-arrow-up"></i> Back to top</a><div id="quarto-appendix" class="default"><section id="footnotes" class="footnotes footnotes-end-of-document" role="doc-endnotes"><h2 class="anchored quarto-appendix-heading">Footnotes</h2>
+
+<ol>
+<li id="fn1"><p>in units of A100 <code>bfloat16</code> peak FLOPS<a href="#fnref1" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+</ol>
+</section><section class="quarto-appendix-contents"><h2 class="anchored quarto-appendix-heading">Citation</h2><div><div class="quarto-appendix-secondary-label">BibTeX citation:</div><pre class="sourceCode code-with-copy quarto-appendix-bibtex"><code class="sourceCode bibtex">@online{foreman2023,
+  author = {Foreman, Sam},
+  title = {nanoGPT},
+  date = {2023-11-15},
+  url = {https://saforem2.github.io/nanoGPT},
+  langid = {en}
+}
+</code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre><div class="quarto-appendix-secondary-label">For attribution, please cite this work as:</div><div id="ref-foreman2023" class="csl-entry quarto-appendix-citeas" role="listitem">
+Foreman, Sam. 2023. <span>“nanoGPT.”</span> November 15, 2023. <a href="https://saforem2.github.io/nanoGPT">https://saforem2.github.io/nanoGPT</a>.
+</div></div></section></div></main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const disableStylesheet = (stylesheets) => {
+    for (let i=0; i < stylesheets.length; i++) {
+      const stylesheet = stylesheets[i];
+      stylesheet.rel = 'prefetch';
+    }
+  }
+  const enableStylesheet = (stylesheets) => {
+    for (let i=0; i < stylesheets.length; i++) {
+      const stylesheet = stylesheets[i];
+      stylesheet.rel = 'stylesheet';
+    }
+  }
+  const manageTransitions = (selector, allowTransitions) => {
+    const els = window.document.querySelectorAll(selector);
+    for (let i=0; i < els.length; i++) {
+      const el = els[i];
+      if (allowTransitions) {
+        el.classList.remove('notransition');
+      } else {
+        el.classList.add('notransition');
+      }
+    }
+  }
+  const toggleColorMode = (alternate) => {
+    // Switch the stylesheets
+    const alternateStylesheets = window.document.querySelectorAll('link.quarto-color-scheme.quarto-color-alternate');
+    manageTransitions('#quarto-margin-sidebar .nav-link', false);
+    if (alternate) {
+      enableStylesheet(alternateStylesheets);
+      for (const sheetNode of alternateStylesheets) {
+        if (sheetNode.id === "quarto-bootstrap") {
+          toggleBodyColorMode(sheetNode);
+        }
+      }
+    } else {
+      disableStylesheet(alternateStylesheets);
+      toggleBodyColorPrimary();
+    }
+    manageTransitions('#quarto-margin-sidebar .nav-link', true);
+    // Switch the toggles
+    const toggles = window.document.querySelectorAll('.quarto-color-scheme-toggle');
+    for (let i=0; i < toggles.length; i++) {
+      const toggle = toggles[i];
+      if (toggle) {
+        if (alternate) {
+          toggle.classList.add("alternate");     
+        } else {
+          toggle.classList.remove("alternate");
+        }
+      }
+    }
+    // Hack to workaround the fact that safari doesn't
+    // properly recolor the scrollbar when toggling (#1455)
+    if (navigator.userAgent.indexOf('Safari') > 0 && navigator.userAgent.indexOf('Chrome') == -1) {
+      manageTransitions("body", false);
+      window.scrollTo(0, 1);
+      setTimeout(() => {
+        window.scrollTo(0, 0);
+        manageTransitions("body", true);
+      }, 40);  
+    }
+  }
+  const isFileUrl = () => { 
+    return window.location.protocol === 'file:';
+  }
+  const hasAlternateSentinel = () => {  
+    let styleSentinel = getColorSchemeSentinel();
+    if (styleSentinel !== null) {
+      return styleSentinel === "alternate";
+    } else {
+      return false;
+    }
+  }
+  const setStyleSentinel = (alternate) => {
+    const value = alternate ? "alternate" : "default";
+    if (!isFileUrl()) {
+      window.localStorage.setItem("quarto-color-scheme", value);
+    } else {
+      localAlternateSentinel = value;
+    }
+  }
+  const getColorSchemeSentinel = () => {
+    if (!isFileUrl()) {
+      const storageValue = window.localStorage.getItem("quarto-color-scheme");
+      return storageValue != null ? storageValue : localAlternateSentinel;
+    } else {
+      return localAlternateSentinel;
+    }
+  }
+  let localAlternateSentinel = 'alternate';
+  // Dark / light mode switch
+  window.quartoToggleColorScheme = () => {
+    // Read the current dark / light value 
+    let toAlternate = !hasAlternateSentinel();
+    toggleColorMode(toAlternate);
+    setStyleSentinel(toAlternate);
+  };
+  // Ensure there is a toggle, if there isn't float one in the top right
+  if (window.document.querySelector('.quarto-color-scheme-toggle') === null) {
+    const a = window.document.createElement('a');
+    a.classList.add('top-right');
+    a.classList.add('quarto-color-scheme-toggle');
+    a.href = "";
+    a.onclick = function() { try { window.quartoToggleColorScheme(); } catch {} return false; };
+    const i = window.document.createElement("i");
+    i.classList.add('bi');
+    a.appendChild(i);
+    window.document.body.appendChild(a);
+  }
+  // Switch to dark mode if need be
+  if (hasAlternateSentinel()) {
+    toggleColorMode(true);
+  } else {
+    toggleColorMode(false);
+  }
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  const viewSource = window.document.getElementById('quarto-view-source') ||
+                     window.document.getElementById('quarto-code-tools-source');
+  if (viewSource) {
+    const sourceUrl = viewSource.getAttribute("data-quarto-source-url");
+    viewSource.addEventListener("click", function(e) {
+      if (sourceUrl) {
+        // rstudio viewer pane
+        if (/\bcapabilities=\b/.test(window.location)) {
+          window.open(sourceUrl);
+        } else {
+          window.location.href = sourceUrl;
+        }
+      } else {
+        const modal = new bootstrap.Modal(document.getElementById('quarto-embedded-source-code-modal'));
+        modal.show();
+      }
+      return false;
+    });
+  }
+  function toggleCodeHandler(show) {
+    return function(e) {
+      const detailsSrc = window.document.querySelectorAll(".cell > details > .sourceCode");
+      for (let i=0; i<detailsSrc.length; i++) {
+        const details = detailsSrc[i].parentElement;
+        if (show) {
+          details.open = true;
+        } else {
+          details.removeAttribute("open");
+        }
+      }
+      const cellCodeDivs = window.document.querySelectorAll(".cell > .sourceCode");
+      const fromCls = show ? "hidden" : "unhidden";
+      const toCls = show ? "unhidden" : "hidden";
+      for (let i=0; i<cellCodeDivs.length; i++) {
+        const codeDiv = cellCodeDivs[i];
+        if (codeDiv.classList.contains(fromCls)) {
+          codeDiv.classList.remove(fromCls);
+          codeDiv.classList.add(toCls);
+        } 
+      }
+      return false;
+    }
+  }
+  const hideAllCode = window.document.getElementById("quarto-hide-all-code");
+  if (hideAllCode) {
+    hideAllCode.addEventListener("click", toggleCodeHandler(false));
+  }
+  const showAllCode = window.document.getElementById("quarto-show-all-code");
+  if (showAllCode) {
+    showAllCode.addEventListener("click", toggleCodeHandler(true));
+  }
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+<footer class="footer">
+  <div class="nav-footer">
+    <div class="nav-footer-left">Copyright 2023, Sam Foreman</div>   
+    <div class="nav-footer-center">
+      <ul class="footer-items list-unstyled">
+    <li class="nav-item">
+    <a class="nav-link" href="https://samforeman.me"><span style="font-size: 1.25em;"></span></a>
+  </li>  
+    <li class="nav-item">
+    <a class="nav-link" href="https://github.com/saforem2"><span style="font-size: 1.25em;"></span></a>
+  </li>  
+    <li class="nav-item">
+    <a class="nav-link" href="https://twitter.com/saforem2"><span style="font-size: 1.25em;"></span></a>
+  </li>  
+    <li class="nav-item">
+    <a class="nav-link" href="mailto:///foremans@anl.gov"><span style="font-size: 1.25em;"></span></a>
+  </li>  
+    <li class="nav-item">
+    <a class="nav-link" href="https://scholar.google.com/citations?user=vV_1zDwAAAAJ&amp;hl=en"><span style="font-size: 1.25em;"></span></a>
+  </li>  
+    <li class="nav-item">
+    <a class="nav-link" href="https://orcid.org/0000-0002-9981-0876"><span style="font-size: 1.25em;"></span></a>
+  </li>  
+    <li class="nav-item">
+    <a class="nav-link" href="https://www.last.fm/user/saforem2"><span style="font-size: 1.25em;"></span></a>
+  </li>  
+    <li class="nav-item">
+    <a class="nav-link" href="https://open.spotify.com/user/saforem2"><span style="font-size: 1.25em;"></span></a>
+  </li>  
+    <li class="nav-item">
+    <a class="nav-link" href="https://www.instagram.com/saforem2"><span style="font-size: 1.25em;"></span></a>
+  </li>  
+    <li class="nav-item">
+    <a class="nav-link" href="https://linkedin.com/in/saforem2"><span style="font-size: 1.25em;"></span></a>
+  </li>  
+</ul>
+    </div>
+    <div class="nav-footer-right"><a href="https://samforeman.me">samforeman.me</a></div>
+  </div>
+</footer>
+
+
+
+</body></html>

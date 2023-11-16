@@ -1,0 +1,165 @@
+title: nanoGPT
+date: last-modified
+# date: today
+author-title: ""
+affiliation-title: ""
+published-title: ""
+modified-title: ""
+title-block-categories: false
+number-sections: false
+bibliography: references.bib
+# appendix-cite-as: display
+favicon: "favicon.svg"
+# twitter-card: true
+site-url: https://saforem2.github.io/nanoGPT
+google-scholar: true
+citeproc: true
+filters:
+  - lightbox
+lightbox: auto
+project:
+  render:
+    - index.qmd
+    - quarto/*.qmd
+  type: website
+  output-dir: "docs"
+  preview:
+    port: 4209
+author:
+  name: "Sam Foreman [[{{< ai orcid >}}]{.orcid-green}](https://orcid.org/0000-0002-9981-0876)"
+  url: https://samforeman.me
+  email: foremans@anl.gov
+  # affiliation: Argonne National Laboratory
+  # affiliation-url: https://alcf.anl.gov/about/people/sam-foreman
+citation:
+   author: Sam Foreman
+   type: webpage
+   title: "nanoGPT"
+   url: https://saforem2.github.io/nanoGPT
+execute:
+  # keep-ipynb: true
+  # keep-md: true
+  freeze: auto
+website:
+  open-graph: true
+  description: "nanoGPT: A minimal LLM implementation for research and education."
+  page-navigation: true
+  title: "nanoGPT"
+  site-url: "https://saforem2.github.io/nanoGPT"
+  favicon: "./favicon.svg"
+  back-to-top-navigation: true
+  repo-url: https://github.com/saforem2/nanoGPT
+  repo-actions: [source, edit, issue]
+  google-analytics: G-XVM2Y822Y1
+  sidebar: false
+  twitter-card:
+    image: "./assets/thumbnail.png"
+    site: "@saforem2"
+    creator: "@saforem2"
+  # sidebar:
+  #   style: docked
+  #   contents: auto
+  navbar:
+    logo: "./favicon.svg"
+    background: "#222222"
+    foregound: "#838383"
+    left:
+      - href: "./quarto/shakespeare.qmd"
+        text: "[{{< iconify line-md pencil >}}]{.red-text style='font-size: 1.0em;'} Shakespeare"
+      - href: "./quarto/gpt2-medium.qmd"
+        text: "[{{< iconify line-md pencil >}}]{.red-text style='font-size: 1.0em;'} GPT2-Medium"
+      - href: "./quarto/gpt2-xl.qmd"
+        text: "[{{< iconify line-md pencil >}}]{.red-text style='font-size: 1.0em;'} GPT2-XL"
+    #   - href: "./qmd/slides.qmd"
+    #     text: "[{{< iconify line-md image >}}]{.green-text style='font-size: 1.0em;'} Talks"
+    #   - href: "./qmd/projects.qmd"
+    #     text: "[{{< iconify line-md computer >}}]{.blue-text style='font-size:1.0em;'} Projects"
+    right:
+      - href: https://twitter.com/saforem2
+        text: "[{{< iconify line-md twitter >}}]{style='font-size: 1.15em;'}"
+        aria-label: Twitter
+      - href: https://github.com/saforem2/personal_site
+        text: "[{{< iconify line-md github-loop >}}]{style='font-size: 1.15em;'}"
+        aria-label: GitHub
+
+  page-footer:
+    left: "Copyright 2023, Sam Foreman" 
+    right: "[samforeman.me](https://samforeman.me)"
+    center:
+      - href: https://samforeman.me
+        text: "[{{< fa solid home >}}]{style='font-size: 1.25em;'}"
+
+      # - icon: github
+      - href: https://github.com/saforem2
+        text: "[{{< fa brands github >}}]{style='font-size: 1.25em;'}"
+
+      # - icon: twitter
+      - href: https://twitter.com/saforem2
+        text: "[{{< fa brands twitter >}}]{style='font-size: 1.25em;'}"
+
+      - href: "mailto:///foremans@anl.gov"
+        text: "[{{< fa regular paper-plane >}}]{style='font-size: 1.25em;'}"
+
+      # - href: https://www.twitter.com/saforem2
+      #   text: "[{{< fa brands twitter >}}]{style='font-size: 1.25em;'}"
+
+      - href: https://scholar.google.com/citations?user=vV_1zDwAAAAJ&hl=en
+        text: "[{{< ai google-scholar >}}]{style='font-size: 1.25em;'}"
+
+      - href: https://orcid.org/0000-0002-9981-0876
+        text: "[{{< ai orcid >}}]{style='font-size: 1.25em;'}"
+
+      - href: https://www.last.fm/user/saforem2
+        text: "[{{< fa brands lastfm >}}]{style='font-size: 1.25em;'}"
+
+      - href: https://open.spotify.com/user/saforem2
+        text: "[{{< fa brands spotify >}}]{style='font-size: 1.25em;'}"
+
+      - href: https://www.instagram.com/saforem2
+        text: "[{{< fa brands instagram >}}]{style='font-size: 1.25em;'}"
+
+      - href: https://linkedin.com/in/saforem2
+        text: "[{{< fa brands linkedin >}}]{style='font-size: 1.25em;'}"
+
+format:
+  html:
+    callout-appearance: simple
+    code-link: true
+    code-line-numbers: false
+    toc: true
+    self-contained: false
+    toc-location: right
+    grid:
+      body-width: 1150px
+    fig-responsive: true
+    anchor-sections: true
+    # highlight-style: atom-one
+    code-overflow: scroll
+    code-fold: false
+    code-copy: hover
+    code-summary: " "
+    code-tools:
+      source: repo
+      toggle: true
+      caption: none
+    html-math-method: katex
+    css:
+      - css/default.css
+      - css/callouts.css
+      - css/profile.css
+    theme:
+      dark:
+        - css/common.scss
+        - css/dark.scss
+        - css/syntax-dark.scss
+        - css/callout-cards.scss
+      light:
+        - css/common.scss
+        - css/light.scss
+        - css/syntax-light.scss
+        - css/callout-cards.scss
+    smooth-scroll: false
+    citations-hover: true
+    footnotes-hover: true
+    header-includes: |
+      <link href="https://pvinis.github.io/iosevka-webfont/3.4.1/iosevka.css" rel="stylesheet" />

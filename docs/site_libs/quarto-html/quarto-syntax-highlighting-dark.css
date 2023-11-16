@@ -1,0 +1,189 @@
+/* quarto syntax highlight colors */
+:root {
+  --quarto-hl-al-color: #f07178;
+  --quarto-hl-an-color: #d4d0ab;
+  --quarto-hl-at-color: #00e0e0;
+  --quarto-hl-bn-color: #d4d0ab;
+  --quarto-hl-bu-color: #abe338;
+  --quarto-hl-ch-color: #abe338;
+  --quarto-hl-co-color: #f8f8f2;
+  --quarto-hl-cv-color: #ffd700;
+  --quarto-hl-cn-color: #ffd700;
+  --quarto-hl-cf-color: #ffa07a;
+  --quarto-hl-dt-color: #ffa07a;
+  --quarto-hl-dv-color: #d4d0ab;
+  --quarto-hl-do-color: #f8f8f2;
+  --quarto-hl-er-color: #f07178;
+  --quarto-hl-ex-color: #00e0e0;
+  --quarto-hl-fl-color: #d4d0ab;
+  --quarto-hl-fu-color: #ffa07a;
+  --quarto-hl-im-color: #abe338;
+  --quarto-hl-in-color: #d4d0ab;
+  --quarto-hl-kw-color: #ffa07a;
+  --quarto-hl-op-color: #ffa07a;
+  --quarto-hl-ot-color: #00e0e0;
+  --quarto-hl-pp-color: #dcc6e0;
+  --quarto-hl-re-color: #00e0e0;
+  --quarto-hl-sc-color: #abe338;
+  --quarto-hl-ss-color: #abe338;
+  --quarto-hl-st-color: #abe338;
+  --quarto-hl-va-color: #00e0e0;
+  --quarto-hl-vs-color: #abe338;
+  --quarto-hl-wa-color: #dcc6e0;
+}
+
+/* other quarto variables */
+:root {
+  --quarto-font-monospace: "IBM Plex Mono", "Iosevka Web", "agave Nerd Font", SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+code span.al {
+  background-color: #2a0f15;
+  font-weight: bold;
+  color: #f07178;
+}
+
+code span.an {
+  color: #d4d0ab;
+}
+
+code span.at {
+  color: #00e0e0;
+}
+
+code span.bn {
+  color: #d4d0ab;
+}
+
+code span.bu {
+  color: #abe338;
+}
+
+code span.ch {
+  color: #abe338;
+}
+
+code span.co {
+  font-style: italic;
+  color: #f8f8f2;
+}
+
+code span.cv {
+  color: #ffd700;
+}
+
+code span.cn {
+  color: #ffd700;
+}
+
+code span.cf {
+  font-weight: bold;
+  color: #ffa07a;
+}
+
+code span.dt {
+  color: #ffa07a;
+}
+
+code span.dv {
+  color: #d4d0ab;
+}
+
+code span.do {
+  color: #f8f8f2;
+}
+
+code span.er {
+  color: #f07178;
+  text-decoration: underline;
+}
+
+code span.ex {
+  font-weight: bold;
+  color: #00e0e0;
+}
+
+code span.fl {
+  color: #d4d0ab;
+}
+
+code span.fu {
+  color: #ffa07a;
+}
+
+code span.im {
+  color: #abe338;
+}
+
+code span.in {
+  color: #d4d0ab;
+}
+
+code span.kw {
+  font-weight: bold;
+  color: #ffa07a;
+}
+
+pre > code.sourceCode > span {
+  color: #f8f8f2;
+}
+
+code span {
+  color: #f8f8f2;
+}
+
+code.sourceCode > span {
+  color: #f8f8f2;
+}
+
+div.sourceCode,
+div.sourceCode pre.sourceCode {
+  color: #f8f8f2;
+}
+
+code span.op {
+  color: #ffa07a;
+}
+
+code span.ot {
+  color: #00e0e0;
+}
+
+code span.pp {
+  color: #dcc6e0;
+}
+
+code span.re {
+  background-color: #f8f8f2;
+  color: #00e0e0;
+}
+
+code span.sc {
+  color: #abe338;
+}
+
+code span.ss {
+  color: #abe338;
+}
+
+code span.st {
+  color: #abe338;
+}
+
+code span.va {
+  color: #00e0e0;
+}
+
+code span.vs {
+  color: #abe338;
+}
+
+code span.wa {
+  color: #dcc6e0;
+}
+
+.prevent-inlining {
+  content: "</";
+}
+
+/*# sourceMappingURL=935a306eefa94366c21e1a970dddb765.css.map */

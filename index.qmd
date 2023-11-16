@@ -1,0 +1,76 @@
+---
+citation:
+   author: Sam Foreman
+   type: webpage
+   title: "nanoGPT"
+   url: https://saforem2.github.io/nanoGPT
+author: ""
+date: ""
+author-title: ""
+affiliation-title: ""
+published-title: ""
+modified-title: ""
+site-url: https://saforem2.github.io/nanoGPT
+website:
+  open-graph: true
+  description: "nanoGPT: A minimal LLM for research and education."
+  page-navigation: true
+  title: "nanoGPT"
+  # title: "Sam Foreman"
+  site-url: "https:"
+  favicon: "./favicon.svg"
+  back-to-top-navigation: true
+  repo-url: https://github.com/saforem2/nanoGPT
+  repo-actions: [source, edit, issue]
+  google-analytics: G-XVM2Y822Y1
+  sidebar: false
+  twitter-card:
+    image: "./assets/thumbnail.png"
+    site: "@saforem2"
+    creator: "@saforem2"
+  navbar:
+    title: false
+    tools:
+      - icon: twitter
+        href: https://twitter.com/saforem2
+      - icon: github
+        menu:
+          - text: Source Code
+            url: https://github.com/saforem2/nanoGPT/blob/main/index.qmd
+          - text: New Issue
+            url: https://github.com/saforem2/nanoGPT/issues/new/choose
+editor:
+   render-on-save: true
+execute:
+   freeze: true
+---
+
+# `nanoGPT`
+
+A minimal LLM implementation for research and education.
+
+
+<!-- &title=visitors) -->
+
+<!-- &edge_flat=false) -->
+
+<!-- <p align="center"> -->
+<!-- <a href="https://hits.seeyoufarm.com"> -->
+<!--     <img align="center" src="https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fsaforem2.github.io%2FnanoGPT&count_bg=%2300CCFF&title_bg=%23303030&icon=&icon_color=%23E7E7E7&title=hits&edge_flat=false"/> -->
+<!--   </a> -->
+<!-- </p> -->
+
+<!-- ## [{{< fa solid hourglass-end >}}]{.pink-text} Last Updated -->
+
+
+```{python}
+#| echo: false
+import datetime
+from rich import print
+print(' '.join([
+  "[dim italic]Last Updated[/]:",
+  f"{datetime.datetime.now().strftime('%m/%d/%Y @ %H:%M:%S')}"
+]))
+```
+
+[![](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fsaforem2.github.io%2FnanoGPT&count_bg=%23222222&title_bg=%23303030&icon=&icon_color=%23E7E7E7)]{style="text-align:left;"}

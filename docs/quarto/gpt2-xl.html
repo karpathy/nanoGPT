@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.3.450">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Sam Foreman ">
+<meta name="dcterms.date" content="2023-11-15">
+
+<title>nanoGPT - nanoGPT: GPT-2 XL</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../">
+<link href=".././favicon.svg" rel="icon" type="image/svg+xml">
+<script src="../site_libs/quarto-html/quarto.js"></script>
+<script src="../site_libs/quarto-html/popper.min.js"></script>
+<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-dark.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../site_libs/bootstrap/bootstrap.min.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="../site_libs/bootstrap/bootstrap-dark.min.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<script src="../site_libs/quarto-contrib/iconify-1.0.7/iconify-icon.min.js"></script>
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 20,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<script async="" src="https://www.googletagmanager.com/gtag/js?id=G-XVM2Y822Y1"></script>
+
+<script type="text/javascript">
+
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-XVM2Y822Y1', { 'anonymize_ip': true});
+</script>
+<link href="https://pvinis.github.io/iosevka-webfont/3.4.1/iosevka.css" rel="stylesheet">
+
+
+<link rel="stylesheet" href="../css/default.css">
+<link rel="stylesheet" href="../css/callouts.css">
+<link rel="stylesheet" href="../css/profile.css">
+<meta property="og:title" content="nanoGPT - nanoGPT: GPT-2 XL">
+<meta property="og:description" content="">
+<meta property="og:site-name" content="nanoGPT">
+<meta name="twitter:title" content="nanoGPT - nanoGPT: GPT-2 XL">
+<meta name="twitter:description" content="">
+<meta name="twitter:image" content="https://saforem2.github.io/nanoGPT/quarto/assets/thumbnail.png">
+<meta name="twitter:creator" content="@saforem2">
+<meta name="twitter:site" content="@saforem2">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="citation_title" content="nanoGPT">
+<meta name="citation_author" content="Sam Foreman">
+<meta name="citation_publication_date" content="2023-11-15">
+<meta name="citation_cover_date" content="2023-11-15">
+<meta name="citation_year" content="2023">
+<meta name="citation_online_date" content="2023-11-15">
+<meta name="citation_fulltext_html_url" content="https://saforem2.github.io/nanoGPT">
+<meta name="citation_language" content="en">
+<meta name="citation_reference" content="citation_title=The climate risk &amp;amp;amp; resilience portal (ClimRR) metadata and data dictionary;,citation_author=C. Burdi;,citation_author=Wall. T Branham;,citation_publication_date=2023;,citation_cover_date=2023;,citation_year=2023;,citation_fulltext_html_url=https://dub.sh/ClimRR-Metadata;">
+<meta name="citation_reference" content="citation_title=Progress on (g-2)_\mu from lattice QCD;,citation_author=Hartmut Wittig;,citation_publication_date=2023;,citation_cover_date=2023;,citation_year=2023;,citation_fulltext_html_url=https://arxiv.org/abs/2306.04165;">
+<meta name="citation_reference" content="citation_title=Hybrid Monte Carlo;,citation_author=S. Duane;,citation_author=A. D. Kennedy;,citation_author=B. J. Pendleton;,citation_author=D. Roweth;,citation_publication_date=1987;,citation_cover_date=1987;,citation_year=1987;,citation_doi=10.1016/0370-2693(87)91197-X;,citation_volume=195;,citation_journal_title=Phys. Lett. B;">
+<meta name="citation_reference" content="citation_title=Snowmass 2021 Computational Frontier CompF03 Topical Group Report: Machine Learning;,citation_author=Phiala Shanahan;,citation_author=others;,citation_publication_date=2022-09;,citation_cover_date=2022-09;,citation_year=2022;,citation_fulltext_html_url=https://arxiv.org/abs/2209.07559;">
+<meta name="citation_reference" content="citation_title=Applications of Machine Learning to Lattice Quantum Field Theory;,citation_author=Denis Boyda;,citation_author=others;,citation_publication_date=2022-02;,citation_cover_date=2022-02;,citation_year=2022;,citation_fulltext_html_url=https://arxiv.org/abs/2202.05838;,citation_conference_title=Snowmass 2021;">
+<meta name="citation_reference" content="citation_title=HMC with Normalizing Flows;,citation_author=Sam Foreman;,citation_author=Taku Izubuchi;,citation_author=Luchang Jin;,citation_author=Xiao-Yong Jin;,citation_author=James C. Osborn;,citation_author=Akio Tomiya;,citation_publication_date=2022;,citation_cover_date=2022;,citation_year=2022;,citation_fulltext_html_url=https://arxiv.org/abs/2112.01586;,citation_doi=10.22323/1.396.0073;,citation_volume=LATTICE2021;,citation_journal_title=PoS;">
+<meta name="citation_reference" content="citation_title=LeapfrogLayers: A Trainable Framework for Effective Topological Sampling;,citation_author=Sam Foreman;,citation_author=Xiao-Yong Jin;,citation_author=James C. Osborn;,citation_publication_date=2022;,citation_cover_date=2022;,citation_year=2022;,citation_fulltext_html_url=https://arxiv.org/abs/2112.01582;,citation_doi=10.22323/1.396.0508;,citation_volume=LATTICE2021;,citation_journal_title=PoS;">
+<meta name="citation_reference" content="citation_title=Deep Learning Hamiltonian Monte Carlo;,citation_author=Sam Foreman;,citation_author=Xiao-Yong Jin;,citation_author=James C. Osborn;,citation_publication_date=2021-05;,citation_cover_date=2021-05;,citation_year=2021;,citation_fulltext_html_url=https://arxiv.org/abs/2105.03418;,citation_conference_title=9th International Conference on Learning Representations;">
+<meta name="citation_reference" content="citation_title=Energy Justice Analysis of Climate Data with ClimRR;,citation_author=Sam Foreman;,citation_publication_date=2023-08-07;,citation_cover_date=2023-08-07;,citation_year=2023;,citation_fulltext_html_url=https://saforem2.github.io/climate-analysis;,citation_language=en;">
+<meta name="citation_reference" content="citation_author=Sam Foreman;,citation_publication_date=2023-08-19;,citation_cover_date=2023-08-19;,citation_year=2023;,citation_fulltext_html_url=https://saforem2.github.io/l2hmc-qcd;,citation_language=en;">
+<meta name="citation_reference" content="citation_title=Deep learning hamiltonian monte carlo;,citation_author=Sam Foreman;,citation_author=Xiao-Yong Jin;,citation_author=James C. Osborn;,citation_publication_date=2021;,citation_cover_date=2021;,citation_year=2021;,citation_fulltext_html_url=https://arxiv.org/abs/2105.03418;">
+<meta name="citation_reference" content="citation_title=MLMC: Machine learning monte carlo for lattice gauge theory;,citation_author=Sam Foreman;,citation_author=Xiao-Yong Jin;,citation_author=James Osborn;,citation_publication_date=00;,citation_cover_date=00;,citation_year=0;,citation_conference_title=40th international symposium on lattice field theory (lattice 2023) (batavia, IL, united states, 07/31/2023 - 08/04/2023);">
+</head>
+
+<body class="nav-fixed">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg navbar-dark ">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container">
+    <a href="../index.html" class="navbar-brand navbar-brand-logo">
+    <img src=".././favicon.svg" alt="" class="navbar-logo">
+    </a>
+    <a class="navbar-brand" href="../index.html">
+    <span class="navbar-title">nanoGPT</span>
+    </a>
+  </div>
+            <div id="quarto-search" class="" title="Search"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll me-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="../quarto/shakespeare.html" rel="" target="">
+ <span class="menu-text"><span class="red-text" style="font-size: 1.0em;"><iconify-icon inline="" icon="line-md:pencil"></iconify-icon></span> Shakespeare</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../quarto/gpt2-medium.html" rel="" target="">
+ <span class="menu-text"><span class="red-text" style="font-size: 1.0em;"><iconify-icon inline="" icon="line-md:pencil"></iconify-icon></span> GPT2-Medium</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link active" href="../quarto/gpt2-xl.html" rel="" target="" aria-current="page">
+ <span class="menu-text"><span class="red-text" style="font-size: 1.0em;"><iconify-icon inline="" icon="line-md:pencil"></iconify-icon></span> GPT2-XL</span></a>
+  </li>  
+</ul>
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="https://twitter.com/saforem2" rel="" target="">
+ <span class="menu-text"><span style="font-size: 1.15em;"><iconify-icon inline="" icon="line-md:twitter"></iconify-icon></span></span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="https://github.com/saforem2/personal_site" rel="" target="">
+ <span class="menu-text"><span style="font-size: 1.15em;"><iconify-icon inline="" icon="line-md:github-loop"></iconify-icon></span></span></a>
+  </li>  
+</ul>
+            <div class="quarto-navbar-tools">
+  <a href="" class="quarto-color-scheme-toggle quarto-navigation-tool  px-1" onclick="window.quartoToggleColorScheme(); return false;" title="Toggle dark mode"><i class="bi"></i></a>
+</div>
+          </div> <!-- /navcollapse -->
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#install-setup" id="toc-install-setup" class="nav-link active" data-scroll-target="#install-setup">Install / Setup</a>
+  <ul class="collapse">
+  <li><a href="#first-time-running" id="toc-first-time-running" class="nav-link" data-scroll-target="#first-time-running">First Time Running</a></li>
+  </ul></li>
+  <li><a href="#post-install" id="toc-post-install" class="nav-link" data-scroll-target="#post-install">Post Install</a></li>
+  <li><a href="#build-trainer" id="toc-build-trainer" class="nav-link" data-scroll-target="#build-trainer">Build Trainer</a></li>
+  <li><a href="#prompt-prior-to-training" id="toc-prompt-prior-to-training" class="nav-link" data-scroll-target="#prompt-prior-to-training">Prompt (<strong>prior</strong> to training)</a></li>
+  <li><a href="#train-model" id="toc-train-model" class="nav-link" data-scroll-target="#train-model">Train Model</a></li>
+  <li><a href="#evaluate-model" id="toc-evaluate-model" class="nav-link" data-scroll-target="#evaluate-model">Evaluate Model</a></li>
+  </ul>
+<div class="toc-actions"><div><i class="bi bi-github"></i></div><div class="action-links"><p><a href="https://github.com/saforem2/nanoGPT/blob/main/quarto/gpt2-xl.qmd" class="toc-action">View source</a></p><p><a href="https://github.com/saforem2/nanoGPT/edit/main/quarto/gpt2-xl.qmd" class="toc-action">Edit this page</a></p><p><a href="https://github.com/saforem2/nanoGPT/issues/new" class="toc-action">Report an issue</a></p></div></div><div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="gpt2-xl-gfm.md"><i class="bi bi-file-code"></i>Github (GFM)</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<div class="quarto-title-block"><div><h1 class="title"><code>nanoGPT</code>: GPT-2 XL</h1><button type="button" class="btn code-tools-button" id="quarto-code-tools-source" data-quarto-source-url="https://github.com/saforem2/nanoGPT/blob/main/quarto/gpt2-xl.qmd"><i class="bi"></i></button></div></div>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading"></div>
+    <div class="quarto-title-meta-contents">
+             <p><a href="https://samforeman.me">Sam Foreman </a><a href="https://orcid.org/0000-0002-9981-0876"><span class="orcid-green"></span></a> </p>
+          </div>
+  </div>
+    
+    <div>
+    <div class="quarto-title-meta-heading"></div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">November 15, 2023</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+</header>
+
+<section id="install-setup" class="level2">
+<h2 class="anchored" data-anchor-id="install-setup">Install / Setup</h2>
+<section id="first-time-running" class="level3">
+<h3 class="anchored" data-anchor-id="first-time-running">First Time Running</h3>
+<p>We need to install <code>ngpt</code> and setup the Shakespeare dataset</p>
+<p>This will need to be ran the first time you are running this notebook.</p>
+<p>Following the</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="op">!</span>python3 <span class="op">-</span>m pip install nanoGPT</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>you will need to restart your runtime (Runtime -&gt; Restart runtime)</p>
+<p>After this, you should be able to</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="im">import</span> ngpt</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> ngpt.<span class="va">__file__</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co">'/content/nanoGPT/src/ngpt/__init__.py'</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">%%bash</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-c</span> <span class="st">'import ngpt; print(ngpt.__file__)'</span> <span class="dv">2</span><span class="op">&gt;</span> <span class="st">'/dev/null'</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">[[</span> <span class="va">$?</span> <span class="ot">-eq</span> 0 <span class="kw">]];</span> <span class="cf">then</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="bu">echo</span> <span class="st">"Has ngpt installed. Nothing to do."</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="cf">else</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="bu">echo</span> <span class="st">"Does not have ngpt installed. Installing..."</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">git</span> clone <span class="st">'https://github.com/saforem2/nanoGPT'</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="ex">python3</span> nanoGPT/data/shakespeare_char/prepare.py</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="ex">python3</span> <span class="at">-m</span> pip install <span class="at">-e</span> nanoGPT <span class="at">-vvv</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="cf">fi</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display">
+<pre><code>/lus/grand/projects/datascience/foremans/locations/thetaGPU/projects/saforem2/nanoGPT/src/ngpt/__init__.py
+Has ngpt installed. Nothing to do.</code></pre>
+</div>
+</section>
+</section>
+<section id="post-install" class="level2">
+<h2 class="anchored" data-anchor-id="post-install">Post Install</h2>
+<p>If installed correctly, you should be able to:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="im">import</span> ngpt</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> ngpt.<span class="va">__file__</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="co">'/path/to/nanoGPT/src/ngpt/__init__.py'</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext autoreload</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> ngpt</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> rich <span class="im">import</span> <span class="bu">print</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(ngpt.<span class="va">__file__</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display">
+<pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:monospace">
+    The autoreload extension is already loaded. To reload it, use:
+      %reload_ext autoreload
+
+    <span style="color: #800080; text-decoration-color: #800080">/lus/grand/projects/datascience/foremans/locations/thetaGPU/projects/saforem2/nanoGPT/src/ngpt/</span><span style="color: #ff00ff; text-decoration-color: #ff00ff">__init__.py</span>
+
+</pre>
+</div>
+</section>
+<section id="build-trainer" class="level2">
+<h2 class="anchored" data-anchor-id="build-trainer">Build Trainer</h2>
+<p>Explicitly, we:</p>
+<ol type="1">
+<li><code>setup_torch(...)</code></li>
+<li>Build <code>cfg: DictConfig = get_config(...)</code></li>
+<li>Instnatiate <code>config: ExperimentConfig = instantiate(cfg)</code></li>
+<li>Build <code>trainer = Trainer(config)</code></li>
+</ol>
+<div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> os</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> ezpz <span class="im">import</span> setup_torch</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> hydra.utils <span class="im">import</span> instantiate</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> ngpt.configs <span class="im">import</span> get_config, PROJECT_ROOT</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> ngpt.trainer <span class="im">import</span> Trainer</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> enrich.console <span class="im">import</span> get_console</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>console <span class="op">=</span> get_console()</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>HF_DATASETS_CACHE <span class="op">=</span> PROJECT_ROOT.joinpath(<span class="st">'.cache'</span>, <span class="st">'huggingface'</span>)</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>HF_DATASETS_CACHE.mkdir(exist_ok<span class="op">=</span><span class="va">True</span>, parents<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>os.environ[<span class="st">'MASTER_PORT'</span>] <span class="op">=</span> <span class="st">'5127'</span></span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>os.environ[<span class="st">'HF_DATASETS_CACHE'</span>] <span class="op">=</span> HF_DATASETS_CACHE.as_posix()</span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>SEED <span class="op">=</span> np.random.randint(<span class="dv">2</span><span class="op">**</span><span class="dv">32</span>)</span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>console.<span class="bu">print</span>(<span class="ss">f'SEED: </span><span class="sc">{</span>SEED<span class="sc">}</span><span class="ss">'</span>)</span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>rank <span class="op">=</span> setup_torch(<span class="st">'DDP'</span>, seed<span class="op">=</span><span class="dv">1234</span>)</span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>cfg <span class="op">=</span> get_config(</span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>    [</span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>        <span class="st">'data=owt'</span>,</span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>        <span class="st">'model=gpt2_xl'</span>,</span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>        <span class="st">'optimizer=gpt2_xl'</span>,</span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>        <span class="st">'train=gpt2_xl'</span>,</span>
+<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>        <span class="st">'train.init_from=gpt2-xl'</span>,</span>
+<span id="cb7-27"><a href="#cb7-27" aria-hidden="true" tabindex="-1"></a>        <span class="st">'train.max_iters=100'</span>,</span>
+<span id="cb7-28"><a href="#cb7-28" aria-hidden="true" tabindex="-1"></a>        <span class="st">'train.dtype=bfloat16'</span>,</span>
+<span id="cb7-29"><a href="#cb7-29" aria-hidden="true" tabindex="-1"></a>    ]</span>
+<span id="cb7-30"><a href="#cb7-30" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-31"><a href="#cb7-31" aria-hidden="true" tabindex="-1"></a>config <span class="op">=</span> instantiate(cfg)</span>
+<span id="cb7-32"><a href="#cb7-32" aria-hidden="true" tabindex="-1"></a>trainer <span class="op">=</span> Trainer(config)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display">
+<pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:monospace,Menlo,'DejaVu Sans Mono',consolas,'Courier New'">
+    --------------------------------------------------------------------------
+    WARNING: There was an error initializing an OpenFabrics device.
+    
+      Local host:   thetagpu24
+      Local device: mlx5_0
+    --------------------------------------------------------------------------
+
+    SEED: <span style="color: #800080; text-decoration-color: #800080">125313342</span>
+    RANK: 0 / 0
+    <span style="color:#838383">[2023-11-10 17:36:01]</span><span style="color:#FD971F">[WARNING]</span><span style="color:#777777">[configs.py:298</span><span style="color:#777777">]</span> - No meta.pkl found, assuming GPT-<span style="color:#A0A">2</span> encodings<span style="color:#FD971F">...</span>
+    <span style="color:#838383">[2023-11-10 17:36:01]</span><span style="color:#2196F3">[INFO]</span><span style="color:#777777">[configs.py:264</span><span style="color:#777777">]</span> - Rescaling GAS -&gt; GAS <span style="color:#0A0">/</span><span style="color:#0A0">/</span> WORLD_SIZE = <span style="color:#A0A">1</span> <span style="color:#0A0">/</span><span style="color:#0A0">/</span> <span style="color:#A0A">1</span>
+    <span style="color:#838383">[2023-11-10 17:36:01]</span><span style="color:#2196F3">[INFO]</span><span style="color:#777777">[configs.py:399</span><span style="color:#777777">]</span> - Tokens per iteration: <span style="color:#A0A">1</span>,<span style="color:#A0A">024</span>
+    <span style="color:#838383">[2023-11-10 17:36:01]</span><span style="color:#2196F3">[INFO]</span><span style="color:#777777">[configs.py:431</span><span style="color:#777777">]</span> - Using <b>&lt;</b><b><span style="color:#F5F">torch.amp.autocast_mode.autocast</span></b><span style="color:#FFF"> object at </span><span style="color:#A0A">0x7f98e0139660</span><b>&gt;</b>
+    <span style="color:#838383">[2023-11-10 17:36:01]</span><span style="color:#2196F3">[INFO]</span><span style="color:#777777">[trainer.py:184</span><span style="color:#777777">]</span> - Initializing from OpenAI GPT-<span style="color:#A0A">2</span> Weights: gpt2-xl
+    2023-11-10 17:36:01.777923: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  SSE3 SSE4.1 SSE4.2 AVX AVX2 FMA
+    To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+    [2023-11-10 17:36:05,925] [INFO] [real_accelerator.py:158:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+    <span style="color:#838383">[2023-11-10 17:36:06]</span><span style="color:#2196F3">[INFO]</span><span style="color:#777777">[model.py:225</span><span style="color:#777777">]</span> - loading weights from pretrained gpt: gpt2-xl
+    <span style="color:#838383">[2023-11-10 17:36:06]</span><span style="color:#2196F3">[INFO]</span><span style="color:#777777">[model.py:234</span><span style="color:#777777">]</span> - forcing <i><span style="color:#55F">vocab_size</span></i>=<span style="color:#A0A">50257</span>, <i><span style="color:#55F">block_size</span></i>=<span style="color:#A0A">1024</span>, <i><span style="color:#55F">bias</span></i>=<i><span style="color:#5F5">True</span></i>
+    <span style="color:#838383">[2023-11-10 17:36:06]</span><span style="color:#2196F3">[INFO]</span><span style="color:#777777">[model.py:240</span><span style="color:#777777">]</span> - overriding dropout rate to <span style="color:#A0A">0.0</span>
+    <span style="color:#838383">[2023-11-10 17:36:29]</span><span style="color:#2196F3">[INFO]</span><span style="color:#777777">[model.py:160</span><span style="color:#777777">]</span> - number of parameters: <span style="color:#A0A">1555.</span>97M
+    <span style="color:#838383">[2023-11-10 17:36:56]</span><span style="color:#2196F3">[INFO]</span><span style="color:#777777">[model.py:290</span><span style="color:#777777">]</span> - num decayed parameter tensors: <span style="color:#A0A">194</span>, with <span style="color:#A0A">1</span>,<span style="color:#A0A">556</span>,<span style="color:#A0A">609</span>,<span style="color:#A0A">600</span> parameters
+    <span style="color:#838383">[2023-11-10 17:36:56]</span><span style="color:#2196F3">[INFO]</span><span style="color:#777777">[model.py:291</span><span style="color:#777777">]</span> - num non-decayed parameter tensors: <span style="color:#A0A">386</span>, with <span style="color:#A0A">1</span>,<span style="color:#A0A">001</span>,<span style="color:#A0A">600</span> parameters
+    <span style="color:#838383">[2023-11-10 17:36:56]</span><span style="color:#2196F3">[INFO]</span><span style="color:#777777">[model.py:297</span><span style="color:#777777">]</span> - using fused AdamW: <i><span style="color:#5F5">True</span></i>
+
+</pre>
+</div>
+</section>
+<section id="prompt-prior-to-training" class="level2">
+<h2 class="anchored" data-anchor-id="prompt-prior-to-training">Prompt (<strong>prior</strong> to training)</h2>
+<div class="sourceCode" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>query <span class="op">=</span> <span class="st">"What is a supercomputer?"</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>outputs <span class="op">=</span> trainer.evaluate(query, num_samples<span class="op">=</span><span class="dv">1</span>, display<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>console.<span class="bu">print</span>(<span class="vs">fr'\[prompt]: "</span><span class="sc">{</span>query<span class="sc">}</span><span class="vs">"'</span>)</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>console.<span class="bu">print</span>(<span class="st">"\[response]:</span><span class="ch">\n\n</span><span class="st">"</span> <span class="op">+</span> <span class="vs">fr"</span><span class="sc">{</span>outputs[<span class="st">'0'</span>][<span class="st">'raw'</span>]<span class="sc">}</span><span class="vs">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display">
+<pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:monospace">
+    <span style="font-weight: bold">[</span>prompt<span style="font-weight: bold">]</span>: <span style="color: #008000; text-decoration-color: #008000">"What is a supercomputer?"</span>
+
+
+
+
+    <span style="font-weight: bold">[</span>response<span style="font-weight: bold">]</span>:
+
+    What is a supercomputer? When it comes to massive computing, a supercomputer is simply a large computer system that has the ability to perform many calculations at once. This can be the result of using many different processing cores, or memory, or operating at a high clock speed. Supercomputers are often used to crack complex calculations and research problems.
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    On a larger scale, these massive computers are used to solve tough mathematical equations and solve hard scientific problems. They are very powerful enough to emulate the workings of the human brain and simulate a human intelligence in a virtual world.
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    In <span style="color: #800080; text-decoration-color: #800080">1992</span>, IBM's NeXTStep supercomputer was the largest and most powerful supercomputer in the world. It was released in <span style="color: #800080; text-decoration-color: #800080">1995</span> and did not continue to live up to its original promises, because its capabilities were quickly surpassed by its competitors.
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia
+
+    Image credit: Wikipedia<span style="font-weight: bold">&lt;</span><span style="color: #ff00ff; text-decoration-color: #ff00ff; font-weight: bold">|endoftext|</span><span style="font-weight: bold">&gt;</span>Editor's note: Dan De Luce is the author of <span style="color: #008000; text-decoration-color: #008000">"When the Going Gets Tough: The New Survival Guide for College Students and Your Health and Well-Being."</span>
+
+    College has never been more expensive. But with so many choices and so many choices of where to go, it's harder than ever for prospective students to find a college that fits their lifestyle.
+
+    This is a problem—not just because it can be a hassle to find a college that doesn't require a large amount of financial aid. It's a problem because it can be costly for students to stay in college.
+
+    So I created this list of colleges with the highest tuition where
+
+</pre>
+</div>
+<div id="tbl-legend" class="anchored">
+<table class="table-striped table-hover table-bordered table">
+<caption>Table&nbsp;1: Legend</caption>
+<thead>
+<tr class="header">
+<th style="text-align: center;">Name</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: center;"><code>step</code></td>
+<td style="text-align: left;"><em>Current training step</em></td>
+</tr>
+<tr class="even">
+<td style="text-align: center;"><code>loss</code></td>
+<td style="text-align: left;"><em>Loss value</em></td>
+</tr>
+<tr class="odd">
+<td style="text-align: center;"><code>dt</code></td>
+<td style="text-align: left;"><em>Time per step</em> (in <strong>ms</strong>)</td>
+</tr>
+<tr class="even">
+<td style="text-align: center;"><code>sps</code></td>
+<td style="text-align: left;"><em>Samples per second</em></td>
+</tr>
+<tr class="odd">
+<td style="text-align: center;"><code>mtps</code></td>
+<td style="text-align: left;"><em>(million) Tokens per sec</em></td>
+</tr>
+<tr class="even">
+<td style="text-align: center;"><code>mfu</code></td>
+<td style="text-align: left;"><em>Model Flops utilization</em><a href="#fn1" class="footnote-ref" id="fnref1" role="doc-noteref"><sup>1</sup></a></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="train-model" class="level2">
+<h2 class="anchored" data-anchor-id="train-model">Train Model</h2>
+<div class="sourceCode" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>trainer.model.module.train()</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>trainer.train()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display">
+<pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:monospace,Menlo,'DejaVu Sans Mono',consolas,'Courier New'">
+    <span style="color:#838383">[2023-11-10 17:41:58]</span><span style="color:#2196F3">[INFO]</span><span style="color:#777777">[trainer.py:540</span><span style="color:#777777">]</span> - <i><span style="color:#55F">step</span></i>=<span style="color:#A0A">100</span> <i><span style="color:#55F">loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.505</span> <i><span style="color:#55F">dt</span></i>=<span style="color:#A0A">922</span><span style="color:#A0A">.295</span> <i><span style="color:#55F">sps</span></i>=<span style="color:#A0A">1</span><span style="color:#A0A">.084</span> <i><span style="color:#55F">mtps</span></i>=<span style="color:#A0A">0</span><span style="color:#A0A">.001</span> <i><span style="color:#55F">mfu</span></i>=<span style="color:#A0A">43</span><span style="color:#A0A">.897</span> <i><span style="color:#55F">train_loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.555</span> <i><span style="color:#55F">val_loss</span></i>=<span style="color:#A0A">2</span><span style="color:#A0A">.558</span>
+
+</pre>
+</div>
+</section>
+<section id="evaluate-model" class="level2">
+<h2 class="anchored" data-anchor-id="evaluate-model">Evaluate Model</h2>
+<div class="sourceCode" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>query <span class="op">=</span> <span class="st">"What is a supercomputer?"</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>outputs <span class="op">=</span> trainer.evaluate(query, num_samples<span class="op">=</span><span class="dv">1</span>, display<span class="op">=</span><span class="va">False</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> rich.text <span class="im">import</span> Text</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> enrich.console <span class="im">import</span> get_console</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>console <span class="op">=</span> get_console()</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>console.<span class="bu">print</span>(<span class="vs">fr'\[prompt]: "</span><span class="sc">{</span>query<span class="sc">}</span><span class="vs">"'</span>)</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>console.<span class="bu">print</span>(<span class="st">"\[response]:</span><span class="ch">\n\n</span><span class="st">"</span> <span class="op">+</span> <span class="vs">fr"</span><span class="sc">{</span>outputs[<span class="st">'0'</span>][<span class="st">'raw'</span>]<span class="sc">}</span><span class="vs">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display">
+<pre style="white-space:pre;overflow-x:auto;line-height:normal;font-family:monospace">
+    <span style="font-weight: bold">[</span>prompt<span style="font-weight: bold">]</span>: <span style="color: #008000; text-decoration-color: #008000">"What is a supercomputer?"</span>
+    <span style="font-weight: bold">[</span>response<span style="font-weight: bold">]</span>:
+
+    What is a supercomputer? A supercomputer is a machine that is exponentially more powerful than previous computing models while being far more energy efficient.
+
+    What is an artificial neural network? An artificial neural network <span style="font-weight: bold">(</span>ANN<span style="font-weight: bold">)</span> is an order of magnitude more powerful than previous computational models, but has the same energy efficiency.
+
+    For this article I will be using a machine learning technique called Backward-Compatible Neural Networks <span style="font-weight: bold">(</span>BCNNs<span style="font-weight: bold">)</span> to represent the biological brain.
+
+    The BCNNs model is very similar to the neural networks utilized in deep learning, but has the added bonus of being able to <span style="color: #008000; text-decoration-color: #008000">'decouple'</span> the learning from the final results.
+
+    BCNN for Machine Learning
+
+    In order to make the transition from neural networks to BCNNs we will follow the same basic principles as we did with neural networks.
+
+    However, instead of the neurons in neural networks that represent the data being represented, BCNNs work with nodes instead. This is because the nodes are the data, while the neurons are the information.
+
+    In case you aren’t familiar with the term node, it is a symbol representing any type of data. For instance, it could be a datum in a neural network model.
+
+    Another way to think of them is as symbols.
+
+    The basic idea of nodes and connections is that a node can have many connections to other nodes, with each node linked to a connection to a larger entity.
+
+    For instance, a node might have a target, which is just a point in space. A connection might have a value, which is just a number between <span style="color: #800080; text-decoration-color: #800080">0</span> and <span style="color: #800080; text-decoration-color: #800080">1</span>.
+
+    Something like this:
+
+    Node Value <span style="color: #800080; text-decoration-color: #800080">-0.1</span> <span style="color: #800080; text-decoration-color: #800080">0.1</span> <span style="color: #800080; text-decoration-color: #800080">0.1</span> <span style="color: #800080; text-decoration-color: #800080">0.1</span>
+
+    The important thing to note, is that the value is a number between <span style="color: #800080; text-decoration-color: #800080">0</span> and <span style="color: #800080; text-decoration-color: #800080">1</span>.
+
+    When we are given a list of data and an input, we will move forward through the data, connected nodes, and the resulting output.
+
+    In the case of neural networks, this would look like:
+
+    Neural Network
+
+    A neural network is just a collection of nodes, connected to each other through connections.
+
+    For example, let’s look at the ConvNet model from Wikipedia.
+
+    Pretty simple. It has multiple layers of neurons, with each neuron being assigned one of the above variables.
+
+    The neurons work with the data given as an input <span style="font-weight: bold">(</span>remember, it’s a
+
+  </pre>
+</div>
+
+
+</section>
+
+
+<a onclick="window.scrollTo(0, 0); return false;" role="button" id="quarto-back-to-top"><i class="bi bi-arrow-up"></i> Back to top</a><div id="quarto-appendix" class="default"><section id="footnotes" class="footnotes footnotes-end-of-document" role="doc-endnotes"><h2 class="anchored quarto-appendix-heading">Footnotes</h2>
+
+<ol>
+<li id="fn1"><p>in units of A100 <code>bfloat16</code> peak FLOPS<a href="#fnref1" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+</ol>
+</section><section class="quarto-appendix-contents"><h2 class="anchored quarto-appendix-heading">Citation</h2><div><div class="quarto-appendix-secondary-label">BibTeX citation:</div><pre class="sourceCode code-with-copy quarto-appendix-bibtex"><code class="sourceCode bibtex">@online{foreman2023,
+  author = {Foreman, Sam},
+  title = {nanoGPT},
+  date = {2023-11-15},
+  url = {https://saforem2.github.io/nanoGPT},
+  langid = {en}
+}
+</code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre><div class="quarto-appendix-secondary-label">For attribution, please cite this work as:</div><div id="ref-foreman2023" class="csl-entry quarto-appendix-citeas" role="listitem">
+Foreman, Sam. 2023. <span>“nanoGPT.”</span> November 15, 2023. <a href="https://saforem2.github.io/nanoGPT">https://saforem2.github.io/nanoGPT</a>.
+</div></div></section></div></main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const disableStylesheet = (stylesheets) => {
+    for (let i=0; i < stylesheets.length; i++) {
+      const stylesheet = stylesheets[i];
+      stylesheet.rel = 'prefetch';
+    }
+  }
+  const enableStylesheet = (stylesheets) => {
+    for (let i=0; i < stylesheets.length; i++) {
+      const stylesheet = stylesheets[i];
+      stylesheet.rel = 'stylesheet';
+    }
+  }
+  const manageTransitions = (selector, allowTransitions) => {
+    const els = window.document.querySelectorAll(selector);
+    for (let i=0; i < els.length; i++) {
+      const el = els[i];
+      if (allowTransitions) {
+        el.classList.remove('notransition');
+      } else {
+        el.classList.add('notransition');
+      }
+    }
+  }
+  const toggleColorMode = (alternate) => {
+    // Switch the stylesheets
+    const alternateStylesheets = window.document.querySelectorAll('link.quarto-color-scheme.quarto-color-alternate');
+    manageTransitions('#quarto-margin-sidebar .nav-link', false);
+    if (alternate) {
+      enableStylesheet(alternateStylesheets);
+      for (const sheetNode of alternateStylesheets) {
+        if (sheetNode.id === "quarto-bootstrap") {
+          toggleBodyColorMode(sheetNode);
+        }
+      }
+    } else {
+      disableStylesheet(alternateStylesheets);
+      toggleBodyColorPrimary();
+    }
+    manageTransitions('#quarto-margin-sidebar .nav-link', true);
+    // Switch the toggles
+    const toggles = window.document.querySelectorAll('.quarto-color-scheme-toggle');
+    for (let i=0; i < toggles.length; i++) {
+      const toggle = toggles[i];
+      if (toggle) {
+        if (alternate) {
+          toggle.classList.add("alternate");     
+        } else {
+          toggle.classList.remove("alternate");
+        }
+      }
+    }
+    // Hack to workaround the fact that safari doesn't
+    // properly recolor the scrollbar when toggling (#1455)
+    if (navigator.userAgent.indexOf('Safari') > 0 && navigator.userAgent.indexOf('Chrome') == -1) {
+      manageTransitions("body", false);
+      window.scrollTo(0, 1);
+      setTimeout(() => {
+        window.scrollTo(0, 0);
+        manageTransitions("body", true);
+      }, 40);  
+    }
+  }
+  const isFileUrl = () => { 
+    return window.location.protocol === 'file:';
+  }
+  const hasAlternateSentinel = () => {  
+    let styleSentinel = getColorSchemeSentinel();
+    if (styleSentinel !== null) {
+      return styleSentinel === "alternate";
+    } else {
+      return false;
+    }
+  }
+  const setStyleSentinel = (alternate) => {
+    const value = alternate ? "alternate" : "default";
+    if (!isFileUrl()) {
+      window.localStorage.setItem("quarto-color-scheme", value);
+    } else {
+      localAlternateSentinel = value;
+    }
+  }
+  const getColorSchemeSentinel = () => {
+    if (!isFileUrl()) {
+      const storageValue = window.localStorage.getItem("quarto-color-scheme");
+      return storageValue != null ? storageValue : localAlternateSentinel;
+    } else {
+      return localAlternateSentinel;
+    }
+  }
+  let localAlternateSentinel = 'alternate';
+  // Dark / light mode switch
+  window.quartoToggleColorScheme = () => {
+    // Read the current dark / light value 
+    let toAlternate = !hasAlternateSentinel();
+    toggleColorMode(toAlternate);
+    setStyleSentinel(toAlternate);
+  };
+  // Ensure there is a toggle, if there isn't float one in the top right
+  if (window.document.querySelector('.quarto-color-scheme-toggle') === null) {
+    const a = window.document.createElement('a');
+    a.classList.add('top-right');
+    a.classList.add('quarto-color-scheme-toggle');
+    a.href = "";
+    a.onclick = function() { try { window.quartoToggleColorScheme(); } catch {} return false; };
+    const i = window.document.createElement("i");
+    i.classList.add('bi');
+    a.appendChild(i);
+    window.document.body.appendChild(a);
+  }
+  // Switch to dark mode if need be
+  if (hasAlternateSentinel()) {
+    toggleColorMode(true);
+  } else {
+    toggleColorMode(false);
+  }
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  const viewSource = window.document.getElementById('quarto-view-source') ||
+                     window.document.getElementById('quarto-code-tools-source');
+  if (viewSource) {
+    const sourceUrl = viewSource.getAttribute("data-quarto-source-url");
+    viewSource.addEventListener("click", function(e) {
+      if (sourceUrl) {
+        // rstudio viewer pane
+        if (/\bcapabilities=\b/.test(window.location)) {
+          window.open(sourceUrl);
+        } else {
+          window.location.href = sourceUrl;
+        }
+      } else {
+        const modal = new bootstrap.Modal(document.getElementById('quarto-embedded-source-code-modal'));
+        modal.show();
+      }
+      return false;
+    });
+  }
+  function toggleCodeHandler(show) {
+    return function(e) {
+      const detailsSrc = window.document.querySelectorAll(".cell > details > .sourceCode");
+      for (let i=0; i<detailsSrc.length; i++) {
+        const details = detailsSrc[i].parentElement;
+        if (show) {
+          details.open = true;
+        } else {
+          details.removeAttribute("open");
+        }
+      }
+      const cellCodeDivs = window.document.querySelectorAll(".cell > .sourceCode");
+      const fromCls = show ? "hidden" : "unhidden";
+      const toCls = show ? "unhidden" : "hidden";
+      for (let i=0; i<cellCodeDivs.length; i++) {
+        const codeDiv = cellCodeDivs[i];
+        if (codeDiv.classList.contains(fromCls)) {
+          codeDiv.classList.remove(fromCls);
+          codeDiv.classList.add(toCls);
+        } 
+      }
+      return false;
+    }
+  }
+  const hideAllCode = window.document.getElementById("quarto-hide-all-code");
+  if (hideAllCode) {
+    hideAllCode.addEventListener("click", toggleCodeHandler(false));
+  }
+  const showAllCode = window.document.getElementById("quarto-show-all-code");
+  if (showAllCode) {
+    showAllCode.addEventListener("click", toggleCodeHandler(true));
+  }
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+<footer class="footer">
+  <div class="nav-footer">
+    <div class="nav-footer-left">Copyright 2023, Sam Foreman</div>   
+    <div class="nav-footer-center">
+      <ul class="footer-items list-unstyled">
+    <li class="nav-item">
+    <a class="nav-link" href="https://samforeman.me"><span style="font-size: 1.25em;"></span></a>
+  </li>  
+    <li class="nav-item">
+    <a class="nav-link" href="https://github.com/saforem2"><span style="font-size: 1.25em;"></span></a>
+  </li>  
+    <li class="nav-item">
+    <a class="nav-link" href="https://twitter.com/saforem2"><span style="font-size: 1.25em;"></span></a>
+  </li>  
+    <li class="nav-item">
+    <a class="nav-link" href="mailto:///foremans@anl.gov"><span style="font-size: 1.25em;"></span></a>
+  </li>  
+    <li class="nav-item">
+    <a class="nav-link" href="https://scholar.google.com/citations?user=vV_1zDwAAAAJ&amp;hl=en"><span style="font-size: 1.25em;"></span></a>
+  </li>  
+    <li class="nav-item">
+    <a class="nav-link" href="https://orcid.org/0000-0002-9981-0876"><span style="font-size: 1.25em;"></span></a>
+  </li>  
+    <li class="nav-item">
+    <a class="nav-link" href="https://www.last.fm/user/saforem2"><span style="font-size: 1.25em;"></span></a>
+  </li>  
+    <li class="nav-item">
+    <a class="nav-link" href="https://open.spotify.com/user/saforem2"><span style="font-size: 1.25em;"></span></a>
+  </li>  
+    <li class="nav-item">
+    <a class="nav-link" href="https://www.instagram.com/saforem2"><span style="font-size: 1.25em;"></span></a>
+  </li>  
+    <li class="nav-item">
+    <a class="nav-link" href="https://linkedin.com/in/saforem2"><span style="font-size: 1.25em;"></span></a>
+  </li>  
+</ul>
+    </div>
+    <div class="nav-footer-right"><a href="https://samforeman.me">samforeman.me</a></div>
+  </div>
+</footer>
+
+
+
+</body></html>

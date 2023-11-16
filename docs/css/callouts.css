@@ -1,0 +1,243 @@
+:root {
+  --callout-simple-color: rgba(90, 90, 90, 20);
+  --callout-simple-title-color: rgba(90, 90, 90, 100);
+  --callout-border-hover-color: rgba(229, 153, 247, 100);
+}
+
+/* .callout-style-simple:hover { */
+/*   box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px; */
+/* } */
+.callout.callout-style-simple {
+  border-radius: 6px!important;
+  opacity: 100%!important;
+  display: -webkit-inline-box;
+  /* padding: .4em .7em; */
+  /* border-left: 5px solid; */
+  /* border-right: 1px solid #dee2e6; */
+  /* border-top: 1px solid #dee2e6; */
+  /* border-bottom: 1px solid #dee2e6; */
+}
+.callout {
+    /* margin-top: 1.25rem; */
+    /* margin-bottom: 1.25rem; */
+    /* border-radius: .25rem; */
+  margin-top: auto;
+  /* border-radius: 8px!important; */
+  border-radius: 0.25rem;
+  /* margin-left: auto!important; */
+  /* margin-right: auto!important; */
+  display: -webkit-inline-box;
+
+}
+.callout.callout-style-default,
+.callout.callout-style-simple {
+  display: inline-block;
+}
+.callout .callout-body-container {
+  flex-grow: 1;
+}
+.callout.callout-style-default .callout-body,
+.callout.callout-style-simple .callout-body {
+  font-size: 1rem;
+}
+.callout.callout-titled.callout-style-default .callout-body,
+.callout.callout-titled.callout-style-simple .callout-body {
+  margin-top: auto;
+}
+.callout:not(.callout-titled) .callout-body {
+  display: flex;
+}
+
+.callout.callout-titled .callout-title p {
+  vertical-align: inherit;
+}
+.callout.callout-titled.callout-style-default .callout-content p,
+.callout.callout-titled.callout-style-simple .callout-content p {
+  margin-top: auto;
+}
+.callout.callout-style-default div.callout-title 
+.callout.callout-style-simple div.callout-title {
+  border-bottom: none;
+  font-weight: 600;
+}
+.callout.callout-style-default .callout-icon::before,
+.callout.callout-style-simple .callout-icon::before {
+  height: 1.1rem!important;
+  width: 1.1rem!important;
+  display: inline-flex;
+  content: "";
+  background-repeat: no-repeat;
+  background-size: 1.1rem 1.1rem!important;
+}
+.callout-title {
+  display: flex;
+}
+.callout-icon::before {
+  padding-right: 0.5rem;
+}
+.callout.no-icon::before {
+  display: none !important;
+}
+.callout.callout-style-simple .callout:not(.no-icon).callout-titled.callout-style-simple .callout-body {
+    padding-top: 0.5rem;
+    padding-left: inherit;
+}
+.callout:not(.no-icon).callout-titled.callout-style-simple .callout-body {
+    padding-left: inherit;
+}
+.callout.callout-titled .callout-body > .callout-content > :last-child {
+}
+.callout.callout-titled .callout-icon::before {
+  padding-right: 0.5rem;
+}
+.callout:not(.callout-titled) .callout-icon::before {
+  margin-top: inherit;
+}
+
+div.callout-note {
+  border: 1.75px solid #4582ec !important;
+  background-color: RGBA(69, 130, 236, 0.075);
+}
+div.callout-warning {
+  border: 1.75px solid #FD971F !important;
+  background-color: RGBA(253, 151, 31, 0.075);
+}
+div.callout-tip {
+  border: 1.75px solid #02b875 !important;
+  background-color: RGBA(2, 184, 117, 0.075);
+}
+.callout-tip:hover {
+  border: 1.75px solid #02b875!important;
+  box-shadow: rgba(0, 0, 0, 0.35) 0px 10px 30px;
+}
+div.callout-caution {
+  border: 1.75px solid #E599F7 !important;
+  background-color: RGBA(229, 159, 247, 0.075);
+}
+div.callout-important {
+  border: 1.75px solid #ff5252 !important;
+  background-color: RGBA(255, 82, 82, 0.075);
+}
+
+div.callout-note.callout-style-default .callout-title {
+  background: none!important;
+  color: #4582EC !important;
+}
+div.callout-warning.callout-style-default .callout-title {
+  background: none!important;
+  color: #FD971F !important;
+}
+div.callout-caution.callout-style-default .callout-title {
+  background: none!important;
+  color: #E599F7!important;
+}
+div.callout-tip.callout-style-default .callout-title {
+  background: none!important;
+  color: #02b875 !important;
+}
+div.callout-important.callout-style-default .callout-title {
+  background: none!important;
+  color: #FF5252 !important;
+}
+
+/* .callout.callout-titled.callout-style-default .callout-content  p { */
+/* } */
+
+div.callout-caution .callout-icon::before {
+  color: #E599F7!important;
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Pro 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license (Commercial License) Copyright 2022 Fonticons, Inc. --><path fill="rgb(229, 153, 247)" d="M448 352V48C448 21.53 426.5 0 400 0h-320C35.89 0 0 35.88 0 80v352C0 476.1 35.89 512 80 512h344c13.25 0 24-10.75 24-24s-10.75-24-24-24H416v-66.95C434.6 390.4 448 372.8 448 352zM368 464h-288c-17.64 0-32-14.34-32-32s14.36-32 32-32h288V464zM400 352h-320c-11.38 0-22.2 2.375-32 6.688V80c0-17.66 14.36-32 32-32h320V352zM152 160h176C341.3 160 352 149.3 352 136S341.3 112 328 112h-176C138.8 112 128 122.8 128 136S138.8 160 152 160zM152 240h176C341.3 240 352 229.3 352 216S341.3 192 328 192h-176C138.8 192 128 202.8 128 216S138.8 240 152 240z"/></svg>')!important;
+}
+
+div.callout-note .callout-icon::before {
+  color: #4582ec !important;
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Pro 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license (Commercial License) Copyright 2022 Fonticons, Inc. --><path fill="rgb(69,130,236)" d="M366.4 213.5L412.2 221.1C414.7 232.4 416 244 416 256C416 344.4 344.4 416 256 416C167.6 416 96 344.4 96 256C96 167.6 167.6 96 256 96C267.1 96 279.6 97.32 290.9 99.81L298.5 145.6L293.6 150.5C281.9 146.3 269.2 143.1 256 143.1C194.1 143.1 144 194.1 144 255.1C144 317.9 194.1 368 256 368C317.9 368 368 317.9 368 255.1C368 242.8 365.7 230.1 361.5 218.4L366.4 213.5zM497.7 171.5C506.1 197.1 512 226.4 512 256C512 397.4 397.4 512 256 512C114.6 512 0 397.4 0 256C0 114.6 114.6 0 256 0C285.6 0 314 5.024 340.5 14.27L301.7 53.04C286.1 49.74 271.7 48 256 48C141.1 48 48 141.1 48 256C48 370.9 141.1 464 256 464C370.9 464 464 370.9 464 256C464 240.3 462.3 225 458.1 210.3L497.7 171.5zM272.1 272.1C263.6 282.3 248.4 282.3 239 272.1C229.7 263.6 229.7 248.4 239 239L331.2 146.9L322.7 96.24C321 86.05 324.3 75.66 331.6 68.36L382.8 17.16C390.1 9.035 404.7 11.86 409 22.53L432 79.1L489.5 102.1C500.1 107.3 502.1 121 494.8 129.2L443.6 180.4C436.3 187.7 425.9 190.1 415.8 189.3L365.1 180.8L272.1 272.1z"/></svg>')!important;
+}
+
+div.callout-important .callout-icon::before {
+  color: #ff5252 !important;
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Pro 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license (Commercial License) Copyright 2022 Fonticons, Inc. --><path fill="rgb(255, 82, 82)" d="M215.1 23.88c0-23.75-31.15-33.15-44.15-13.03C76.47 158.1 200 238.7 200 287.1c0 22-18 40-40 40c-22 0-40-18-40-40V182.1c0-19.38-21.88-30.75-37.75-19.63C30.75 198.4 0 257.2 0 319.1C0 425.9 86.12 512 192 512s192-86.12 192-192C384 149.7 215.1 127 215.1 23.88zM192 463.1c-79.38 0-144-64.63-144-144c0-28.63 8.5-64.75 24-88v56c0 48.5 39.5 88 88 88s88-39.5 88-88c0-64.25-88-120-64-208C224 167.1 336 201.7 336 319.1C336 399.4 271.4 463.1 192 463.1z"/></svg>')!important;
+  }
+div.callout-warning .callout-icon::before {
+  color: #FD971F !important;
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Pro 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license (Commercial License) Copyright 2022 Fonticons, Inc. --><path fill="rgb(253,151,31)" d="M200.7 128C270.7 128 337.9 100.2 387.4 50.68L425.4 12.69C445.5-7.472 480 6.805 480 35.31V179.6C498.6 188.4 512 212.1 512 240C512 267.9 498.6 291.6 480 300.4V444.7C480 473.2 445.5 487.5 425.4 467.3L387.4 429.3C339.6 381.5 275.4 353.1 208 352.1V456C208 486.9 182.9 512 152 512H120C89.07 512 64 486.9 64 456V352C28.65 352 0 323.3 0 288V192C0 156.7 28.65 128 64 128L200.7 128zM432 73.94L421.3 84.62C364.5 141.4 288.1 174 208 175.9V304.1C288.1 305.1 364.5 338.6 421.3 395.4L432 406.1V73.94zM112 456C112 460.4 115.6 464 120 464H152C156.4 464 160 460.4 160 456V352H112V456zM48 192V288C48 296.8 55.16 303.1 64 303.1H160V176H64C55.16 176 48 183.2 48 192V192z"/></svg>')!important;
+}
+
+div.callout-tip .callout-icon::before {
+  color: #02b875!important;
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Pro 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license (Commercial License) Copyright 2022 Fonticons, Inc. --><path fill="rgb(2,184,117)" d="M414.9 31.11L270.9 495.1C266.1 507.8 253.5 514.8 240.9 510.9C228.2 506.1 221.1 493.5 225.1 480.9L369.1 16.89C373 4.226 386.5-2.852 399.1 1.077C411.8 5.006 418.9 18.45 414.9 31.11V31.11zM504.4 118.5L632.4 238.5C637.3 243 640 249.4 640 255.1C640 262.6 637.3 268.1 632.4 273.5L504.4 393.5C494.7 402.6 479.6 402.1 470.5 392.4C461.4 382.7 461.9 367.6 471.6 358.5L580.9 255.1L471.6 153.5C461.9 144.4 461.4 129.3 470.5 119.6C479.6 109.9 494.7 109.4 504.4 118.5V118.5zM168.4 153.5L59.09 255.1L168.4 358.5C178.1 367.6 178.6 382.7 169.5 392.4C160.4 402.1 145.3 402.6 135.6 393.5L7.585 273.5C2.746 268.1 0 262.6 0 255.1C0 249.4 2.746 243 7.585 238.5L135.6 118.5C145.3 109.4 160.4 109.9 169.5 119.6C178.6 129.3 178.1 144.4 168.4 153.5V153.5z"/></svg>')!important;
+}
+
+
+
+
+
+
+
+
+.callout.callout-style-simple .callout-icon::before,.callout.callout-style-simple .callout-toggle::before {
+    height: 1.1rem!important;
+    width: 1.1rem!important;
+    place-self: start;
+    display: inline-block;
+    content: "";
+    background-repeat: no-repeat;
+    background-size: 1.1rem 1.1rem!important;
+}
+
+.callout.callout-style-default .callout-icon::before,.callout.callout-style-default .callout-toggle::before {
+    height: 1.1rem;
+    width: 1.1rem;
+    display: inline-block;
+    content: "";
+    background-repeat: no-repeat;
+    background-size: 1.1rem 1.1rem
+}
+
+.callout.callout-style-default .callout-toggle::before {
+    margin-top: 2.25rem;
+}
+
+.callout .callout-btn-toggle .callout-toggle::before {
+    transition: transform .2s linear
+}
+
+.callout .callout-header[aria-expanded=false] .callout-toggle::before {
+    transform: rotate(-90deg)
+}
+
+.callout .callout-header[aria-expanded=true] .callout-toggle::before {
+    transform: none
+}
+
+.callout.callout-style-simple:not(.no-icon) div.callout-icon-container {
+    padding-right: .55em
+}
+
+.callout.callout-style-default:not(.no-icon) div.callout-icon-container {
+    padding-right: .35em
+}
+
+.callout.callout-style-default.callout-caution:not(.no-icon) div.callout-icon-container {
+    padding-right: .35em
+}
+
+.callout>.callout-body>.callout-icon-container>.no-icon,.callout>.callout-header>.callout-icon-container>.no-icon {
+    display: none
+}
+
+
+div.callout-code {
+  border: 1px solid #F783AC !important;
+}
+
+div.callout-code.callout-style-default .callout-title {
+  background: none!important;
+  color: #F783AC !important;
+  font-weight: bold;
+}
+
+
+div.callout-code .callout-icon::before {
+  color: #F783AC;
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Pro 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license (Commercial License) Copyright 2022 Fonticons, Inc. --><path fill="rgb(247, 131, 172)" d="M414.9 31.11L270.9 495.1C266.1 507.8 253.5 514.8 240.9 510.9C228.2 506.1 221.1 493.5 225.1 480.9L369.1 16.89C373 4.226 386.5-2.852 399.1 1.077C411.8 5.006 418.9 18.45 414.9 31.11V31.11zM504.4 118.5L632.4 238.5C637.3 243 640 249.4 640 255.1C640 262.6 637.3 268.1 632.4 273.5L504.4 393.5C494.7 402.6 479.6 402.1 470.5 392.4C461.4 382.7 461.9 367.6 471.6 358.5L580.9 255.1L471.6 153.5C461.9 144.4 461.4 129.3 470.5 119.6C479.6 109.9 494.7 109.4 504.4 118.5V118.5zM168.4 153.5L59.09 255.1L168.4 358.5C178.1 367.6 178.6 382.7 169.5 392.4C160.4 402.1 145.3 402.6 135.6 393.5L7.585 273.5C2.746 268.1 0 262.6 0 255.1C0 249.4 2.746 243 7.585 238.5L135.6 118.5C145.3 109.4 160.4 109.9 169.5 119.6C178.6 129.3 178.1 144.4 168.4 153.5V153.5z"/></svg>')!important;
+}

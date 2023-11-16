@@ -1,0 +1,9 @@
+
+
+
+body:not(.glightbox-mobile) div.gslide div.gslide-description,
+body:not(.glightbox-mobile) div.gslide-description .gslide-title,
+body:not(.glightbox-mobile) div.gslide-description .gslide-desc {
+    color: var(--quarto-body-color);
+    background-color: var(--quarto-body-bg);
+}
