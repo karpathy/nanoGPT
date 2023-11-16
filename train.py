@@ -31,7 +31,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
 from model import GPTConfig, GPT
-from utils import printok
+from utils import printok, printlog
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -254,7 +254,10 @@ local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
 
-printok("\nlet the learning, begin...")
+
+# dump info to logs + start main training loop
+printok("\nlet the learning, begin...\n")
+printlog("config values used:\n", config, "\n\n")
 while True:
     # determine and set the learning rate for this iteration
     lr = get_lr(iter_num) if decay_lr else learning_rate
