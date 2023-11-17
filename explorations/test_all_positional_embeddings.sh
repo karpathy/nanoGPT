@@ -31,14 +31,14 @@ python3 train.py \
   --dataset "shakespeare_char" \
   --no-use_rotary_embeddings \
   --use_abs_pos_embeddings \
-  --no-use_softmax_variant \
+  --no-use_softmax_variant \G
   --tensorboard_project "shkspr" \
   --tensorboard_run_name "abs_pos" \
   --block_size 256 \
   --out_dir "shkspr_abs_pos" \
   --compile
 
-# start training
+# both abs pos and rope
 python3 train.py \
   --max_iters 1000 \
   --eval_iters 200 \
@@ -54,3 +54,38 @@ python3 train.py \
   --block_size 256 \
   --out_dir "shkspr_rope_abs_pos" \
   --compile
+
+no positional embeddings
+python3 train.py \
+  --max_iters 1000 \
+  --eval_iters 200 \
+  --eval_interval 100 \
+  --log_interval 10 \
+  --dataset "shakespeare_char" \
+  --no-use_rotary_embeddings \
+  --no-use_abs_pos_embeddings \
+  --no-use_softmax_variant \
+  --tensorboard_project "shkspr" \
+  --tensorboard_run_name "no_pos_emb" \
+  --block_size 256 \
+  --out_dir "shkspr_nope" \
+  --compile
+
+# Short Rope variations
+for i in {2..16..2}; do
+  python3 train.py \
+    --max_iters 1000 \
+    --eval_iters 200 \
+    --eval_interval 100 \
+    --log_interval 10 \
+    --dataset "shakespeare_char" \
+    --use_rotary_embeddings \
+    --rope_variant "shortrope" \
+    --no-use_abs_pos_embeddings \
+    --no-use_softmax_variant \
+    --tensorboard_project "shkspr" \
+    --tensorboard_run_name "shortrope_${i}" \
+    --block_size 256 \
+    --out_dir "shkspr_rope_abs_pos_${i}" \
+    --compile
+done
