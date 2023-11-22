@@ -1,3 +1,7 @@
+"""
+openwebtext/prepare.py
+"""
+from __future__ import absolute_import, annotations, division, print_function
 # saves the openwebtext dataset to a binary file for training. following was helpful:
 # https://github.com/HazyResearch/flash-attention/blob/main/training/src/datamodules/language_modeling_hf.py
 
@@ -6,6 +10,13 @@ from tqdm import tqdm
 import numpy as np
 import tiktoken
 from datasets import load_dataset # huggingface datasets
+from pathlib import Path
+
+HERE = Path(os.path.abspath(__file__)).parent
+HF_DATASETS_CACHE = HERE / ".cache" / "huggingface"
+HF_DATASETS_CACHE.mkdir(parents=True, exist_ok=True)
+os.environ['HF_DATASETS_CACHE'] = HF_DATASETS_CACHE.as_posix()
+print(f'Using HF_DATASETS_CACHE={HF_DATASETS_CACHE.as_posix()}')
 
 # number of workers in .map() call
 # good number to use is ~order number of cpu cores // 2
@@ -15,6 +26,8 @@ num_proc = 8
 # best number might be different from num_proc above as it also depends on NW speed.
 # it is better than 1 usually though
 num_proc_load_dataset = num_proc
+# HF_DATASETS_CACHE="./cache"
+
 
 if __name__ == '__main__':
     # takes 54GB in huggingface .cache dir, about 8M documents (8,013,769)

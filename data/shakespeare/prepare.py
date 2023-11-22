@@ -1,7 +1,19 @@
+"""
+shakespeare/prepare.py
+"""
+from __future__ import absolute_import, annotations, division, print_function
 import os
 import requests
 import tiktoken
 import numpy as np
+
+from pathlib import Path
+
+HERE = Path(os.path.abspath(__file__)).parent
+HF_DATASETS_CACHE = HERE / ".cache" / "huggingface"
+HF_DATASETS_CACHE.mkdir(parents=True, exist_ok=True)
+os.environ['HF_DATASETS_CACHE'] = HF_DATASETS_CACHE.as_posix()
+print(f'Using HF_DATASETS_CACHE={HF_DATASETS_CACHE.as_posix()}')
 
 # download the tiny shakespeare dataset
 input_file_path = os.path.join(os.path.dirname(__file__), 'input.txt')

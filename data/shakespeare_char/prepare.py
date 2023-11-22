@@ -4,10 +4,18 @@ So instead of encoding with GPT-2 BPE tokens, we just map characters to ints.
 Will save train.bin, val.bin containing the ids, and meta.pkl containing the
 encoder and decoder and some other related info.
 """
+from __future__ import absolute_import, annotations, division, print_function
 import os
 import pickle
 import requests
 import numpy as np
+from pathlib import Path
+
+HERE = Path(os.path.abspath(__file__)).parent
+HF_DATASETS_CACHE = HERE / ".cache" / "huggingface"
+HF_DATASETS_CACHE.mkdir(parents=True, exist_ok=True)
+os.environ['HF_DATASETS_CACHE'] = HF_DATASETS_CACHE.as_posix()
+print(f'Using HF_DATASETS_CACHE={HF_DATASETS_CACHE.as_posix()}')
 
 # download the tiny shakespeare dataset
 input_file_path = os.path.join(os.path.dirname(__file__), 'input.txt')
