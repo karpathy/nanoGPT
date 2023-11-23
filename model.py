@@ -53,6 +53,7 @@ class Softermax(nn.Module):
         return e_x / e_x.sum(dim=self.dim, keepdim=True)
 
 # Softmax base 2, with constant denominator, and option to remove max subtraction
+#poor man's easiest quantization
 def quantize(tensor,scale):
     tensor = tensor.mul(scale)
     tensor = torch.round(tensor)
@@ -66,8 +67,8 @@ class const_quan(torch.autograd.Function):
     @staticmethod
     def forward(ctx, beta=None, gamma=None):
         #scaling factor for beta and gamma while doing quantization
-        scale_beta=100
-        scale_gamma=10
+        scale_beta=9#scaling factor for quantization, should make it as parameter
+        scale_gamma=8
         beta = quantize(beta, scale_beta)
         gamma = quantize(gamma, scale_gamma)
         return dequantize(beta, scale_beta),dequantize(gamma,scale_gamma)
@@ -101,8 +102,8 @@ class Constantmax_quan(nn.Module):
             e_x = torch.exp(x)
             return e_x / self.fake_gamma
         else:
-            scale_beta=100
-            scale_gamma=10
+            scale_beta=9 #scaling factor for quantization, should make it as parameter
+            scale_gamma=8
             x = x - dequantize(quantize(self.beta,scale_beta),scale_beta)
             e_x = torch.exp(x)
             return e_x/dequantize(quantize(self.gamma,scale_gamma),scale_gamma)
