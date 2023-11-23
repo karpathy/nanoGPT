@@ -303,28 +303,50 @@ class GPT(nn.Module):
         return mfu
 
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
+    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, return_token_logprobs: bool=False):
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
         Most likely you'll want to make sure to be in model.eval() mode of operation for this.
         """
+        # optional arg, returns the logprobs for perplexity calcs
+        # for prompt tokens, we need special calling of the forward method
+        if return_token_logprobs:
+            logprobs = []
+            prompt_logits, _ = self(idx, idx)
+                # Shape: (batch, prompt_seq_len, vocab_size)
+            prompt_logprobs = torch.log_softmax(prompt_logits, dim=1)
+            # iter over tok ids in SINGLE batch we got (always expect bs=1)
+            for seq_pos_idx, token_idx in enumerate(idx[0]):
+                token_idx = token_idx.item()
+                token_logprob = prompt_logprobs[0, seq_pos_idx, token_idx]
+                print(token_idx, token_logprob.item(), f"min: {torch.min(prompt_logprobs[0, seq_pos_idx])} @ {torch.argmin(prompt_logprobs[0, seq_pos_idx])}", f"max: {torch.max(prompt_logprobs[0, seq_pos_idx])} @ {torch.argmax(prompt_logprobs[0, seq_pos_idx])}")
+                logprobs.append(token_logprob.item())
+
         for _ in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
             idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
             # forward the model to get the logits for the index in the sequence
             logits, _ = self(idx_cond)
             # pluck the logits at the final step and scale by desired temperature
-            logits = logits[:, -1, :] / temperature
+            logits_t = logits[:, -1, :] / temperature
+                # logits_t are adjusted, logits is the raw outputs
             # optionally crop the logits to only the top k options
             if top_k is not None:
-                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                logits[logits < v[:, [-1]]] = -float('Inf')
+                v, _ = torch.topk(logits_t, min(top_k, logits_t.size(-1)))
+                logits_t[logits_t < v[:, [-1]]] = -float('Inf')
             # apply softmax to convert logits to (normalized) probabilities
-            probs = F.softmax(logits, dim=-1)
+            probs = F.softmax(logits_t, dim=-1)
             # sample from the distribution
             idx_next = torch.multinomial(probs, num_samples=1)
             # append sampled index to the running sequence and continue
             idx = torch.cat((idx, idx_next), dim=1)
 
-        return idx
+            if return_token_logprobs:
+                next_logprob = torch.log_softmax(logits[0], dim=1)[-1, idx_next]
+                logprobs.append(next_logprob.item())
+
+        if return_token_logprobs:
+            return idx, torch.tensor(logprobs)
+        else:
+            return idx

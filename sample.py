@@ -13,7 +13,7 @@ from utils import HiddenPrints, printok, printerr
 
 # -----------------------------------------------------------------------------
 init_from = 'resume' # either 'resume' (from an out_dir) or a gpt2 variant (e.g. 'gpt2-xl')
-out_dir = 'insulted_inital_test_6k' # ignored if init_from is not 'resume'
+out_dir = 'inital_test_6k' # ignored if init_from is not 'resume'
 start = "A most notable" # or "<|endoftext|>" or etc. Can also specify a file, use the following: "FILE:prompt.txt" where 'prompt.txt' is the actual filename
 num_samples = 10 # number of samples to draw
 max_new_tokens = 12 # number of tokens generated in each sample
@@ -106,42 +106,37 @@ with torch.no_grad():
         for k in range(num_samples):
             x = x[:, :]
             print("input shape: ", x.shape)
-            y = model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k, return_token_logprobs=False)
-            output_strings = decode(y[0].tolist())
 
-            # get the ppl @ each step in the full sequence
+            # optionally calculate ppl @ each decoding step during inference
             if calculate_perplexity:
-                seq_logprobs = []
-                logits, loss = model.forward(y, y) 
-                    # Shapes:
-                    # logits: (seq_len, vocab_dim) 
-                    #   loss: (1) --> scalar
-                logprobs = torch.log_softmax(logits, dim=1)
+                y, seq_logprobs = model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k, return_token_logprobs=True)
+                printerr(seq_logprobs)
+                output_strings = decode(y[0].tolist())
+                ppl = torch.exp(-torch.sum(seq_logprobs)/len(seq_logprobs))
 
-                # TODO: calculate perplexity correctly @ each step in the sequence (up to that step)
-                #       get a list of the ppls and a way to get at the output distributions nicely
-                # TODO: also make it optional to save visualizations for sampled generations
-                # investigate the output distribution
+                # Calculate PPL @ Steps in Seq
                 for idx, tok_id in enumerate(y[0]):
                     # logits[:, idx, tok_id] #alleged idx'ing of token score
-                    tok_logprob = logprobs[:, idx, tok_id]
-                    seq_logprobs.append(tok_logprob)
+                    sl_at_idx = seq_logprobs[:idx]
+                    ppl_at_idx = torch.exp(-torch.sum(sl_at_idx)/len(sl_at_idx))
 
-                    worst, best = torch.min(logprobs[:, idx, :]), torch.max(logprobs[:, idx, :])
-                    worst_idx, best_idx = torch.argmin(logprobs[:, idx, :]), torch.argmax(logprobs[:, idx, :])
-                    worst_str, best_str = tokenizer.decode([worst_idx.item()]), tokenizer.decode([best_idx.item()])
-                    # Fancy printing of the sequence
                     token_str = decode([tok_id.item()])[0]
                     print("".join(output_strings[:idx]), sep="", end="")
                     printok(token_str if token_str != " " else "_")
-                    print(f"  current token: {tok_id} should be followed by {y[0, idx+1]}")
+                    if idx+1 < len(y[0]):
+                        next_token = y[0, idx+1]
+                        print(f"  current token: {tok_id} should be followed by token: {next_token} which is '{decode([next_token.item()])[0]}' ")
+                    else:
+                        print(f"  final token: {tok_id} --> {y[0, idx]}")
                     # print(f"   min -- token: {worst_idx} score: {worst} str: {worst_str}")
                     # print(f"   max -- token: {best_idx} score: {best} str: {best_str}")
-                    print(f"  ppl @ this point: {torch.exp(sum(seq_logprobs)/len(seq_logprobs)).item()}")
+                    print(f"  ppl @ this point: {ppl_at_idx}")
+                    print("\n")
 
-                print("logits: ", logits.shape)
-                print("  loss: ", loss)
-                print("y shape: ", y.shape, y)
+            # Default Inference Behavior
+            else: 
+                y = model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k, return_token_logprobs=False)
+                output_strings = decode(y[0].tolist())
 
 
             print(output_strings)
