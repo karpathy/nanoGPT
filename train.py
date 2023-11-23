@@ -300,6 +300,21 @@ class Trainer:
                 "mfu": running_mfu*100,
             })
 
+    def log_metrics_non_validation(self, loss_training, running_mfu, iter_num):
+        if self.args.tensorboard_log:
+            self.writer.add_scalars(
+                "loss", { "train": loss_training }, iter_num
+            )
+            self.writer.add_scalar("mfu_pct", running_mfu * 100, iter_num)
+
+        if self.args.wandb_log and self.master_process:
+            import wandb
+            wandb.log({
+                "iter": iter_num,
+                "train/loss": loss_training,
+                "mfu": running_mfu*100,
+            })
+
     def train(self):
         self.X, self.Y = self.get_batch('train')
         t0 = time.time()
@@ -363,6 +378,7 @@ class Trainer:
                     mfu = self.raw_model.estimate_mfu(self.args.batch_size * self.args.gradient_accumulation_steps, dt)
                     running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
                 print(f"iter {self.iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+                self.log_metrics_non_validation(lossf, running_mfu, self.iter_num)
 
             self.iter_num += 1
             local_iter_num += 1
