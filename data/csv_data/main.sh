@@ -5,18 +5,21 @@
 
 set -x
 
-# CREATE SYNTHETIC DATA -- Skip if using your own data
-# This is a generator create two csvs (if `--split` is specified):
-# 1. time data called:    `time_filename.csv`
-# 2. signal data called:  `data_filename.csv`
-python3 sine_noise_generator.py --noise_level 0.3 --filename sine_data.csv --scientific --precision 2 --modulo 1000 --points 1000000 --split
+# 1. time data is called:    `time_csv`
+# 2. signal data is called:  `data_csv`
+
+time_csv="$1"
+data_csv="$2"
+exclude_labels="$3"
+data_shuffled_txt="${2}.shuffled.txt"
+processed_txt="${2}.processed.txt"
 
 set +x
-echo -e "\nPreview: Generated Times"
-head time_sine_data.csv
+echo -e "\nPreview: Times"
+head "$time_csv"
 
-echo -e "\n\nPreview: Generated Data"
-head data_sine_data.csv
+echo -e "\n\nPreview: Data"
+head "$data_csv"
 echo -e "\n\n"
 set -x
 
@@ -25,18 +28,19 @@ set -x
 # 1. _prepend_ labels to the data
 # 2. (optionally) shuffle the data
 # Also 'e' is used for scientific notation, skip this letter when doing labelling
-python3 process_csv.py data_sine_data.csv sine_noise_sn_shuffled.csv --shuffle --exclude e
+python3 process_csv.py "$data_csv" "$data_shuffled_txt" --shuffle --exclude "$exclude_labels"
 
 # preview the result
 set +x
 echo -e "\nPreview: Shuffled Data"
-head sine_noise_sn_shuffled.csv
+head "$data_shuffled_txt"
 echo -e "\n\n"
 set -x
 
 # recombine
-python3 combine_csvs.py time_sine_data.csv sine_noise_sn_shuffled.csv processed_sine_data.csv
+python3 combine_csvs.py "$time_csv" "$data_shuffled_txt" "$processed_txt"
 
 set +x
 echo -e "\nPreview: Timestamps with Shuffled Data"
-head processed_sine_data.csv
+head "$processed_txt"
+
