@@ -63,7 +63,7 @@ def parse_args():
 
     # Softmax variations
     model_group.add_argument('--use_softmax_variant', default=False, action=argparse.BooleanOptionalAction)
-    model_group.add_argument("--softmax_variant", type=str, default="softermax", choices=["constantmax", "polymax", "strongermax", "softermax", "sigsoftmax", "sigsoftmax_base2"])
+    model_group.add_argument("--softmax_variant", type=str, default="softermax", choices=["constantmax_quan", "constantmax", "polymax", "strongermax", "softermax", "sigsoftmax", "sigsoftmax_base2"])
 
     # Custom Softmax Variation Options
     model_group.add_argument('--use_softermax_xmax', default=False, action=argparse.BooleanOptionalAction)
