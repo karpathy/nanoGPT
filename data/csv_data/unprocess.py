@@ -13,24 +13,28 @@ def unshuffle_data(data, labels, convert_to_csv=False):
     """
     unshuffled_data = []
 
+    # Creating a regex pattern to match any label followed by non-label characters
+    label_pattern = r"([" + "".join(labels) + "])([^" + "".join(labels) + "]+)"
+
     for line in data:
         # Extracting the part before the first label
         prefix = re.match(r"[^" + "".join(labels) + "]*", line).group()
 
         # Extracting the parts with labels
-        parts_dict = {label: "" for label in labels}  # Initialize all labels with empty values
-        for label, value in re.findall(r"([" + "".join(labels) + "])(-?\d+\.\d+e[+-]\d+)", line):
-            parts_dict[label] = value
+        parts_dict = {label: [] for label in labels}  # Initialize all labels with empty list to handle duplicates
+        for label, value in re.findall(label_pattern, line):
+            parts_dict[label].append(value.strip())
 
-        # Forming the unshuffled line
+       # Forming the unshuffled line
+        unshuffled_line = prefix
         if convert_to_csv:
-            unshuffled_line = prefix + "".join(
-                f",{parts_dict[label]}" for label in labels
+            unshuffled_line += ",".join(
+                " ".join(parts_dict[label]) for label in labels
             )
         else:
-            unshuffled_line = prefix + "".join(
-                f"{label}{parts_dict[label]}" for label in labels
-            )
+            for label in labels:
+                for value in parts_dict[label]:
+                    unshuffled_line += f"{label}{value}"
 
         unshuffled_data.append(unshuffled_line)
 
