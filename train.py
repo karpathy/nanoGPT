@@ -76,12 +76,12 @@ def parse_args():
     model_group.add_argument("--constantmax_base", type=float, default=2.0)
 
     model_group.add_argument("--polymax_x_intercept", type=float, default=-100.0)
-    model_group.add_argument("--polymax_y_intercept", type=float, default=1.0) ##TODO
+    model_group.add_argument("--polymax_y_intercept", type=float, default=1.0)
     model_group.add_argument("--polymax_power", type=float, default=2.0)
     model_group.add_argument("--polymax_divisor", type=float, default=1000.0)
 
     model_group.add_argument("--sigsoftmax_use_euler_base", type=float, default=2.0)
-    model_group.add_argument("--sigsoftmax_base", type=int, default=2.0)
+    model_group.add_argument("--sigsoftmax_base", type=float, default=2.0)
 
     model_group.add_argument("--strongermax_strength", type=float, default=2.0)
 
