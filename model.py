@@ -67,8 +67,8 @@ class const_quan(torch.autograd.Function):
     @staticmethod
     def forward(ctx, beta=None, gamma=None):
         #scaling factor for beta and gamma while doing quantization
-        scale_beta=9#scaling factor for quantization, should make it as parameter
-        scale_gamma=8
+        scale_beta=100#scaling factor for quantization, should make it as parameter
+        scale_gamma=10
         beta = quantize(beta, scale_beta)
         gamma = quantize(gamma, scale_gamma)
         return dequantize(beta, scale_beta),dequantize(gamma,scale_gamma)
@@ -97,13 +97,15 @@ class Constantmax_quan(nn.Module):
 
     def forward(self, x):
         if self.training:
+            #print('fake_beta:', self.fake_beta)
+            #print('fake_gamma:', self.fake_gamma)
             self.fake_beta,self.fake_gamma=_const_quan(self.beta,self.gamma)
             x = x - self.fake_beta
             e_x = torch.exp(x)
             return e_x / self.fake_gamma
         else:
-            scale_beta=9 #scaling factor for quantization, should make it as parameter
-            scale_gamma=8
+            scale_beta=100 #scaling factor for quantization, should make it as parameter
+            scale_gamma=10
             x = x - dequantize(quantize(self.beta,scale_beta),scale_beta)
             e_x = torch.exp(x)
             return e_x/dequantize(quantize(self.gamma,scale_gamma),scale_gamma)
