@@ -52,8 +52,27 @@ class Softermax(nn.Module):
         e_x = torch.pow(2.0, x)
         return e_x / e_x.sum(dim=self.dim, keepdim=True)
 
-# Softmax base 2, with constant denominator, and option to remove max subtraction
-#poor man's easiest quantization
+# Softmax with learnable parameters for xmax and denominator
+class Constantmax(nn.Module):
+    """ Softmax with learnable parameters for xmax and denominator """
+    def __init__(self, dim=-1, initial_gamma=500):
+        super().__init__()
+        self.dim = dim
+
+        # learnable 'xmax' - beta
+        self.beta = nn.Parameter(torch.Tensor([0.0]))
+
+        # denominator - gamma
+        self.gamma = nn.Parameter(torch.Tensor([initial_gamma]))
+
+    def forward(self, x):
+        x = x - self.beta
+        e_x = torch.exp(x)
+        return e_x / self.gamma
+
+# Constantmax Quantized
+
+## Quantization Methods Utilized for Separate Forward and Backward Passes
 def quantize(tensor,scale):
     tensor = tensor.mul(scale)
     tensor = torch.round(tensor)
@@ -61,7 +80,8 @@ def quantize(tensor,scale):
 def dequantize(tensor,scale):
     tensor = tensor.div(scale)
     return tensor
-    
+
+## helper class for Constantmax_quan
 class const_quan(torch.autograd.Function):
     """Simulates error caused by quantization. Uses Straight-Through Estimator for Back prop"""
     @staticmethod
@@ -78,19 +98,18 @@ class const_quan(torch.autograd.Function):
         return grad_gamma, grad_beta
 
 _const_quan=const_quan.apply
-    
+
 class Constantmax_quan(nn.Module):
     """ Base-e Softmax with option to remove max subtraction"""
     def __init__(self, dim=-1, initial_gamma=500):
         super().__init__()
         self.dim = dim
-        
+
         # demonimator - gamma
         self.gamma = nn.Parameter(torch.Tensor([initial_gamma]))
 
         # learnable 'xmax' - beta
         self.beta = nn.Parameter(torch.Tensor([0.0]))
-
 
         self.fake_beta=None
         self.fake_gamma=None
@@ -109,24 +128,6 @@ class Constantmax_quan(nn.Module):
             x = x - dequantize(quantize(self.beta,scale_beta),scale_beta)
             e_x = torch.exp(x)
             return e_x/dequantize(quantize(self.gamma,scale_gamma),scale_gamma)
-
-# Softmax with learnable parameters for xmax and denominator
-class Constantmax(nn.Module):
-    """ Softmax with learnable parameters for xmax and denominator """
-    def __init__(self, dim=-1, initial_gamma=500):
-        super().__init__()
-        self.dim = dim
-
-        # learnable 'xmax' - beta
-        self.beta = nn.Parameter(torch.Tensor([0.0]))
-
-        # denominator - gamma
-        self.gamma = nn.Parameter(torch.Tensor([initial_gamma]))
-
-    def forward(self, x):
-        x = x - self.beta
-        e_x = torch.exp(x)
-        return e_x / self.gamma
 
 # Like softermax, but parameterized to permit exploration of bases greater than 2
 class Strongermax(nn.Module):
