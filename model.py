@@ -70,6 +70,65 @@ class Constantmax(nn.Module):
         e_x = torch.exp(x)
         return e_x / self.gamma
 
+# Constantmax Quantized
+
+## Quantization Methods Utilized for Separate Forward and Backward Passes
+def quantize(tensor,scale):
+    tensor = tensor.mul(scale)
+    tensor = torch.round(tensor)
+    return tensor
+def dequantize(tensor,scale):
+    tensor = tensor.div(scale)
+    return tensor
+
+## helper class for Constantmax_quan
+class const_quan(torch.autograd.Function):
+    """Simulates error caused by quantization. Uses Straight-Through Estimator for Back prop"""
+    @staticmethod
+    def forward(ctx, beta=None, gamma=None):
+        #scaling factor for beta and gamma while doing quantization
+        scale_beta=100#scaling factor for quantization, should make it as parameter
+        scale_gamma=10
+        beta = quantize(beta, scale_beta)
+        gamma = quantize(gamma, scale_gamma)
+        return dequantize(beta, scale_beta),dequantize(gamma,scale_gamma)
+
+    @staticmethod
+    def backward(ctx, grad_gamma, grad_beta):
+        return grad_gamma, grad_beta
+
+_const_quan=const_quan.apply
+
+class Constantmax_quan(nn.Module):
+    """ Base-e Softmax with option to remove max subtraction"""
+    def __init__(self, dim=-1, initial_gamma=500):
+        super().__init__()
+        self.dim = dim
+
+        # demonimator - gamma
+        self.gamma = nn.Parameter(torch.Tensor([initial_gamma]))
+
+        # learnable 'xmax' - beta
+        self.beta = nn.Parameter(torch.Tensor([0.0]))
+
+        self.fake_beta=None
+        self.fake_gamma=None
+
+    def forward(self, x):
+        if self.training:
+            #print('fake_beta:', self.fake_beta)
+            #print('fake_gamma:', self.fake_gamma)
+            self.fake_beta,self.fake_gamma=_const_quan(self.beta,self.gamma)
+            x = x - self.fake_beta
+            e_x = torch.exp(x)
+            return e_x / self.fake_gamma
+        else:
+            scale_beta=100 #scaling factor for quantization, should make it as parameter
+            scale_gamma=10
+            x = x - dequantize(quantize(self.beta,scale_beta),scale_beta)
+            e_x = torch.exp(x)
+            return e_x/dequantize(quantize(self.gamma,scale_gamma),scale_gamma)
+
 # Like softermax, but parameterized to permit exploration of bases greater than 2
 class Strongermax(nn.Module):
     """ Base-2 Softmax with option to remove max subtraction"""
@@ -279,6 +338,10 @@ class CausalSelfAttention(nn.Module):
               self.constantmax_constant = config.constantmax_constant
               self.softmax_layer = Constantmax()
 
+            if self.softmax_variant == "constantmax_quan":
+                self.use_softermax_xmax = config.use_softermax_xmax
+                self.softmax_layer = Constantmax_quan()
+
             if self.softmax_variant == "strongermax":
               self.use_softermax_xmax = config.use_softermax_xmax
               self.softmax_layer = Strongermax(subtract_max=self.use_softermax_xmax,strength=config.strongermax_strength)
@@ -453,6 +516,10 @@ class GPT(nn.Module):
               self.use_softermax_xmax = config.use_softermax_xmax
               self.constantmax_constant = config.constantmax_constant
               self.softmax_layer = Constantmax()
+
+            if self.softmax_variant == "constantmax_quan":
+                self.use_softermax_xmax = config.use_softermax_xmax
+                self.softmax_layer = Constantmax_quan()
 
             if self.softmax_variant == "strongermax":
               self.use_softermax_xmax = config.use_softermax_xmax
