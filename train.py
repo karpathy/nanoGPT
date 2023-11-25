@@ -50,6 +50,7 @@ def parse_args():
     model_group.add_argument('--n_embd', default=384, type=int)
     model_group.add_argument('--dropout', default=0.2, type=float)
     model_group.add_argument('--bias', default=False, action=argparse.BooleanOptionalAction)
+    model_group.add_argument('--use_post_ln', default=False, action=argparse.BooleanOptionalAction)
 
     # Norm variations
     model_group.add_argument('--use_rmsnorm', default=True, action=argparse.BooleanOptionalAction)

@@ -376,12 +376,18 @@ class Block(nn.Module):
             self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
             self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
 
+        self.use_post_ln = config.use_post_ln
+
         self.attn = CausalSelfAttention(config)
         self.mlp = MLP(config)
 
     def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
-        x = x + self.mlp(self.ln_2(x))
+        if self.use_post_ln:
+          x = x + self.attn(self.ln_1(x))
+          x = x + self.mlp(self.ln_2(x))
+        else:
+          x = self.ln_1(x + self.attn(x))
+          x = self.ln_2(x + self.mlp(x))
         return x
 
 @dataclass
@@ -405,6 +411,10 @@ class GPTConfig:
     rope_variant: str = "shortrope" # options: "shortrope", "rope
     shortrope_length: int = 8 # number of embeddings to use in shortrope
     use_abs_pos_embeddings: bool = True # If True, uses rotary embeddings, else use conventional absolute position encoding
+
+    # Structuring Options, remember to compile the model
+    use_post_ln: bool = True
+    use_pre_ln: bool = False
 
     # Layernorm Alternatives and Options
     use_rmsnorm: bool = True # Add option for RMSNorm in place of LayerNorm: https://arxiv.org/abs/1910.07467
