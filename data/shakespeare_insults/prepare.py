@@ -51,7 +51,7 @@ class InsultsTokenizer:
             self.decoder_map: Dict[str, int] = {tok: char for char, tok in self.encoder_map.items()}
             self.vocab_dim = len(tokmap.keys())
             del tokmap
-            self.max_seq_len = 64 #manually looked @ dataset, set this num to allow for some leeway at inference time
+            self.max_seq_len = 48 #initally tried 64, but seems that model just learned EOS token prediction (max in this dataset is 45, so round up)
 
     def __call__(self, text: str, *args: Any, **kwargs: Any) -> Any:
         text = text.lower() #keep everything lowercase here

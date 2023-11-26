@@ -21,9 +21,13 @@ catpuccin_hue = ['#8aadf4', '#cad3f5', '#ee99a0'] #catppuccin colors -- from the
 
 
 # Display Perplexities @ positions in a sequence of tokens
-def display_colored_text(sentence: List[int], color_values, cmap: Union[List[str], str]='magma', outfilename: str="out.png"):
+def display_colored_text(sentence: List[str], color_values, cmap: Union[List[str], str]='magma', outfilename: str="out.png"):
     assert len(sentence) == len(color_values), "Text and color values must be the same length"
-    fig, ax = plt.subplots(figsize=(15, 1.5))
+
+    # set dims for the figure
+    word_proportion = 2.5
+    figure_width = word_proportion * len(sentence)
+    fig, ax = plt.subplots(figsize=(figure_width, 1.5))
 
     if type(cmap) == str:
         cmap = plt.get_cmap(cmap)
@@ -63,7 +67,7 @@ def display_colored_text(sentence: List[int], color_values, cmap: Union[List[str
 def normalize_data(color_values):
     min_val = np.min(color_values)
     max_val = np.max(color_values)
-    # for the actual task, perhaps we set hard bins on Perplexity values 
+    # for the actual task, perhaps we set hard bins on Perplexity values (mask out really large/small ppls)
     # min_val = 0.01
     # max_val = 10.0
 
@@ -74,6 +78,7 @@ def normalize_data(color_values):
 
 
 sent = ["The", "Ocean", "Waves", "is", "a", "great", "film"]
+sent.extend(["woz"] * 5)
 # print(len(sen))
 # display_colored_text(sent, [1, 20, 0, 1, 1e13])
 
