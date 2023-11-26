@@ -303,26 +303,13 @@ class GPT(nn.Module):
         return mfu
 
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, return_token_logprobs: bool=False):
+    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, return_output_logprobs: bool=False):
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
         Most likely you'll want to make sure to be in model.eval() mode of operation for this.
+          * if requested, this function will return the `log_softmax`-ed model outputs (which can directly be used to compute the cross entropy loss/perplexity), see this reference for more info- https://wandb.ai/amanarora/Written-Reports/reports/Understanding-Logits-Sigmoid-Softmax-and-Cross-Entropy-Loss-in-Deep-Learning--Vmlldzo0NDMzNTU3#:~:text=Softmax%20itself%20is%20an%20activation,their%20total%20sum%20is%201.&text=As%20we%20can%20see%20above,given%20some%20input%20image%20x.
         """
-        # optional arg, returns the logprobs for perplexity calcs
-        # for prompt tokens, we need special calling of the forward method
-        if return_token_logprobs:
-            logprobs = []
-            prompt_logits, _ = self(idx, idx)
-                # Shape: (batch, prompt_seq_len, vocab_size)
-            prompt_logprobs = torch.log_softmax(prompt_logits, dim=1)
-            # iter over tok ids in SINGLE batch we got (always expect bs=1)
-            for seq_pos_idx, token_idx in enumerate(idx[0]):
-                token_idx = token_idx.item()
-                token_logprob = prompt_logprobs[0, seq_pos_idx, token_idx]
-                print(token_idx, token_logprob.item(), f"min: {torch.min(prompt_logprobs[0, seq_pos_idx])} @ {torch.argmin(prompt_logprobs[0, seq_pos_idx])}", f"max: {torch.max(prompt_logprobs[0, seq_pos_idx])} @ {torch.argmax(prompt_logprobs[0, seq_pos_idx])}")
-                logprobs.append(token_logprob.item())
-
         for _ in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
             idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
@@ -342,11 +329,15 @@ class GPT(nn.Module):
             # append sampled index to the running sequence and continue
             idx = torch.cat((idx, idx_next), dim=1)
 
-            if return_token_logprobs:
-                next_logprob = torch.log_softmax(logits[0], dim=1)[-1, idx_next]
-                logprobs.append(next_logprob.item())
+        # optional arg, returns the model output states for calculating perplexities
+        # its ugly, but after sampling a sequence, we get the output distribution @ each step in the sequence
+        if return_output_logprobs:
+            logits, _ = self(idx, idx)
+                # Shape: (batch, prompt_seq_len, vocab_size)
+            output_logprobs = torch.log_softmax(logits, dim=1)
+            # print(output_logprobs)
 
-        if return_token_logprobs:
-            return idx, torch.tensor(logprobs)
+        if return_output_logprobs:
+            return idx, output_logprobs
         else:
             return idx

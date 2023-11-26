@@ -9,15 +9,17 @@ import tiktoken
 import sys
 
 from model import GPTConfig, GPT
-from utils import HiddenPrints, printok, printerr
+from visualization import display_colored_text, catpuccin_hue
+from utils import HiddenPrints, printok, printerr, printlog, printwar
 
 # -----------------------------------------------------------------------------
 init_from = 'resume' # either 'resume' (from an out_dir) or a gpt2 variant (e.g. 'gpt2-xl')
 out_dir = 'inital_test_6k' # ignored if init_from is not 'resume'
 start = "A most notable" # or "<|endoftext|>" or etc. Can also specify a file, use the following: "FILE:prompt.txt" where 'prompt.txt' is the actual filename
+start = "012"
 num_samples = 10 # number of samples to draw
-max_new_tokens = 12 # number of tokens generated in each sample
-temperature = 0.8 # 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
+max_new_tokens = 10 # number of tokens generated in each sample
+temperature = 0.1 # 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
 top_k = 200 # retain only the top_k most likely tokens, clamp others to have 0 probability
 seed = 1337
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
@@ -109,16 +111,23 @@ with torch.no_grad():
 
             # optionally calculate ppl @ each decoding step during inference
             if calculate_perplexity:
-                y, seq_logprobs = model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k, return_token_logprobs=True)
-                printerr(seq_logprobs)
+                y, output_logprobs = model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k, return_output_logprobs=True)
+                printlog("WE @ THEM PROBS FOE")
+                printerr(output_logprobs.shape)
+                for idx, lp in enumerate(output_logprobs[0]):
+                    print(f"@ {y[0, idx]} -- {lp} -- next should be {lp.argmax()}")
+                exit(42)
                 output_strings = decode(y[0].tolist())
-                ppl = torch.exp(-torch.sum(seq_logprobs)/len(seq_logprobs))
+                ppl = torch.exp(-torch.sum(output_logprobs)/len(output_logprobs))
+                printok(f"whole sequence ppl: {ppl}")
 
-                # Calculate PPL @ Steps in Seq
+                # Calculate PPL @ each step in the sequence
+                stepwise_ppls = []
                 for idx, tok_id in enumerate(y[0]):
                     # logits[:, idx, tok_id] #alleged idx'ing of token score
-                    sl_at_idx = seq_logprobs[:idx]
+                    sl_at_idx = output_logprobs[:idx]
                     ppl_at_idx = torch.exp(-torch.sum(sl_at_idx)/len(sl_at_idx))
+                    stepwise_ppls.append(ppl_at_idx)
 
                     token_str = decode([tok_id.item()])[0]
                     print("".join(output_strings[:idx]), sep="", end="")
@@ -133,6 +142,9 @@ with torch.no_grad():
                     print(f"  ppl @ this point: {ppl_at_idx}")
                     print("\n")
 
+                #TODO: fix this sequence ppl visualizer to freaking work... (arb length inputs)
+                # display_colored_text(output_strings, stepwise_ppls, cmap=catpuccin_hue, outfilename="sequence-ppl.png")
+
             # Default Inference Behavior
             else: 
                 y = model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k, return_token_logprobs=False)
@@ -141,4 +153,5 @@ with torch.no_grad():
 
             print(output_strings)
             print('---------------')
+            # TODO: remove this early stopping logic
             exit(42) #ckg added, early stop
