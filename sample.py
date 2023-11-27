@@ -17,9 +17,11 @@ init_from = 'resume' # either 'resume' (from an out_dir) or a gpt2 variant (e.g.
 out_dir = 'inital_test_6k' # ignored if init_from is not 'resume'
 start = "A most notable" # or "<|endoftext|>" or etc. Can also specify a file, use the following: "FILE:prompt.txt" where 'prompt.txt' is the actual filename
 start = "012"
+# start = "92" #get jenky with this countformer
 num_samples = 10 # number of samples to draw
 max_new_tokens = 10 # number of tokens generated in each sample
 temperature = 0.1 # 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
+# temperature = 120
 top_k = 200 # retain only the top_k most likely tokens, clamp others to have 0 probability
 seed = 1337
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
@@ -109,41 +111,35 @@ with torch.no_grad():
             x = x[:, :]
             print("input shape: ", x.shape)
 
-            # optionally calculate ppl @ each decoding step during inference
+            # Optional Inference-ing: calculate ppl @ each decoding step
             if calculate_perplexity:
                 y, output_logprobs = model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k, return_output_logprobs=True)
+                    # output_logprobs shape: (batch, sequence_length, vocab_size)
                 printlog("WE @ THEM PROBS FOE")
                 printerr(output_logprobs.shape)
                 for idx, lp in enumerate(output_logprobs[0]):
                     print(f"@ {y[0, idx]} -- {lp} -- next should be {lp.argmax()}")
-                exit(42)
-                output_strings = decode(y[0].tolist())
-                ppl = torch.exp(-torch.sum(output_logprobs)/len(output_logprobs))
-                printok(f"whole sequence ppl: {ppl}")
 
-                # Calculate PPL @ each step in the sequence
-                stepwise_ppls = []
-                for idx, tok_id in enumerate(y[0]):
-                    # logits[:, idx, tok_id] #alleged idx'ing of token score
-                    sl_at_idx = output_logprobs[:idx]
-                    ppl_at_idx = torch.exp(-torch.sum(sl_at_idx)/len(sl_at_idx))
-                    stepwise_ppls.append(ppl_at_idx)
-
-                    token_str = decode([tok_id.item()])[0]
-                    print("".join(output_strings[:idx]), sep="", end="")
-                    printok(token_str if token_str != " " else "_")
+                # attempt to calculate perplexity
+                seq_logprobs = torch.tensor([0.0], device=device) #include a "logprob" for the zero-th index --> 1st token is something like oracle logprob, since MAX loglikelihood
+                seq_ppls = [1.0] #placeholder for 1st pos ppl, assume perfect as above (lowest ppl 1.0)
+                for idx, tok in enumerate(y[0]):
+                    alleged_max = output_logprobs[0, idx, :].argmax()
                     if idx+1 < len(y[0]):
-                        next_token = y[0, idx+1]
-                        print(f"  current token: {tok_id} should be followed by token: {next_token} which is '{decode([next_token.item()])[0]}' ")
-                    else:
-                        print(f"  final token: {tok_id} --> {y[0, idx]}")
-                    # print(f"   min -- token: {worst_idx} score: {worst} str: {worst_str}")
-                    # print(f"   max -- token: {best_idx} score: {best} str: {best_str}")
-                    print(f"  ppl @ this point: {ppl_at_idx}")
-                    print("\n")
+                        actual_next_token = y[0, idx+1]
+                        # print(idx, " --> has alleged_max: ", alleged_max.item(), "and actual selected: ", actual_next_token.item())
+                        seq_logprobs = torch.cat((seq_logprobs, output_logprobs[0, idx, actual_next_token].unsqueeze(0)), dim=0)
+                        seq_ppls.append(
+                            torch.exp2(-torch.sum(seq_logprobs)/len(seq_logprobs)).item()
+                        )
+                    # once the index is greater than y's len, there are no more "actuals" to compute ppl with...
 
-                #TODO: fix this sequence ppl visualizer to freaking work... (arb length inputs)
-                # display_colored_text(output_strings, stepwise_ppls, cmap=catpuccin_hue, outfilename="sequence-ppl.png")
+                ppl = torch.exp2(-torch.sum(seq_logprobs)/len(seq_logprobs)) #for aggregate sequence
+                printlog(ppl)
+                printlog(seq_ppls)
+
+                output_strings = decode(y[0].tolist())
+                display_colored_text(output_strings, seq_ppls, cmap=catpuccin_hue, outfilename="sequence-ppl.png")
 
             # Default Inference Behavior
             else: 

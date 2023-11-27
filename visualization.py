@@ -35,6 +35,7 @@ def display_colored_text(sentence: List[str], color_values, cmap: Union[List[str
         cmap = LinearSegmentedColormap.from_list("mycmap", cmap)
 
     color_values_scaled = normalize_data(color_values)
+    # color_values_scaled = [0] * len(color_values_scaled)
     # color_values_scaled = color_values
     colors = cmap(color_values_scaled)
 
@@ -59,17 +60,20 @@ def display_colored_text(sentence: List[str], color_values, cmap: Union[List[str
 
     norm = mpl.colors.Normalize(vmin=np.min(color_values), vmax=np.max(color_values))
     cb = mpl.colorbar.ColorbarBase(cbar_ax, cmap=cmap, norm=norm, orientation='vertical')
-    cb.set_label("PPL Values", loc="center", font=font_config["fontname"])
+    cb.set_label("Perplexities", loc="center", font=font_config["fontname"])
     # plt.show()
     plt.savefig(outfilename, format="png", dpi=1200)
 
 
 def normalize_data(color_values):
+    # cast dtype if list
+    if type(color_values) != np.array:
+        color_values = np.array(color_values)
     min_val = np.min(color_values)
     max_val = np.max(color_values)
     # for the actual task, perhaps we set hard bins on Perplexity values (mask out really large/small ppls)
-    # min_val = 0.01
-    # max_val = 10.0
+    # min_val = 1.0  #the lowest possible ppl
+    # max_val = 10.0 #if higher than this, big problem
 
     color_values_scaled = (color_values - min_val) / (max_val - min_val)
     return color_values_scaled

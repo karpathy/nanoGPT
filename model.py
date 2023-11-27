@@ -334,8 +334,9 @@ class GPT(nn.Module):
         if return_output_logprobs:
             logits, _ = self(idx, idx)
                 # Shape: (batch, prompt_seq_len, vocab_size)
-            output_logprobs = torch.log_softmax(logits, dim=1)
-            # print(output_logprobs)
+            # base 2 for the log op, omit negative sign from post below as log_softmax returns negs
+            # the math below follows this post on computing base2 logsoftmax in torch- https://stackoverflow.com/questions/70229674/pytorch-log-softmax-base-2
+            output_logprobs = (1 / torch.log(torch.tensor(2.))) * torch.log_softmax(logits, dim=1)
 
         if return_output_logprobs:
             return idx, output_logprobs
