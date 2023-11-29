@@ -4,13 +4,13 @@ This is a guide for adding a new feature to the search space.
 
 # TOC
 
-* [Step 1  Add a config within the model.py](#step-1-add-a-config-within-the-model.py)
-* [Step 2  Add an argparse argument for the train.py](#step-2-add-an-argparse-argument-for-the-train.py)
+* [Step 1 Add a config within the model.py](#step-1-add-a-config-within-the-modelpy)
+* [Step 2 Add an argparse argument for the train.py](#step-2-add-an-argparse-argument-for-the-trainpy)
 * [Step 3 Create script in exploration folder](#step-3-create-script-in-exploration-folder)
 * [Other Parameter Groups](#other-parameter-groups)
 * [Ideas](#ideas)
 
-## Step 1  Add a config within the model.py
+## Step 1 Add a config within the model.py
 
 Open up `model.py` and add your new configuration within the `GPTConfig`
 dataclass:
@@ -29,7 +29,7 @@ class GPTConfig:
     use_faster_inference: bool = True
 ```
 
-## Step 2  Add an argparse argument for the train.py
+## Step 2 Add an argparse argument for the train.py
 
 
 Open up `train.py` and add your new feature to the model group inside `parse_args` function,
