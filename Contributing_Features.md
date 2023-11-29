@@ -15,7 +15,7 @@ This is a guide for adding a new feature to the search space.
 Open up `model.py` and add your new configuration within the `GPTConfig`
 dataclass:
 
-```
+```python
 @dataclass
 class GPTConfig:
     block_size: int = 1024
@@ -36,24 +36,21 @@ Open up `train.py` and add your new feature to the model group inside `parse_arg
 depending on the type:
 
 For boolean values:
-```
+```python
 model_group.add_argument('--use_faster_inference', default=True, action=argparse.BooleanOptionalAction)
 ```
 
 For string values (e.g. for selection between several types of a module):
-```
+```python
 model_group.add_argument("--softmax_variant", type=str, default="softermax", choices=["constantmax", "polymax", "strongermax", "softermax", "sigsoftmax", "sigsoftmax_base2"])
 ```
 
 For numeric values:
-```
+```python
 model_group.add_argument("--block_size", type=int, default=256)
 ```
 
-
-
 ## Step 3 Create script in exploration folder
-
 
 `cd` into the exploration folder and script in an exploration sweep.
 
@@ -68,50 +65,34 @@ on the default dataset:
 # head to repo root
 cd ../
 
-# create train.bin and val.bin splits (retaining contiguous sections of data)
-python3 data/shakespeare_char/prepare.py
+dataset="shakespeare_char"
+python3 "data/${dataset}/prepare.py"
 
-# start training
-python3 train.py \
-  --max_iters 3000 \
-  --eval_iters 200 \
-  --eval_interval 200 \
-  --log_interval 10 \
-  --use_softmax_variant \
-  --dataste
-  --softmax_variant "constantmax" \
-  --tensorboard_project "softmax_explorations" \
-  --tensorboard_run_name "consmax_base_e" \
-  --block_size 256  \
-  --out_dir "consmax_evaluations" \
-  --compile
+softmax_variation=("constantmax" "polymax" "softermax" "sigsoftmax")
 
-# start training
-python3 train.py \
-  --max_iters 3000 \
-  --eval_iters 200 \
-  --eval_interval 200 \
-  --log_interval 10 \
-  --use_softmax_variant \
-  --softmax_variant "softermax" \
-  --tensorboard_project "softmax_explorations" \
-  --tensorboard_run_name "softermax" \
-  --block_size 256  \
-  --out_dir "softermax_evaluations" \
-  --compile
+max_iters="3000"
+block_size="256"
+notes="check_all_softmax_variations"
 
-# start training
-python3 train.py \
-  --max_iters 3000 \
-  --eval_iters 200 \
-  --eval_interval 200 \
-  --log_interval 10 \
-  --no-use_softmax_variant \
-  --tensorboard_project "softmax_explorations" \
-  --tensorboard_run_name "regular_softmax" \
-  --block_size 256  \
-  --out_dir "softmax_evaluations" \
-  --compile
+# Loop over the array
+for softmax_variant in "${softmax_variation[@]}"
+do
+  python3 train.py \
+    --max_iters "$max_iters" \
+    --eval_iters 200 \
+    --eval_interval 200 \
+    --log_interval 10 \
+    --device cuda \
+    --dataset "$dataset" \
+    --use_softmax_variant \
+    --softmax_variant "${softmax_variant}" \
+    --use_softermax_xmax \
+    --tensorboard_project "${dataset}_${softmax_variant}_${max_iters}" \
+    --tensorboard_run_name "${softmax_variant}_${notes}" \
+    --block_size "$block_size" \
+    --out_dir "${dataset}_${softmax_variant}_${max_iters}_${notes}" \
+    --compile
+done
 ```
 
 ## Other Parameter Groups
