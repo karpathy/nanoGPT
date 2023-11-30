@@ -285,6 +285,20 @@ class DataConfig(BaseConfig):
     def to_str(self):
         return f'dset-{self.dataset}'
 
+    def load_data(self, data_dir: os.PathLike) -> dict:
+        dpath = Path(data_dir)
+        assert dpath.is_dir()
+        bfiles = [f for f in dpath.rglob('*.bin')]
+        self.data = {}
+        for bf in bfiles:
+            assert bf.is_file()
+            log.info(f'Loading {bf.stem} from {bf.as_posix()}')
+            self.data[bf.stem] = np.memmap(
+                bf.as_posix(),
+                dtype=np.uint16,
+                mode='r'
+            )
+
     def __post_init__(self):
         self._root_path = (
             DATA_DIR if self.root_path is None
@@ -297,6 +311,7 @@ class DataConfig(BaseConfig):
         self._load_meta = self.meta_path.is_file()
         self.stoi = None
         self.itos = None
+        self.data = self.load_data(self.data_dir)
         if self._load_meta:
             with self.meta_path.open('rb') as f:
                 meta = pickle.load(f)
@@ -310,16 +325,7 @@ class DataConfig(BaseConfig):
             self._enc = tiktoken.get_encoding('gpt2')
             self.encode = lambda s: self._enc.encode(s, allowed_special={'<|endoftext|>'})
             self.decode = lambda z: self._enc.decode(z)
-        bfiles = [f for f in self.data_dir.rglob('*.bin')]
-        self.data = {}
-        for bf in bfiles:
-            assert bf.is_file()
-            log.info(f'Loading {bf.stem} from {bf.as_posix()}')
-            self.data[bf.stem] = np.memmap(
-                bf.as_posix(),
-                dtype=np.uint16,
-                mode='r'
-            )
+
 
 
 @dataclass
