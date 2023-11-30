@@ -1,0 +1,6 @@
+_target_: ngpt.configs.DataConfig
+
+dataset: yelp_review_full
+root_path: null
+out_dir: 'out-yelp_review_full'
+
