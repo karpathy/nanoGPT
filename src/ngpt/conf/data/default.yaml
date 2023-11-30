@@ -1,4 +1,5 @@
 _target_: ngpt.configs.DataConfig
 
 dataset: null
+root_path: null
 out_dir: 'out-${dataset}'
