@@ -278,8 +278,8 @@ class OptimizerConfig(BaseConfig):
 
 @dataclass
 class DataConfig(BaseConfig):
-    out_dir: str = 'out'
     dataset: str = 'openwebtext'
+    out_dir: Optional[Any] = None
     root_path: Optional[Any] = None
 
     def to_str(self):
@@ -302,10 +302,14 @@ class DataConfig(BaseConfig):
     def __post_init__(self):
         self._root_path = (
             DATA_DIR if self.root_path is None
-            else Path(self.root_dir)
+            else Path(self.root_path)
+        )
+        self._out_dir = (
+            CKPT_DIR.joinpath(self.dataset) if self.out_dir is None
+            else Path(self.out_dir)
         )
         self.data_dir = self._root_path.joinpath(self.dataset)
-        self.ckpt_dir = CKPT_DIR.joinpath(self.out_dir)
+        self.ckpt_dir = CKPT_DIR.joinpath(self._out_dir)
         self.meta_path = self.data_dir.joinpath('meta.pkl')
         self.meta_vocab_size = None
         self._load_meta = self.meta_path.is_file()
