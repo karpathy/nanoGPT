@@ -72,7 +72,7 @@ if HF_DATASETS_CACHE is None:
     log.info(f'Setting HF_DATASETS_CACHE to {HF_DATASETS_CACHE_DIR.as_posix()}')
     os.environ['HF_DATASETS_CACHE'] = HF_DATASETS_CACHE_DIR.as_posix()
 else:
-    log.info(f'Caught {HF_DATASETS_CACHE.as_posix()=} from env')
+    log.info(f'Caught {HF_DATASETS_CACHE=} from env')
 
 # os.environ['HF_DATASETS_CACHE'] = HF_DATASETS_CACHE_DIR.as_posix()
 
