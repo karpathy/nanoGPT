@@ -289,15 +289,17 @@ class DataConfig(BaseConfig):
         dpath = Path(data_dir)
         assert dpath.is_dir()
         bfiles = [f for f in dpath.rglob('*.bin')]
-        self.data = {}
+        data = {}
         for bf in bfiles:
             assert bf.is_file()
             log.info(f'Loading {bf.stem} from {bf.as_posix()}')
-            self.data[bf.stem] = np.memmap(
+            data[bf.stem] = np.memmap(
                 bf.as_posix(),
                 dtype=np.uint16,
                 mode='r'
             )
+
+        return data
 
     def __post_init__(self):
         self._root_path = (
