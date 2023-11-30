@@ -310,6 +310,16 @@ class DataConfig(BaseConfig):
             self._enc = tiktoken.get_encoding('gpt2')
             self.encode = lambda s: self._enc.encode(s, allowed_special={'<|endoftext|>'})
             self.decode = lambda z: self._enc.decode(z)
+        bfiles = [f for f in self.data_dir.rglob('*.bin')]
+        self.data = {}
+        for bf in bfiles:
+            assert bf.is_file()
+            log.info(f'Loading {bf.stem} from {bf.as_posix()}')
+            self.data[bf.stem] = np.memmap(
+                bf.as_posix(),
+                dtype=np.uint16,
+                mode='r'
+            )
 
 
 @dataclass
@@ -416,16 +426,6 @@ class ExperimentConfig(BaseConfig):
                 if self.data.meta_vocab_size is not None
                 else 50304
             )
-        self.train_data = np.memmap(
-            self.data.data_dir.joinpath('train.bin'),
-            dtype=np.uint16,
-            mode='r'
-        )
-        self.val_data = np.memmap(
-            self.data.data_dir.joinpath('val.bin'),
-            dtype=np.uint16,
-            mode='r'
-        )
         self._out_dir = Path(self.data.out_dir)
         self._out_dir.mkdir(parents=True, exist_ok=True)
         self.device_type = 'cuda' if torch.cuda.is_available() else 'cpu'

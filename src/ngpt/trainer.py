@@ -231,7 +231,9 @@ class Trainer:
         self.model = DDP(model)  # , device_ids=get_local_rank())
 
     def get_batch(self, split: str) -> tuple[torch.Tensor, torch.Tensor]:
-        data = self.config.train_data if split == 'train' else self.config.val_data
+        # data = self.config.train_data if split == 'train' else self.config.val_data
+        data = self.config.data.data.get(split, None)
+        assert data is not None
         ix = torch.randint(
             len(data) - self.config.model.block_size,
             (self.config.model.batch_size,)
@@ -271,7 +273,7 @@ class Trainer:
     def estimate_loss(self):
         out = {}
         self.model.eval()
-        for split in ['train', 'val']:
+        for split in self.config.data.data.keys():
             losses = torch.zeros(self.config.train.eval_iters)
             for k in range(self.config.train.eval_iters):
                 x, y = self.get_batch(split)
