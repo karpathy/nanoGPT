@@ -10,7 +10,7 @@ import json
 import os
 from pathlib import Path
 import pickle
-from typing import Optional
+from typing import Optional, Any
 from copy import deepcopy
 import tiktoken
 
@@ -67,7 +67,14 @@ PT_DTYPES = {
 }
 
 os.environ['WANDB_CACHE_DIR'] = WB_CACHE_DIR.as_posix()
-os.environ['HF_DATASETS_CACHE'] = HF_DATASETS_CACHE_DIR.as_posix()
+HF_DATASETS_CACHE = os.environ.get('HF_DATASETS_CACHE', None)
+if HF_DATASETS_CACHE is None:
+    log.info(f'Setting HF_DATASETS_CACHE to {HF_DATASETS_CACHE_DIR.as_posix()}')
+    os.environ['HF_DATASETS_CACHE'] = HF_DATASETS_CACHE_DIR.as_posix()
+else:
+    log.info(f'Caught {HF_DATASETS_CACHE.as_posix()=} from env')
+
+# os.environ['HF_DATASETS_CACHE'] = HF_DATASETS_CACHE_DIR.as_posix()
 
 
 
@@ -273,12 +280,17 @@ class OptimizerConfig(BaseConfig):
 class DataConfig(BaseConfig):
     out_dir: str = 'out'
     dataset: str = 'openwebtext'
+    root_path: Optional[Any] = None
 
     def to_str(self):
         return f'dset-{self.dataset}'
 
     def __post_init__(self):
-        self.data_dir = DATA_DIR.joinpath(self.dataset)
+        self._root_path = (
+            DATA_DIR if self.root_path is None
+            else Path(self.root_dir)
+        )
+        self.data_dir = self._root_path.joinpath(self.dataset)
         self.ckpt_dir = CKPT_DIR.joinpath(self.out_dir)
         self.meta_path = self.data_dir.joinpath('meta.pkl')
         self.meta_vocab_size = None

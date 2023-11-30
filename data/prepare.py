@@ -65,12 +65,6 @@ if __name__ == '__main__':
     #         num_rows: 4007
     #     })
     # })
-    outdir = Path(data_dir).joinpath(name)
-    # outdir = Path(os.path.dirname(__file__)).joinpath(name)
-    outdir.mkdir(exist_ok=True, parents=True)
-    print(f'Saving dataset {name} to {outdir}')
-    # takes 54GB in huggingface .cache dir, about 8M documents (8,013,769)
-
     # we now want to tokenize the dataset. first define the encoding function (gpt2 bpe)
     enc = tiktoken.get_encoding("gpt2")
     def process(example):
@@ -81,7 +75,7 @@ if __name__ == '__main__':
         return out
 
     # tokenize the dataset
-    tokenized = split_dataset.map(
+    tokenized = dataset.map(
         process,
         remove_columns=['text'],
         desc="tokenizing the splits",
@@ -95,9 +89,14 @@ if __name__ == '__main__':
 
     # to read the bin files later, e.g. with numpy:
     # m = np.memmap('train.bin', dtype=np.uint16, mode='r')
+    outdir = Path(data_dir).joinpath(name)
+    # outdir = Path(os.path.dirname(__file__)).joinpath(name)
+    outdir.mkdir(exist_ok=True, parents=True)
+    print(f'Saving dataset {name} to {outdir}')
+    # takes 54GB in huggingface .cache dir, about 8M documents (8,013,769)
+
     for split, dset in tokenized.items():
         arr_len = np.sum(dset['len'], dtype=np.uint64)
-        # filename = os.path.join(os.path.dirname(__file__), f'{split}.bin')
         filename = outdir.joinpath(f'{split}.bin')
         dtype = np.uint16 # (can do since enc.max_token_value == 50256 is < 2**16)
         arr = np.memmap(filename.as_posix(), dtype=dtype, mode='w+', shape=(arr_len,))
