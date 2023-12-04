@@ -212,6 +212,30 @@ Note that the code by default uses [PyTorch 2.0](https://pytorch.org/get-started
 - Additional logging around network health (e.g. gradient clip events, magnitudes)
 - Few more investigations around better init etc.
 
+
+## toods [jack]
+
+ - [x] add docker environment
+ - [x] train a model
+ - [ ] add deepspeed and fsdp
+ - [ ] add pipeline parallelism
+ - [ ] add FlashAttention or other efficient transforemr
+ - [ ] add MQA and GQA
+ - [ ] add more datasets
+ - [ ] tokenizer training
+ - [ ] add more models (GPT-3 pre-lm, parallel-layers, etc.)
+ - [ ] check gradient accumulation
+ - [ ] add context parallelism
+ - [ ] add expert parallelism
+ - [ ] add better training setup
+ - [ ] add chronicle
+ - [ ] add other optimizers
+ - [ ] add other schedulers
+ - [ ] add other logging
+ - [ ] add hyperparameter search
+ - [ ] add PEFT
+ - [ ] add better checkpointing
+
 ## troubleshooting
 
 Note that by default this repo uses PyTorch 2.0 (i.e. `torch.compile`). This is fairly new and experimental, and not yet available on all platforms (e.g. Windows). If you're running into related error messages try to disable this by adding `--compile=False` flag. This will slow down the code but at least it will run.

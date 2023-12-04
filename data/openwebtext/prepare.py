@@ -9,7 +9,7 @@ from datasets import load_dataset # huggingface datasets
 
 # number of workers in .map() call
 # good number to use is ~order number of cpu cores // 2
-num_proc = 8
+num_proc = os.cpu_count() // 2
 
 # number of workers in load_dataset() call
 # best number might be different from num_proc above as it also depends on NW speed.
