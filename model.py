@@ -15,6 +15,9 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+import brevitas.nn as qnn
+from brevitas.quant import Int32Bias
+
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
 
@@ -91,6 +94,23 @@ class MLP(nn.Module):
         x = self.dropout(x)
         return x
 
+class QuantMLP(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.quant_inp  = qnn.QuantIdentity(bit_width=4, return_quant_tensor=True)
+        self.c_fc       = qnn.QuantLinear(config.n_embd, 4 * config.n_embd, bias=config.bias, bias_quant=Int32Bias, weight_bit_width=4)
+        self.relu       = qnn.QuantReLU(bit_width=4, return_quant_tensor=True)
+        self.c_proj     = qnn.QuantLinear(4* config.n_embd, config.n_embd, bias=config.bias, bias_quant=Int32Bias, weight_bit_width=4)
+        self.dropout    = qnn.QuantDropout(config.dropout)
+
+    def forward(self, x):
+        x = self.quant_inp(x)
+        x = self.c_fc(x)
+        x = self.relu(x)
+        x = self.c_proj(x)
+        x = self.dropout(x)
+        return x
+
 class Block(nn.Module):
 
     def __init__(self, config):
@@ -98,7 +118,7 @@ class Block(nn.Module):
         self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
         self.attn = CausalSelfAttention(config)
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
-        self.mlp = MLP(config)
+        self.mlp = QuantMLP(config)
 
     def forward(self, x):
         x = x + self.attn(self.ln_1(x))
