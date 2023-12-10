@@ -32,6 +32,11 @@ beta2 = 0.99 # make a bit bigger because number of tokens per iter is small
 
 warmup_iters = 100 # not super necessary potentially
 
+# moe settings
+use_moe = True
+num_experts = 10
+num_experts_per_tok = 2
+
 # on macbook also add
 # device = 'cpu'  # run on cpu only
 # compile = False # do not torch compile the model
