@@ -1,13 +1,18 @@
 """
-Full definition of a GPT Language Model, all of it in this single file.
+RWKV "x051a" model - does not require custom CUDA kernel to train :)
+
 References:
-1) the official GPT-2 TensorFlow implementation released by OpenAI:
-https://github.com/openai/gpt-2/blob/master/src/model.py
-2) huggingface/transformers PyTorch implementation:
-https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
+https://github.com/BlinkDL/RWKV-LM
+
+Inference:
+Always fast, and VRAM will not grow, because RWKV does not need KV cache.
+
+Training:
+Because we are not using custom CUDA kernel here, training is slightly slower than gpt+flash_attn when ctxlen is short.
+Training becomes faster than gpt+flash_attn when ctxlen is long.
 """
 
-import math
+import math, warnings
 import inspect
 from dataclasses import dataclass
 
@@ -26,83 +31,156 @@ class LayerNorm(nn.Module):
     def forward(self, input):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
-class CausalSelfAttention(nn.Module):
+class RWKV_TimeMix_x051a(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, config, layer_id):
         super().__init__()
         assert config.n_embd % config.n_head == 0
-        # key, query, value projections for all heads, but in a batch
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
-        # output projection
-        self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
-        # regularization
-        self.attn_dropout = nn.Dropout(config.dropout)
-        self.resid_dropout = nn.Dropout(config.dropout)
+
+        self.head_size = config.n_embd // config.n_head
         self.n_head = config.n_head
-        self.n_embd = config.n_embd
-        self.dropout = config.dropout
-        # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
-        self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
-        if not self.flash:
-            print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
-            # causal mask to ensure that attention is only applied to the left in the input sequence
-            self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
-                                        .view(1, 1, config.block_size, config.block_size))
 
-    def forward(self, x):
-        B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+        with torch.no_grad():
+            ratio_0_to_1 = layer_id / (config.n_layer - 1)  # 0 to 1
+            ratio_1_to_almost0 = 1.0 - (layer_id / config.n_layer)  # 1 to ~0
+            ddd = torch.ones(1, 1, config.n_embd)
+            for i in range(config.n_embd):
+                ddd[0, 0, i] = i / config.n_embd
 
-        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
-        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+            self.time_maa_k = nn.Parameter(1.0 - torch.pow(ddd, ratio_1_to_almost0))
+            self.time_maa_v = nn.Parameter(1.0 - (torch.pow(ddd, ratio_1_to_almost0) + 0.3 * ratio_0_to_1))
+            self.time_maa_r = nn.Parameter(1.0 - torch.pow(ddd, 0.5 * ratio_1_to_almost0))
+            self.time_maa_g = nn.Parameter(1.0 - torch.pow(ddd, 0.5 * ratio_1_to_almost0))
 
-        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        if self.flash:
-            # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
-        else:
-            # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
-            att = F.softmax(att, dim=-1)
-            att = self.attn_dropout(att)
-            y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
+            decay_speed = torch.ones(self.n_head)
+            for h in range(self.n_head):
+                decay_speed[h] = -6 + 5 * (h / (self.n_head - 1)) ** (0.7 + 1.3 * ratio_0_to_1)
+            self.time_decay = nn.Parameter(decay_speed.unsqueeze(-1))
 
-        # output projection
-        y = self.resid_dropout(self.c_proj(y))
-        return y
+            tmp = torch.zeros(self.n_head)
+            for h in range(self.n_head):
+                tmp[h] = ratio_0_to_1 * (1 - (h / (self.n_head - 1)))
+            self.time_faaaa = nn.Parameter(tmp.unsqueeze(-1))
 
-class MLP(nn.Module):
+        self.time_shift = nn.ZeroPad2d((0, 0, 1, -1))
 
-    def __init__(self, config):
-        super().__init__()
-        self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
-        self.gelu    = nn.GELU()
-        self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
+        self.receptance = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.key = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.value = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.gate = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+
+        self.output = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.ln_x = nn.GroupNorm(self.n_head, config.n_embd, eps=(1e-5)*64)
+
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
-        x = self.c_fc(x)
-        x = self.gelu(x)
-        x = self.c_proj(x)
+        B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+        H, N = self.n_head, self.head_size
+        #
+        # we divide a block into chunks to speed up computation & save vram.
+        # you can try to find the optimal chunk_len for your GPU.
+        # avoid going below 128 if you are using bf16 (otherwise time_decay might be less accurate).
+        #
+        if T % 256 == 0: Q = 256
+        elif T % 128 == 0: Q = 128
+        else:
+            Q = T
+            warnings.warn(f'\n{"#"*80}\n\n{" "*38}Note\nThe GPT-mode forward() should only be called when we are training models.\nNow we are using it for inference for simplicity, which works, but will be very inefficient.\n\n{"#"*80}\n')
+        assert T % Q == 0
+
+        xx = self.time_shift(x) - x
+        xk = x + xx * self.time_maa_k
+        xv = x + xx * self.time_maa_v
+        xr = x + xx * self.time_maa_r
+        xg = x + xx * self.time_maa_g
+        r = self.receptance(xr).view(B, T, H, N).transpose(1, 2) # receptance
+        k = self.key(xk).view(B, T, H, N).permute(0, 2, 3, 1) # key
+        v = self.value(xv).view(B, T, H, N).transpose(1, 2) # value
+        g = F.silu(self.gate(xg)) # extra gate
+
+        w = torch.exp(-torch.exp(self.time_decay.float())) # time_decay
+        u = self.time_faaaa.float() # time_first
+
+        ws = w.pow(Q).view(1, H, 1, 1)
+
+        ind = torch.arange(Q-1, -1, -1, device=r.device).unsqueeze(0).repeat(H, 1)
+        w = w.repeat(1, Q).pow(ind)
+
+        wk = w.view(1, H, 1, Q)
+        wb = wk.transpose(-2, -1).flip(2)
+
+        w = torch.cat([w[:, 1:], u], dim=1)
+        w = F.pad(w, (0, Q))
+        w = torch.tile(w, [Q])
+        w = w[:, :-Q].view(-1, Q, 2*Q - 1)
+        w = w[:, :, Q-1:].view(1, H, Q, Q)
+
+        w = w.to(dtype=r.dtype) # the decay matrix
+        wk = wk.to(dtype=r.dtype)
+        wb = wb.to(dtype=r.dtype)
+        ws = ws.to(dtype=r.dtype)
+
+        state = torch.zeros(B, H, N, N, device=r.device, dtype=r.dtype) # state
+        y = torch.empty(B, H, T, N, device=r.device, dtype=r.dtype) # output
+
+        for i in range(T // Q): # the rwkv-x051a operator
+            rr = r[:, :, i*Q:i*Q+Q, :]
+            kk = k[:, :, :, i*Q:i*Q+Q]
+            vv = v[:, :, i*Q:i*Q+Q, :]
+            y[:, :, i*Q:i*Q+Q, :] = ((rr @ kk) * w) @ vv + (rr @ state) * wb
+            state = ws * state + (kk * wk) @ vv
+
+        y = y.transpose(1, 2).contiguous().view(B * T, C)
+        y = self.ln_x(y).view(B, T, C) * g
+
+        # output projection
+        y = self.dropout(self.output(y))
+        return y
+
+class RWKV_ChannelMix_x051a(nn.Module):
+
+    def __init__(self, config, layer_id):
+        super().__init__()
+
+        self.time_shift = nn.ZeroPad2d((0, 0, 1, -1))
+        with torch.no_grad():
+            ratio_1_to_almost0 = 1.0 - (layer_id / config.n_layer)
+            ddd = torch.ones(1, 1, config.n_embd)
+            for i in range(config.n_embd):
+                ddd[0, 0, i] = i / config.n_embd
+            self.time_maa_k = nn.Parameter(1.0 - torch.pow(ddd, ratio_1_to_almost0))
+            self.time_maa_r = nn.Parameter(1.0 - torch.pow(ddd, ratio_1_to_almost0))
+
+        self.key = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+        self.value = nn.Linear(3 * config.n_embd, config.n_embd, bias=config.bias)
+        self.receptance = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.dropout = nn.Dropout(config.dropout)
+
+    def forward(self, x):
+        xx = self.time_shift(x) - x
+        xk = x + xx * self.time_maa_k
+        xr = x + xx * self.time_maa_r
+
+        x = self.key(xk)
+        x = torch.relu(x) ** 2
+        x = self.value(x)
+        x = torch.sigmoid(self.receptance(xr)) * x
         x = self.dropout(x)
         return x
 
 class Block(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, config, layer_id):
         super().__init__()
         self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
-        self.attn = CausalSelfAttention(config)
+        self.tmix = RWKV_TimeMix_x051a(config, layer_id)
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
-        self.mlp = MLP(config)
+        self.cmix = RWKV_ChannelMix_x051a(config, layer_id)
 
     def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
-        x = x + self.mlp(self.ln_2(x))
+        x = x + self.tmix(self.ln_1(x))
+        x = x + self.cmix(self.ln_2(x))
         return x
 
 @dataclass
@@ -127,7 +205,7 @@ class GPT(nn.Module):
             wte = nn.Embedding(config.vocab_size, config.n_embd),
             wpe = nn.Embedding(config.block_size, config.n_embd),
             drop = nn.Dropout(config.dropout),
-            h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
+            h = nn.ModuleList([Block(config, i) for i in range(config.n_layer)]),
             ln_f = LayerNorm(config.n_embd, bias=config.bias),
         ))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
@@ -141,7 +219,7 @@ class GPT(nn.Module):
         self.apply(self._init_weights)
         # apply special scaled init to the residual projections, per GPT-2 paper
         for pn, p in self.named_parameters():
-            if pn.endswith('c_proj.weight'):
+            if pn.endswith('tmix.output.weight'):
                 torch.nn.init.normal_(p, mean=0.0, std=0.02/math.sqrt(2 * config.n_layer))
 
         # report number of parameters
@@ -267,8 +345,8 @@ class GPT(nn.Module):
         param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
         # create optim groups. Any parameters that is 2D will be weight decayed, otherwise no.
         # i.e. all weight tensors in matmuls + embeddings decay, all biases and layernorms don't.
-        decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
-        nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
+        decay_params = [p for n, p in param_dict.items() if p.dim() >= 2 and 'time_' not in n]
+        nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2 or 'time_' in n]
         optim_groups = [
             {'params': decay_params, 'weight_decay': weight_decay},
             {'params': nodecay_params, 'weight_decay': 0.0}
