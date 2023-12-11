@@ -1,4 +1,6 @@
-# This is WIP
+# nanoRWKV (WIP)
+
+![nanoRWKV](assets/nanoRWKV.png)
 
 # nanoGPT
 
