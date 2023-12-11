@@ -148,7 +148,7 @@ class MoE(nn.Module):
         flat_expert_indices = expert_indices.view(-1)
 
         x = x.repeat_interleave(self.num_experts_per_tok, dim=0)
-        y = torch.empty_like(x).to(torch.bfloat16)
+        y = torch.empty_like(x, dtype=torch.bfloat16, device=x.device)
         for i, expert in enumerate(self.experts):
             y[flat_expert_indices == i] = expert(x[flat_expert_indices == i])
         y = (y.view(*expert_weights.shape, -1) *
