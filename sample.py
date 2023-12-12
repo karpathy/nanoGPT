@@ -8,7 +8,7 @@ import torch
 import tiktoken
 from model import GPTConfig, GPT
 
-# -----------------------------------------------------------------------------
+# setting constance------------------------------------------------------------
 init_from = 'resume' # either 'resume' (from an out_dir) or a gpt2 variant (e.g. 'gpt2-xl')
 out_dir = 'out' # ignored if init_from is not 'resume'
 start = "\n" # or "<|endoftext|>" or etc. Can also specify a file, use as: "FILE:prompt.txt"
@@ -23,6 +23,7 @@ compile = False # use PyTorch 2.0 to compile the model to be faster
 exec(open('configurator.py').read()) # overrides from command line or config file
 # -----------------------------------------------------------------------------
 
+# PyTorch Meta AI framework for python ----------------------------------------
 torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
@@ -30,6 +31,7 @@ torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
+# -----------------------------------------------------------------------------
 
 # model
 if init_from == 'resume':
@@ -46,6 +48,7 @@ if init_from == 'resume':
     model.load_state_dict(state_dict)
 elif init_from.startswith('gpt2'):
     # init from a given GPT-2 model
+    # model starts with pretained data
     model = GPT.from_pretrained(init_from, dict(dropout=0.0))
 
 model.eval()
@@ -64,14 +67,15 @@ if load_meta:
         meta = pickle.load(f)
     # TODO want to make this more general to arbitrary encoder/decoder schemes
     stoi, itos = meta['stoi'], meta['itos']
-    encode = lambda s: [stoi[c] for c in s]
-    decode = lambda l: ''.join([itos[i] for i in l])
+    encode = lambda s: [stoi[c] for c in s]             # encoder takes a string and outputs a list of integers
+    decode = lambda l: ''.join([itos[i] for i in l])    # decoder takes a list of integers and outputs a concatinated string
 else:
     # ok let's assume gpt-2 encodings by default
+    # is responsible for character mapping which is the first step in character level tokenization
     print("No meta.pkl found, assuming GPT-2 encodings...")
     enc = tiktoken.get_encoding("gpt2")
-    encode = lambda s: enc.encode(s, allowed_special={"<|endoftext|>"})
-    decode = lambda l: enc.decode(l)
+    encode = lambda s: enc.encode(s, allowed_special={"<|endoftext|>"}) # encoder takes a string and outputs a list of integers
+    decode = lambda l: enc.decode(l)                                    # decoder takes a list of integers and outputs a concatinated string
 
 # encode the beginning of the prompt
 if start.startswith('FILE:'):
@@ -81,6 +85,7 @@ start_ids = encode(start)
 x = (torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...])
 
 # run generation
+# TODO eliminate the multiple promp issue
 with torch.no_grad():
     with ctx:
         for k in range(num_samples):
