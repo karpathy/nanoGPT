@@ -1,12 +1,14 @@
 # nanoRWKV (WIP)
 
-![nanoRWKV](assets/nanoRWKV.png)
+![nanoRWKV](assets/nanoRWKV-loss.png)
 
 This is RWKV "x051a" which does not require custom CUDA kernel to train, so it works for any GPU / CPU.
 
 Reference: [RWKV-LM](https://github.com/BlinkDL/RWKV-LM) <3
 
 [RWKV.com](https://www.rwkv.com/) <3
+
+![nanoRWKV](assets/nanoRWKV.png)
 
 # nanoGPT
 
