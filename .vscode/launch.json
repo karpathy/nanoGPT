@@ -17,12 +17,12 @@
             "name": "Python: train.py",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/train.py",
+            "program": "${workspaceFolder}/src/train.py",
             "console": "integratedTerminal",
             "args": [
                 "--batch_size=32",
                 "--compile=False",
-                "--wandb_log=True"
+                "--device=cpu",
             ],
         }
     ]

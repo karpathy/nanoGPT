@@ -1,0 +1,13 @@
+name: nano_gpt
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+    - numpy
+    - transformers
+    - datasets
+    - tiktoken
+    - mlflow
+    - tqdm
+    - azure-ai-ml
+    - torch
