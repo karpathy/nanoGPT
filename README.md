@@ -1,3 +1,9 @@
+> [!IMPORTANT]
+> **Moved to new repo**: [`saforem2/wordplay`](https://github.com/saforem2/wordplay)  🎮 💬
+
+---
+
+<details closed><summary><code>nanoGPT</code></summary>
 
 # nanoGPT
 
@@ -225,3 +231,5 @@ For more questions/discussions feel free to stop by **#nanoGPT** on Discord:
 ## acknowledgements
 
 All nanoGPT experiments are powered by GPUs on [Lambda labs](https://lambdalabs.com), my favorite Cloud GPU provider. Thank you Lambda labs for sponsoring nanoGPT!
+
+</details>
