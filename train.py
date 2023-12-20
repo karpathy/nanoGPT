@@ -139,7 +139,7 @@ class Trainer:
         self.ddp = int(os.environ.get('RANK', -1)) != -1
         if self.ddp:
             init_process_group(backend=self.args.backend)
-            print(args)
+            print(self.args)
             self.ddp_rank = int(os.environ['RANK'])
             self.ddp_local_rank = int(os.environ['LOCAL_RANK'])
             self.ddp_world_size = int(os.environ['WORLD_SIZE'])
