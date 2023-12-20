@@ -6,6 +6,7 @@ import pickle
 from contextlib import nullcontext
 import torch
 import tiktoken
+from rich import print
 from model import GPTConfig, GPT
 import argparse
 
@@ -93,5 +94,5 @@ with torch.no_grad():
         for k in range(args.num_samples):
             y = model.generate(x, args.max_new_tokens,
                                temperature=args.temperature, top_k=args.top_k)
-            print(decode(y[0].tolist()))
+            print("[bold green]" + decode(y[0].tolist()))
             print('---------------')
