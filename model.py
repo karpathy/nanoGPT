@@ -205,7 +205,7 @@ class SigSoftmax(nn.Module):
     def __init__(self, config, dim=-1):
         super().__init__()
         self.dim = dim
-        self.base = config.base
+        self.base = config.sigsoftmax_base
 
         # Set the base of the exponent
         if config.sigsoftmax_use_euler_base:

@@ -7,7 +7,7 @@ dataset="shakespeare_char"
 python3 "data/${dataset}/prepare.py"
 
 # softmax_variation=("softmax" "constantmax" "polymax" "softermax" "sigsoftmax" "sigsoftmax_base2")
-softmax_variation=("constantmax" "polymax" "softermax" "sigsoftmax" "sigsoftmax_base2")
+softmax_variation=("constantmax" "polymax" "softermax" "sigsoftmax")
 
 n_layer="3"
 n_head="3"
