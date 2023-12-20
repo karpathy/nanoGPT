@@ -72,3 +72,4 @@ wandb==0.15.12
 Werkzeug==3.0.1
 xxhash==3.4.1
 yarl==1.9.2
+rich==13.5.3
