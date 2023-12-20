@@ -40,10 +40,10 @@ class RMSNorm(nn.Module):
 # Softmax base 2, with option to remove max subtraction
 class Softermax(nn.Module):
     """ Base-2 Softmax with option to remove max subtraction"""
-    def __init__(self, dim=-1, subtract_max=True):
+    def __init__(self, config, dim=-1):
         super().__init__()
         self.dim = dim
-        self.subtract_max = subtract_max
+        self.subtract_max = config.softermax_use_xmax
 
     def forward(self, x):
         if self.subtract_max:
@@ -52,22 +52,28 @@ class Softermax(nn.Module):
         e_x = torch.pow(2.0, x)
         return e_x / e_x.sum(dim=self.dim, keepdim=True)
 
-# Softmax with learnable parameters for xmax and denominator
+# Softmax variation with learnable constant parameters for xmax and denominator
 class Constantmax(nn.Module):
-    """ Softmax with learnable parameters for xmax and denominator """
-    def __init__(self, dim=-1, initial_gamma=500):
+    """ Constant learnable parameters for xmax and denominator """
+    def __init__(self, config, dim=-1):
         super().__init__()
-        self.dim = dim
 
         # learnable 'xmax' - beta
-        self.beta = nn.Parameter(torch.Tensor([0.0]))
+        self.beta = nn.Parameter(torch.Tensor([config.constantmax_initial_beta]))
 
         # denominator - gamma
-        self.gamma = nn.Parameter(torch.Tensor([initial_gamma]))
+        self.gamma = nn.Parameter(torch.Tensor([config.constantmax_initial_gamma]))
+
+        # Set the base of the exponent
+        if config.constantmax_use_euler_base:
+          # equivalent to 'e'
+          self.constantmax_base = torch.exp(torch.tensor(1.0))
+        else:
+          self.constantmax_base = config.constantmax_base
 
     def forward(self, x):
         x = x - self.beta
-        e_x = torch.exp(x)
+        e_x = torch.pow(constantmax_base, x)
         return e_x / self.gamma
 
 # Constantmax Quantized
@@ -87,7 +93,7 @@ class const_quan(torch.autograd.Function):
     @staticmethod
     def forward(ctx, beta=None, gamma=None):
         #scaling factor for beta and gamma while doing quantization
-        scale_beta=100#scaling factor for quantization, should make it as parameter
+        scale_beta=100 #scaling factor for quantization, should make it as parameter
         scale_gamma=10
         beta = quantize(beta, scale_beta)
         gamma = quantize(gamma, scale_gamma)
@@ -101,42 +107,42 @@ _const_quan=const_quan.apply
 
 class Constantmax_quan(nn.Module):
     """ Base-e Softmax with option to remove max subtraction"""
-    def __init__(self, dim=-1, initial_gamma=500):
+    def __init__(self, config, dim=-1):
         super().__init__()
         self.dim = dim
 
         # demonimator - gamma
-        self.gamma = nn.Parameter(torch.Tensor([initial_gamma]))
+        self.gamma = nn.Parameter(torch.Tensor([config.constantmax_initial_gamma]))
 
         # learnable 'xmax' - beta
-        self.beta = nn.Parameter(torch.Tensor([0.0]))
+        self.beta = nn.Parameter(torch.Tensor([config.constantmax_initial_beta]))
 
-        self.fake_beta=None
-        self.fake_gamma=None
+        self.fake_beta = None
+        self.fake_gamma = None
 
     def forward(self, x):
         if self.training:
             #print('fake_beta:', self.fake_beta)
             #print('fake_gamma:', self.fake_gamma)
-            self.fake_beta,self.fake_gamma=_const_quan(self.beta,self.gamma)
+            self.fake_beta, self.fake_gamma=_const_quan(self.beta, self.gamma)
             x = x - self.fake_beta
             e_x = torch.exp(x)
             return e_x / self.fake_gamma
         else:
             scale_beta=100 #scaling factor for quantization, should make it as parameter
             scale_gamma=10
-            x = x - dequantize(quantize(self.beta,scale_beta),scale_beta)
+            x = x - dequantize(quantize(self.beta,scale_beta), scale_beta)
             e_x = torch.exp(x)
-            return e_x/dequantize(quantize(self.gamma,scale_gamma),scale_gamma)
+            return e_x/dequantize(quantize(self.gamma,scale_gamma), scale_gamma)
 
 # Like softermax, but parameterized to permit exploration of bases greater than 2
 class Strongermax(nn.Module):
-    """ Base-2 Softmax with option to remove max subtraction"""
-    def __init__(self, dim=-1, subtract_max=True, strength=2):
+    """ Softmax with ability to increase to 'stronger' bases """
+    def __init__(self, config, dim=-1):
         super().__init__()
-        self.strength = strength
         self.dim = dim
-        self.subtract_max = subtract_max
+        self.strength = config.strongermax_strength
+        self.subtract_max = config.softermax_use_xmax
 
     def forward(self, x):
         if self.subtract_max:
@@ -145,20 +151,18 @@ class Strongermax(nn.Module):
         e_x = torch.pow(self.strength, x)
         return e_x / e_x.sum(dim=self.dim, keepdim=True)
 
-# Polynomial estimate of Softmax
+# Using polynomial instead of exponential for Softmax separation non-linearity
 class Polymax(nn.Module):
-    def __init__(self, x_intercept=-100, y_intercept=1, power=2, divisor=1000.0):
+    def __init__(self, config):
         super().__init__()
 
-        assert(x_intercept < 0) # ensure x_intercepts strictly left of the y-axis
-        self.x_intercept = x_intercept # where to transition from y=0 to m*x+b
-        self.y_intercept = y_intercept # where teh graph crosses y-axis
+        assert(config.polymax_x_intercept < 0) # ensure x_intercept is strictly left of the y-axis
 
-        self.power = power
-        self.divisor = divisor
+        self.x_intercept = config.polymax_x_intercept # where to transition from y=0 to m*x+b
+        self.y_intercept = config.polymax_y_intercept # where teh graph crosses y-axis
 
-        # TODO: create single location for printing the model settings
-        print("Use polymax")
+        self.power = config.polymax_power
+        self.divisor = config.polymax_divisor
 
     def forward(self, x):
         # Overview:
@@ -182,36 +186,52 @@ class Polymax(nn.Module):
 
 # SigSoftmax from https://arxiv.org/abs/1805.10829
 class SigSoftmax(nn.Module):
-    def __init__(self):
+    def __init__(self, config, dim=-1):
         super().__init__()
+        self.dim = dim
 
     def forward(self, inputs):
         exp_x = torch.exp(inputs)
         sig_x = torch.sigmoid(inputs)
+
         numerator = exp_x * sig_x
-        denominator = torch.sum(exp_x * sig_x, dim=-1, keepdim=True)
+        denominator = torch.sum(exp_x * sig_x, dim=self.dim, keepdim=True)
+
         return numerator / denominator
 
-# Base2 variant of SigSoftmax from https://arxiv.org/abs/1805.10829
-class SigSoftmaxBase2(nn.Module):
-    def __init__(self):
+# SigSoftmax from https://arxiv.org/abs/1805.10829
+class SigSoftmax(nn.Module):
+    """ Softmax variant based on arxiv 1805.10829 with added handles for base """
+    def __init__(self, config, dim=-1):
         super().__init__()
+        self.dim = dim
+        self.base = config.base
+
+        # Set the base of the exponent
+        if config.sigsoftmax_use_euler_base:
+          # equivalent to 'e'
+          self.sigsoftmax_base = torch.exp(torch.tensor(1.0))
+        else:
+          # custom base
+          self.sigsoftmaxmax_base = config.sigsoftmax_base
 
     def forward(self, inputs):
 
-        # Base 2 exponent
-        exp2_x = torch.pow(2, inputs)
+        # Set exponent
+        exp_x = torch.pow(self.sigsoftmax_base, inputs)
 
-        # Base 2 sigmoid approximation
-        sig2_x = 1 / (1 + torch.pow(2, -inputs))
+        # Similarly set sigmoid approximation
+        sig_x = 1 / (1 + torch.pow(self.sigsoftmax_base, -inputs))
 
-        numerator = exp2_x * sig2_x
-        denominator = torch.sum(exp2_x * sig2_x, dim=-1, keepdim=True)
+        # calculation of numerator and denominator
+        numerator = exp_x * sig_x
+        denominator = torch.sum(exp_x * sig_x, dim=self.dim, keepdim=True)
 
         return numerator / denominator
 
-class RotaryEmbedding(nn.Module):
+# POSITIONAL EMBEDDINGS
 
+class RotaryEmbedding(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.dim = config.n_embd
@@ -310,8 +330,6 @@ class CausalSelfAttention(nn.Module):
         self.n_head = config.n_head
         self.n_embd = config.n_embd
         self.dropout = config.dropout
-        # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
-        self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
 
         # Rotary Positional Embeddings
         self.rotary_emb = None
@@ -322,42 +340,31 @@ class CausalSelfAttention(nn.Module):
                 self.rotary_emb = ShortRope(config)
 
         # Softmax Variant Selection
-        self.use_softmax_variant = config.use_softmax_variant
-        self.softmax_variant = config.softmax_variant
-        if self.use_softmax_variant == True:
-            # TODO: Add softermax support into flashattention from pytorch 2.0
-            # Select softmax variant
-            self.softmax_variant = config.softmax_variant
-
-            if self.softmax_variant == "softermax":
-              self.use_softermax_xmax = config.use_softermax_xmax
-              self.softmax_layer = Softermax(subtract_max=self.use_softermax_xmax)
-
-            if self.softmax_variant == "constantmax":
-              self.use_softermax_xmax = config.use_softermax_xmax
-              self.constantmax_constant = config.constantmax_constant
-              self.softmax_layer = Constantmax()
-
-            if self.softmax_variant == "constantmax_quan":
-                self.use_softermax_xmax = config.use_softermax_xmax
-                self.softmax_layer = Constantmax_quan()
-
-            if self.softmax_variant == "strongermax":
-              self.use_softermax_xmax = config.use_softermax_xmax
-              self.softmax_layer = Strongermax(subtract_max=self.use_softermax_xmax,strength=config.strongermax_strength)
-
-            if self.softmax_variant == "polymax":
-              self.softmax_layer = Polymax()
-
-            if self.softmax_variant == "sigsoftmax":
-              self.softmax_layer = SigSoftmax()
-
-            if self.softmax_variant == "sigsoftmax_base2":
-              self.softmax_layer = SigSoftmaxBase2()
-
-            self.flash = False
-        else:
+        self.softmax_variant_attn = config.softmax_variant_attn
+        if self.softmax_variant_attn == "softmax":
+            # Enable flash attention, which is compatible with 'softmax'
             self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
+        else:
+            # Remove flash attention (only compatible with 'softmax')
+            self.flash = False
+
+            if self.softmax_variant_attn == "softermax":
+              self.softmax_layer = Softermax(config)
+
+            if self.softmax_variant_attn == "constantmax":
+              self.softmax_layer = Constantmax(config)
+
+            if self.softmax_variant_attn == "constantmax_quan":
+                self.softmax_layer = Constantmax_quan(config)
+
+            if self.softmax_variant_attn == "strongermax":
+              self.softmax_layer = Strongermax(config)
+
+            if self.softmax_variant_attn == "polymax":
+              self.softmax_layer = Polymax(config)
+
+            if self.softmax_variant_attn == "sigsoftmax":
+              self.softmax_layer = SigSoftmax(config)
 
         if not self.flash:
             print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
@@ -384,7 +391,7 @@ class CausalSelfAttention(nn.Module):
             # manual implementation of attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
             att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
-            if self.use_softmax_variant:
+            if self.softmax_variant_attn != 'softmax':
                 att = self.softmax_layer(att)
             else:
                 att = F.softmax(att, dim=-1)
@@ -396,6 +403,7 @@ class CausalSelfAttention(nn.Module):
         y = self.resid_dropout(self.c_proj(y))
         return y
 
+# Activation variations
 class SquaredReLU(nn.Module):
     def __init__(self):
         super().__init__()
@@ -409,13 +417,13 @@ class MLP(nn.Module):
         super().__init__()
         self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
         # TODO: Change name of self.gelu to something like "self.activation_variant"
-        if config.use_relu:
+        if config.activation_variant == "relu":
           print("Use ReLU")
           self.gelu = nn.ReLU()
-        elif config.use_squared_relu:
+        if config.activation_variant == "squared_relu":
           print("Use Squared ReLU")
           self.gelu = SquaredReLU()
-        else:
+        if config.activation_variant == "gelu":
           print("Use GELU")
           self.gelu    = nn.GELU()
         self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
@@ -432,10 +440,12 @@ class Block(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        if config.use_rmsnorm:
+
+        if config.layernorm_variant == 'rmsnorm':
             self.ln_1 = RMSNorm(config.n_embd)
             self.ln_2 = RMSNorm(config.n_embd)
-        else:
+
+        if config.layernorm_variant == 'layernorm':
             self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
             self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
 
@@ -463,27 +473,47 @@ class GPTConfig:
     dropout: float = 0.0
 
     # Softmax Alternatives and Options
-    use_softmax_variant: bool = False
-    softmax_variant: str = "softermax" # Choices: "softermax" "sigsoftmax" "sigsoftmax_base2" "polymax" "strongermax" "constantmax"
-    use_softermax_xmax: bool = True # Softermax Option active is softermax selected - True: uses (x - x_max) normalization; False: removes normalization (potential overflow)
-    constantmax_constant: int = 1000 # denominator to utilize for Constantmax
-    strongermax_strength: int = 2 # Softermax Option active is softermax selected - True: uses (x - x_max) normalization; False: removes normalization (potential overflow)
+    softmax_variant_attn: str = "softmax" # Choices: "softmax" "softermax" "sigsoftmax" "polymax" "strongermax" "constantmax"
+    softmax_variant_output: str = "softmax" # Choices: "softmax" "softermax" "sigsoftmax" "polymax" "strongermax" "constantmax"
+
+    ## Constantmax Options
+    constantmax_initial_beta: float = 0.0 # denominator to utilize for Constantmax
+    constantmax_initial_gamma: float = 1.0 # denominator to utilize for Constantmax
+    constantmax_use_euler_base: bool = True # use 'e' as base for Constantmax
+    constantmax_base: float = 2.0 # denominator to utilize for Constantmax
+
+    ## Softermax options
+    softermax_use_xmax: bool = True # Softermax Option active is softermax selected - True: uses (x - x_max) normalization; False: removes normalization (potential overflow)
+
+    ## Polymax options
+    polymax_x_intercept: float = -100.0
+    polymax_y_intercept: float = 1.0
+    polymax_power: float = 2.0
+    polymax_divisor: float = 1000.0
+
+    ## SigSoftmaxBase
+    sigsoftmax_use_euler_base: bool = True # use 'e' as base for Constantmax
+    sigsoftmax_base: float = 2.0 # denominator to utilize for Constantmax
+
+    ## Strongermax options
+    strongermax_strength: float = 2.0 # Softermax with option of 'stronger' (larger integer) bases
 
     # Positional Embeddings Variations
+    use_abs_pos_embeddings: bool = False # Note: one can use this AND rotary embeddings
     use_rotary_embeddings: bool = True # If True, uses rotary embeddings, else use conventional absolute position encoding
-    rope_variant: str = "shortrope" # options: "shortrope", "rope
+    rope_variant: str = "rope" # options: "shortrope", "rope"
     shortrope_length: int = 8 # number of embeddings to use in shortrope
-    use_abs_pos_embeddings: bool = True # If True, uses rotary embeddings, else use conventional absolute position encoding
 
     # Structuring Options, remember to compile the model
     use_post_ln: bool = True
     use_pre_ln: bool = False
 
     # Layernorm Alternatives and Options
-    use_rmsnorm: bool = True # Add option for RMSNorm in place of LayerNorm: https://arxiv.org/abs/1910.07467
-    use_relu: bool = False #True: relu squared, False: do not utilize
-    use_squared_relu: bool = False #True: utilize relu squared, False: do not utilize
+    layernorm_variant: str = "rmsnorm" # Current options "rmsnorm" or "layernorm"
     bias: bool = False # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+
+    # Activation Alternatives
+    activation_variant: str = "gelu" # Current options "gelu", "relu", "squared_relu"
 
 class GPT(nn.Module):
 
@@ -491,48 +521,42 @@ class GPT(nn.Module):
         super().__init__()
         assert config.vocab_size is not None
         assert config.block_size is not None
+
         self.config = config
+
+        if config.layernorm_variant == "layernorm":
+            self.normalization_variant = LayerNorm(config.n_embd, bias=config.bias)
+        if config.layernorm_variant == "rmsnorm":
+            self.normalization_variant = RMSNorm(config.n_embd)
 
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
             wpe = nn.Embedding(config.block_size, config.n_embd),
             drop = nn.Dropout(config.dropout),
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
-            ln_f = LayerNorm(config.n_embd, bias=config.bias),
+            ln_f = self.normalization_variant,
         ))
 
-        self.use_softmax_variant = config.use_softmax_variant
-        self.softmax_variant = config.softmax_variant
+        # Select softmax variant for output layer
+        self.softmax_variant_output = config.softmax_variant_output
+        if self.softmax_variant_output != "softmax":
+            if self.softmax_variant_output == "softermax":
+                self.softmax_layer_output = Softermax(config)
 
-        if self.use_softmax_variant == True:
-            # Select softmax variant
-            self.softmax_variant = config.softmax_variant
+            if self.softmax_variant_output == "constantmax":
+                self.softmax_layer_output = Constantmax(config)
 
-            if self.softmax_variant == "softermax":
-              self.use_softermax_xmax = config.use_softermax_xmax
-              self.softmax_layer = Softermax(subtract_max=self.use_softermax_xmax)
+            if self.softmax_variant_output == "constantmax_quan":
+                self.softmax_layer_output = Constantmax_quan(config)
 
-            if self.softmax_variant == "constantmax":
-              self.use_softermax_xmax = config.use_softermax_xmax
-              self.constantmax_constant = config.constantmax_constant
-              self.softmax_layer = Constantmax()
+            if self.softmax_variant_output == "strongermax":
+              self.softmax_layer_output = Strongermax(config)
 
-            if self.softmax_variant == "constantmax_quan":
-                self.use_softermax_xmax = config.use_softermax_xmax
-                self.softmax_layer = Constantmax_quan()
+            if self.softmax_variant_output == "polymax":
+              self.softmax_layer_output = Polymax(config)
 
-            if self.softmax_variant == "strongermax":
-              self.use_softermax_xmax = config.use_softermax_xmax
-              self.softmax_layer = Strongermax(subtract_max=self.use_softermax_xmax, strength=config.strongermax_strength)
-
-            if self.softmax_variant == "polymax":
-              self.softmax_layer = Polymax()
-
-            if self.softmax_variant == "sigsoftmax":
-              self.softmax_layer = SigSoftmax()
-
-            if self.softmax_variant == "sigsoftmax_base2":
-              self.softmax_layer = SigSoftmaxBase2()
+            if self.softmax_variant_output == "sigsoftmax":
+              self.softmax_layer_output = SigSoftmax(config)
 
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         # with weight tying when using torch.compile() some warnings get generated:
@@ -730,8 +754,8 @@ class GPT(nn.Module):
                 logits[logits < v[:, [-1]]] = -float('Inf')
 
             probs = None
-            if self.config.use_softmax_variant:
-                probs = self.softmax_layer(logits)
+            if self.config.softmax_variant_output != 'softmax':
+                probs = self.softmax_layer_output(logits)
             else:
                 probs = F.softmax(logits, dim=-1)
             assert probs != None

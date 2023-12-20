@@ -49,25 +49,44 @@ def parse_args():
     model_group.add_argument('--n_head', default=6, type=int)
     model_group.add_argument('--n_embd', default=384, type=int)
     model_group.add_argument('--dropout', default=0.2, type=float)
-    model_group.add_argument('--bias', default=False, action=argparse.BooleanOptionalAction)
-    model_group.add_argument('--use_post_ln', default=False, action=argparse.BooleanOptionalAction)
+    model_group.add_argument('--use_post_ln', default=True, action=argparse.BooleanOptionalAction)
 
-    # Norm variations
-    model_group.add_argument('--use_rmsnorm', default=True, action=argparse.BooleanOptionalAction)
+    # NORM VARIATIONS
+    model_group.add_argument("--layernorm_variant", type=str, default="rmsnorm", choices=["rmsnorm", "layernorm"])
+    model_group.add_argument('--bias', default=False, action=argparse.BooleanOptionalAction, help="only used for layernorm variation option")
 
-    # Positional Embedding variations
+    # ACTIVATION VARIATIONS
+    model_group.add_argument("--activation_variant", type=str, default="gelu", choices=["relu", "squared_relu"])
+
+    # POSITIONAL EMBEDDING VARIATIONS
     model_group.add_argument('--use_rotary_embeddings', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument("--rope_variant", type=str, default="rope", choices=["shortrope", "rope"])
     model_group.add_argument("--shortrope_length", type=int, default="16", help="number of embeddings to use with rope, must be <= length, and be even")
     model_group.add_argument('--use_abs_pos_embeddings', default=False, action=argparse.BooleanOptionalAction)
 
-    # Softmax variations
-    model_group.add_argument('--use_softmax_variant', default=False, action=argparse.BooleanOptionalAction)
-    model_group.add_argument("--softmax_variant", type=str, default="softermax", choices=["constantmax_quan", "constantmax", "polymax", "strongermax", "softermax", "sigsoftmax", "sigsoftmax_base2"])
+    # SOFTMAX VARIATIONS
+    ## Selection of softmax variation for attention and output layers
+    model_group.add_argument("--softmax_variant_attn", type=str, default="softermax", choices=["constantmax_quan", "constantmax", "polymax", "strongermax", "softermax", "sigsoftmax"])
+    model_group.add_argument("--softmax_variant_output", type=str, default="softermax", choices=["constantmax_quan", "constantmax", "polymax", "strongermax", "softermax", "sigsoftmax"])
 
-    # Custom Softmax Variation Options
-    model_group.add_argument('--use_softermax_xmax', default=False, action=argparse.BooleanOptionalAction)
-    model_group.add_argument("--strongermax_strength", type=int, default=2)
+    ## Custom Softmax Variation Options
+    model_group.add_argument("--constantmax_initial_beta", type=float, default=0.0)
+    model_group.add_argument("--constantmax_initial_gamma", type=float, default=100.0)
+    model_group.add_argument('--constantmax_use_euler_base', default=True, action=argparse.BooleanOptionalAction)
+    model_group.add_argument("--constantmax_base", type=float, default=2.0)
+
+    model_group.add_argument("--polymax_x_intercept", type=float, default=-100.0)
+    model_group.add_argument("--polymax_y_intercept", type=float, default=1.0) ##TODO
+    model_group.add_argument("--polymax_power", type=float, default=2.0)
+    model_group.add_argument("--polymax_divisor", type=float, default=1000.0)
+
+    model_group.add_argument("--sigsoftmax_use_euler_base", type=float, default=2.0)
+    model_group.add_argument("--sigsoftmax_base", type=int, default=2.0)
+
+    model_group.add_argument("--strongermax_strength", type=float, default=2.0)
+
+    # Softermax Specific Options
+    model_group.add_argument('--softermax_use_xmax', default=True, action=argparse.BooleanOptionalAction)
 
     # Optimizer args
     training_group.add_argument('--learning_rate', default=1e-3, type=float)
