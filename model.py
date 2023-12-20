@@ -73,7 +73,7 @@ class Constantmax(nn.Module):
 
     def forward(self, x):
         x = x - self.beta
-        e_x = torch.pow(constantmax_base, x)
+        e_x = torch.pow(self.constantmax_base, x)
         return e_x / self.gamma
 
 # Constantmax Quantized

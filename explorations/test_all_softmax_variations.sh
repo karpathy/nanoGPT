@@ -6,46 +6,42 @@ cd ../
 dataset="shakespeare_char"
 python3 "data/${dataset}/prepare.py"
 
-softmax_variation=("constantmax" "polymax" "softermax" "sigsoftmax")
+# softmax_variation=("softmax" "constantmax" "polymax" "softermax" "sigsoftmax" "sigsoftmax_base2")
+softmax_variation=("constantmax" "polymax" "softermax" "sigsoftmax" "sigsoftmax_base2")
 
-max_iters="3000"
-block_size="256"
+n_layer="3"
+n_head="3"
+n_embd="384"
+max_iters="1000"
+block_size="64"
+timestamp="$(date +%F_%T)"
 notes="check_all_softmax_variations"
+run_name="${dataset}_${softmax_variant}_${max_iters}_${block_size}_${n_layer}_${n_head}_${n_embd}_${notes}"
 
 # Loop over the array
 for softmax_variant in "${softmax_variation[@]}"
 do
+  output_dir="results/${timestamp}_${notes}_${softmax_variant}"
+  if [ ! -d "${output_dir}" ]; then
+    mkdir -p "${output_dir}"
+  fi
+
   python3 train.py \
     --max_iters "$max_iters" \
+    --n_layer "$n_layer" \
+    --n_head "$n_head" \
+    --n_embd "$n_embd" \
     --eval_iters 200 \
     --eval_interval 200 \
     --log_interval 10 \
-    --device cuda \
+    --device cpu \
     --dataset "$dataset" \
-    --use_softmax_variant \
-    --softmax_variant "${softmax_variant}" \
-    --use_softermax_xmax \
-    --tensorboard_project "${dataset}_${softmax_variant}_${max_iters}" \
-    --tensorboard_run_name "${softmax_variant}_${notes}" \
+    --softmax_variant_attn "${softmax_variant}" \
+    --softmax_variant_output "softmax" \
+    --softermax_use_xmax \
+    --tensorboard_run_name "$run_name" \
     --block_size "$block_size" \
-    --out_dir "${dataset}_${softmax_variant}_${max_iters}_${notes}" \
-    --compile
+    --out_dir "${output_dir}"
+
+  sleep 5
 done
-
-# do one iteration with regular softmax
-softmax_variant="regular_softmax"
-python3 train.py \
-  --max_iters "$max_iters" \
-  --eval_iters 200 \
-  --eval_interval 200 \
-  --log_interval 10 \
-  --device cuda \
-  --dataset "$dataset" \
-  --no-use_softmax_variant \
-  --use_softermax_xmax \
-  --tensorboard_project "${dataset}_${softmax_variant}_${max_iters}" \
-  --tensorboard_run_name "${softmax_variant}_${notes}" \
-  --block_size "$block_size" \
-  --out_dir "${dataset}_${softmax_variant}_${max_iters}_${notes}" \
-  --compile
-

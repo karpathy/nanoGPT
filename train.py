@@ -1,4 +1,5 @@
 import argparse
+from rich import print
 import os
 import time
 from datetime import datetime
@@ -11,9 +12,6 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from torch.utils.tensorboard import SummaryWriter
-
-from torch.utils.tensorboard import SummaryWriter
-
 
 from model import GPTConfig, GPT
 
@@ -66,8 +64,10 @@ def parse_args():
 
     # SOFTMAX VARIATIONS
     ## Selection of softmax variation for attention and output layers
-    model_group.add_argument("--softmax_variant_attn", type=str, default="softermax", choices=["constantmax_quan", "constantmax", "polymax", "strongermax", "softermax", "sigsoftmax"])
-    model_group.add_argument("--softmax_variant_output", type=str, default="softermax", choices=["constantmax_quan", "constantmax", "polymax", "strongermax", "softermax", "sigsoftmax"])
+    model_group.add_argument("--softmax_variant_attn", type=str,
+                             default="softermax", choices=["constantmax_quan", "constantmax", "polymax", "strongermax", "softermax", "sigsoftmax", "softmax"])
+    model_group.add_argument("--softmax_variant_output", type=str,
+                             default="softermax", choices=["constantmax_quan", "constantmax", "polymax", "strongermax", "softermax", "sigsoftmax", "softmax"])
 
     ## Custom Softmax Variation Options
     model_group.add_argument("--constantmax_initial_beta", type=float, default=0.0)
@@ -117,7 +117,6 @@ def parse_args():
     # Tensorboard args
     logging_group.add_argument('--tensorboard_log', default=True, action=argparse.BooleanOptionalAction)
     logging_group.add_argument('--tensorboard_log_dir', type=str, default='logs')
-    logging_group.add_argument('--tensorboard_project', type=str, default='out-test')
     logging_group.add_argument('--tensorboard_run_name', type=str, default='logs-test')
 
     # Wandb args
@@ -235,9 +234,7 @@ class Trainer:
 
         # Tensorboard
         if self.args.tensorboard_log:
-            timestamp = time.strftime("%Y%m%d-%H%M%S" + "_" +
-                                      self.args.tensorboard_project + "_" +
-                                      self.args.tensorboard_run_name)
+            timestamp = time.strftime("%Y%m%d-%H%M%S" + "_" + self.args.tensorboard_run_name)
             log_subpath = os.path.join(self.args.tensorboard_log_dir, timestamp)
             self.writer = SummaryWriter(log_subpath)
 
@@ -377,7 +374,7 @@ class Trainer:
                 if local_iter_num >= 5:
                     mfu = self.raw_model.estimate_mfu(self.args.batch_size * self.args.gradient_accumulation_steps, dt)
                     running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-                print(f"iter {self.iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+                print(f"iter {self.iter_num}: loss {lossf:.4f}, time {dt*1000:.2f} ms, mfu {running_mfu*100:.2f}%")
                 self.log_metrics_non_validation(lossf, running_mfu, self.iter_num)
 
             self.iter_num += 1
