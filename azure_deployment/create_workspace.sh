@@ -2,19 +2,14 @@
 
 #! /usr/bin/sh
 
-# Create random string
-guid=$(cat /proc/sys/kernel/random/uuid)
-suffix=${guid//[-]/}
-suffix=${suffix:0:18}
-
 # Set the necessary variables
 RESOURCE_GROUP="rg-nano-gpt"
 RESOURCE_PROVIDER="Microsoft.MachineLearning"
 REGIONS=("eastus" "westus" "centralus" "northeurope" "westeurope")
 RANDOM_REGION=${REGIONS[$RANDOM % ${#REGIONS[@]}]}
 WORKSPACE_NAME="mlw-nano-gpt"
-COMPUTE_INSTANCE="ci${suffix}"
-COMPUTE_CLUSTER="aml-cluster"
+COMPUTE_INSTANCE="ci-nano-gpt"
+COMPUTE_CLUSTER="aml-cluster-nano-gpt"
 
 # Register the Azure Machine Learning resource provider in the subscription
 echo "Register the Machine Learning resource provider:"

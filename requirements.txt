@@ -1,4 +1,3 @@
-torch
 numpy
 transformers
 datasets
@@ -6,3 +5,4 @@ tiktoken
 mlflow
 tqdm
 azure-ai-ml
+torch

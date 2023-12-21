@@ -14,15 +14,20 @@
         },
         // Run train.py with arguments
         {
-            "name": "Python: train.py",
+            "name": "Train small model for debugging",
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/src/train.py",
             "console": "integratedTerminal",
             "args": [
-                "--batch_size=32",
+                "--batch_size=2",
                 "--compile=False",
                 "--device=cpu",
+                "--gradient_accumulation_steps=2",
+                "--n_layer=4",
+                "--n_head=4",
+                "--n_embd=384",
+                "--block_size=128",
             ],
         }
     ]
