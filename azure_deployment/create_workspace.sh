@@ -2,12 +2,18 @@
 
 #! /usr/bin/sh
 
+# Make sure the Azure ml CLI is installed
+az extension add -n ml
+
+echo "Verify version of az ml CLI, it should be >=2.22.0"
+az extension show --name ml --output table
+
 # Set the necessary variables
 RESOURCE_GROUP="rg-nano-gpt"
 RESOURCE_PROVIDER="Microsoft.MachineLearning"
 REGIONS=("eastus" "westus" "centralus" "northeurope" "westeurope")
 RANDOM_REGION=${REGIONS[$RANDOM % ${#REGIONS[@]}]}
-WORKSPACE_NAME="mlw-nano-gpt"
+WORKSPACE_NAME="ml-nano-gpt"
 COMPUTE_INSTANCE="ci-nano-gpt"
 COMPUTE_CLUSTER="aml-cluster-nano-gpt"
 
@@ -32,6 +38,6 @@ az ml compute create --name ${COMPUTE_INSTANCE} --size STANDARD_DS11_V2 --type C
 echo "Creating a compute cluster with name: " $COMPUTE_CLUSTER
 az ml compute create --name ${COMPUTE_CLUSTER} --size STANDARD_DS11_V2 --max-instances 2 --type AmlCompute 
 
-# Create data assets
+# Create data assets for NLP next token prediction datasets (pretraining)
 echo "Create training data asset:"
-az ml data create --type uri_file --name "diabetes-data" --path ./data/diabetes.csv 
+az ml data create --type uri_file --name "shakespeare-corpus" --path ./data/shakespeare.txt

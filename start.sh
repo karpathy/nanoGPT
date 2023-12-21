@@ -8,4 +8,5 @@ if [ $? -eq 0 ]; then
 else
     echo "nano_gpt environment does not exist. Let's create it..."
     conda env create -f environment.yml
+    conda activate nano_gpt
 fi

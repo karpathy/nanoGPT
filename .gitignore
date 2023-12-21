@@ -1,3 +1,6 @@
 *.env
 *.pt
 *.pyc
+*.bin
+*.pkl
+*.txt
