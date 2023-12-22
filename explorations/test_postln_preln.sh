@@ -9,15 +9,13 @@ python3 "data/${dataset}/prepare.py"
 ordering_options=("--use_post_ln" "--no-use_post_ln")
 
 device="cuda"
-n_layer="2"
-n_head="3"
+n_layer="6"
+n_head="6"
 n_embd="384"
-max_iters="50"
-block_size="32"
-eval_iters="50"
-eval_interval="50"
+max_iters="5000"
+eval_iters="200"
+eval_interval="250"
 log_interval="10"
-max_iters="3000"
 block_size="256"
 
 timestamp="$(date +%F_%T)"
@@ -26,7 +24,7 @@ notes="test_post_ln_and_pre_ln"
 # Loop over the array
 for ordering_option in "${ordering_options[@]}"
 do
-  run_name="${timestamp}_${ordering_options}_${notes}"
+  run_name="${timestamp}_${ordering_option}_${notes}"
   output_dir="${timestamp}_${run_name}"
   python3 train.py \
     --max_iters "$max_iters" \
