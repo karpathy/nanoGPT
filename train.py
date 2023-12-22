@@ -65,9 +65,9 @@ def parse_args():
     # SOFTMAX VARIATIONS
     ## Selection of softmax variation for attention and output layers
     model_group.add_argument("--softmax_variant_attn", type=str,
-                             default="softermax", choices=["constantmax_quan", "constantmax", "polymax", "strongermax", "softermax", "sigsoftmax", "softmax"])
+                             default="softmax", choices=["constantmax_quan", "constantmax", "polymax", "strongermax", "softermax", "sigsoftmax", "softmax"])
     model_group.add_argument("--softmax_variant_output", type=str,
-                             default="softermax", choices=["constantmax_quan", "constantmax", "polymax", "strongermax", "softermax", "sigsoftmax", "softmax"])
+                             default="softmax", choices=["constantmax_quan", "constantmax", "polymax", "strongermax", "softermax", "sigsoftmax", "softmax"])
 
     ## Custom Softmax Variation Options
     model_group.add_argument("--constantmax_initial_beta", type=float, default=0.0)
