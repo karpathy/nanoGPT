@@ -12,6 +12,14 @@
             "console": "integratedTerminal",
             "justMyCode": true
         },
+        // Prepare dataset
+        {
+            "name": "Prepare Shakespeare dataset",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/data/shakespeare_char/prepare.py",
+            "console": "integratedTerminal"
+        },
         // Run train.py with arguments
         {
             "name": "Train small model for debugging",
@@ -28,6 +36,18 @@
                 "--n_head=4",
                 "--n_embd=384",
                 "--block_size=128",
+            ],
+        },
+        {
+            "name": "Train with GPU",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/train.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--batch_size=32",
+                "--compile=False",
+                "--device=gpu"
             ],
         }
     ]
