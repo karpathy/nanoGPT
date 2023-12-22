@@ -9,9 +9,12 @@ echo "Verify version of az ml CLI, it should be >=2.22.0"
 az extension show --name ml --output table
 
 # Set the necessary variables
-RESOURCE_GROUP="rg-nano-gpt"
+# Read Resource Group name from the config file
+source ./azure_deployment/config.conf
+echo "Resource group name: " $RESOURCE_GROUP
+
 RESOURCE_PROVIDER="Microsoft.MachineLearning"
-REGIONS=("eastus" "westus" "centralus" "northeurope" "westeurope")
+REGIONS=("eastus")
 RANDOM_REGION=${REGIONS[$RANDOM % ${#REGIONS[@]}]}
 WORKSPACE_NAME="ml-nano-gpt"
 COMPUTE_INSTANCE="ci-nano-gpt"
