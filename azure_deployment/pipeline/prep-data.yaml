@@ -1,0 +1,17 @@
+$schema: https://azuremlschemas.azureedge.net/latest/commandComponent.schema.json
+name: prep_data
+display_name: Prepare training data
+version: 1
+type: command
+inputs:
+  input_data: 
+    type: uri_file
+outputs:
+  output_data:
+    type: uri_folder
+code: ./src
+environment: azureml:AzureML-sklearn-0.24-ubuntu18.04-py37-cpu@latest
+command: >-
+  python prep-data.py 
+  --input_data 
+{{outputs.output_data}}

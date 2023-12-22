@@ -14,8 +14,6 @@ source ./azure_deployment/config.conf
 echo "Resource group name: " $RESOURCE_GROUP
 
 RESOURCE_PROVIDER="Microsoft.MachineLearning"
-REGIONS=("eastus")
-RANDOM_REGION=${REGIONS[$RANDOM % ${#REGIONS[@]}]}
 WORKSPACE_NAME="ml-nano-gpt"
 COMPUTE_INSTANCE="ci-nano-gpt"
 COMPUTE_CLUSTER="aml-cluster-nano-gpt"
@@ -26,21 +24,31 @@ az provider register --namespace $RESOURCE_PROVIDER
 
 # Create the resource group and workspace and set to default
 echo "Create a resource group and set as default:"
-az group create --name $RESOURCE_GROUP --location $RANDOM_REGION
+az group create --name $RESOURCE_GROUP --location $REGION
 az configure --defaults group=$RESOURCE_GROUP
+
+echo "Sleeping for 30 seconds to allow the resource group to be created..."
+sleep 30
 
 echo "Create an Azure Machine Learning workspace:"
 az ml workspace create --name $WORKSPACE_NAME 
 az configure --defaults workspace=$WORKSPACE_NAME 
 
+echo "Sleeping for 30 seconds to allow the ml workspace to be created..."
+sleep 30
+
 # Create compute instance
 echo "Creating a compute instance with name: " $COMPUTE_INSTANCE
-az ml compute create --name ${COMPUTE_INSTANCE} --size STANDARD_DS11_V2 --type ComputeInstance 
+az ml compute create --name ${COMPUTE_INSTANCE} --size ${COMPUTE_VM} --type ComputeInstance 
 
 # Create compute cluster
 echo "Creating a compute cluster with name: " $COMPUTE_CLUSTER
-az ml compute create --name ${COMPUTE_CLUSTER} --size STANDARD_DS11_V2 --max-instances 2 --type AmlCompute 
+az ml compute create --name ${COMPUTE_CLUSTER} --size ${COMPUTE_VM} --max-instances 2 --type AmlCompute 
 
 # Create data assets for NLP next token prediction datasets (pretraining)
 echo "Create training data asset:"
-az ml data create --type uri_file --name "shakespeare-corpus" --path ./data/shakespeare.txt
+az ml data create --type uri_file --name "shakespeare-corpus" --path ./azure_deployment/data/shakespeare.txt
+
+# Set idle shutdown timer to 15 minutes
+echo "Setting idle shutdown timer to 15 minutes for compute instance: " $COMPUTE_INSTANCE
+az ml compute update --name ${COMPUTE_INSTANCE} --idle-shutdown-timeout 900
