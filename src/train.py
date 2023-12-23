@@ -29,9 +29,6 @@ from torch.distributed import init_process_group, destroy_process_group
 
 from model import GPTConfig, GPT
 
-import mlflow
-
-mlflow.autolog()
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
@@ -75,14 +72,20 @@ backend = 'nccl' # 'nccl', 'gloo', etc.
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'float16' # 'float32' or 'bfloat16'
 compile = True # use PyTorch 2.0 to compile the model to be faster
+experiment_name="nano-gpt-training"
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
 config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
 
-# Based on batch size, block size, n_layer, n_head, n_embd, and gradient_accumulation_steps, calculate the total memory requirement in bytes.
-gpu_memory_requirement = batch_size * block_size * (n_layer * (n_embd * n_embd * 2 + n_embd * 3) + n_embd * 2) * gradient_accumulation_steps * 4
+import mlflow
+mlflow.set_experiment(experiment_name)
+mlflow.autolog()
+
+# Save all the config values to mlflow
+for k, v in config.items():
+    mlflow.log_param(k, v)
 
 # various inits, derived attributes, I/O setup
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
@@ -97,7 +100,6 @@ else:
     # if not ddp, we are running on a single gpu, and one process
     master_process = True
     seed_offset = 0
-
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
 torch.manual_seed(1337 + seed_offset)
@@ -106,8 +108,7 @@ torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
 # note: float16 would require us to change the code to use a GradScaler
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
-ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
-
+ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type,dtype=ptdtype)
 # poor man's data loader, TODO evaluate need for actual DataLoader
 data_dir = os.path.join('data', dataset)
 # If .bin files are not present, run the data preprocessing script first.
@@ -124,11 +125,9 @@ def get_batch(split):
     y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
     x, y = x.to(device), y.to(device)
     return x, y
-
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
 best_val_loss = 1e9
-
 # attempt to derive vocab_size from the dataset
 meta_path = os.path.join(data_dir, 'meta.pkl')
 if os.path.exists(meta_path):
@@ -139,10 +138,9 @@ if os.path.exists(meta_path):
 else:
     print(f"vocab_size not found in {meta_path}, using GPT-2 default of 50257")
     vocab_size = 50257
-
 # model init
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
-                  dropout=dropout, vocab_size=vocab_size, bias=bias)
+                dropout=dropout, vocab_size=vocab_size, bias=bias)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -183,22 +181,18 @@ elif init_from.startswith('gpt2'):
 if block_size < model.config.block_size:
     model.crop_block_size(block_size)
 model.to(device)
-
 # optimizer
 optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2))
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
-
 # compile the model
 if compile:
     print("compiling the model... (takes a ~minute)")
     unoptimized_model = model
     model = torch.compile(model) # requires PyTorch 2.0
-
 # wrap model into DDP container
 if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
-
 @torch.no_grad()
 def estimate_loss():
     out = {}
@@ -213,7 +207,6 @@ def estimate_loss():
         out[split] = losses.mean()
     model.train()
     return out
-
 # learning rate decay scheduler (cosine with warmup)
 def get_lr(iter):
     # 1) linear warmup for warmup_iters steps
@@ -227,11 +220,9 @@ def get_lr(iter):
     assert 0 <= decay_ratio <= 1
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
-
 # training loop
 t0 = time.time()
 while True:
-
     # determine the learning rate for this iteration
     if decay_lr:
         lr = get_lr(iter_num)
@@ -239,7 +230,6 @@ while True:
             param_group['lr'] = lr
     else:
         lr = learning_rate
-
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
@@ -247,7 +237,6 @@ while True:
         mlflow.log_metric("train_loss", losses['train'], step=iter_num)
         mlflow.log_metric("val_loss", losses['val'], step=iter_num)
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
             raw_model = model.module if ddp else model
@@ -264,7 +253,6 @@ while True:
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
     if iter_num == 0 and eval_only:
         break
-
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     for micro_step in range(gradient_accumulation_steps):
         X, Y = get_batch('train')
@@ -281,7 +269,6 @@ while True:
         torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
     optimizer.step()
     optimizer.zero_grad(set_to_none=True)
-
     # timing and logging
     t1 = time.time()
     dt = t1 - t0
@@ -291,10 +278,8 @@ while True:
         lossf = loss.item() # loss as float. TODO note CPU-GPU sync! profile, make sure not too slow
         print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms")
     iter_num += 1
-
     # termination conditions
     if iter_num > max_iters:
         break
-
 if ddp:
     destroy_process_group()

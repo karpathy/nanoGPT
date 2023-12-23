@@ -16,6 +16,7 @@ dependencies:
     - tqdm
     - azure-ai-ml
     - pyhocon
+    - azureml-mlflow
   - pytorch
   - torchvision
   - torchaudio
