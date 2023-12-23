@@ -4,3 +4,4 @@
 *.bin
 *.pkl
 *.txt
+mlruns/

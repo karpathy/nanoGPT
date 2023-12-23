@@ -1,4 +1,9 @@
 name: nano_gpt
+channels:
+  - nvidia/label/cuda-11.8.0
+  - pytorch # or pytorch-nightly
+  - conda-forge
+  - defaults
 dependencies:
   - python=3.10
   - pip
@@ -10,5 +15,9 @@ dependencies:
     - mlflow
     - tqdm
     - azure-ai-ml
-    - torch
     - pyhocon
+  - pytorch
+  - torchvision
+  - torchaudio
+  - cuda
+  - pytorch-cuda=11.8

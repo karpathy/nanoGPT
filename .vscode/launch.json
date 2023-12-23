@@ -22,10 +22,12 @@
         },
         // Run train.py with arguments
         {
-            "name": "Train small model for debugging",
+            "name": "Azure Job Debugging",
+            // Set src directory as the current working directory
+            "cwd": "${workspaceFolder}/src",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/src/train.py",
+            "program": "train.py",
             "console": "integratedTerminal",
             "args": [
                 "--batch_size=2",

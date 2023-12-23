@@ -73,13 +73,16 @@ min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchi
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
-dtype = 'bfloat16' # 'float32' or 'bfloat16'
+dtype = 'float16' # 'float32' or 'bfloat16'
 compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
-exec(open('src/configurator.py').read()) # overrides from command line or config file
+exec(open('configurator.py').read()) # overrides from command line or config file
 config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
+
+# Based on batch size, block size, n_layer, n_head, n_embd, and gradient_accumulation_steps, calculate the total memory requirement in bytes.
+gpu_memory_requirement = batch_size * block_size * (n_layer * (n_embd * n_embd * 2 + n_embd * 3) + n_embd * 2) * gradient_accumulation_steps * 4
 
 # various inits, derived attributes, I/O setup
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
@@ -102,16 +105,16 @@ torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
 # note: float16 would require us to change the code to use a GradScaler
-ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16}[dtype]
+ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 # poor man's data loader, TODO evaluate need for actual DataLoader
-data_dir = os.path.join('src/data', dataset)
+data_dir = os.path.join('data', dataset)
 # If .bin files are not present, run the data preprocessing script first.
 if not os.path.exists(os.path.join(data_dir, 'train.bin')):
     import subprocess
     print("Prepare dataset...")
-    subprocess.run(['python', f'src/data/{dataset}/prepare.py', dataset])
+    subprocess.run(['python', f'data/{dataset}/prepare.py', dataset])
 train_data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
 val_data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
 def get_batch(split):
@@ -240,6 +243,9 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
+        # Use mlflow to log metrics to 4 digits after the decimal point
+        mlflow.log_metric("train_loss", losses['train'], step=iter_num)
+        mlflow.log_metric("val_loss", losses['val'], step=iter_num)
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
 
         if losses['val'] < best_val_loss or always_save_checkpoint:
@@ -281,6 +287,7 @@ while True:
     dt = t1 - t0
     t0 = t1
     if iter_num % log_interval == 0 and master_process:
+        
         lossf = loss.item() # loss as float. TODO note CPU-GPU sync! profile, make sure not too slow
         print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms")
     iter_num += 1
