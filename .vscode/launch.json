@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "justMyCode": true
+            "justMyCode": false
         },
         // Prepare dataset
         {
@@ -36,6 +36,7 @@
                 "--n_head=4",
                 "--n_embd=384",
                 "--block_size=128",
+                "--dataset=shakespeare",
             ],
         },
         {

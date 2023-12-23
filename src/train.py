@@ -106,7 +106,12 @@ ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 # poor man's data loader, TODO evaluate need for actual DataLoader
-data_dir = os.path.join('data', dataset)
+data_dir = os.path.join('src/data', dataset)
+# If .bin files are not present, run the data preprocessing script first.
+if not os.path.exists(os.path.join(data_dir, 'train.bin')):
+    import subprocess
+    print("Prepare dataset...")
+    subprocess.run(['python', f'src/data/{dataset}/prepare.py', dataset])
 train_data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
 val_data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
 def get_batch(split):

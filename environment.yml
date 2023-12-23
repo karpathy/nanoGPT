@@ -11,4 +11,4 @@ dependencies:
     - tqdm
     - azure-ai-ml
     - torch
-    - notebook
+    - pyhocon

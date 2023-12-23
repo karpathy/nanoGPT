@@ -14,7 +14,6 @@ source ./azure_deployment/config.conf
 echo "Resource group name: " $RESOURCE_GROUP
 
 RESOURCE_PROVIDER="Microsoft.MachineLearning"
-WORKSPACE_NAME="ml-nano-gpt"
 COMPUTE_INSTANCE="ci-nano-gpt"
 COMPUTE_CLUSTER="aml-cluster-nano-gpt"
 
