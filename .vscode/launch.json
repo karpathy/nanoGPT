@@ -39,8 +39,8 @@
                 "--n_embd=64",
                 "--block_size=64",
                 "--dataset=shakespeare_char",
-                "--eval_interval=500",
-                "--max_iters=2000"
+                "--eval_interval=50",
+                "--max_iters=100",
             ],
         },
         {
@@ -65,6 +65,18 @@
             "console": "integratedTerminal",
             "args": [
                 "--out_dir=outputs"
+            ],
+        },
+        {
+            "name": "Test Pipeline",
+            // Set src directory as the current working directory
+            "cwd": "${workspaceFolder}/src",
+            "type": "python",
+            "request": "launch",
+            "program": "pipeline.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--config_file=./configs/debugging_config.json",
             ],
         },
     ]

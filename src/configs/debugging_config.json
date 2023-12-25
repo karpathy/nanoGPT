@@ -1,0 +1,31 @@
+{
+    "train_params": {
+        "out_dir": "./outputs",
+        "eval_interval": 50,
+        "eval_iters": 50,
+        "log_interval": 10,
+        "always_save_checkpoint": false,
+        "dataset": "shakespeare_char",
+        "batch_size": 2,
+        "block_size": 64,
+        "n_layer": 3,
+        "n_head": 4,
+        "n_embd": 64,
+        "dropout": 0.2,
+        "learning_rate": 0.001,
+        "max_iters": 100,
+        "lr_decay_iters": 100,
+        "min_lr": 0.0001,
+        "beta2": 0.99,
+        "warmup_iters": 50,
+        "device": "cpu",
+        "compile": false,
+        "experiment_name": "nano-gpt-training-autolog",
+        "azure": false
+    },
+    "sample_params": {
+        "out_dir": "./outputs",
+        "device": "cpu",
+        "num_samples": 3
+    }
+}

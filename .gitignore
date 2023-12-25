@@ -6,6 +6,7 @@
 *.txt
 mlruns/
 logs/
+outputs/
 out/
 **/__pycache__/
 **/*.pyc

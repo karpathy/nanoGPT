@@ -39,10 +39,6 @@ eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
-# wandb logging
-wandb_log = False # disabled by default
-wandb_project = 'owt'
-wandb_run_name = 'gpt2' # 'run' + str(time.time())
 # data
 dataset = 'shakespeare_char' # 'openwebtext'
 gradient_accumulation_steps = 5 # used to simulate larger batch sizes
@@ -242,7 +238,6 @@ while True:
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
         # Use mlflow to log metrics to 4 digits after the decimal point
-        mlflow.log_metric("train_loss", losses['train'], step=iter_num)
         mlflow.log_metric("val_loss", losses['val'], step=iter_num)
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
         if losses['val'] < best_val_loss or always_save_checkpoint:
@@ -285,6 +280,7 @@ while True:
         
         lossf = loss.item() # loss as float. TODO note CPU-GPU sync! profile, make sure not too slow
         print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms")
+        mlflow.log_metric("train_loss", losses['train'], step=iter_num)
     iter_num += 1
     # termination conditions
     if iter_num > max_iters:
