@@ -34,11 +34,13 @@
                 "--compile=False",
                 "--device=cpu",
                 "--gradient_accumulation_steps=2",
-                "--n_layer=4",
+                "--n_layer=3",
                 "--n_head=4",
-                "--n_embd=384",
-                "--block_size=128",
-                "--dataset=shakespeare",
+                "--n_embd=64",
+                "--block_size=64",
+                "--dataset=shakespeare_char",
+                "--eval_interval=50",
+                "--max_iters=100"
             ],
         },
         {

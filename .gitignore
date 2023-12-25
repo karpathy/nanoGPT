@@ -5,3 +5,9 @@
 *.pkl
 *.txt
 mlruns/
+logs/
+out/
+**/__pycache__/
+**/*.pyc
+*/**.pyc
+src/__pycache__/

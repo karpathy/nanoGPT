@@ -32,7 +32,7 @@ from model import GPTConfig, GPT
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'out'
+out_dir = './logs'
 eval_interval = 2000
 log_interval = 1
 eval_iters = 200
@@ -69,6 +69,7 @@ min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchi
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
+azure = False
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'float16' # 'float32' or 'bfloat16'
 compile = True # use PyTorch 2.0 to compile the model to be faster
@@ -80,7 +81,9 @@ config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
 
 import mlflow
+from mlflow.models.signature import infer_signature
 mlflow.set_experiment(experiment_name)
+# mlflow.autolog(log_models=False)
 mlflow.autolog()
 
 # Save all the config values to mlflow
@@ -101,7 +104,12 @@ else:
     master_process = True
     seed_offset = 0
 if master_process:
+    print("Create out_dir...")
+    # Make sure the out_dir is located in the same directory as this script
+    out_dir = os.path.join(os.path.dirname(__file__), out_dir)
     os.makedirs(out_dir, exist_ok=True)
+    # Verify that the out_dir was created
+    assert os.path.exists(out_dir)
 torch.manual_seed(1337 + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
@@ -283,3 +291,7 @@ while True:
         break
 if ddp:
     destroy_process_group()
+    
+# create the signature by inferring it from the datasets
+# signature = infer_signature(train_data)
+# mlflow.pytorch.log_model(raw_model, "./outputs", signature=signature)
