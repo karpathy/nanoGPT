@@ -22,7 +22,7 @@
         },
         // Run train.py with arguments
         {
-            "name": "Azure Job Debugging",
+            "name": "Azure Training Job Debugging",
             // Set src directory as the current working directory
             "cwd": "${workspaceFolder}/src",
             "type": "python",
@@ -39,8 +39,8 @@
                 "--n_embd=64",
                 "--block_size=64",
                 "--dataset=shakespeare_char",
-                "--eval_interval=50",
-                "--max_iters=100"
+                "--eval_interval=500",
+                "--max_iters=2000"
             ],
         },
         {
@@ -54,6 +54,18 @@
                 "--compile=False",
                 "--device=gpu"
             ],
-        }
+        },
+        // python sample.py --out_dir=outputs
+        {
+            "name": "Sample from trained model",
+            "type": "python",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/src",
+            "program": "sample.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--out_dir=outputs"
+            ],
+        },
     ]
 }
