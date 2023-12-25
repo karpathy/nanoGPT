@@ -33,8 +33,10 @@ logger.setLevel(logging.INFO)
 
 # Step 2: Start training
 logger.info("TRAINING MODEL")
+print("TRAINING MODEL")
 subprocess.run(train_cmd, shell=True, check=True)
 
 # Step 3: Create sample
 logger.info("CREATING SAMPLE")
+print("CREATING SAMPLE")
 subprocess.run(sample_cmd, shell=True, check=True)
