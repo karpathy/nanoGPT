@@ -40,7 +40,7 @@ RUN git config --global user.name "niccolox"
 WORKDIR /workspace
 COPY . /workspace/
 
-RUN cd /workspace && pip install -r requirements.txt
+RUN cd /workspace && pip install torch numpy transformers datasets tiktoken wandb tqdm
 
 RUN chmod -R a+rwx /workspace
 
