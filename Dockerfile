@@ -24,18 +24,11 @@ RUN apt-get update && \
             python3 \
             python3-pip \
             python3-dev \
-            rapidjson-dev \
             vim \
             wget \
-            python3-pdfkit \
-            openjdk-11-jdk \
-            maven && \
     pip3 install --upgrade wheel setuptools && \
     pip3 install --upgrade grpcio-tools && \
     pip3 install --upgrade pip
-
-RUN git config --global user.email "niccolox@devekko.com"
-RUN git config --global user.name "niccolox"
 
 WORKDIR /workspace
 COPY . /workspace/
