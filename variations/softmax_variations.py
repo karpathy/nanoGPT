@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import math
 
 # Softmax base 2, with option to remove max subtraction
 class Softermax(nn.Module):
@@ -30,8 +31,7 @@ class Constantmax(nn.Module):
 
         # Set the base of the exponent
         if config.constantmax_use_euler_base:
-          # equivalent to 'e'
-          self.constantmax_base = torch.exp(torch.tensor(1.0))
+          self.constantmax_base = math.e
         else:
           self.constantmax_base = config.constantmax_base
 
@@ -158,8 +158,7 @@ class SigSoftmax(nn.Module):
 
         # Set the base of the exponent
         if config.sigsoftmax_use_euler_base:
-          # equivalent to 'e'
-          self.sigsoftmax_base = torch.exp(torch.tensor(1.0))
+          self.sigsoftmax_base = math.e
         else:
           # custom base
           self.sigsoftmaxmax_base = config.sigsoftmax_base
@@ -177,3 +176,4 @@ class SigSoftmax(nn.Module):
         denominator = torch.sum(exp_x * sig_x, dim=self.dim, keepdim=True)
 
         return numerator / denominator
+
