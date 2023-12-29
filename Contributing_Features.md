@@ -4,13 +4,44 @@ This is a guide for adding a new feature to the search space.
 
 # TOC
 
-* [Step 1 Add a config within the model.py](#step-1-add-a-config-within-the-modelpy)
-* [Step 2 Add an argparse argument for the train.py](#step-2-add-an-argparse-argument-for-the-trainpy)
-* [Step 3 Create script in exploration folder](#step-3-create-script-in-exploration-folder)
+* [Step 1 Add new variation](#step-1-add-new-variation)
+* [Step 2 Adjust model.py](#step-2-adjust-modelpy)
+* [Step 3 Add a config within the model.py](#step-3-add-a-config-within-the-modelpy)
+* [Step 4 Add an argparse argument for the train.py](#step-4-add-an-argparse-argument-for-the-trainpy)
+* [Step 5 Create configuration json in exploration folder](#step-5-create-configuration-json-in-exploration-folder)
 * [Other Parameter Groups](#other-parameter-groups)
 * [Ideas](#ideas)
 
-## Step 1 Add a config within the model.py
+## Step 1 Add new variation
+
+
+If the variation is in the following categories, add to the appropriate file or
+create a new file in the variations folder:
+
+```
+variations/
+├── activation_variations.py
+├── normalization_variations.py
+├── position_encoding_variations.py
+└── softmax_variations.py
+```
+Some variations, such as orderings of the network, may need to be made directly
+to the `model.py` file.
+
+## Step 2 Adjust model.py
+
+Import the new variation:
+```
+from variations.softmax_variations import YourSoftmaxVariation
+```
+
+And add to the model.py in appropriate section:
+```
+    if self.softmax_variant_attn == "yournewvariation":
+      self.softmax_layer = YourNewVariation(config)
+```
+
+## Step 3 Add a config within the model.py
 
 Open up `model.py` and add your new configuration within the `GPTConfig`
 dataclass:
@@ -25,11 +56,11 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
 
-    # Your New Feature
-    use_faster_inference: bool = True
+    # Your New Setting
+    new_variation_setting: bool = True
 ```
 
-## Step 2 Add an argparse argument for the train.py
+## Step 4 Add an argparse argument for the train.py
 
 
 Open up `train.py` and add your new feature to the model group inside `parse_args` function,
@@ -50,50 +81,19 @@ For numeric values:
 model_group.add_argument("--block_size", type=int, default=256)
 ```
 
-## Step 3 Create script in exploration folder
+## Step 5 Create configuration json in exploration folder
 
-`cd` into the exploration folder and script in an exploration sweep.
+`cd` into the exploration folder and copy a template for a new exploration sweep.
 
-This will automatically timestamp and apply labels to your tensorboard logs.
+Run the sweep with `run_experiments.py` from the repo root specifying our
+config file.
 
-The following example shows testing with different types of softmax variations
-on the default dataset:
-
-```bash
-#/bin/bash
-
-# head to repo root
-cd ../
-
-dataset="shakespeare_char"
-python3 "data/${dataset}/prepare.py"
-
-softmax_variation=("constantmax" "polymax" "softermax" "sigsoftmax")
-
-max_iters="3000"
-block_size="256"
-notes="check_all_softmax_variations"
-
-# Loop over the array
-for softmax_variant in "${softmax_variation[@]}"
-do
-  python3 train.py \
-    --max_iters "$max_iters" \
-    --eval_iters 200 \
-    --eval_interval 200 \
-    --log_interval 10 \
-    --device cuda \
-    --dataset "$dataset" \
-    --use_softmax_variant \
-    --softmax_variant "${softmax_variant}" \
-    --use_softermax_xmax \
-    --tensorboard_project "${dataset}_${softmax_variant}_${max_iters}" \
-    --tensorboard_run_name "${softmax_variant}_${notes}" \
-    --block_size "$block_size" \
-    --out_dir "${dataset}_${softmax_variant}_${max_iters}_${notes}" \
-    --compile
-done
 ```
+python3 run_experiments.py --config explorations/config.json --value_only --output_dir out_test`
+```
+
+This will automatically timestamp and apply labels to your tensorboard logs,
+create direct csv logs, and save output checkpoints into a specified folder.
 
 ## Other Parameter Groups
 

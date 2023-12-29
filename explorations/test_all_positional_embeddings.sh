@@ -3,95 +3,143 @@
 # head to repo root
 cd ../
 
-python3 data/shakespeare_char/prepare.py
+dataset="shakespeare_char"
+python3 "data/${dataset}/prepare.py"
 
-# Common settings
-max_iterations=3000
-dataset="shakespeare"
-tensorboard_project="shkspr_tiktoken"
+# optionally choose number of gpu with:
+# device="cuda:2"
+device="cuda"
+n_layer="6"
+n_head="6"
+n_embd="384"
+max_iters="5000"
+block_size="256"
+eval_iters="200"
+eval_interval="250"
+log_interval="10"
+timestamp="$(date +%F_%T)"
+notes="test_all_positional_embeddings"
 
-# rope
+pe_variant="rope"
+run_name="${dataset}_${pe_variant}_${max_iters}_${block_size}_${n_layer}_${n_head}_${n_embd}_${notes}"
+output_dir="${timestamp}_${run_name}"
 python3 train.py \
-  --max_iters "$max_iterations" \
-  --eval_iters 200 \
-  --eval_interval 100 \
-  --log_interval 10 \
-  --dataset "$dataset" \
-  --use_rotary_embeddings \
-  --no-use_abs_pos_embeddings \
-  --rope_variant "rope" \
-  --no-use_softmax_variant \
-  --tensorboard_project "$tensorboard_project" \
-  --tensorboard_run_name "rope" \
-  --block_size 256 \
-  --out_dir "shkspr_rope" \
-  --compile
-
-# abs pos
-python3 train.py \
-  --max_iters "$max_iterations" \
-  --eval_iters 200 \
-  --eval_interval 100 \
-  --log_interval 10 \
-  --dataset "$dataset" \
-  --no-use_rotary_embeddings \
-  --use_abs_pos_embeddings \
-  --no-use_softmax_variant \
-  --tensorboard_project "$tensorboard_project" \
-  --tensorboard_run_name "abs_pos" \
-  --block_size 256 \
-  --out_dir "shkspr_abs_pos" \
-  --compile
-
-# both abs pos and rope
-python3 train.py \
-  --max_iters "$max_iterations" \
-  --eval_iters 200 \
-  --eval_interval 100 \
-  --log_interval 10 \
+  --max_iters "$max_iters" \
+  --n_layer "$n_layer" \
+  --n_head "$n_head" \
+  --n_embd "$n_embd" \
+  --block_size "$block_size" \
+  --eval_iters "$eval_iters" \
+  --eval_interval "$eval_interval" \
+  --log_interval "$log_interval" \
+  --device "$device" \
   --dataset "$dataset" \
   --use_rotary_embeddings \
   --rope_variant "rope" \
-  --use_abs_pos_embeddings \
-  --no-use_softmax_variant \
-  --tensorboard_project "$tensorboard_project" \
-  --tensorboard_run_name "rope_abs_pos" \
-  --block_size 256 \
-  --out_dir "shkspr_rope_abs_pos" \
-  --compile
+  --tensorboard_run_name "$run_name" \
+  --out_dir "$output_dir"
 
-# no positional embeddings
+pe_variant="rope_and_abs_pos_emb"
+run_name="${dataset}_${pe_variant}_${max_iters}_${block_size}_${n_layer}_${n_head}_${n_embd}_${notes}"
+output_dir="${timestamp}_${run_name}"
 python3 train.py \
-  --max_iters "$max_iterations" \
-  --eval_iters 200 \
-  --eval_interval 100 \
-  --log_interval 10 \
+  --max_iters "$max_iters" \
+  --n_layer "$n_layer" \
+  --n_head "$n_head" \
+  --n_embd "$n_embd" \
+  --block_size "$block_size" \
+  --eval_iters "$eval_iters" \
+  --eval_interval "$eval_interval" \
+  --log_interval "$log_interval" \
+  --device "$device" \
   --dataset "$dataset" \
+  --use_abs_pos_embeddings \
+  --use_rotary_embeddings \
+  --rope_variant "rope" \
+  --tensorboard_run_name "$run_name" \
+  --out_dir "$output_dir"
+
+pe_variant="abs_pos_emb"
+run_name="${dataset}_${pe_variant}_${max_iters}_${block_size}_${n_layer}_${n_head}_${n_embd}_${notes}"
+output_dir="${timestamp}_${run_name}"
+python3 train.py \
+  --max_iters "$max_iters" \
+  --n_layer "$n_layer" \
+  --n_head "$n_head" \
+  --n_embd "$n_embd" \
+  --block_size "$block_size" \
+  --eval_iters "$eval_iters" \
+  --eval_interval "$eval_interval" \
+  --log_interval "$log_interval" \
+  --device "$device" \
+  --dataset "$dataset" \
+  --use_abs_pos_embeddings \
   --no-use_rotary_embeddings \
+  --rope_variant "rope" \
+  --tensorboard_run_name "$run_name" \
+  --out_dir "$output_dir"
+
+pe_variant="no_positional_embeddings"
+run_name="${dataset}_${pe_variant}_${max_iters}_${block_size}_${n_layer}_${n_head}_${n_embd}_${notes}"
+output_dir="${timestamp}_${run_name}"
+python3 train.py \
+  --max_iters "$max_iters" \
+  --n_layer "$n_layer" \
+  --n_head "$n_head" \
+  --n_embd "$n_embd" \
+  --block_size "$block_size" \
+  --eval_iters "$eval_iters" \
+  --eval_interval "$eval_interval" \
+  --log_interval "$log_interval" \
+  --device "$device" \
+  --dataset "$dataset" \
   --no-use_abs_pos_embeddings \
-  --no-use_softmax_variant \
-  --tensorboard_project "$tensorboard_project" \
-  --tensorboard_run_name "no_pos_emb" \
-  --block_size 256 \
-  --out_dir "shkspr_nope" \
-  --compile
+  --no-use_rotary_embeddings \
+  --rope_variant "rope" \
+  --tensorboard_run_name "$run_name" \
+  --out_dir "$output_dir"
 
 # Short Rope variations
 for i in {2..16..2}; do
+  pe_variant="shortrope_$i"
+  run_name="${dataset}_${pe_variant}_${max_iters}_${block_size}_${n_layer}_${n_head}_${n_embd}_${notes}"
+  output_dir="${timestamp}_${run_name}"
   python3 train.py \
-    --max_iters "$max_iterations" \
-    --eval_iters 200 \
-    --eval_interval 100 \
-    --log_interval 10 \
+    --max_iters "$max_iters" \
+    --n_layer "$n_layer" \
+    --n_head "$n_head" \
+    --n_embd "$n_embd" \
+    --block_size "$block_size" \
+    --eval_iters "$eval_iters" \
+    --eval_interval "$eval_interval" \
+    --log_interval "$log_interval" \
+    --device "$device" \
     --dataset "$dataset" \
+    --no-use_abs_pos_embeddings \
     --use_rotary_embeddings \
     --rope_variant "shortrope" \
-    --shortrope_length "${i}" \
-    --no-use_abs_pos_embeddings \
-    --no-use_softmax_variant \
-    --tensorboard_project "$tensorboard_project" \
-    --tensorboard_run_name "shortrope_${i}" \
-    --block_size 256 \
-    --out_dir "shkspr_rope_abs_pos_${i}" \
-    --compile
+    --shortrope_length "$i" \
+    --tensorboard_run_name "$run_name" \
+    --out_dir "$output_dir"
+
+  pe_variant="abs_pos_emb_shortrope_$i"
+  run_name="${dataset}_${pe_variant}_${max_iters}_${block_size}_${n_layer}_${n_head}_${n_embd}_${notes}"
+  output_dir="${timestamp}_${run_name}"
+  python3 train.py \
+    --max_iters "$max_iters" \
+    --n_layer "$n_layer" \
+    --n_head "$n_head" \
+    --n_embd "$n_embd" \
+    --block_size "$block_size" \
+    --eval_iters "$eval_iters" \
+    --eval_interval "$eval_interval" \
+    --log_interval "$log_interval" \
+    --device "$device" \
+    --dataset "$dataset" \
+    --use_abs_pos_embeddings \
+    --use_rotary_embeddings \
+    --rope_variant "shortrope" \
+    --shortrope_length "$i" \
+    --tensorboard_run_name "$run_name" \
+    --out_dir "$output_dir"
 done

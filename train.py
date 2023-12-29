@@ -1,6 +1,8 @@
 import argparse
+from rich import print
 import os
 import time
+import csv
 from datetime import datetime
 import math
 import pickle
@@ -11,9 +13,6 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from torch.utils.tensorboard import SummaryWriter
-
-from torch.utils.tensorboard import SummaryWriter
-
 
 from model import GPTConfig, GPT
 
@@ -49,25 +48,46 @@ def parse_args():
     model_group.add_argument('--n_head', default=6, type=int)
     model_group.add_argument('--n_embd', default=384, type=int)
     model_group.add_argument('--dropout', default=0.2, type=float)
-    model_group.add_argument('--bias', default=False, action=argparse.BooleanOptionalAction)
-    model_group.add_argument('--use_post_ln', default=False, action=argparse.BooleanOptionalAction)
+    model_group.add_argument('--use_post_ln', default=True, action=argparse.BooleanOptionalAction)
 
-    # Norm variations
-    model_group.add_argument('--use_rmsnorm', default=True, action=argparse.BooleanOptionalAction)
+    # NORM VARIATIONS
+    model_group.add_argument("--layernorm_variant", type=str, default="rmsnorm", choices=["rmsnorm", "layernorm"])
+    model_group.add_argument('--bias', default=False, action=argparse.BooleanOptionalAction, help="only used for layernorm variation option")
 
-    # Positional Embedding variations
+    # ACTIVATION VARIATIONS
+    model_group.add_argument("--activation_variant", type=str, default="gelu", choices=["relu", "squared_relu"])
+
+    # POSITIONAL EMBEDDING VARIATIONS
     model_group.add_argument('--use_rotary_embeddings', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument("--rope_variant", type=str, default="rope", choices=["shortrope", "rope"])
     model_group.add_argument("--shortrope_length", type=int, default="16", help="number of embeddings to use with rope, must be <= length, and be even")
     model_group.add_argument('--use_abs_pos_embeddings', default=False, action=argparse.BooleanOptionalAction)
 
-    # Softmax variations
-    model_group.add_argument('--use_softmax_variant', default=False, action=argparse.BooleanOptionalAction)
-    model_group.add_argument("--softmax_variant", type=str, default="softermax", choices=["constantmax_quan", "constantmax", "polymax", "strongermax", "softermax", "sigsoftmax", "sigsoftmax_base2"])
+    # SOFTMAX VARIATIONS
+    ## Selection of softmax variation for attention and output layers
+    model_group.add_argument("--softmax_variant_attn", type=str,
+                             default="softmax", choices=["constantmax_quan", "constantmax", "polymax", "strongermax", "softermax", "sigsoftmax", "softmax"])
+    model_group.add_argument("--softmax_variant_output", type=str,
+                             default="softmax", choices=["constantmax_quan", "constantmax", "polymax", "strongermax", "softermax", "sigsoftmax", "softmax"])
 
-    # Custom Softmax Variation Options
-    model_group.add_argument('--use_softermax_xmax', default=False, action=argparse.BooleanOptionalAction)
-    model_group.add_argument("--strongermax_strength", type=int, default=2)
+    ## Custom Softmax Variation Options
+    model_group.add_argument("--constantmax_initial_beta", type=float, default=0.0)
+    model_group.add_argument("--constantmax_initial_gamma", type=float, default=100.0)
+    model_group.add_argument('--constantmax_use_euler_base', default=True, action=argparse.BooleanOptionalAction)
+    model_group.add_argument("--constantmax_base", type=float, default=2.0)
+
+    model_group.add_argument("--polymax_x_intercept", type=float, default=-100.0)
+    model_group.add_argument("--polymax_y_intercept", type=float, default=1.0)
+    model_group.add_argument("--polymax_power", type=float, default=2.0)
+    model_group.add_argument("--polymax_divisor", type=float, default=1000.0)
+
+    model_group.add_argument("--sigsoftmax_use_euler_base", type=float, default=2.0)
+    model_group.add_argument("--sigsoftmax_base", type=float, default=2.0)
+
+    model_group.add_argument("--strongermax_strength", type=float, default=2.0)
+
+    # Softermax Specific Options
+    model_group.add_argument('--softermax_use_xmax', default=True, action=argparse.BooleanOptionalAction)
 
     # Optimizer args
     training_group.add_argument('--learning_rate', default=1e-3, type=float)
@@ -95,10 +115,14 @@ def parse_args():
     logging_group.add_argument('--log_project', default='out-test', type=str)
     logging_group.add_argument('--log_run_name', default='logs-test', type=str)
 
+    # CSV logging
+    logging_group.add_argument('--csv_log', default=True, action=argparse.BooleanOptionalAction)
+    training_group.add_argument('--csv_dir', default='csv_logs', type=str)
+    training_group.add_argument('--csv_name', default='output.csv', type=str)
+
     # Tensorboard args
     logging_group.add_argument('--tensorboard_log', default=True, action=argparse.BooleanOptionalAction)
     logging_group.add_argument('--tensorboard_log_dir', type=str, default='logs')
-    logging_group.add_argument('--tensorboard_project', type=str, default='out-test')
     logging_group.add_argument('--tensorboard_run_name', type=str, default='logs-test')
 
     # Wandb args
@@ -121,7 +145,7 @@ class Trainer:
         self.ddp = int(os.environ.get('RANK', -1)) != -1
         if self.ddp:
             init_process_group(backend=self.args.backend)
-            print(args)
+            print(self.args)
             self.ddp_rank = int(os.environ['RANK'])
             self.ddp_local_rank = int(os.environ['LOCAL_RANK'])
             self.ddp_world_size = int(os.environ['WORLD_SIZE'])
@@ -214,17 +238,20 @@ class Trainer:
 
         self.raw_model = self.model.module if self.ddp else self.model
 
+        timestamp_prefix = time.strftime("%Y%m%d-%H%M%S")
+
         # Tensorboard
         if self.args.tensorboard_log:
-            timestamp = time.strftime("%Y%m%d-%H%M%S" + "_" +
-                                      self.args.tensorboard_project + "_" +
-                                      self.args.tensorboard_run_name)
-            log_subpath = os.path.join(self.args.tensorboard_log_dir, timestamp)
+            timestamped_run_name = timestamp_prefix + "_" + self.args.tensorboard_run_name
+            if self.args.csv_log:
+                self.args.csv_name = timestamped_run_name
+            log_subpath = os.path.join(self.args.tensorboard_log_dir, timestamped_run_name)
             self.writer = SummaryWriter(log_subpath)
 
         # Wandb
         if self.args.wandb_log and self.master_process:
             import wandb
+            self.args.csv_name = wandb_run_name
             wandb.init(project=self.args.wandb_project, name=self.args.wandb_run_name, config=self.args)
 
     def get_batch(self, split):
@@ -278,6 +305,33 @@ class Trainer:
                 "train/loss": losses['train'],
                 "val/loss": losses['val'],
                 "lr": lr,
+                "mfu": running_mfu*100,
+            })
+
+        if self.args.csv_log:
+            self.write_to_csv(losses['train'].item(), losses['val'].item())
+
+    def write_to_csv(self, *args):
+        os.makedirs(self.args.csv_dir, exist_ok=True)
+        csv_path = os.path.join(self.args.csv_dir, self.args.csv_name)
+        with open(csv_path, 'a', newline='') as file:
+            writer = csv.writer(file)
+            # Write arguments as a new row in the CSV
+            writer.writerow(args)
+
+
+    def log_metrics_non_validation(self, loss_training, running_mfu, iter_num):
+        if self.args.tensorboard_log:
+            self.writer.add_scalars(
+                "loss", { "train": loss_training }, iter_num
+            )
+            self.writer.add_scalar("mfu_pct", running_mfu * 100, iter_num)
+
+        if self.args.wandb_log and self.master_process:
+            import wandb
+            wandb.log({
+                "iter": iter_num,
+                "train/loss": loss_training,
                 "mfu": running_mfu*100,
             })
 
@@ -343,7 +397,8 @@ class Trainer:
                 if local_iter_num >= 5:
                     mfu = self.raw_model.estimate_mfu(self.args.batch_size * self.args.gradient_accumulation_steps, dt)
                     running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-                print(f"iter {self.iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+                print(f"iter {self.iter_num}: loss {lossf:.4f}, time {dt*1000:.2f} ms, mfu {running_mfu*100:.2f}%")
+                self.log_metrics_non_validation(lossf, running_mfu, self.iter_num)
 
             self.iter_num += 1
             local_iter_num += 1

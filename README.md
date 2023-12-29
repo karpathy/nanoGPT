@@ -142,14 +142,21 @@ checkpoints created from training using `validation loss` as a figure of merit.
 
 ### Start Exploration
 
-To run the experiment simply cd into the `explorations` folder and run (for example):
+To run the experiment create or modify an existing json file in the `explorations` folder:
 
 ```bash
-bash test_all_softmax_variations.sh
+python3 run_experiments.py --config explorations/config.json --value_only --output_dir out_test`
 ```
 
-This will queue up a series of training runs.
-The logs will be automatically labelling and timestamping for analysis with tensorboard.
+This will create logs in the following directories:
+
+```
+csv_logs/
+logs/
+```
+
+and save checkpoints for inference in `out_test`
+
 
 ### Start Tensorboard Logging
 
