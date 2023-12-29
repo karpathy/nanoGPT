@@ -2,6 +2,7 @@ import argparse
 from rich import print
 import os
 import time
+import csv
 from datetime import datetime
 import math
 import pickle
@@ -113,6 +114,11 @@ def parse_args():
     # Logging args
     logging_group.add_argument('--log_project', default='out-test', type=str)
     logging_group.add_argument('--log_run_name', default='logs-test', type=str)
+
+    # CSV logging
+    logging_group.add_argument('--csv_log', default=True, action=argparse.BooleanOptionalAction)
+    training_group.add_argument('--csv_dir', default='csv_logs', type=str)
+    training_group.add_argument('--csv_name', default='output.csv', type=str)
 
     # Tensorboard args
     logging_group.add_argument('--tensorboard_log', default=True, action=argparse.BooleanOptionalAction)
@@ -232,15 +238,20 @@ class Trainer:
 
         self.raw_model = self.model.module if self.ddp else self.model
 
+        timestamp_prefix = time.strftime("%Y%m%d-%H%M%S")
+
         # Tensorboard
         if self.args.tensorboard_log:
-            timestamp = time.strftime("%Y%m%d-%H%M%S" + "_" + self.args.tensorboard_run_name)
-            log_subpath = os.path.join(self.args.tensorboard_log_dir, timestamp)
+            timestamped_run_name = timestamp_prefix + "_" + self.args.tensorboard_run_name
+            if self.args.csv_log:
+                self.args.csv_name = timestamped_run_name
+            log_subpath = os.path.join(self.args.tensorboard_log_dir, timestamped_run_name)
             self.writer = SummaryWriter(log_subpath)
 
         # Wandb
         if self.args.wandb_log and self.master_process:
             import wandb
+            self.args.csv_name = wandb_run_name
             wandb.init(project=self.args.wandb_project, name=self.args.wandb_run_name, config=self.args)
 
     def get_batch(self, split):
@@ -296,6 +307,18 @@ class Trainer:
                 "lr": lr,
                 "mfu": running_mfu*100,
             })
+
+        if self.args.csv_log:
+            self.write_to_csv(losses['train'].item(), losses['val'].item())
+
+    def write_to_csv(self, *args):
+        os.makedirs(self.args.csv_dir, exist_ok=True)
+        csv_path = os.path.join(self.args.csv_dir, self.args.csv_name)
+        with open(csv_path, 'a', newline='') as file:
+            writer = csv.writer(file)
+            # Write arguments as a new row in the CSV
+            writer.writerow(args)
+
 
     def log_metrics_non_validation(self, loss_training, running_mfu, iter_num):
         if self.args.tensorboard_log:

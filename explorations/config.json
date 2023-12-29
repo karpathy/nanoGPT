@@ -1,0 +1,28 @@
+[
+    {
+        "max_iters": ["500"],
+        "n_layer": ["6"],
+        "n_head": ["6"],
+        "n_embd": ["384"],
+        "block_size": "256",
+        "eval_iters": "20",
+        "eval_interval": "25",
+        "log_interval": "10",
+        "device": "cuda",
+        "dataset": "shakespeare_char",
+        "use_rotary_embeddings": [true, false],
+        "rope_variant": {
+            "conditions": [["use_rotary_embeddings", true]],
+            "options": ["rope", "shortrope"],
+            "nested": {
+                "shortrope_length": {
+                    "conditions": [["rope_variant", "shortrope"]],
+                    "options": [16, 32]
+                }
+            }
+        },
+        "tensorboard_run_name": "experiment1"
+
+    }
+]
+
