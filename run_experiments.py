@@ -9,7 +9,9 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Run experiments based on a json configuration file.")
     parser.add_argument("--config", type=str, required=True, help="Path to the configuration JSON file.")
     parser.add_argument("--output_dir", type=str, default="out", help="Directory to place the set of output checkpoints.")
-    parser.add_argument("--prefix", type=str, default='', help="Optional prefix for tensorboard_run_name and out_dir to help with grouping experiments.")
+    parser.add_argument("--prefix", type=str, default='', help="Optional prefix for tensorboard_run_name and out_dir.")
+    parser.add_argument("--multi_option_only", action="store_true", help="Include only parameters with multiple options in the names.")
+    parser.add_argument("--value_only", action="store_true", help="Include only the values of the configuration parameters in the names.")
     return parser.parse_args()
 
 def check_conditions(conditions, combo_dict):
@@ -36,12 +38,19 @@ def generate_combinations(config, current_combo={}, parent_conditions=[]):
             else:
                 yield combo_dict
 
-def format_config_name(config, config_basename, prefix):
-    config_items = [f"{k}_{v}" for k, v in config.items() if k != 'out_dir' and k != 'tensorboard_run_name']
-    return f"{prefix}_{config_basename}_{'_'.join(config_items)}"
+def format_config_name(config, config_basename, prefix, multi_option_only, value_only, original_config):
+    if multi_option_only:
+        config_items = [f"{k}_{v}" for k, v in config.items() if k in original_config and isinstance(original_config[k], list)]
+    else:
+        config_items = [f"{k}_{v}" for k, v in config.items()]
 
-def run_command(config, config_basename, output_dir, prefix):
-    formatted_name = format_config_name(config, config_basename, prefix)
+    if value_only:
+        config_items = [item.split("_")[1] for item in config_items]
+
+    return f"{prefix}{config_basename}-{'-'.join(config_items)}"
+
+def run_command(config, config_basename, output_dir, prefix, multi_option_only, value_only, original_config):
+    formatted_name = format_config_name(config, config_basename, prefix, multi_option_only, value_only, original_config)
     config['tensorboard_run_name'] = formatted_name
     config['out_dir'] = os.path.join(output_dir, f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_{formatted_name}")
 
@@ -61,11 +70,11 @@ def main():
     config_basename = os.path.splitext(os.path.basename(args.config))[0]
 
     with open(args.config, 'r') as file:
-        configurations = json.load(file)
+        original_configurations = json.load(file)
 
-    for config in configurations:
+    for config in original_configurations:
         for combination in generate_combinations(config):
-            run_command(combination, config_basename, args.output_dir, args.prefix)
+            run_command(combination, config_basename, args.output_dir, args.prefix, args.multi_option_only, args.value_only, original_configurations[0])
 
 if __name__ == "__main__":
     main()
