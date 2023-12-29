@@ -10,7 +10,6 @@ def parse_args():
     parser.add_argument("--config", type=str, required=True, help="Path to the configuration JSON file.")
     parser.add_argument("--output_dir", type=str, default="out", help="Directory to place the set of output checkpoints.")
     parser.add_argument("--prefix", type=str, default='', help="Optional prefix for tensorboard_run_name and out_dir.")
-    parser.add_argument("--multi_option_only", action="store_true", help="Include only parameters with multiple options in the names.")
     parser.add_argument("--value_only", action="store_true", help="Include only the values of the configuration parameters in the names.")
     return parser.parse_args()
 
@@ -38,21 +37,18 @@ def generate_combinations(config, current_combo={}, parent_conditions=[]):
             else:
                 yield combo_dict
 
-def format_config_name(config, config_basename, prefix, multi_option_only, value_only, original_config):
-    if multi_option_only:
-        config_items = [f"{k}_{v}" for k, v in config.items() if k in original_config and isinstance(original_config[k], list)]
+def format_config_name(config, config_basename, prefix, value_only, original_config):
+    if value_only:
+        config_items = [f"{v}" for _, v in config.items()]
     else:
         config_items = [f"{k}_{v}" for k, v in config.items()]
 
-    if value_only:
-        config_items = [item.split("_")[1] for item in config_items]
-
     return f"{prefix}{config_basename}-{'-'.join(config_items)}"
 
-def run_command(config, config_basename, output_dir, prefix, multi_option_only, value_only, original_config):
-    formatted_name = format_config_name(config, config_basename, prefix, multi_option_only, value_only, original_config)
+def run_command(config, config_basename, output_dir, prefix, value_only, original_config):
+    formatted_name = format_config_name(config, config_basename, prefix, value_only, original_config)
     config['tensorboard_run_name'] = formatted_name
-    config['out_dir'] = os.path.join(output_dir, f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_{formatted_name}")
+    config['out_dir'] = os.path.join(output_dir, f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{formatted_name}")
 
     base_command = ["python3", "train.py"]
     for key, value in config.items():
@@ -74,7 +70,7 @@ def main():
 
     for config in original_configurations:
         for combination in generate_combinations(config):
-            run_command(combination, config_basename, args.output_dir, args.prefix, args.multi_option_only, args.value_only, original_configurations[0])
+            run_command(combination, config_basename, args.output_dir, args.prefix, args.value_only, original_configurations[0])
 
 if __name__ == "__main__":
     main()
