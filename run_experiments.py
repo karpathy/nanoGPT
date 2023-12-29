@@ -6,10 +6,10 @@ from datetime import datetime
 from itertools import product
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Run experiments based on a configuration file.")
+    parser = argparse.ArgumentParser(description="Run experiments based on a json configuration file.")
     parser.add_argument("--config", type=str, required=True, help="Path to the configuration JSON file.")
-    parser.add_argument("--output_dir", type=str, required=True, help="Directory to place the output directories.")
-    parser.add_argument("--prefix", type=str, default='', help="Optional prefix for tensorboard_run_name and out_dir.")
+    parser.add_argument("--output_dir", type=str, default="out", help="Directory to place the set of output checkpoints.")
+    parser.add_argument("--prefix", type=str, default='', help="Optional prefix for tensorboard_run_name and out_dir to help with grouping experiments.")
     return parser.parse_args()
 
 def check_conditions(conditions, combo_dict):
@@ -38,7 +38,7 @@ def generate_combinations(config, current_combo={}, parent_conditions=[]):
 
 def format_config_name(config, config_basename, prefix):
     config_items = [f"{k}_{v}" for k, v in config.items() if k != 'out_dir' and k != 'tensorboard_run_name']
-    return f"{prefix}{config_basename}_{'_'.join(config_items)}"
+    return f"{prefix}_{config_basename}_{'_'.join(config_items)}"
 
 def run_command(config, config_basename, output_dir, prefix):
     formatted_name = format_config_name(config, config_basename, prefix)
