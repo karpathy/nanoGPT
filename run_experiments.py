@@ -20,6 +20,10 @@ def generate_combinations(config, current_combo={}, parent_conditions=[]):
     base_params = {k: v for k, v in config.items() if not isinstance(v, dict)}
     conditional_params = {k: v for k, v in config.items() if isinstance(v, dict)}
 
+    if not conditional_params:  # If there are no conditional parameters
+        yield from [dict(zip(base_params, combo)) for combo in product(*base_params.values())]
+        return
+
     base_combinations = list(product(*[[(k, v) for v in (val if isinstance(val, list) else [val])] for k, val in base_params.items()]))
 
     for base_combination in base_combinations:
@@ -36,6 +40,7 @@ def generate_combinations(config, current_combo={}, parent_conditions=[]):
                         yield new_combo
             else:
                 yield combo_dict
+
 
 def format_config_name(config, config_basename, prefix, value_only, original_config):
     if value_only:
