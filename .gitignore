@@ -1,6 +1,7 @@
 # folders
 __pycache__/
 logs/
+csv_logs/
 
 # file extensions
 *.pkl
