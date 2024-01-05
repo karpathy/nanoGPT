@@ -8,3 +8,9 @@ __pycache__/
 *.pt
 *.pyc
 input.txt
+*.venv
+*.code-workspace
+out/
+out-*/
+wandb/*
+data/*/samples/*
