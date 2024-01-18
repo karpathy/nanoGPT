@@ -1,0 +1,23 @@
+[
+    {
+        "max_iters": ["30000"],
+        "n_layer": ["6"],
+        "n_head": ["6"],
+        "n_embd": ["384"],
+        "block_size": ["256"],
+        "eval_iters": ["200"],
+        "eval_interval": ["250"],
+        "log_interval": ["10"],
+        "device": ["cuda"],
+        "dataset": ["wikitext103"],
+        "softmax_variant_attn": ["constantmax", "softmax"],
+        "use_abs_pos_embeddings": [true],
+        "use_rotary_embeddings": [false],
+        "constantmax_initial_beta": {
+            "conditions": [["softmax_variant_attn", "constantmax"]],
+            "options": ["2.5", "5.0", "10.0"]
+        },
+        "tensorboard_run_name": ["wikitext103"]
+    }
+]
+
