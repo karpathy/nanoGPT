@@ -8,6 +8,7 @@ __pycache__/
 *.pt
 *.txt
 *.pyc
+*.npz
 input.txt
 train.npy
 val.npy
