@@ -6,6 +6,7 @@ __pycache__/
 *.bin
 *.pkl
 *.pt
+*.txt
 *.pyc
 input.txt
 train.npy

@@ -170,7 +170,9 @@ class GPT(nn.Module):
 
     def forward(self, idx, targets=None, intervals=None):
         # idx: Input sequence indices of shape (b,t)
-        # targets: Output token indices of shape (b,t), shifted forward by 1 position
+        # targets: If targets is of shape (b,t), computes autoregressive training loss, shifted forward by 1 position
+        #          If targets is of shape (b,), computes classification loss on just the first position (not last position due to padding issues)
+
         assert (intervals is None) or targets is not None, "if you use interval, you must provide targets"
         device = idx.device
         b, t = idx.size()
@@ -191,11 +193,15 @@ class GPT(nn.Module):
         elif targets is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x) # (b, t, vocab_size)
-            # Compute loss for each token in targets of shape (b, t)
-            # Reshape logits to be a long list of logits of shape (b * t, vocab_size)
-            # Reshape targets to be a long list of token ids of shape (b * t)
-            # Computed loss is a scalar
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
+            if targets.dim() == 2:
+                # Compute loss for each token in targets of shape (b, t)
+                # Reshape logits to be a long list of logits of shape (b * t, vocab_size)
+                # Reshape targets to be a long list of token ids of shape (b * t)
+                # Computed loss is a scalar
+                loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
+            elif targets.dim() == 1:
+                # Compute loss for the first token targets of shape (b)
+                loss = F.cross_entropy(logits[:, 0, :], targets)
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(x[:, [-1], :]) # note: using list [-1] to preserve the time dim
