@@ -15,9 +15,9 @@ output_file = None
 prompts_file = "data/SAT/SAT_test.txt"
 eval_labels = None
 igore_tokens = ["[PAD]"]
-num_samples = 10 # number of samples to draw
-max_new_tokens = 500 # number of tokens generated in each sample
-temperature = 0.01 # 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
+num_samples = 200 # number of samples to draw
+max_new_tokens = 2000 # number of tokens generated in each sample
+temperature = 0.1 # 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
 top_k = 200 # retain only the top_k most likely tokens, clamp others to have 0 probability
 seed = 1337
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
@@ -135,7 +135,7 @@ with torch.no_grad():
                 continue
             sample_cnt += 1
             prompt = (torch.tensor(prompt, dtype=torch.long, device=device)[None, ...])
-            y = model.generate(prompt, max_new_tokens, temperature=temperature, top_k=top_k)
+            y = model.generate(prompt, max_new_tokens, temperature=temperature, top_k=top_k, stop=encode(['[SEP]']))
             res_str = decode(y[0].tolist())
             print(res_str)
             print('---------------')
@@ -161,8 +161,6 @@ for i in range(len(true_label)):
     if pred_label[i] is None:
         pred_label[i] = not true_label[i] # If the model fails to predict, we assume it is wrong
 
-print(true_label)
-print(pred_label)
 if eval:
     from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score
     f1 = f1_score(true_label, pred_label, pos_label=False)

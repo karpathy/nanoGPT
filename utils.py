@@ -1,5 +1,5 @@
 import torch
-
+import numpy as np
 # def get_interval_values(X, intervals):
 #     # Create a mask that represents the interval for each row, inclusive both ends
 #     mask = torch.arange(X.size(1)).unsqueeze(0).expand((X.size(0), X.size(1))).to(intervals.device)
