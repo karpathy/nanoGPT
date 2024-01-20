@@ -48,7 +48,7 @@ Hardware Related
 
 This section contains installation locally with GPU acceleration.
 
-(If you do not have a GPU, check out this [colab](TODO), which has a T4 GPU
+(If you do not have a GPU, check out this [colab](./NanoGPT_Quickstart.ipynb), which has a T4 GPU
 runtime (at time of writing) for ML acceleration.)
 
 ### Step 1 (Recommended) Adding a Virtual Env

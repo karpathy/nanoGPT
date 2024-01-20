@@ -118,7 +118,7 @@ def parse_args():
     # CSV logging
     logging_group.add_argument('--csv_log', default=True, action=argparse.BooleanOptionalAction)
     training_group.add_argument('--csv_dir', default='csv_logs', type=str)
-    training_group.add_argument('--csv_name', default='output.csv', type=str)
+    training_group.add_argument('--csv_name', default='output', type=str, help="Output csv basename. Note, the .csv will be automatically appended.")
 
     # Tensorboard args
     logging_group.add_argument('--tensorboard_log', default=True, action=argparse.BooleanOptionalAction)
@@ -313,7 +313,7 @@ class Trainer:
 
     def write_to_csv(self, *args):
         os.makedirs(self.args.csv_dir, exist_ok=True)
-        csv_path = os.path.join(self.args.csv_dir, self.args.csv_name)
+        csv_path = os.path.join(self.args.csv_dir, self.args.csv_name + ".csv")
         with open(csv_path, 'a', newline='') as file:
             writer = csv.writer(file)
             # Write arguments as a new row in the CSV
