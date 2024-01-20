@@ -313,7 +313,7 @@ class Trainer:
 
     def write_to_csv(self, *args):
         os.makedirs(self.args.csv_dir, exist_ok=True)
-        csv_path = os.path.join(self.args.csv_dir, self.args.csv_name, ".csv")
+        csv_path = os.path.join(self.args.csv_dir, self.args.csv_name + ".csv")
         with open(csv_path, 'a', newline='') as file:
             writer = csv.writer(file)
             # Write arguments as a new row in the CSV
