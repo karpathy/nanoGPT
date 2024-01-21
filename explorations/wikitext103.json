@@ -10,12 +10,13 @@
         "log_interval": ["10"],
         "device": ["cuda"],
         "dataset": ["wikitext103"],
-        "softmax_variant_attn": ["constantmax", "softmax"],
+        "use_post_ln": [false],
+        "softmax_variant_attn": ["constantmax", "softmax", "softermax"],
         "use_abs_pos_embeddings": [true],
         "use_rotary_embeddings": [false],
         "constantmax_initial_beta": {
             "conditions": [["softmax_variant_attn", "constantmax"]],
-            "options": ["2.5", "5.0", "10.0"]
+            "options": ["0.5", "1.0", "1.5", "2.0", "2.5", "3.0"]
         },
         "tensorboard_run_name": ["wikitext103"]
     }
