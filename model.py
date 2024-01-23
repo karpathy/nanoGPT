@@ -348,3 +348,12 @@ class GPT(nn.Module):
                 break
 
         return idx
+    
+    @torch.no_grad()
+    def classify(self, idx):
+        """
+        Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and use the first position to predict a single token.
+        """
+        logits, _ = self(idx)
+        logits = logits[:, 0, :]
+        return logits.argmax(dim=-1)
