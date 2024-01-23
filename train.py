@@ -72,6 +72,7 @@ backend = 'nccl' # 'nccl', 'gloo', etc.
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
+class_only = False # if True, only train the classifier head with a single label. Used for predicting SAT/UNSAT using one pass of the Transformer
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
@@ -113,7 +114,15 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 # poor man's data loader
 data_dir = os.path.join('data', dataset)
-if os.path.exists(os.path.join(data_dir, 'train.npy')):
+if class_only:
+    if os.path.exists(os.path.join(data_dir, 'train_class.npz')):
+        train_samples = np.load(os.path.join(data_dir, 'train_class.npz'))
+        val_samples = np.load(os.path.join(data_dir, 'val_class.npz'))
+        train_data, train_labels = train_samples['X'], train_samples['y']
+        val_data, val_labels = val_samples['X'], val_samples['y']
+    else:
+        raise Exception(f"could not find train_class.npz inside {data_dir}")
+elif os.path.exists(os.path.join(data_dir, 'train.npy')):
     train_data = np.load(os.path.join(data_dir, 'train.npy'))
     val_data = np.load(os.path.join(data_dir, 'val.npy'))
 elif os.path.exists(os.path.join(data_dir, 'train.bin')):
@@ -124,6 +133,11 @@ else:
 
 def get_batch(split):
     data = train_data if split == 'train' else val_data
+    if class_only:
+        labels = train_labels if split == 'train' else val_labels
+        ix = torch.randint(len(data), (batch_size,))
+        x = torch.from_numpy(data[ix].astype(np.int64))
+        y = torch.from_numpy(labels[ix].astype(np.int64))
     if data.ndim == 1:
         ix = torch.randint(len(data) - block_size, (batch_size,))
         x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])

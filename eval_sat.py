@@ -25,6 +25,7 @@ dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported
 compile = False # use PyTorch 2.0 to compile the model to be faster
 eval = True
 sep = ' ' # separator between tokens during decoding, default: nothing, i.e. join with empty string
+class_only = False # only generate the class token
 exec(open('configurator.py').read()) # overrides from command line or config file
 if sep == 'SPACE':
     sep = ' '
@@ -135,19 +136,24 @@ with torch.no_grad():
                 continue
             sample_cnt += 1
             prompt = (torch.tensor(prompt, dtype=torch.long, device=device)[None, ...])
-            y = model.generate(prompt, max_new_tokens, temperature=temperature, top_k=top_k)
-            res_str = decode(y[0].tolist())
-            print(res_str)
-            print('---------------')
-            if eval:
+            if class_only:
                 true_label.append(label)
-                res = line_sat(res_str, sep)
-                if res is None:
-                    res = not label
-                pred_label.append(res)
-            if output_file is not None:
-                with open(output_file, 'a', encoding='utf-8') as f:
-                    f.write(res_str + '\n')
+                y = model.classify(prompt)
+                pred_label.append(y[0].item() == stoi['SAT'])
+            else:
+                y = model.generate(prompt, max_new_tokens, temperature=temperature, top_k=top_k)
+                res_str = decode(y[0].tolist())
+                print(res_str)
+                print('---------------')
+                if eval:
+                    true_label.append(label)
+                    res = line_sat(res_str, sep)
+                    if res is None:
+                        res = not label
+                    pred_label.append(res)
+                if output_file is not None:
+                    with open(output_file, 'a', encoding='utf-8') as f:
+                        f.write(res_str + '\n')
 
 if eval_labels is not None:
     with open(eval_labels, 'r') as f:
