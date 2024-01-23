@@ -15,6 +15,9 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+import brevitas.nn as qnn
+from brevitas.quant import Int32Bias
+
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
 
@@ -91,6 +94,23 @@ class MLP(nn.Module):
         x = self.dropout(x)
         return x
 
+class QuantMLP(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.quant_inp  = qnn.QuantIdentity(bit_width=4, return_quant_tensor=True)
+        self.c_fc       = qnn.QuantLinear(config.n_embd, 4 * config.n_embd, bias=config.bias, weight_bit_width=config.weight_bit_width)
+        self.relu       = qnn.QuantReLU(bit_width=config.weight_bit_width)
+        self.c_proj     = qnn.QuantLinear(4* config.n_embd, config.n_embd, bias=config.bias, weight_bit_width=config.weight_bit_width)
+        self.dropout    = qnn.QuantDropout(config.dropout)
+
+    def forward(self, x):
+        x = self.quant_inp(x)
+        x = self.c_fc(x)
+        x = self.relu(x)
+        x = self.c_proj(x)
+        x = self.dropout(x)
+        return x
+
 class Block(nn.Module):
 
     def __init__(self, config):
@@ -105,6 +125,21 @@ class Block(nn.Module):
         x = x + self.mlp(self.ln_2(x))
         return x
 
+class QuantBlock(nn.Module):
+
+    def __init__(self, config):
+        super().__init__()
+        self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
+        self.attn = qnn.QuantMultiheadAttention(embed_dim=config.n_embd, num_heads=config.n_head)
+        self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
+        self.mlp = QuantMLP(config)
+
+    def forward(self, x):
+        normalized_x = self.ln_1(x)
+        x = x + self.attn(query=normalized_x, key=normalized_x, value=normalized_x)[0]
+        x = x + self.mlp(self.ln_2(x))
+        return x
+
 @dataclass
 class GPTConfig:
     block_size: int = 1024
@@ -115,6 +150,11 @@ class GPTConfig:
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
 
+class QuantGPTConfig(GPTConfig):
+    def __init__(self, block_size, vocab_size, n_layer, n_head, n_embd, dropout, bias, weight_bit_width = 8):
+        super().__init__(block_size, vocab_size, n_layer, n_head, n_embd, dropout, bias)
+        self.weight_bit_width = weight_bit_width
+    
 class GPT(nn.Module):
 
     def __init__(self, config):
@@ -328,3 +368,16 @@ class GPT(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
 
         return idx
+
+class QuantGPT(GPT): 
+    def __init__(self, config):
+        super().__init__(config)
+
+        self.transformer = nn.ModuleDict(dict(
+            wte = qnn.QuantEmbedding(config.vocab_size, config.n_embd),
+            wpe = qnn.QuantEmbedding(config.vocab_size, config.n_embd),
+            drop = qnn.QuantDropout(config.dropout),
+            h = nn.ModuleList([QuantBlock(config) for _ in range(config.n_layer)]),
+            ln_f = LayerNorm(config.n_embd, bias=config.bias),
+        ))
+        self.lm_head = qnn.QuantLinear(config.n_embd, config.vocab_size, bias=False, weight_bit_width=config.weight_bit_width)
