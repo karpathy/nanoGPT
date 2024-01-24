@@ -41,6 +41,7 @@ def parse_args():
     training_group.add_argument('--dataset', default='shakespeare_char', type=str)
     training_group.add_argument('--gradient_accumulation_steps', default=1, type=int)
     training_group.add_argument('--batch_size', default=64, type=int)
+    training_group.add_argument("--seed", default=1337, type=int)
 
     # Model args
     model_group.add_argument('--block_size', default=256, type=int)
@@ -166,7 +167,9 @@ class Trainer:
         if self.master_process:
             os.makedirs(self.args.out_dir, exist_ok=True)
 
-        torch.manual_seed(1337 + self.seed_offset)
+        print("seed: ", self.args.seed)
+        print("seed offset: ", self.seed_offset)
+        torch.manual_seed(self.args.seed + self.seed_offset)
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
 

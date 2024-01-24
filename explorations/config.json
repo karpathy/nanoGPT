@@ -10,6 +10,7 @@
     "dataset": ["shakespeare_char"],
     "use_rotary_embeddings": [false],
     "use_abs_pos_embeddings": [true],
-    "tensorboard_run_name": ["shakespeare_context_length_sweep"]
+    "tensorboard_run_name": ["shakespeare_context_length_sweep"],
+    "seed":  ["1337"]
   }
 ]
