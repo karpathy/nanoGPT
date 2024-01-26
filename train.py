@@ -66,6 +66,9 @@ decay_lr = True # whether to decay the learning rate
 warmup_iters = 2000 # how many steps to warm up for
 lr_decay_iters = 600000 # should be ~= max_iters per Chinchilla
 min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
+# Perplexity Required
+start = "\n" # or "<|endoftext|>" or etc.
+sample_length = 16
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
@@ -249,6 +252,7 @@ t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
+token_num = 0
 while True:
 
     # determine and set the learning rate for this iteration
@@ -256,16 +260,21 @@ while True:
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
+    # Calculate perplexity
+    gen_x = torch.tensor([meta["stoi"][i] for i in start]).tile(batch_size, 1).to(device)
+    _, ppl = model.generate(gen_x, sample_length)
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
-        print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        print(f"step {iter_num}, tokens {token_num:,d}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}",
+              f"avg perplexity: {ppl.mean():.4f}")
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
                 "train/loss": losses['train'],
                 "val/loss": losses['val'],
                 "lr": lr,
+                "perplexity": ppl.mean(),
                 "mfu": running_mfu*100, # convert to percentage
             })
         if losses['val'] < best_val_loss or always_save_checkpoint:
@@ -324,6 +333,7 @@ while True:
         print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
     iter_num += 1
     local_iter_num += 1
+    token_num += tokens_per_iter
 
     # termination conditions
     if iter_num > max_iters:
