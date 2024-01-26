@@ -1,0 +1,28 @@
+[
+    {
+      "max_iters": ["3000"],
+      "n_layer": ["6"],
+      "n_head": ["6"],
+      "n_embd": ["384"],
+      "block_size":["256"],
+      "use_post_ln": [true],
+      "device": ["cuda"],
+      "dtype": ["bfloat16"],
+      "dataset": ["shakespeare_char"],
+      "use_rotary_embeddings": [false],
+      "use_abs_pos_embeddings": [true],
+      "compile": [true],
+      "seed":  [
+        "1197", "1276", "1789", "1835", "2627", "2739", "2788", "3393", "3618",
+        "4042", "4691", "4963", "5021", "5772", "6337", "7748", "8423", "9001",
+        "9448", "9473"
+      ],
+      "softmax_variant_attn": ["softermax", "softmax", "constantmax"],
+      "constantmax_initial_beta": {
+          "conditions": [["softmax_variant_attn", "constantmax"]],
+          "options": ["2.5", "5.0", "10.0"]
+      },
+      "tensorboard_run_name": ["random_seed_tests"]
+    }
+  ]
+  
