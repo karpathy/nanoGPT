@@ -5,12 +5,17 @@
     "n_head": ["6"],
     "n_embd": ["384"],
     "block_size":["64","128","256","512"],
+    "use_post_ln": [true],
     "device": ["cuda"],
     "dtype": ["float16"],
     "dataset": ["shakespeare_char"],
     "use_rotary_embeddings": [false],
     "use_abs_pos_embeddings": [true],
-    "tensorboard_run_name": ["shakespeare_context_length_sweep"],
-    "seed":  ["1337"]
+    "tensorboard_run_name": ["shakespeare_context_length_sweep"],  
+    "softmax_variant_attn": {
+      "conditions": [],
+      "options": ["softermax", "softmax", "constantmax"]
+    },
+    "constantmax_base": ["2"]
   }
 ]
