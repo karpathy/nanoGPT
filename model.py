@@ -156,11 +156,11 @@ class Block(nn.Module):
 
     def forward(self, x):
         if self.use_post_ln:
-          x = x + self.attn(self.ln_1(x))
-          x = x + self.mlp(self.ln_2(x))
-        else:
           x = self.ln_1(x + self.attn(x))
           x = self.ln_2(x + self.mlp(x))
+        else:
+          x = x + self.attn(self.ln_1(x))
+          x = x + self.mlp(self.ln_2(x))
         return x
 
 @dataclass
