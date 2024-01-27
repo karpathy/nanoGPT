@@ -1,14 +1,15 @@
 
-# nanoGPT
+# nanoGPT with Rotary Position Embeddings
 
 ![nanoGPT](assets/nanogpt.jpg)
 
-The simplest, fastest repository for training/finetuning medium-sized GPTs. It is a rewrite of [minGPT](https://github.com/karpathy/minGPT) that prioritizes teeth over education. Still under active development, but currently the file `train.py` reproduces GPT-2 (124M) on OpenWebText, running on a single 8XA100 40GB node in about 4 days of training. The code itself is plain and readable: `train.py` is a ~300-line boilerplate training loop and `model.py` a ~300-line GPT model definition, which can optionally load the GPT-2 weights from OpenAI. That's it.
+This is a modification of nanoGPT to use rotary position embeddings.
 
-![repro124m](assets/gpt2_124M_loss.png)
+See [https://github.com/karpathy/nanoGPT](https://github.com/karpathy/nanoGPT) for more information on nanoGPT.
 
-Because the code is so simple, it is very easy to hack to your needs, train new models from scratch, or finetune pretrained checkpoints (e.g. biggest one currently available as a starting point would be the GPT-2 1.3B model from OpenAI).
+One day I will do a complete training run comparison. But for now, this has been an educational exercise in the use of RoPE.
 
+# The following is from nanoGPT
 ## install
 
 ```
