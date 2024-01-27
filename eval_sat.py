@@ -26,6 +26,7 @@ compile = False # use PyTorch 2.0 to compile the model to be faster
 eval = True
 sep = ' ' # separator between tokens during decoding, default: nothing, i.e. join with empty string
 class_only = False # only generate the class token
+debug = True
 exec(open('configurator.py').read()) # overrides from command line or config file
 if sep == 'SPACE':
     sep = ' '
@@ -38,6 +39,10 @@ if sep == 'TAB':
 # -----------------------------------------------------------------------------
 
 assert eval_labels is None or eval
+
+def debug_log(*args, **kwargs):
+    if debug:
+        print(*args, **kwargs)
 
 def load_sat_tokens(fn, stoi):
     with open(fn, 'r') as f:
@@ -139,9 +144,10 @@ with torch.no_grad():
             if class_only:
                 true_label.append(label)
                 y = model.classify(prompt)
+                debug_log(itos[y[0].item()])
                 pred_label.append(y[0].item() == stoi['SAT'])
             else:
-                y = model.generate(prompt, max_new_tokens, temperature=temperature, top_k=top_k, stop=encode(['[SEP]']))
+                y = model.generate(prompt, max_new_tokens, temperature=temperature, top_k=top_k, stop=encode(['[SEP]', '[PAD]']))
                 res_str = decode(y[0].tolist())
                 print(res_str)
                 print('---------------')
@@ -166,6 +172,11 @@ if len(true_label) != len(pred_label):
 for i in range(len(true_label)):
     if pred_label[i] is None:
         pred_label[i] = not true_label[i] # If the model fails to predict, we assume it is wrong
+
+debug_log("True Label:", true_label)
+debug_log("Pred Label:", pred_label)
+debug_log("SAT ID", stoi['SAT'])
+debug_log("UNSAT ID", stoi['UNSAT'])
 
 if eval:
     from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score

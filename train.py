@@ -73,11 +73,16 @@ device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps'
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
 class_only = False # if True, only train the classifier head with a single label. Used for predicting SAT/UNSAT using one pass of the Transformer
+debug = False # Output debug information
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
 config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
+
+def debug_log(*args, **kwargs):
+    if debug:
+        print(*args, **kwargs)
 
 # various inits, derived attributes, I/O setup
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
@@ -138,7 +143,7 @@ def get_batch(split):
         ix = torch.randint(len(data), (batch_size,))
         x = torch.from_numpy(data[ix].astype(np.int64))
         y = torch.from_numpy(labels[ix].astype(np.int64))
-    if data.ndim == 1:
+    elif data.ndim == 1:
         ix = torch.randint(len(data) - block_size, (batch_size,))
         x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
         y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
@@ -271,6 +276,9 @@ if wandb_log and master_process:
 
 # training loop
 X, Y = get_batch('train') # fetch the very first batch
+debug_log(f"Loaded first batch of shape {X.shape} {Y.shape}")
+debug_log(f"first batch X: {X}")
+debug_log(f"first batch Y: {Y}")
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
@@ -305,8 +313,11 @@ while True:
                     'best_val_loss': best_val_loss,
                     'config': config,
                 }
-                print(f"saving checkpoint to {out_dir}")
-                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+                if not debug:
+                    print(f"saving checkpoint to {out_dir}")
+                    torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+                else:
+                    print("skipping checkpoint save because debug=True")
     if iter_num == 0 and eval_only:
         break
 

@@ -11,6 +11,7 @@ import numpy as np
 
 MAX_PROP = 30
 DATASET_FILE = 'SAT_N6_10_Clause_Trace.txt'
+TEST_FILE = 'SAT_N6_10_Test_Clause_Trace.txt'
 
 input_file_path = os.path.join(os.path.dirname(__file__), DATASET_FILE)
 if not os.path.exists(input_file_path):
@@ -18,6 +19,14 @@ if not os.path.exists(input_file_path):
     url = 'https://huggingface.co/datasets/leyanpan/sat-solver/resolve/main/SAT_N6_10_Clause_Trace.txt?download=true'
     r = requests.get(url)
     with open(input_file_path, 'wb') as f:
+        f.write(r.content)
+
+test_file_path = os.path.join(os.path.dirname(__file__), TEST_FILE)
+if not os.path.exists(test_file_path):
+    # download from HuggingFace
+    url = 'https://huggingface.co/datasets/leyanpan/sat-solver/resolve/main/SAT_N6_10_Test_Clause_Trace.txt?download=true'
+    r = requests.get(url)
+    with open(test_file_path, 'wb') as f:
         f.write(r.content)
 
 with open(input_file_path, 'r') as f:
