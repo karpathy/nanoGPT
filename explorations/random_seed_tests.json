@@ -7,7 +7,7 @@
       "block_size":["256"],
       "use_post_ln": [true],
       "device": ["cuda"],
-      "dtype": ["bfloat16"],
+      "dtype": ["float16"],
       "dataset": ["shakespeare_char"],
       "use_rotary_embeddings": [false],
       "use_abs_pos_embeddings": [true],
