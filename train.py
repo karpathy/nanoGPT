@@ -8,6 +8,7 @@ import math
 import pickle
 from contextlib import nullcontext
 
+import pandas as pd
 import numpy as np
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -311,14 +312,29 @@ class Trainer:
         if self.args.csv_log:
             self.write_to_csv(losses['train'].item(), losses['val'].item())
 
-    def write_to_csv(self, *args):
+    def write_to_csv(self, *args, prefix=""):
         os.makedirs(self.args.csv_dir, exist_ok=True)
-        csv_path = os.path.join(self.args.csv_dir, self.args.csv_name)
+        csv_path = os.path.join(self.args.csv_dir, prefix + self.args.csv_name)
         with open(csv_path, 'a', newline='') as file:
             writer = csv.writer(file)
             # Write arguments as a new row in the CSV
             writer.writerow(args)
 
+
+    def log_gamma_beta(self, gamma, beta, iter_num, layer_num):
+        if self.args.tensorboard_log:
+            self.writer.add_scalar( "gamma_" + str(layer_num), gamma, iter_num)
+            self.writer.add_scalar( "beta_" + str(layer_num), beta, iter_num)
+
+        if self.args.wandb_log and self.master_process:
+            import wandb
+            wandb.log({
+                "iter": iter_num,
+                "train/loss": losses['train'],
+                "val/loss": losses['val'],
+                "lr": lr,
+                "mfu": running_mfu*100,
+            })
 
     def log_metrics_non_validation(self, loss_training, running_mfu, iter_num):
         if self.args.tensorboard_log:
@@ -400,6 +416,123 @@ class Trainer:
                 print(f"iter {self.iter_num}: loss {lossf:.4f}, time {dt*1000:.2f} ms, mfu {running_mfu*100:.2f}%")
                 self.log_metrics_non_validation(lossf, running_mfu, self.iter_num)
 
+
+
+            if self.args.softmax_variant_attn == "constantmax" and self.iter_num%50==0:
+                betas = []
+                gammas = []
+                i_sum_vals = []
+                i_means = []
+                i_medians = []
+                i_stdevs = []
+                i_max_values = []
+                o_sum_vals = []
+                o_means = []
+                o_medians = []
+                o_stdevs = []
+                o_max_values = []
+
+                for layer in range (self.args.n_layer):
+                    # Inputs
+                    inputs_location = f"transformer.h[{layer}].attn.softmax_layer.inputs"
+                    softmax_input = eval(f"self.model.{inputs_location}").to('cpu').to(torch.float32)
+
+                    ## Get first batch
+                    i_first_batch = softmax_input[0]
+                    i_first_batch[i_first_batch == float('-inf')] = float('NaN')
+
+                    for i_head in i_first_batch:
+
+                        ## Flatten across heads, height, and width
+                        flattened = i_head.view(-1)
+
+                        ## Calculate statistics
+                        i_means.append(torch.nanmean(flattened).item())
+                        i_medians.append(torch.nanmedian(flattened).item())
+
+                        # Standard deviation, ignoring NaNs
+                        mask = ~torch.isnan(i_head)
+                        i_stdevs.append(torch.std(i_head[mask]).item())
+                        i_sum_vals.append(torch.sum(i_head[mask]).item())
+
+                        # Max, temporarily replacing NaNs with -inf for calculation
+                        i_max_values.append(torch.max(torch.where(torch.isnan(i_head), torch.tensor(float('-inf')), i_head)).item())
+
+                    outputs_location = f"transformer.h[{layer}].attn.softmax_layer.outputs"
+                    softmax_output = eval(f"self.model.{outputs_location}").to('cpu').to(torch.float32)
+                    o_first_batch = softmax_output[0]
+                    o_first_batch[o_first_batch == float('-inf')] = float('NaN')
+                    for o_head in o_first_batch:
+
+                        # Step 3: Flatten across heads, height, and width
+                        flattened = o_head.view(-1)
+
+                        # Step 4: Calculate statistics
+                        ## Calculate statistics
+                        o_means.append(torch.nanmean(flattened).item())
+                        o_medians.append(torch.nanmedian(flattened).item())
+                        # Standard deviation, ignoring NaNs
+                        mask = ~torch.isnan(o_head)
+                        o_stdevs.append(torch.std(o_head[mask]).item())
+                        o_sum_vals.append(torch.sum(o_head[mask]).item())
+                        # Max, temporarily replacing NaNs with -inf for calculation
+                        o_max_values.append(torch.max(torch.where(torch.isnan(o_head), torch.tensor(float('-inf')), o_head)).item())
+
+                    #BETA GAMMA
+                    gamma_location = f"transformer.h[{layer}].attn.softmax_layer.gamma"
+                    beta_location = f"transformer.h[{layer}].attn.softmax_layer.beta"
+
+                    gamma = eval(f"self.model.{gamma_location}")
+                    gammas.append(gamma[0].item()) # are there more than just gamma 0?
+                    # print("gammas",gamma) # are there more than just gamma 0?
+
+                    beta = eval(f"self.model.{beta_location}")
+                    betas.append(beta[0].item()) # are there more than just beta 0?
+                    # print("betas",beta,) # are there more than just beta 0?
+
+                    self.log_gamma_beta(gamma, beta, self.iter_num, layer)
+
+
+                self.write_to_csv(self.iter_num,
+                                  *i_sum_vals,
+                                  *i_means,
+                                  *i_medians,
+                                  *i_stdevs,
+                                  *i_max_values,
+                                  prefix="inputs")
+                self.write_to_csv(self.iter_num,
+                                  *o_sum_vals,
+                                  *o_means,
+                                  *o_medians,
+                                  *o_stdevs,
+                                  *o_max_values,
+                                  prefix="outputs")
+                self.write_to_csv(self.iter_num, *betas, *gammas, prefix="beta_gamma")
+
+            """
+            if self.iter_num % 50 == 0:
+                inputs = []
+                outputs = []
+
+                for layer in range (self.args.n_layer):
+                    inputs_location = f"transformer.h[{layer}].attn.softmax_layer.inputs"
+                    outputs_location = f"transformer.h[{layer}].attn.softmax_layer.outputs"
+
+                    gamma = eval(f"self.model.{gamma_location}")
+                    gammas.append(gamma[0].item()) # are there more than just gamma 0?
+                    # print("gammas",gamma) # are there more than just gamma 0?
+
+                    beta = eval(f"self.model.{beta_location}")
+                    betas.append(beta[0].item()) # are there more than just beta 0?
+                    # print("betas",beta,) # are there more than just beta 0?
+
+                    self.log_gamma_beta(gamma, beta, self.iter_num, layer)
+
+
+                self.write_to_csv(self.iter_num, *betas, *gammas, prefix="beta_gamma")
+
+
+            """
             self.iter_num += 1
             local_iter_num += 1
 
