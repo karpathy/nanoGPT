@@ -1,7 +1,7 @@
 [
     {
-      "max_iters": ["3000"],
-      "n_layer": ["6"],
+      "max_iters": ["1000"],
+      "n_layer": ["4"],
       "n_head": ["6"],
       "n_embd": ["384"],
       "block_size":["256"],
