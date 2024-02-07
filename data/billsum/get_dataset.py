@@ -49,7 +49,7 @@ def emit_json_contents(json_path, order, output_text_file):
             f.write("\n" + "-" * 80 + "\n")  # Separator between items
 
 
-def main(output_format, order, output_text_file):
+def main(order, output_text_file):
     parquet_files = {
         "ca_test": "https://huggingface.co/datasets/billsum/resolve/main/data/ca_test-00000-of-00001.parquet?download=true",
         "test": "https://huggingface.co/datasets/billsum/resolve/main/data/test-00000-of-00001.parquet?download=true",
@@ -100,4 +100,4 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    main(args.output_format, args.order, args.output_text_file)
+    main(args.order, args.output_text_file)

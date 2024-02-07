@@ -35,8 +35,11 @@ For more details, visit the [BillSum dataset page on Hugging Face](https://huggi
 ### 2. Retrieve Dataset
 
 ```bash
-python3 get_billsum.py --output_text_file "input.txt"
+python3 get_dataset.py
 ```
+
+This will get the dataset into a text file "input.txt", expanding the json files
+in order of "title" then "article" then "summary".
 
 ### 3. Run Tokenization
 
