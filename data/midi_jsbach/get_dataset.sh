@@ -1,6 +1,6 @@
 #!/bih/bash
 
-git clone https://github.com/czhuang/JSB-Chorales-dataset.git
+git clone https://github.com/klei22/JSB-Chorales-dataset.git
 
 cp JSB-Chorales-dataset/Jsb16thSeparated.json midi.json
 
