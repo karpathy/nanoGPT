@@ -1,84 +1,53 @@
-# Tokenization
+# XSum Dataset Processor
 
-This folder is a template data folder, with a script provides a utility for
-tokenizing text data using alternative methods.
+This Python script is designed to automate the downloading, conversion, and processing of the "xsum" dataset, which includes 226,711 news articles accompanied with a one-sentence summary.
 
-Currently SentencePiece, TikToken, and character-level tokenizations are
-supported, with more tokenization method support planned.
+## Dataset Overview
 
-## Currently Supported Tokenizations
+The Extreme Summarization (XSum) dataset contains 226,711 BBC news articles (2010-2017) accompanied with a one-sentence summary. The articles cover a wide variety of domains (e.g., News, Politics, Sports, Weather, Business, Technology, Science, Health, Family, Education, Entertainment and Arts). For each article, a sentence is provided that is intented to explain what the article is about.
 
-- **SentencePiece Tokenization**
-- **TikToken Tokenization**
-- **Character-Level Tokenization**
+## Getting Started
 
-## Usage
+### 1. Install Requirements
 
-### Prerequisites
+- Python 3.x
+- NumPy
+- huggingface
+- json
 
-Ensure you have Python installed on your system along with the necessary libraries: `numpy`, `pickle`, `sentencepiece`, and `tiktoken`.
-
-### Command Line Arguments
-
-- `input_file`: Path to the input text file.
-- `--method`: Tokenization method (`sentencepiece`, `tiktoken`, `char`). Default is `sentencepiece`.
-- `--vocab_size`: Vocabulary size for the SentencePiece model. Default is 500.
-
-#### 1. Create a New Data Folder
-
-First copy this folder into a new folder:
+### 2. Retrieve Dataset
 
 ```bash
-# from the ./data directory
-cp -r ./template ./new_data_folder
+python3 get_dataset.py
 ```
 
-#### 2. Add data to folder
+This will get the dataset into a text file "input.txt", dividing each article and summary into "text" and "summary" denoted sections.
 
-Obtain a text format of the data for training.
-
-### 3. Run tokenization script
-
-This script takes in a text file as its argument for tokenization.
-
-Afterward it produces the train.bin and val.bin (and meta.pkl if not tiktoken)
-then you'll be able to begin training with the train.py script.
-
-#### SentencePiece
+### 3. Run Tokenization
 
 ```bash
-python3 text_tokenizer.py input.txt --method sentencepiece --vocab_size 1000
+python3 prepare.py --method tiktoken
 ```
 
-#### TikToken
+After running the above command you should be ready to add this folder as a
+dataset for training.
 
-```bash
-python3 text_tokenizer.py input.txt --method tiktoken
+
+## Acknowledgments
+
+See the following links for more information about XSum:
+
+* [Huggingface XSum Page](https://huggingface.co/datasets/EdinburghNLP/xsum)
+* [Arxiv Paper: Don’t Give Me the Details, Just the Summary!
+Topic-Aware Convolutional Neural Networks for Extreme Summarization](https://arxiv.org/pdf/1808.08745v1)
+
+xsum bibtex citation:
 ```
-#### Character Level Tokenization
-
-This command will tokenize the text in from the input file at the character level.
-
-```bash
-python3 text_tokenizer.py input.txt --method char
+@misc{Narayan_Cohen_Lapata_2018,
+  title={Don’t give me the details, just the summary! topic-aware convolutional neural networks for extreme summarization},
+  author={Shashi Narayan, Shay B. Cohen, Mirella Lapata},
+  year={2018},
+  eprint={1808.08745},
+  archivePrefix={arXiv},
+  primaryClass={cs.CL}
 ```
-
-## Relevant Resources and References
-
-This section provides links to research papers and GitHub repositories related to the tokenization methods used in this script. These resources can offer deeper insights into the algorithms and their implementations.
-
-### SentencePiece
-
-- [Read the Paper](https://arxiv.org/abs/1808.06226)
-- [SentencePiece Github Repository](https://github.com/google/sentencepiece)
-
-### TikToken
-
-- [General Usage Guide](https://github.com/openai/openai-cookbook/blob/main/examples/How_to_count_tokens_with_tiktoken.ipynb)
-- [TikToken Github Repository](https://github.com/openai/tiktoken)
-
-## Open to Contributions
-
-- [ ] Add feature to take in a file with set of multi-character tokens for custom tokenization (e.g. char level tokenization but custom word-level tokenization list)
-- [ ] Add byte-level tokenization options
-- [ ] Add argparse arguments for more features of SentencePiece and TikToken
