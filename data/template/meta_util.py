@@ -21,23 +21,25 @@ def merge_metas(meta_path1, meta_path2, output_path):
     meta1 = load_meta(meta_path1)
     meta2 = load_meta(meta_path2)
     
-    # Combine and resolve conflicts if any
-    stoi = {**meta1['stoi'], **meta2['stoi']}
-    itos = {**meta1['itos'], **meta2['itos']}
+    # Start with the stoi and itos from the first meta file
+    stoi = meta1['stoi'].copy()
+    itos = meta1['itos'].copy()
     
-    # Check for conflicts and duplicates - simplistic approach, needs refinement for real conflicts
-    stoi_counter = Counter(stoi.values())
-    conflict_ids = [id for id, count in stoi_counter.items() if count > 1]
-    if conflict_ids:
-        print(f"Conflicts detected in token IDs: {conflict_ids}. Manual resolution required.")
-        return
+    # Update with tokens from the second meta, resolving conflicts by prioritizing the first meta
+    for token, id in meta2['stoi'].items():
+        if token not in stoi:
+            # If the token is not in stoi, add it
+            new_id = max(itos.keys()) + 1  # Assign a new ID that is the current max ID + 1
+            stoi[token] = new_id
+            itos[new_id] = token
+        # If the token is already in stoi, it's skipped, thereby prioritizing meta1's mapping
     
-    # Assuming no conflicts or resolved
     vocab_size = len(stoi)
     meta = {'vocab_size': vocab_size, 'stoi': stoi, 'itos': itos}
     with open(output_path, 'wb') as f:
         pickle.dump(meta, f)
-    print(f"Merged meta saved to {output_path}.")
+    print(f"Merged meta saved to {output_path}, prioritizing {meta_path1}.")
+
 
 def create_meta_from_text(text_file, output_path, special_chars={'<ukn>': 0}):
     with open(text_file, 'r') as f:
