@@ -16,29 +16,47 @@ def parse_args():
 def check_conditions(conditions, combo_dict):
     return all(combo_dict.get(cond[0]) == cond[1] for cond in conditions)
 
+def expand_range(value):
+    if isinstance(value, dict) and 'range' in value:
+        range_def = value['range']
+        start, end = range_def['start'], range_def['end']
+        step = range_def.get('step', 1 if isinstance(start, int) else 0.1)
+        return list(range(start, end + 1, step)) if isinstance(start, int) else [start + i * step for i in range(int((end - start) / step) + 1)]
+    return value
+
 def generate_combinations(config, current_combo={}, parent_conditions=[]):
-    base_params = {k: v for k, v in config.items() if not isinstance(v, dict)}
-    conditional_params = {k: v for k, v in config.items() if isinstance(v, dict)}
+    # Initialize base_params with expanded ranges or direct values
+    base_params = {}
+    for k, v in config.items():
+        if isinstance(v, list):
+            base_params[k] = v
+        elif isinstance(v, dict):
+            if 'range' in v:
+                # Directly expand ranges for parameters like 'seed'
+                base_params[k] = expand_range(v)
+            else:
+                # Handle conditional parameters separately
+                continue
+        else:
+            base_params[k] = [v]
 
-    if not conditional_params:  # If there are no conditional parameters
-        yield from [dict(zip(base_params, combo)) for combo in product(*base_params.values())]
-        return
+    conditional_params = {k: v for k, v in config.items() if isinstance(v, dict) and 'conditions' in v}
 
-    base_combinations = list(product(*[[(k, v) for v in (val if isinstance(val, list) else [val])] for k, val in base_params.items()]))
+    base_combinations = list(product(*[[(k, v) for v in values] for k, values in base_params.items()]))
 
     for base_combination in base_combinations:
-        combo_dict = {**current_combo, **dict(base_combination)}
+        combo_dict = dict(base_combination)
 
+        # Check and apply conditional parameters
         for cond_param, values in conditional_params.items():
-            current_conditions = values['conditions'] + parent_conditions
-            if check_conditions(current_conditions, combo_dict):
-                for val in values['options']:
-                    new_combo = {**combo_dict, cond_param: val}
-                    if "nested" in values:
-                        yield from generate_combinations(values["nested"], new_combo, current_conditions)
-                    else:
-                        yield new_combo
+            if check_conditions(values['conditions'], combo_dict):
+                # This assumes 'options' is a list of values or a single value
+                option_values = values['options'] if isinstance(values['options'], list) else [values['options']]
+                for option_value in option_values:
+                    new_combo = {**combo_dict, cond_param: option_value}
+                    yield new_combo
             else:
+                # If conditions are not met, yield the base combination without the conditional parameter
                 yield combo_dict
 
 
@@ -50,6 +68,7 @@ def format_config_name(config, config_basename, prefix, value_only, original_con
 
     return f"{prefix}{config_basename}-{'-'.join(config_items)}"
 
+# Update the run_command function to handle list parameters correctly
 def run_command(config, config_basename, output_dir, prefix, value_only, original_config):
     formatted_name = format_config_name(config, config_basename, prefix, value_only, original_config)
     config['tensorboard_run_name'] = formatted_name
@@ -59,10 +78,15 @@ def run_command(config, config_basename, output_dir, prefix, value_only, origina
     for key, value in config.items():
         if isinstance(value, bool):
             base_command.extend([f"--{'' if value else 'no-'}{key}"])
+        elif isinstance(value, list):
+            # For list arguments, add each value separately
+            for val in value:
+                base_command.extend([f"--{key}", str(val)])
         else:
             base_command.extend([f"--{key}", str(value)])
 
     print(f"Running command: {' '.join(base_command)}")
+
     subprocess.run(base_command)
 
 def main():
@@ -79,4 +103,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
