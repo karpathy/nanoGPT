@@ -145,7 +145,7 @@ checkpoints created from training using `validation loss` as a figure of merit.
 To run the experiment create or modify an existing json file in the `explorations` folder:
 
 ```bash
-python3 run_experiments.py --config explorations/config.json --value_only --output_dir out_test`
+python3 run_experiments.py --config explorations/config.json --value_only --output_dir out_test
 ```
 
 This will create logs in the following directories:
