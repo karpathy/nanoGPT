@@ -18,7 +18,7 @@ The `OpenMathInstruct-1` dataset comprises several fields as outlined below:
 - `dataset`: Specifies the source dataset for the question, which can be either `gsm8k` or `math`.
 - `generation_type`: Denotes the method used for generating the solution, categorized as either `without_reference_solution` or `masked_reference_solution`.
 
-## Download
+## Download Dataset
 
 Run the get datasets script to download the data
 
@@ -26,8 +26,23 @@ Run the get datasets script to download the data
 bash get_datasets.sh
 ```
 
-Then run the prepare.py script with preferred tokenization to create the
-train.bin and val.bin for training.
+The above will create `train.txt` and `validation.txt` files ready for
+tokenization.
+
+## Tokenizate files
+
+Finally run the `prepare.py` script on the separate files to permit creation of
+the train.bin and validation.bin files needed for training.
+
+For example for tiktoken:
+```sh
+python3 prepare.py -s -t train.txt -v validation.txt
+```
+
+Or for sentence piece (warning requires *a lot* of ram):
+```sh
+python3 prepare.py -s -t train.txt -v validation.txt --method sentencepiece
+```
 
 ## Reference and more information
 
