@@ -3,11 +3,26 @@ import argparse
 import numpy as np
 import pickle
 import sentencepiece as spm
+import tempfile
 import tiktoken
 
 
 def train_sentencepiece_model(input_files, model_prefix, vocab_size):
-    """Train a SentencePiece model."""
+    """Train a SentencePiece model directly with a single file or using concatenated input files."""
+    num_threads = os.cpu_count()
+    input_arg = ""
+
+    # If input_files is a list of multiple files, concatenate them into a temporary file
+    if isinstance(input_files, list):
+        with tempfile.NamedTemporaryFile(delete=False, mode="w") as tmpfile:
+            for input_file in input_files:
+                with open(input_file, "r") as infile:
+                    tmpfile.write(infile.read())
+            # Use the name of the temporary file as the input argument for training
+            input_arg = tmpfile.name
+    else:
+        # If input_files is not a list, use it directly as the input argument
+        input_arg = input_files
 
     # Other options (https://github.com/google/sentencepiece/blob/master/doc/options.md)
     # self_test_sample_size=1,
@@ -16,16 +31,21 @@ def train_sentencepiece_model(input_files, model_prefix, vocab_size):
     # split_digits=False, # this often helps with arithmetic
     # allow_whitespace_only_pieces=True,
     # normalization_rule_name="nmt_nfkc_cf" lower cases as well
-    num_threads = os.cpu_count()
-    input_arg = ",".join(input_files) if isinstance(input_files, list) else input_files
+
+    # Train the SentencePiece model
     spm.SentencePieceTrainer.train(
         num_threads=num_threads,
         input=input_arg,
         model_prefix=model_prefix,
+        split_digits=True,
         vocab_size=vocab_size,
         model_type="bpe",
     )
     print("SentencePiece model training complete.")
+
+    # If a temporary file was used, remove it after training
+    if isinstance(input_files, list):
+        os.remove(input_arg)
 
 
 def tokenize_sentencepiece(sp_model, data):
@@ -50,7 +70,9 @@ def main():
     )
 
     # Default option is a single input file
-    parser.add_argument('-i', "--input_file", type=str, help="Path to the input text file")
+    parser.add_argument(
+        "-i", "--input_file", type=str, help="Path to the input text file"
+    )
 
     parser.add_argument(
         "--method",
@@ -126,7 +148,7 @@ def main():
 
     if args.method == "sentencepiece":
         # Train and use SentencePiece
-        spm_model_prefix = os.path.splitext(args.input_file)[0] + "_spm_model"
+        spm_model_prefix = "trained_spm_model"
         train_sentencepiece_model(input_files, spm_model_prefix, args.vocab_size)
         sp = spm.SentencePieceProcessor()
         sp.load(f"{spm_model_prefix}.model")
@@ -154,7 +176,8 @@ def main():
 
     elif args.method == "char":
         # Print the total length of the dataset in characters
-        print(f"Length of dataset in characters: {len(data):,}")
+        total_len = len(train_data) + len(val_data)
+        print(f"Length of dataset in characters: {total_len:,}")
         # Character-level tokenization
         chars = sorted(
             list(set(train_data + val_data))
