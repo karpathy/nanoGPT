@@ -37,6 +37,7 @@ def parse_args():
     training_group.add_argument('--always_save_checkpoint', action='store_true')
     training_group.add_argument('--init_from', default='scratch', choices=['scratch', 'prev_run', 'resume', 'gpt2*'], type=str)
     training_group.add_argument('--prev_run_ckpt', default='', type=str)
+    training_group.add_argument('--csv_ckpt_dir', default='', type=str)
 
     # Data args
     training_group.add_argument('--dataset', default='shakespeare_char', type=str)
@@ -332,8 +333,11 @@ class Trainer:
 
     def write_to_csv(self, *args):
         csv_full_dir = self.args.csv_dir
-        if self.args.tensorboard_log:
-            csv_full_dir = f"{self.args.csv_dir}/{self.args.tensorboard_run_name.split('-')[0]}-{self.args.dataset}"
+        if self.args.csv_ckpt_dir:
+            csv_full_dir = f"{self.args.csv_dir}/{self.args.csv_ckpt_dir}"
+        else:
+            if self.args.tensorboard_log:
+                csv_full_dir = f"{self.args.csv_dir}/{self.args.tensorboard_run_name.split('-')[0]}-{self.args.dataset}"
         os.makedirs(csv_full_dir, exist_ok=True)
         csv_path = os.path.join(csv_full_dir, self.args.csv_name + ".csv")
         with open(csv_path, 'a', newline='') as file:

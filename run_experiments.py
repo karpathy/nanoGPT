@@ -11,6 +11,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Run experiments based on a json configuration file.")
     parser.add_argument("--config", type=str, required=True, help="Path to the configuration JSON file.")
     parser.add_argument("--output_dir", type=str, default="out", help="Directory to place the set of output checkpoints.")
+    parser.add_argument("--csv_ckpt_dir", type=str, default="", help="Directory to place the set of csv checkpoints in csv_logs.")
     parser.add_argument("--prefix", type=str, default='', help="Optional prefix for tensorboard_run_name and out_dir.")
     parser.add_argument("--value_only", action="store_true", help="Include only the values of the configuration parameters in the names.")
     parser.add_argument("--use-best-val-loss-from", nargs=2, metavar=('csv_dir', 'output_dir'), type=str, default=['', ''],
@@ -18,15 +19,14 @@ def parse_args():
     return parser.parse_args()
 
 def find_best_val_loss(csv_dir, output_dir):
-    csv_path = f"csv_logs/{csv_dir}"
-    csvList = os.listdir(csv_path)
+    csvList = os.listdir(csv_dir)
 
     best_ckpt_loss = sys.float_info.max
     best_ckpt_name = ""
     for fname in csvList:
         ext = os.path.splitext(fname)
         params = ext[0].split('-')
-        df = pd.read_csv(f"{csv_path}/{fname}", header=None)
+        df = pd.read_csv(f"{csv_dir}/{fname}", header=None)
         best_valid_loss = df.iloc[:,-1].dropna().min()
         if best_valid_loss < best_ckpt_loss:
             best_ckpt_loss = best_valid_loss
@@ -98,8 +98,7 @@ def format_config_name(config, config_basename, prefix, value_only, original_con
 
     return f"{prefix}{config_basename}-{'-'.join(config_items)}"
 
-
-def run_command(config, config_basename, output_dir, prefix, value_only, best_val_loss_from, original_config):
+def run_command(config, config_basename, output_dir, csv_ckpt_dir, prefix, value_only, best_val_loss_from, original_config):
     formatted_name = format_config_name(config, config_basename, prefix, value_only, original_config)
     config['tensorboard_run_name'] = formatted_name
     config['out_dir'] = os.path.join(output_dir, f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{formatted_name}")
@@ -120,6 +119,9 @@ def run_command(config, config_basename, output_dir, prefix, value_only, best_va
         ckpt_path = find_best_val_loss(best_val_loss_from[0], best_val_loss_from[1])
         base_command.extend(["--prev_run_ckpt", ckpt_path])
 
+    if csv_ckpt_dir:
+        base_command.extend(["--csv_ckpt_dir", csv_ckpt_dir])
+
     print(f"Running command: {' '.join(base_command)}")
 
     subprocess.run(base_command)
@@ -134,10 +136,8 @@ def main():
 
     for config in original_configurations:
         for combination in generate_combinations(config):
-            run_command(combination, config_basename, args.output_dir, args.prefix, 
+            run_command(combination, config_basename, args.output_dir, args.csv_ckpt_dir, args.prefix, 
                         args.value_only, args.use_best_val_loss_from, original_configurations[0])
 
 if __name__ == "__main__":
     main()
-
-
