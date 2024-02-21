@@ -8,3 +8,5 @@ __pycache__/
 *.pt
 *.pyc
 input.txt
+data/enwik8_char/enwik8
+data/enwik8_char/enwik8.zip*
