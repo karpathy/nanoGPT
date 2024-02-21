@@ -198,10 +198,9 @@ class GPTConfig:
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
 
+@dataclass
 class QuantGPTConfig(GPTConfig):
-    def __init__(self, block_size, vocab_size, n_layer, n_head, n_embd, dropout, bias, weight_bit_width = 8):
-        super().__init__(block_size, vocab_size, n_layer, n_head, n_embd, dropout, bias)
-        self.weight_bit_width = weight_bit_width
+    weight_bit_width: int = 8
     
 class GPT(nn.Module):
 
