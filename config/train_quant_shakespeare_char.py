@@ -37,4 +37,4 @@ warmup_iters = 100 # not super necessary potentially
 # compile = False # do not torch compile the model
 
 # Quantization
-weight_bit_width = 8
+weight_bit_width = 16
