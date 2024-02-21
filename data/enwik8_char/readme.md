@@ -1,10 +1,7 @@
 
 # enwik8, byte-level
-
-
-
 After running `prepare.py`:
 
-TODO: .....
-- train.bin has xx tokens
-- val.bin has xx tokens
+- train.bin has 90M tokens 
+- val.bin has 5M tokens 
+- val.bin has 5M tokens 

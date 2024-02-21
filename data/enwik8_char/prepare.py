@@ -39,7 +39,6 @@ except Exception as e:
 print(success, output, error)
 
 
-
 # Read the dataset as bytes
 with open('enwik8', 'rb') as file:
     data = file.read()
