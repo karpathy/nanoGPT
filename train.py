@@ -35,7 +35,8 @@ def parse_args():
     # Checkpoint args
     training_group.add_argument('--only_save_checkpoint_at_end', action='store_true')
     training_group.add_argument('--always_save_checkpoint', action='store_true')
-    training_group.add_argument('--init_from', default='scratch', choices=['scratch', 'resume', 'gpt2*'], type=str)
+    training_group.add_argument('--init_from', default='scratch', choices=['scratch', 'prev_run', 'resume', 'gpt2*'], type=str)
+    training_group.add_argument('--prev_run_ckpt', default='', type=str)
 
     # Data args
     training_group.add_argument('--dataset', default='shakespeare_char', type=str)
@@ -219,6 +220,21 @@ class Trainer:
             self.model = GPT.from_pretrained(self.args.init_from, override_args)
             for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
                 self.model_args[k] = getattr(self.model.config, k)
+        elif self.args.init_from == 'prev_run':
+            ckpt_path = os.path.join(self.args.prev_run_ckpt, 'ckpt.pt')
+            checkpoint = torch.load(ckpt_path, map_location=self.device)
+            checkpoint_model_args = checkpoint['model_args']
+            for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
+                self.model_args[k] = checkpoint_model_args[k]
+            gptconf = GPTConfig(**self.model_args)
+            self.model = GPT(gptconf)
+            state_dict = checkpoint['model']
+            for k,v in list(state_dict.items()):
+                if k.startswith('_orig_mod.'):
+                    state_dict[k[len('_orig_mod.'):]] = state_dict.pop(k)
+            self.model.load_state_dict(state_dict)
+            self.iter_num = 0
+            self.best_val_loss = checkpoint['best_val_loss']
 
         if self.args.block_size < self.model.config.block_size:
             self.model.crop_block_size(self.args.block_size)
@@ -315,8 +331,11 @@ class Trainer:
             self.write_to_csv(losses['train'].item(), losses['val'].item())
 
     def write_to_csv(self, *args):
-        os.makedirs(self.args.csv_dir, exist_ok=True)
-        csv_path = os.path.join(self.args.csv_dir, self.args.csv_name + ".csv")
+        csv_full_dir = self.args.csv_dir
+        if self.args.tensorboard_log:
+            csv_full_dir = f"{self.args.csv_dir}/{self.args.tensorboard_run_name.split('-')[0]}-{self.args.dataset}"
+        os.makedirs(csv_full_dir, exist_ok=True)
+        csv_path = os.path.join(csv_full_dir, self.args.csv_name + ".csv")
         with open(csv_path, 'a', newline='') as file:
             writer = csv.writer(file)
             # Write arguments as a new row in the CSV
