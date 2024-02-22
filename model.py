@@ -187,16 +187,13 @@ class GPT(nn.Module):
             logits = self.lm_head(x)
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
 
-            # bpc value
-            probs = F.softmax(logits, dim=-1)
-            # find the probability of the target tokens
+            # find bpc 
+            probs = F.softmax(logits, dim=-1) # same shape as logits: (b, t, vocab_size)
+            # probability of the target tokens with shape (b, t) 
             target_probs = torch.gather(probs, 2, targets.unsqueeze(2)).squeeze(2)
-
-            # calculate the bpc
             bpc = -torch.log2(target_probs).mean()
+            
 
-            
-            
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(x[:, [-1], :]) # note: using list [-1] to preserve the time dim
