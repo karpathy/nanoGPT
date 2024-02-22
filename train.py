@@ -213,14 +213,18 @@ if ddp:
 def estimate_loss():
     out = {}
     model.eval()
-    for split in ['train', 'val']:
+    for split in ['train', 'val', 'test']:
         losses = torch.zeros(eval_iters)
+        pbc_vals = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = get_batch(split)
             with ctx:
-                logits, loss = model(X, Y)
+                logits, loss, bpc = model(X, Y)
+            #print(f'iter {k}: {split} loss {loss.item():.4f}, bpc {bpc.item():.4f}')
             losses[k] = loss.item()
+            pbc_vals[k] = bpc.item()
         out[split] = losses.mean()
+        out[split + '_bpc'] = pbc_vals.mean()
     model.train()
     return out
 
@@ -259,12 +263,17 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
-        print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, test loss {losses['test']:.4f}")
+        print(f'                 train bpc {losses["train_bpc"]:.4f}, val bpc {losses["val_bpc"]:.4f}, test bpc {losses["test_bpc"]:.4f}')
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
                 "train/loss": losses['train'],
                 "val/loss": losses['val'],
+                'test/loss': losses['test'],
+                "train/bpc": losses['train_bpc'],
+                "val/bpc": losses['val_bpc'],
+                'test/bpc': losses['test_bpc'],
                 "lr": lr,
                 "mfu": running_mfu*100, # convert to percentage
             })
@@ -294,7 +303,7 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            logits, loss = model(X, Y)
+            logits, loss, pbc = model(X, Y)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, Y = get_batch('train')
@@ -318,10 +327,11 @@ while True:
         # get loss as float. note: this is a CPU-GPU sync point
         # scale up to undo the division above, approximating the true total loss (exact would have been a sum)
         lossf = loss.item() * gradient_accumulation_steps
+        bpcf = pbc.item()
         if local_iter_num >= 5: # let the training loop settle a bit
             mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+        print(f"iter {iter_num}: loss {lossf:.4f}, bpc: {bpcf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
     iter_num += 1
     local_iter_num += 1
 

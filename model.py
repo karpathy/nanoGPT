@@ -180,17 +180,30 @@ class GPT(nn.Module):
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)
+        
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
+
+            # bpc value
+            probs = F.softmax(logits, dim=-1)
+            # find the probability of the target tokens
+            target_probs = torch.gather(probs, 2, targets.unsqueeze(2)).squeeze(2)
+
+            # calculate the bpc
+            bpc = -torch.log2(target_probs).mean()
+
+            
+            
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(x[:, [-1], :]) # note: using list [-1] to preserve the time dim
             loss = None
+            bpc = None
 
-        return logits, loss
+        return logits, loss, bpc
 
     def crop_block_size(self, block_size):
         # model surgery to decrease the block size if necessary
