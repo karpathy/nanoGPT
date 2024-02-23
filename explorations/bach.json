@@ -1,0 +1,17 @@
+[
+  {
+    "max_iters": ["10000"],
+    "n_layer": ["6"],
+    "n_head": ["6"],
+    "n_embd": ["384"],
+    "block_size": ["256"],
+    "device": ["cuda"],
+    "dtype": ["bfloat16"],
+    "dataset": ["midi_jsbach"],
+    "use_post_ln": [true, false],
+    "compile": [true],
+    "use_rotary_embeddings": [true],
+    "use_abs_pos_embeddings": [true],
+    "tensorboard_run_name": ["midijsbach"]
+  }
+]
