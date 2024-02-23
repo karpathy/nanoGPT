@@ -22,15 +22,15 @@ bash get_dataset.sh
 prepare.py midi_12.csv --method char
 ```
 
-### Step 2: run train.py on the midi_jsbach dataset
+### Step 2: Training Transformer Network on midi_jsbach
 
-Use the train.py script to train the model on the prepared dataset.
+Use the run_experiments.py script to train the model on the prepared dataset.
 
 ```sh
-python3 train.py --dataset midi_jsbach --out_dir out
+python3 run_experiments.py --config explorations/bach.json --out out --value_only
 ```
 
-### Step 3: run sample.py and save output to a file
+### Step 3: Run sample.py and Save Output to a File
 
 Generate samples from the trained model and redirect the output to a CSV file.
 
@@ -41,8 +41,6 @@ python3 sample.py --out_dir out --num_samples 1 --temperature 0.8 > ./data/midi_
 ### Step 4: Open File with Vim or Editor to trim file to just CSV Contents
 
 Edit the generated CSV file to clean up any non-CSV content.
-
-```sh
 
 ```sh
 vim generated_music.csv # or preferred editor
