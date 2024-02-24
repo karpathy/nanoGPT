@@ -85,6 +85,15 @@ def main():
         help="Vocabulary size for SentencePiece model",
     )
 
+    # Tiktoken only argument
+    parser.add_argument(
+        "-e",
+        "--tiktoken_encoding",
+        choices=["gpt2", "r50k_base", "p50k_base", "cl100k_base"],
+        default="gpt2",
+        help="version of tiktoken encoding to utilize, which effects performance and vocab size, e.g. cl100k_base is better for coding than gpt2.",
+    )
+
     # Customize output names for bins
     parser.add_argument(
         "--train_output",
@@ -165,7 +174,7 @@ def main():
 
     elif args.method == "tiktoken":
         # Use TikToken
-        enc = tiktoken.get_encoding("gpt2")
+        enc = tiktoken.get_encoding(arg.tiktoken_encoding)
         train_ids = tokenize_tiktoken(enc, train_data)
         val_ids = tokenize_tiktoken(enc, val_data)
 
