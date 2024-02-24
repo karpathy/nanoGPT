@@ -69,11 +69,6 @@ def main():
         description="Tokenize text data using different methods."
     )
 
-    # Default option is a single input file
-    parser.add_argument(
-        "-i", "--input_file", type=str, help="Path to the input text file"
-    )
-
     parser.add_argument(
         "--method",
         type=str,
