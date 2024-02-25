@@ -63,6 +63,7 @@ if args.compile:
 
 # look for the meta pickle in case it is available in the dataset folder
 load_meta = False
+separator_token = None
 if args.init_from == 'resume' and 'config' in checkpoint and 'dataset' in checkpoint['config']: # older checkpoints might not have these...
     meta_path = os.path.join('data', checkpoint['config']['dataset'], 'meta.pkl')
     load_meta = os.path.exists(meta_path)
@@ -71,15 +72,22 @@ if load_meta:
     with open(meta_path, 'rb') as f:
         meta = pickle.load(f)
     # TODO want to make this more general to arbitrary encoder/decoder schemes
-    stoi, itos = meta['stoi'], meta['itos']
-    encode = lambda s: [stoi[c] for c in s]
-    decode = lambda l: ''.join([itos[i] for i in l])
-else:
-    # ok let's assume gpt-2 encodings by default
-    print("No meta.pkl found, assuming GPT-2 encodings...")
-    enc = tiktoken.get_encoding("gpt2")
-    encode = lambda s: enc.encode(s, allowed_special={"<|endoftext|>"})
-    decode = lambda l: enc.decode(l)
+    if 'tokenizer' in meta and meta['tokenizer'] == 'tiktoken':
+        enc = tiktoken.get_encoding(meta['tiktoken_encoding'])
+        print(f"using tiktoken encoding {meta['tiktoken_encoding']}")
+        encode = lambda s: enc.encode(s, allowed_special={"<|endoftext|>"})
+        decode = lambda l: enc.decode(l)
+    elif 'tokenizer' in meta and meta['tokenizer'] == 'sentencepiece':
+
+        separator_token="▁"
+
+        stoi, itos = meta['stoi'], meta['itos']
+        encode = lambda s: [stoi[c] for c in s]
+        decode = lambda l: ''.join([itos[i] for i in l])
+    else:
+        stoi, itos = meta['stoi'], meta['itos']
+        encode = lambda s: [stoi[c] for c in s]
+        decode = lambda l: ''.join([itos[i] for i in l])
 
 # encode the beginning of the prompt
 if args.start.startswith('FILE:'):
@@ -94,5 +102,11 @@ with torch.no_grad():
         for k in range(args.num_samples):
             y = model.generate(x, args.max_new_tokens,
                                temperature=args.temperature, top_k=args.top_k)
-            print("[bold green]" + decode(y[0].tolist()))
-            print('---------------')
+            if separator_token == None:
+                print("[bold green]" + decode(y[0].tolist()))
+                print('---------------')
+            else:
+                print(separator_token)
+                print("[bold green]" + decode(y[0].tolist()).replace(separator_token, " "))
+                print('---------------')
+
