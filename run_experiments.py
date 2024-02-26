@@ -38,7 +38,7 @@ def find_best_val_loss(csv_dir, output_dir):
         if params[2] in fname:
             best_ckpt_name = fname
             break
-        
+
     print("best_valid_loss: ", best_ckpt_loss)
     print("best_valid_chpt: ", best_ckpt_name)
     return f"{output_dir}/{best_ckpt_name}"
@@ -54,43 +54,42 @@ def expand_range(value):
         return list(range(start, end + 1, step)) if isinstance(start, int) else [start + i * step for i in range(int((end - start) / step) + 1)]
     return value
 
-def generate_combinations(config, current_combo={}, parent_conditions=[]):
-    # Initialize base_params with expanded ranges or direct values
-    base_params = {}
-    for k, v in config.items():
-        if isinstance(v, list):
-            base_params[k] = v
-        elif isinstance(v, dict):
-            if 'range' in v:
-                # Directly expand ranges for parameters like 'seed'
-                base_params[k] = expand_range(v)
-            else:
-                # Handle conditional parameters separately
-                continue
-        else:
-            base_params[k] = [v]
-
+def generate_combinations(config):
+    print("Generating parameter combinations...")
+    base_params = {k: v if isinstance(v, list) else [v] for k, v in config.items() if not isinstance(v, dict)}
     conditional_params = {k: v for k, v in config.items() if isinstance(v, dict) and 'conditions' in v}
+
+    for k, v in config.items():
+        if isinstance(v, dict) and 'range' in v:
+            base_params[k] = expand_range(v)
 
     base_combinations = list(product(*[[(k, v) for v in values] for k, values in base_params.items()]))
 
+    if not conditional_params:
+        for combo in base_combinations:
+            yield dict(combo)
+        return
+
     for base_combination in base_combinations:
         combo_dict = dict(base_combination)
+        valid_combos = [combo_dict]
 
-        # Check and apply conditional parameters
         for cond_param, values in conditional_params.items():
-            if check_conditions(values['conditions'], combo_dict):
-                # This assumes 'options' is a list of values or a single value
-                option_values = values['options'] if isinstance(values['options'], list) else [values['options']]
-                for option_value in option_values:
-                    new_combo = {**combo_dict, cond_param: option_value}
-                    yield new_combo
-            else:
-                # If conditions are not met, yield the base combination without the conditional parameter
-                yield combo_dict
+            new_combos = []
+            for combo in valid_combos:
+                if check_conditions(values['conditions'], combo):
+                    option_values = values['options'] if isinstance(values['options'], list) else [values['options']]
+                    for option_value in option_values:
+                        new_combo = {**combo, cond_param: option_value}
+                        new_combos.append(new_combo)
+                else:
+                    new_combos.append(combo)
+            valid_combos = new_combos
 
+        for combo in valid_combos:
+            yield combo
 
-def format_config_name(config, config_basename, prefix, value_only, original_config):
+def format_config_name(config, config_basename, prefix, value_only):
     if value_only:
         config_items = [f"{v}" for _, v in config.items()]
     else:
@@ -98,8 +97,8 @@ def format_config_name(config, config_basename, prefix, value_only, original_con
 
     return f"{prefix}{config_basename}-{'-'.join(config_items)}"
 
-def run_command(config, config_basename, output_dir, csv_ckpt_dir, prefix, value_only, best_val_loss_from, original_config):
-    formatted_name = format_config_name(config, config_basename, prefix, value_only, original_config)
+def run_command(config, config_basename, output_dir, csv_ckpt_dir, prefix, value_only, best_val_loss_from):
+    formatted_name = format_config_name(config, config_basename, prefix, value_only)
     config['tensorboard_run_name'] = formatted_name
     config['out_dir'] = os.path.join(output_dir, f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{formatted_name}")
 
@@ -108,7 +107,6 @@ def run_command(config, config_basename, output_dir, csv_ckpt_dir, prefix, value
         if isinstance(value, bool):
             base_command.extend([f"--{'' if value else 'no-'}{key}"])
         elif isinstance(value, list):
-            # For list arguments, add each value separately
             for val in value:
                 base_command.extend([f"--{key}", str(val)])
         else:
@@ -123,12 +121,10 @@ def run_command(config, config_basename, output_dir, csv_ckpt_dir, prefix, value
         base_command.extend(["--csv_ckpt_dir", csv_ckpt_dir])
 
     print(f"Running command: {' '.join(base_command)}")
-
     subprocess.run(base_command)
 
 def main():
     args = parse_args()
-
     config_basename = os.path.splitext(os.path.basename(args.config))[0]
 
     with open(args.config, 'r') as file:
@@ -136,8 +132,8 @@ def main():
 
     for config in original_configurations:
         for combination in generate_combinations(config):
-            run_command(combination, config_basename, args.output_dir, args.csv_ckpt_dir, args.prefix, 
-                        args.value_only, args.use_best_val_loss_from, original_configurations[0])
+            run_command(combination, config_basename, args.output_dir, args.csv_ckpt_dir, args.prefix, args.value_only, args.use_best_val_loss_from)
 
 if __name__ == "__main__":
     main()
+
