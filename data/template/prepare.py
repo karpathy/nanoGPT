@@ -69,11 +69,6 @@ def main():
         description="Tokenize text data using different methods."
     )
 
-    # Default option is a single input file
-    parser.add_argument(
-        "-i", "--input_file", type=str, help="Path to the input text file"
-    )
-
     parser.add_argument(
         "--method",
         type=str,
@@ -88,6 +83,15 @@ def main():
         type=int,
         default=500,
         help="Vocabulary size for SentencePiece model",
+    )
+
+    # Tiktoken only argument
+    parser.add_argument(
+        "-e",
+        "--tiktoken_encoding",
+        choices=["gpt2", "r50k_base", "p50k_base", "cl100k_base"],
+        default="gpt2",
+        help="version of tiktoken encoding to utilize, which effects performance and vocab size, e.g. cl100k_base is better for coding than gpt2.",
     )
 
     # Customize output names for bins
@@ -164,15 +168,35 @@ def main():
             stoi["\n"] = sp.PieceToId("\n")
 
         # Save metadata including stoi and itos in a pickle file
-        meta = {"vocab_size": sp.GetPieceSize(), "stoi": stoi, "itos": itos}
+        meta = {
+                "vocab_size": sp.GetPieceSize(),
+                "tokenizer": "sentencepiece",
+                "stoi": stoi,
+                "itos": itos,
+                }
         with open(os.path.join(os.path.dirname(__file__), "meta.pkl"), "wb") as f:
             pickle.dump(meta, f)
 
     elif args.method == "tiktoken":
         # Use TikToken
-        enc = tiktoken.get_encoding("gpt2")
+        enc = tiktoken.get_encoding(args.tiktoken_encoding)
         train_ids = tokenize_tiktoken(enc, train_data)
         val_ids = tokenize_tiktoken(enc, val_data)
+
+        vocab_size = enc.n_vocab
+        print("vocab size", vocab_size)
+
+        # Create meta information
+        meta = {
+                "vocab_size": vocab_size,
+                "tokenizer": "tiktoken",
+                "tiktoken_encoding" : args.tiktoken_encoding,
+                }
+
+        # Save meta information
+        with open("meta.pkl", "wb") as f:
+            pickle.dump(meta, f)
+
 
     elif args.method == "char":
         # Print the total length of the dataset in characters
@@ -197,8 +221,12 @@ def main():
     # Print token counts and export to bin files
     print(f"train has {len(train_ids):,} tokens")
     print(f"val has {len(val_ids):,} tokens")
-    np.array(train_ids, dtype=np.uint16).tofile(args.train_output)
-    np.array(val_ids, dtype=np.uint16).tofile(args.val_output)
+    if args.tiktoken_encoding == "cl100k_base":
+        np.array(train_ids, dtype=np.uint32).tofile(args.train_output)
+        np.array(val_ids, dtype=np.uint32).tofile(args.val_output)
+    else:
+        np.array(train_ids, dtype=np.uint16).tofile(args.train_output)
+        np.array(val_ids, dtype=np.uint16).tofile(args.val_output)
 
 
 if __name__ == "__main__":

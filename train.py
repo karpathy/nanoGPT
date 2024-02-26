@@ -1,4 +1,5 @@
 import argparse
+import sys
 from rich import print
 import os
 import time
@@ -179,16 +180,6 @@ class Trainer:
         self.ptdtype = {"bfloat16" : torch.bfloat16, "float16" : torch.float16, "float32" : torch.float32}[self.args.dtype]
         self.ctx = nullcontext() if self.device_type == 'cpu' else torch.amp.autocast(device_type=self.device_type, dtype=self.ptdtype)
 
-        # Data loader
-        self.train_data = np.memmap(os.path.join('data', self.args.dataset, 'train.bin'), dtype=np.uint16, mode='r')
-        self.val_data = np.memmap(os.path.join('data', self.args.dataset, 'val.bin'), dtype=np.uint16, mode='r')
-        meta_path = os.path.join('data', self.args.dataset, 'meta.pkl')
-        self.meta_vocab_size = None
-        if os.path.exists(meta_path):
-            with open(meta_path, 'rb') as f:
-                meta = pickle.load(f)
-            self.meta_vocab_size = meta['vocab_size']
-
         # Model
         # TODO only add if they are defined from the argparse
         self.model_args = {action.dest: getattr(self.args, action.dest) for action in self.model_group._group_actions}
@@ -196,7 +187,8 @@ class Trainer:
         self.model_args['vocab_size'] = None
 
         if self.args.init_from == 'scratch':
-            self.model_args['vocab_size'] = self.meta_vocab_size if self.meta_vocab_size is not None else 50304
+            self.model_args['vocab_size'] = self.get_vocab_size_from_meta()
+            self.load_data()
             gptconf = GPTConfig(**self.model_args)
             self.model = GPT(gptconf)
             self.iter_num = 0 # for starting from scratch
@@ -207,6 +199,7 @@ class Trainer:
             checkpoint_model_args = checkpoint['model_args']
             for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
                 self.model_args[k] = checkpoint_model_args[k]
+            self.load_data()
             gptconf = GPTConfig(**self.model_args)
             self.model = GPT(gptconf)
             state_dict = checkpoint['model']
@@ -221,12 +214,14 @@ class Trainer:
             self.model = GPT.from_pretrained(self.args.init_from, override_args)
             for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
                 self.model_args[k] = getattr(self.model.config, k)
+            self.load_data()
         elif self.args.init_from == 'prev_run':
             ckpt_path = os.path.join(self.args.prev_run_ckpt, 'ckpt.pt')
             checkpoint = torch.load(ckpt_path, map_location=self.device)
             checkpoint_model_args = checkpoint['model_args']
             for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
                 self.model_args[k] = checkpoint_model_args[k]
+            self.load_data()
             gptconf = GPTConfig(**self.model_args)
             self.model = GPT(gptconf)
             state_dict = checkpoint['model']
@@ -273,6 +268,31 @@ class Trainer:
             import wandb
             self.args.csv_name = wandb_run_name
             wandb.init(project=self.args.wandb_project, name=self.args.wandb_run_name, config=self.args)
+
+    def get_vocab_size_from_meta(self):
+        # Data loader
+        meta_path = os.path.join('data', self.args.dataset, 'meta.pkl')
+        if os.path.exists(meta_path):
+            with open(meta_path, 'rb') as f:
+                meta = pickle.load(f)
+                if 'vocab_size' in meta:
+                    return meta['vocab_size']
+                else:
+                    sys.exit(f"Error: 'vocab_size' key not found in {meta_path}")
+        else:
+            sys.exit(f"Error: File not found - {meta_path}")
+
+    def load_data(self):
+        if self.model_args['vocab_size'] is None: 
+            sys.exit("Error: no vocab size specified")
+        elif self.model_args['vocab_size'] == 100277:
+            # cl100k_base, vocab size 100277, requires np.uint32
+            self.train_data = np.memmap(os.path.join('data', self.args.dataset, 'train.bin'), dtype=np.uint32, mode='r')
+            self.val_data = np.memmap(os.path.join('data', self.args.dataset, 'val.bin'), dtype=np.uint32, mode='r')
+        else:
+            # all other tokenations so far require only np.uint16
+            self.train_data = np.memmap(os.path.join('data', self.args.dataset, 'train.bin'), dtype=np.uint16, mode='r')
+            self.val_data = np.memmap(os.path.join('data', self.args.dataset, 'val.bin'), dtype=np.uint16, mode='r')
 
     def get_batch(self, split):
         data = self.train_data if split == 'train' else self.val_data
