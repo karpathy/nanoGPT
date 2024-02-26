@@ -422,7 +422,7 @@ class QuantGPT(GPT):
 
         self.transformer = nn.ModuleDict(dict(
             wte = qnn.QuantEmbedding(config.vocab_size, config.n_embd),
-            wpe = qnn.QuantEmbedding(config.vocab_size, config.n_embd),
+            wpe = qnn.QuantEmbedding(config.block_size, config.n_embd),
             drop = qnn.QuantDropout(config.dropout),
             h = nn.ModuleList([QuantBlock(config) for _ in range(config.n_layer)]),
             ln_f = LayerNorm(config.n_embd, bias=config.bias),
