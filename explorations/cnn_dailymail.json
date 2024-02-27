@@ -9,7 +9,7 @@
         "eval_interval": ["250"],
         "log_interval": ["10"],
         "device": ["cuda"],
-        "dataset": ["wikitext103"],
+        "dataset": ["cnn_dailymail"],
          "seed": {
           "range": {
             "start": 1,
