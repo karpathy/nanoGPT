@@ -9,7 +9,8 @@
         "eval_interval": ["250"],
         "log_interval": ["10"],
         "device": ["cuda"],
-        "dataset": ["wikitext103"],
+        "dataset": ["openwebtext"],
+        "compile": [true],
          "seed": {
           "range": {
             "start": 1,
@@ -20,7 +21,7 @@
         "use_post_ln": [true],
         "softmax_variant_attn": ["softmax"],
         "use_abs_pos_embeddings": [true],
-        "use_rotary_embeddings": [false],
+        "use_rotary_embeddings": [true],
         "tensorboard_run_name": ["curriculum"]
     }
 ]

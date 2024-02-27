@@ -11,7 +11,7 @@ def run_experiments_command(training_stage, config):
     global prev_output_dir
 
     dataset = os.path.splitext(config)[0]
-    csv_dir = f"csv_logs/{training_stage}_{dataset}"
+    csv_dir = f"{training_stage}_{dataset}"
     output_dir = f"{training_stage}_{dataset}"
     # base command
     command = ["python3", "run_experiments.py"]
@@ -22,7 +22,7 @@ def run_experiments_command(training_stage, config):
     # directory to output ckpts
     command.extend(["--output_dir", output_dir])
     if prev_csv_dir and prev_output_dir:
-        command.extend(["--use-best-val-loss-from", prev_csv_dir, prev_output_dir])
+        command.extend(["--use-best-val-loss-from", "csv_logs/" + prev_csv_dir, prev_output_dir])
     prev_csv_dir = csv_dir
     prev_output_dir = output_dir
     return command
