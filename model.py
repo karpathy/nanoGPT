@@ -28,26 +28,26 @@ class LayerNorm(nn.Module):
 
 class CausalSelfAttention(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, n_head, n_embd, dropout, bias, block_size):
         super().__init__()
-        assert config.n_embd % config.n_head == 0
+        assert n_embd % n_head == 0
         # key, query, value projections for all heads, but in a batch
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+        self.c_attn = nn.Linear(n_embd, 3 * n_embd, bias=bias)
         # output projection
-        self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.c_proj = nn.Linear(n_embd, n_embd, bias=bias)
         # regularization
-        self.attn_dropout = nn.Dropout(config.dropout)
-        self.resid_dropout = nn.Dropout(config.dropout)
-        self.n_head = config.n_head
-        self.n_embd = config.n_embd
-        self.dropout = config.dropout
+        self.attn_dropout = nn.Dropout(dropout)
+        self.resid_dropout = nn.Dropout(dropout)
+        self.n_head = n_head
+        self.n_embd = n_embd
+        self.dropout = dropout
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
         if not self.flash:
             print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
             # causal mask to ensure that attention is only applied to the left in the input sequence
-            self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
-                                        .view(1, 1, config.block_size, config.block_size))
+            self.register_buffer("bias", torch.tril(torch.ones(block_size, block_size))
+                                        .view(1, 1, block_size, block_size))
 
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
@@ -77,12 +77,12 @@ class CausalSelfAttention(nn.Module):
 
 class MLP(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, n_embd, dropout, bias):
         super().__init__()
-        self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
+        self.c_fc    = nn.Linear(n_embd, int(1 * n_embd), bias=bias)
         self.gelu    = nn.GELU()
-        self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
-        self.dropout = nn.Dropout(config.dropout)
+        self.c_proj  = nn.Linear(int(1 * n_embd), n_embd, bias=bias)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         x = self.c_fc(x)
@@ -93,17 +93,57 @@ class MLP(nn.Module):
 
 class Block(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, n_embd, bias, dropout, block_size, n_head):
         super().__init__()
-        self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
-        self.attn = CausalSelfAttention(config)
-        self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
-        self.mlp = MLP(config)
+        # self.ln_1 = LayerNorm(n_embd, bias=bias)
+        self.attn = CausalSelfAttention(n_head = n_head, n_embd=n_embd, bias=bias, dropout=dropout,
+                                        block_size=block_size)
+        # self.ln_2 = LayerNorm(n_embd, bias=bias)
+        # self.mlp = MLP(n_embd, bias=bias, dropout=dropout)
 
     def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
-        x = x + self.mlp(self.ln_2(x))
+        # x = x + self.attn(self.ln_1(x))
+        x = x + self.attn(x)
+        # x = x + self.mlp(self.ln_2(x))
         return x
+
+class LayerBlock(nn.Module):
+    def __init__(self, n_embd, inner_embd, blockcount, block_size, bias, dropout, n_head):
+        super().__init__()
+        
+        # Ensure the embedding size can be evenly split among blocks
+        assert inner_embd % blockcount == 0, "inner_embd should be divisible by blockcount"
+        
+        self.blockcount = blockcount
+        self.n_embd_per_block = inner_embd // blockcount
+        assert self.n_embd_per_block % n_head == 0, "n_embd_per_block should be divisible by n_head"
+
+        # Create 'blockcount' number of Block instances
+        self.blocks = nn.ModuleList([Block(n_embd=self.n_embd_per_block,
+                                           dropout=dropout,
+                                           block_size=block_size,
+                                           bias=bias,n_head=n_head) for _ in range(blockcount)])
+        
+        # Add Layer Normalization modules
+        self.ln_start = LayerNorm(inner_embd, bias=bias)
+        self.ln_end = LayerNorm(inner_embd, bias=bias)
+        self.mlp = MLP(inner_embd, bias=bias, dropout=dropout)
+    
+    def forward(self, x):
+        x = self.ln_start(x)
+        
+        # Split the input embeddings into 'blockcount' chunks
+        self.split_embeddings = torch.split(x, self.n_embd_per_block, dim=-1)
+        
+        # Process each chunk through its corresponding Block
+        processed_embeddings = [block(emb) for block, emb in zip(self.blocks, self.split_embeddings)]
+        
+        # Concatenate the outputs of all the blocks to produce the result
+        out = torch.cat(processed_embeddings, dim=-1)
+        
+        out = out + self.mlp(self.ln_end(out))
+        
+        return out
 
 @dataclass
 class GPTConfig:
@@ -117,17 +157,25 @@ class GPTConfig:
 
 class GPT(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, config: GPTConfig):
         super().__init__()
         assert config.vocab_size is not None
         assert config.block_size is not None
         self.config = config
 
+        self.inner_embd = config.n_embd * 1
+        self.inner_extender = nn.Linear(config.n_embd, self.inner_embd, bias=config.bias)
+        self.inner_shrinker = nn.Linear(self.inner_embd, config.n_embd, bias=config.bias)
+
+        assert self.inner_embd % config.n_embd == 0, "inner_embd should be divisible by n_embd"
+
+        self.blocks_per_layer = self.inner_embd // config.n_embd
+
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
             wpe = nn.Embedding(config.block_size, config.n_embd),
             drop = nn.Dropout(config.dropout),
-            h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
+            h = nn.ModuleList([LayerBlock(config.n_embd, bias=config.bias, dropout=config.dropout, block_size=config.block_size, n_head=config.n_head, blockcount = self.blocks_per_layer, inner_embd=self.inner_embd) for _ in range(config.n_layer)]),
             ln_f = LayerNorm(config.n_embd, bias=config.bias),
         ))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
@@ -167,7 +215,8 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None):
+    def forward(self, idx, targets=None, utility_targets=None,
+                utility_targets2=None):
         device = idx.device
         b, t = idx.size()
         assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
@@ -177,8 +226,11 @@ class GPT(nn.Module):
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
+        x = self.inner_extender(x)
         for block in self.transformer.h:
             x = block(x)
+
+        x = self.inner_shrinker(x)
         x = self.transformer.ln_f(x)
 
         if targets is not None:
