@@ -16,6 +16,8 @@ num_proc = 8
 # it is better than 1 usually though
 num_proc_load_dataset = num_proc
 
+enc = tiktoken.get_encoding("gpt2")
+
 if __name__ == '__main__':
     # takes 54GB in huggingface .cache dir, about 8M documents (8,013,769)
     dataset = load_dataset("openwebtext", num_proc=num_proc_load_dataset)
@@ -38,7 +40,6 @@ if __name__ == '__main__':
     # })
 
     # we now want to tokenize the dataset. first define the encoding function (gpt2 bpe)
-    enc = tiktoken.get_encoding("gpt2")
     def process(example):
         ids = enc.encode_ordinary(example['text']) # encode_ordinary ignores any special tokens
         ids.append(enc.eot_token) # add the end of text token, e.g. 50256 for gpt2 bpe
