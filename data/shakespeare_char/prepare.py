@@ -5,7 +5,7 @@ Will save train.bin, val.bin containing the ids, and meta.pkl containing the
 encoder and decoder and some other related info.
 """
 import os
-import pickle
+import dill
 import requests
 import numpy as np
 
@@ -54,11 +54,11 @@ val_ids.tofile(os.path.join(os.path.dirname(__file__), 'val.bin'))
 # save the meta information as well, to help us encode/decode later
 meta = {
     'vocab_size': vocab_size,
-    'itos': itos,
-    'stoi': stoi,
+    'encode': encode,
+    'decode': decode,
 }
 with open(os.path.join(os.path.dirname(__file__), 'meta.pkl'), 'wb') as f:
-    pickle.dump(meta, f)
+    dill.dump(meta, f, recurse=True)
 
 # length of dataset in characters:  1115394
 # all the unique characters:
