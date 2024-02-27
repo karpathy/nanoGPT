@@ -41,13 +41,53 @@ class CausalSelfAttention(nn.Module):
         self.n_head = config.n_head
         self.n_embd = config.n_embd
         self.dropout = config.dropout
+        self.config = config
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
         if not self.flash:
             print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
-            # causal mask to ensure that attention is only applied to the left in the input sequence
-            self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
-                                        .view(1, 1, config.block_size, config.block_size))
+        # Register attention mask in buffer.
+        # causal mask to ensure that attention is only applied to the left in the input sequence
+        attn_mask = self.get_causal_mask(config.block_size).repeat(config.n_head, 1, 1)
+        if config.pos_encoding == 'alibi':
+            # ALiBi: Linear biases in relation to token distance.
+            attn_mask += self.get_alibi_mask(self.n_head, config.block_size)
+        self.register_buffer("attn_mask", attn_mask)
+    
+    @classmethod
+    def get_alibi_slopes(cls, n):
+        """
+        Compute ALiBi slopes for a given number of heads. Adopted from
+        https://github.com/ofirpress/attention_with_linear_biases.
+        """
+        def get_slopes_power_of_2(n):
+            start = (2**(-2**-(math.log2(n)-3)))
+            ratio = start
+            return [start*ratio**i for i in range(n)]
+
+        if math.log2(n).is_integer():
+            return get_slopes_power_of_2(n)                   #In the paper, we only train models that have 2^a heads for some a. This function has
+        else:                                                 #some good properties that only occur when the input is a power of 2. To maintain that even
+            closest_power_of_2 = 2**math.floor(math.log2(n))  #when the number of heads is not a power of 2, we use this workaround. 
+            return get_slopes_power_of_2(closest_power_of_2) + cls.get_alibi_slopes(2*closest_power_of_2)[0::2][:n-closest_power_of_2]
+    
+    @classmethod
+    def get_alibi_mask(cls, n_head, T):
+        """Compute the mask for ALiBi attention. See paper for more details."""
+        d = torch.arange(T) - torch.arange(T).view(-1, 1) # distance matrix (T, T)
+        s = torch.tensor(cls.get_alibi_slopes(n_head)) # scalars (nh,)
+        ds = d * s.view(-1, 1, 1) # (T, T) x (nh, 1, 1) -> (nh, T, T)
+        return ds
+    
+    @classmethod
+    def get_causal_mask(cls, T):
+        """
+        Generate the causal attention mask which ensures that tokens do not
+        attend to future tokens.
+        """
+        causal_mask = torch.ones(T, T).tril()
+        causal_mask = causal_mask.masked_fill(causal_mask==0, -float('inf'))
+        return causal_mask
 
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
@@ -59,13 +99,31 @@ class CausalSelfAttention(nn.Module):
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        if self.flash:
+        
+        # Note: With ALiBi positional encoding we would typically not scale the
+        # dot product attention before adding the attention mask. However,
+        # PyTorch's `scaled_dot_product_attention` does currently (as of June
+        # 20, 2023) not allow this and it seems like training results are
+        # actually slighlty better when keeping the original scaling factor.
+        attn_mask = self.attn_mask[:, :T, :T] # (nh, T, T)
+        if self.flash:            
             # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
+            #
+            # The function `scaled_dot_product_attention` is currently only
+            # optimized for the case where is_caual = True and attn_mask = None.
+            # Hence we ensure this here if we don't use the ALiBi mask. See
+            # https://github.com/pytorch/pytorch/issues/96099 for more details.
+            if self.config.pos_encoding == 'alibi':
+                causal = False
+            else:
+                causal =  True
+                attn_mask = None
+            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=self.dropout if self.training else 0, is_causal=causal)
         else:
             # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+            att = q @ k.transpose(-2, -1) # (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
+            att *= 1.0 / math.sqrt(T)
+            att += attn_mask # (B, nh, T, T) + (nh, T, T) -> (B, nh, T, T)
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
             y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
@@ -114,6 +172,7 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    pos_encoding: str = 'learned' # 'learned', 'nope', 'alibi'
 
 class GPT(nn.Module):
 
@@ -125,7 +184,7 @@ class GPT(nn.Module):
 
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
-            wpe = nn.Embedding(config.block_size, config.n_embd),
+            wpe = nn.Embedding(config.block_size, config.n_embd) if config.pos_encoding == 'learned' else None,
             drop = nn.Dropout(config.dropout),
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
             ln_f = LayerNorm(config.n_embd, bias=config.bias),
@@ -155,7 +214,7 @@ class GPT(nn.Module):
         params are actually used as weights in the final layer, so we include them.
         """
         n_params = sum(p.numel() for p in self.parameters())
-        if non_embedding:
+        if non_embedding and self.transformer.wpe:
             n_params -= self.transformer.wpe.weight.numel()
         return n_params
 
@@ -175,8 +234,16 @@ class GPT(nn.Module):
 
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
-        pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
-        x = self.transformer.drop(tok_emb + pos_emb)
+        
+        if self.config.pos_encoding == 'learned':
+            pos = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(0)
+            pos_emb = self.transformer.wpe(pos) # position embeddings of shape (1, t, n_embd)
+            x = tok_emb + pos_emb
+        elif self.config.pos_encoding in ['nope', 'alibi']:
+            x = tok_emb
+        else:
+            raise Exception("Invalid positional encoding type")
+        x = self.transformer.drop(x)
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)
@@ -198,7 +265,8 @@ class GPT(nn.Module):
         # but want to use a smaller block size for some smaller, simpler model
         assert block_size <= self.config.block_size
         self.config.block_size = block_size
-        self.transformer.wpe.weight = nn.Parameter(self.transformer.wpe.weight[:block_size])
+        if self.transformer.wpe:
+            self.transformer.wpe.weight = nn.Parameter(self.transformer.wpe.weight[:block_size])
         for block in self.transformer.h:
             if hasattr(block.attn, 'bias'):
                 block.attn.bias = block.attn.bias[:,:,:block_size,:block_size]

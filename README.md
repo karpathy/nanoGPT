@@ -195,6 +195,13 @@ $ python sample.py \
 
 If you'd like to sample from a model you trained, use the `--out_dir` to point the code appropriately. You can also prompt the model with some text from a file, e.g. `$ python sample.py --start=FILE:prompt.txt`.
 
+## positional encoding
+
+The code supports a number of different positional encodings via flag `--pos_encoding`.
+```
+$ python train.py config/train_shakespeare_char.py --out_dir=out-shakespeare-char-alibi --pos_encoding=alibi
+```
+
 ## efficiency notes
 
 For simple model benchmarking and profiling, `bench.py` might be useful. It's identical to what happens in the meat of the training loop of `train.py`, but omits much of the other complexities.
@@ -207,7 +214,7 @@ Note that the code by default uses [PyTorch 2.0](https://pytorch.org/get-started
 - Eval zero-shot perplexities on standard evals (e.g. LAMBADA? HELM? etc.)
 - Finetune the finetuning script, I think the hyperparams are not great
 - Schedule for linear batch size increase during training
-- Incorporate other embeddings (rotary, alibi)
+- Incorporate other embeddings (e.g., rotary)
 - Separate out the optim buffers from model params in checkpoints I think
 - Additional logging around network health (e.g. gradient clip events, magnitudes)
 - Few more investigations around better init etc.
