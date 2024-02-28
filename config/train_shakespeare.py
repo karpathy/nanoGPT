@@ -18,10 +18,10 @@ gradient_accumulation_steps = 1
 batch_size = 8
 block_size = 32 # context of up to 256 previous characters
 
-# baby GPT model :)
-n_layer = 6
-n_head = 6
-n_embd = 384
+# GPT-2-medium
+n_layer = 24
+n_head = 16
+n_embd = 1024
 dropout = 0.0
 
 learning_rate = 1e-3 # with baby networks can afford to go a bit higher
