@@ -138,7 +138,7 @@ class MLP(nn.Module):
 
 class Block(nn.Module):
 
-    def __init__(self, config, mlp=None):
+    def __init__(self, config, mlp=None, attn=None):
         super().__init__()
 
         if config.layernorm_variant == 'rmsnorm':
@@ -151,7 +151,13 @@ class Block(nn.Module):
 
         self.use_post_ln = config.use_post_ln
 
-        self.attn = CausalSelfAttention(config)
+        # Allow for sharing attn between blocks
+        if attn == None:
+          self.attn = CausalSelfAttention(config)
+        else:
+          self.attn = attn
+
+        # Allow for sharing mlp between blocks
         if mlp == None:
           self.mlp = MLP(config)
         else:
@@ -177,6 +183,7 @@ class GPTConfig:
 
     # Shared parameters
     sharing_mlp: bool = False
+    sharing_attn: bool = False
 
     # Softmax Alternatives and Options
     softmax_variant_attn: str = "softmax" # Choices: "softmax" "softermax" "sigsoftmax" "polymax" "strongermax" "constantmax"
@@ -240,11 +247,16 @@ class GPT(nn.Module):
         if config.sharing_mlp:
           shared_mlp = MLP(config)
 
+        shared_attn = None
+        if config.sharing_attn:
+          shared_attn = CausalSelfAttention(config)
+
+        # Building up Transformer
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
             wpe = nn.Embedding(config.block_size, config.n_embd),
             drop = nn.Dropout(config.dropout),
-            h = nn.ModuleList([Block(config, shared_mlp) for _ in range(config.n_layer)]),
+            h = nn.ModuleList([Block(config, shared_mlp, shared_attn) for _ in range(config.n_layer)]),
             ln_f = self.normalization_variant,
         ))
 

@@ -56,6 +56,7 @@ def parse_args():
 
     # Shared Parameter Settings
     model_group.add_argument('--sharing_mlp', default=False, action=argparse.BooleanOptionalAction)
+    model_group.add_argument('--sharing_attn', default=False, action=argparse.BooleanOptionalAction)
 
     # NORM VARIATIONS
     model_group.add_argument("--layernorm_variant", type=str, default="rmsnorm", choices=["rmsnorm", "layernorm"])
