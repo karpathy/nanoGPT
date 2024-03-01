@@ -13,7 +13,7 @@ def parse_args():
     parser.add_argument("--output_dir", type=str, default="out", help="Directory to place the set of output checkpoints.")
     parser.add_argument("--csv_ckpt_dir", type=str, default="", help="Directory to place the set of csv checkpoints in csv_logs.")
     parser.add_argument("--prefix", type=str, default='', help="Optional prefix for tensorboard_run_name and out_dir.")
-    parser.add_argument("--value_only", action="store_true", help="Include only the values of the configuration parameters in the names.")
+    parser.add_argument("--add_names", action="store_true", help="Include names of values of the configuration parameters in addition to values (may cause too long a file name).")
     parser.add_argument("--use-best-val-loss-from", nargs=2, metavar=('csv_dir', 'output_dir'), type=str, default=['', ''],
                         help="Grab the best val loss of the run given by the csv_dir. Then, use the corresponding ckpt from the matching output_dir")
     return parser.parse_args()
@@ -89,16 +89,16 @@ def generate_combinations(config):
         for combo in valid_combos:
             yield combo
 
-def format_config_name(config, config_basename, prefix, value_only):
-    if value_only:
-        config_items = [f"{v}" for _, v in config.items()]
-    else:
+def format_config_name(config, config_basename, prefix, add_names):
+    if add_names:
         config_items = [f"{k}_{v}" for k, v in config.items()]
+    else:
+        config_items = [f"{v}" for _, v in config.items()]
 
     return f"{prefix}{config_basename}-{'-'.join(config_items)}"
 
-def run_command(config, config_basename, output_dir, csv_ckpt_dir, prefix, value_only, best_val_loss_from):
-    formatted_name = format_config_name(config, config_basename, prefix, value_only)
+def run_command(config, config_basename, output_dir, csv_ckpt_dir, prefix, add_names, best_val_loss_from):
+    formatted_name = format_config_name(config, config_basename, prefix, add_names)
     config['tensorboard_run_name'] = formatted_name
     config['out_dir'] = os.path.join(output_dir, f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{formatted_name}")
 
@@ -132,7 +132,8 @@ def main():
 
     for config in original_configurations:
         for combination in generate_combinations(config):
-            run_command(combination, config_basename, args.output_dir, args.csv_ckpt_dir, args.prefix, args.value_only, args.use_best_val_loss_from)
+            run_command(combination, config_basename, args.output_dir,
+                        args.csv_ckpt_dir, args.prefix, args.add_names, args.use_best_val_loss_from)
 
 if __name__ == "__main__":
     main()
