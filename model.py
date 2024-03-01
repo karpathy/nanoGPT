@@ -19,7 +19,7 @@ from torch.nn import functional as F
 from variations.softmax_variations import Softermax, Constantmax, Constantmax_quan, Strongermax, Polymax, SigSoftmax
 from variations.normalization_variations import LayerNorm, RMSNorm
 from variations.position_encoding_variations import RotaryEmbedding, ShortRope
-from variations.activation_variations import SquaredReLU
+from variations.activation_variations import SquaredReLU, activation_dictionary
 
 
 class CausalSelfAttention(nn.Module):
@@ -116,22 +116,16 @@ class MLP(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
-        # TODO: Change name of self.gelu to something like "self.activation_variant"
-        if config.activation_variant == "relu":
-          print("Use ReLU")
-          self.gelu = nn.ReLU()
-        if config.activation_variant == "squared_relu":
-          print("Use Squared ReLU")
-          self.gelu = SquaredReLU()
-        if config.activation_variant == "gelu":
-          print("Use GELU")
-          self.gelu    = nn.GELU()
+
+        # Select activation variant
+        self.activation_variant = activation_dictionary[config.activation_variant]
+
         self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
         x = self.c_fc(x)
-        x = self.gelu(x)
+        x = self.activation_variant(x)
         x = self.c_proj(x)
         x = self.dropout(x)
         return x

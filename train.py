@@ -59,7 +59,29 @@ def parse_args():
     model_group.add_argument('--bias', default=False, action=argparse.BooleanOptionalAction, help="only used for layernorm variation option")
 
     # ACTIVATION VARIATIONS
-    model_group.add_argument("--activation_variant", type=str, default="gelu", choices=["relu", "squared_relu"])
+    model_group.add_argument(
+        "--activation_variant",
+        type=str,
+        default="gelu",
+        choices=[
+            "celu",
+            "elu",
+            "gelu",
+            "glu",
+            "leaky_relu",
+            "mish",
+            "prelu",
+            "relu6",
+            "rrelu",
+            "selu",
+            "sigmoid",
+            "silu",
+            "softplus",
+            "softsign",
+            "squared_relu",
+            "tanh",
+        ],
+    )
 
     # POSITIONAL EMBEDDING VARIATIONS
     model_group.add_argument('--use_rotary_embeddings', default=True, action=argparse.BooleanOptionalAction)
