@@ -55,6 +55,10 @@ def parse_args():
     model_group.add_argument('--dropout', default=0.2, type=float)
     model_group.add_argument('--use_post_ln', default=True, action=argparse.BooleanOptionalAction)
 
+    # Shared Parameter Settings
+    model_group.add_argument('--sharing_mlp', default=False, action=argparse.BooleanOptionalAction)
+    model_group.add_argument('--sharing_attn', default=False, action=argparse.BooleanOptionalAction)
+
     # NORM VARIATIONS
     model_group.add_argument("--layernorm_variant", type=str, default="rmsnorm", choices=["rmsnorm", "layernorm"])
     model_group.add_argument('--bias', default=False, action=argparse.BooleanOptionalAction, help="only used for layernorm variation option")
