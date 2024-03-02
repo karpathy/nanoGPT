@@ -2,6 +2,7 @@ import argparse
 import sys
 from rich import print
 import os
+import sys
 import time
 import csv
 from datetime import datetime
@@ -444,6 +445,8 @@ class Trainer:
                     mfu = self.raw_model.estimate_mfu(self.args.batch_size * self.args.gradient_accumulation_steps, dt)
                     running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
                 print(f"iter {self.iter_num}: loss {lossf:.4f}, time {dt*1000:.2f} ms, mfu {running_mfu*100:.2f}%")
+                if math.isnan(lossf):
+                    sys.exit("Exiting training loss is NaN")
                 self.log_metrics_non_validation(lossf, running_mfu, self.iter_num)
 
             self.iter_num += 1
