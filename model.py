@@ -37,6 +37,8 @@ class CausalSelfAttention(nn.Module):
         self.n_head = config.n_head
         self.n_embd = config.n_embd
         self.dropout = config.dropout
+        self.window_size = config.window_size
+        self.gate = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
 
         # Rotary Positional Embeddings
         self.rotary_emb = None
@@ -83,9 +85,18 @@ class CausalSelfAttention(nn.Module):
         if self.rotary_emb is not None:
           x = self.rotary_emb(x)
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+        if self.window_size is not None:
+            window_mask = torch.ones((1, 1, T, T), device=x.device)
+            window_mask = torch.tril(window_mask, diagonal=self.window_size) * torch.triu(window_mask, diagonal=-self.window_size)
+        else:
+            window_mask = torch.ones((1, 1, T, T), device=x.device)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
+        gate = torch.sigmoid(self.gate(x))
+        q = q * gate
+        k = k * gate
+        v = v * gate
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
@@ -97,7 +108,8 @@ class CausalSelfAttention(nn.Module):
         else:
             # manual implementation of attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+            combined_mask = self.bias[:,:,:T,:T] * window_mask
+            att = att.masked_fill(combined_mask == 0, float('-inf'))
             if self.softmax_variant_attn != 'softmax':
                 att = self.softmax_layer(att)
             else:
@@ -171,6 +183,7 @@ class GPTConfig:
     n_head: int = 12
     n_embd: int = 768
     dropout: float = 0.0
+    window_size: int = 128
 
     # Softmax Alternatives and Options
     softmax_variant_attn: str = "softmax" # Choices: "softmax" "softermax" "sigsoftmax" "polymax" "strongermax" "constantmax"
@@ -355,6 +368,7 @@ class GPT(nn.Module):
         config_args['vocab_size'] = 50257 # always 50257 for GPT model checkpoints
         config_args['block_size'] = 1024 # always 1024 for GPT model checkpoints
         config_args['bias'] = True # always True for GPT model checkpoints
+        config_args['window_size'] = 128 # always 128 for GPT model checkpoints
         # we can override the dropout rate, if desired
         if 'dropout' in override_args:
             print(f"overriding dropout rate to {override_args['dropout']}")
