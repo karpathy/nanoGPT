@@ -38,7 +38,7 @@ class CausalSelfAttention(nn.Module):
         self.n_embd = config.n_embd
         self.dropout = config.dropout
         self.window_size = config.window_size
-        self.gate = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.gate = config.gate
 
         # Rotary Positional Embeddings
         self.rotary_emb = None
@@ -93,10 +93,12 @@ class CausalSelfAttention(nn.Module):
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
-        gate = torch.sigmoid(self.gate(x))
-        q = q * gate
-        k = k * gate
-        v = v * gate
+        if self.gate:
+            Gating = nn.Linear(self.n_embd, self.n_embd, bias=True)
+            gate_ = torch.sigmoid(Gating(x))
+            q = q * gate_
+            k = k * gate_
+            v = v * gate_
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
@@ -184,6 +186,7 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     window_size: int = 128
+    gate: bool = False
 
     # Softmax Alternatives and Options
     softmax_variant_attn: str = "softmax" # Choices: "softmax" "softermax" "sigsoftmax" "polymax" "strongermax" "constantmax"
@@ -368,7 +371,7 @@ class GPT(nn.Module):
         config_args['vocab_size'] = 50257 # always 50257 for GPT model checkpoints
         config_args['block_size'] = 1024 # always 1024 for GPT model checkpoints
         config_args['bias'] = True # always True for GPT model checkpoints
-        config_args['window_size'] = 128 # always 128 for GPT model checkpoints
+        config_args['window_size'] = 128 # always None for GPT model checkpoints
         # we can override the dropout rate, if desired
         if 'dropout' in override_args:
             print(f"overriding dropout rate to {override_args['dropout']}")
