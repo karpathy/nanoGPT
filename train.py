@@ -2,6 +2,7 @@ import argparse
 import sys
 from rich import print
 import os
+import sys
 import time
 import csv
 from datetime import datetime
@@ -56,12 +57,38 @@ def parse_args():
     model_group.add_argument('--window_size', default=128, type=int)
     model_group.add_argument('--gate', default=False)
 
+    # Shared Parameter Settings
+    model_group.add_argument('--sharing_mlp', default=False, action=argparse.BooleanOptionalAction)
+    model_group.add_argument('--sharing_attn', default=False, action=argparse.BooleanOptionalAction)
+
     # NORM VARIATIONS
     model_group.add_argument("--layernorm_variant", type=str, default="rmsnorm", choices=["rmsnorm", "layernorm"])
     model_group.add_argument('--bias', default=False, action=argparse.BooleanOptionalAction, help="only used for layernorm variation option")
 
     # ACTIVATION VARIATIONS
-    model_group.add_argument("--activation_variant", type=str, default="gelu", choices=["relu", "squared_relu"])
+    model_group.add_argument(
+        "--activation_variant",
+        type=str,
+        default="gelu",
+        choices=[
+            "celu",
+            "elu",
+            "gelu",
+            "glu",
+            "leaky_relu",
+            "mish",
+            "prelu",
+            "relu6",
+            "rrelu",
+            "selu",
+            "sigmoid",
+            "silu",
+            "softplus",
+            "softsign",
+            "squared_relu",
+            "tanh",
+        ],
+    )
 
     # POSITIONAL EMBEDDING VARIATIONS
     model_group.add_argument('--use_rotary_embeddings', default=True, action=argparse.BooleanOptionalAction)
@@ -446,6 +473,8 @@ class Trainer:
                     mfu = self.raw_model.estimate_mfu(self.args.batch_size * self.args.gradient_accumulation_steps, dt)
                     running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
                 print(f"iter {self.iter_num}: loss {lossf:.4f}, time {dt*1000:.2f} ms, mfu {running_mfu*100:.2f}%")
+                if math.isnan(lossf):
+                    sys.exit("Exiting training loss is NaN")
                 self.log_metrics_non_validation(lossf, running_mfu, self.iter_num)
 
             self.iter_num += 1

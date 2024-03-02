@@ -19,7 +19,7 @@ from torch.nn import functional as F
 from variations.softmax_variations import Softermax, Constantmax, Constantmax_quan, Strongermax, Polymax, SigSoftmax
 from variations.normalization_variations import LayerNorm, RMSNorm
 from variations.position_encoding_variations import RotaryEmbedding, ShortRope
-from variations.activation_variations import SquaredReLU
+from variations.activation_variations import SquaredReLU, activation_dictionary
 
 
 class CausalSelfAttention(nn.Module):
@@ -130,29 +130,23 @@ class MLP(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
-        # TODO: Change name of self.gelu to something like "self.activation_variant"
-        if config.activation_variant == "relu":
-          print("Use ReLU")
-          self.gelu = nn.ReLU()
-        if config.activation_variant == "squared_relu":
-          print("Use Squared ReLU")
-          self.gelu = SquaredReLU()
-        if config.activation_variant == "gelu":
-          print("Use GELU")
-          self.gelu    = nn.GELU()
+
+        # Select activation variant
+        self.activation_variant = activation_dictionary[config.activation_variant]
+
         self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
         x = self.c_fc(x)
-        x = self.gelu(x)
+        x = self.activation_variant(x)
         x = self.c_proj(x)
         x = self.dropout(x)
         return x
 
 class Block(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, config, mlp=None, attn=None):
         super().__init__()
 
         if config.layernorm_variant == 'rmsnorm':
@@ -165,8 +159,17 @@ class Block(nn.Module):
 
         self.use_post_ln = config.use_post_ln
 
-        self.attn = CausalSelfAttention(config)
-        self.mlp = MLP(config)
+        # Allow for sharing attn between blocks
+        if attn == None:
+          self.attn = CausalSelfAttention(config)
+        else:
+          self.attn = attn
+
+        # Allow for sharing mlp between blocks
+        if mlp == None:
+          self.mlp = MLP(config)
+        else:
+          self.mlp = mlp
 
     def forward(self, x):
         if self.use_post_ln:
@@ -187,6 +190,10 @@ class GPTConfig:
     dropout: float = 0.0
     window_size: int = 128
     gate: bool = False
+
+    # Shared parameters
+    sharing_mlp: bool = False
+    sharing_attn: bool = False
 
     # Softmax Alternatives and Options
     softmax_variant_attn: str = "softmax" # Choices: "softmax" "softermax" "sigsoftmax" "polymax" "strongermax" "constantmax"
@@ -245,11 +252,21 @@ class GPT(nn.Module):
         if config.layernorm_variant == "rmsnorm":
             self.normalization_variant = RMSNorm(config.n_embd)
 
+        # Shared Parameters
+        shared_mlp = None
+        if config.sharing_mlp:
+          shared_mlp = MLP(config)
+
+        shared_attn = None
+        if config.sharing_attn:
+          shared_attn = CausalSelfAttention(config)
+
+        # Building up Transformer
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
             wpe = nn.Embedding(config.block_size, config.n_embd),
             drop = nn.Dropout(config.dropout),
-            h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
+            h = nn.ModuleList([Block(config, shared_mlp, shared_attn) for _ in range(config.n_layer)]),
             ln_f = self.normalization_variant,
         ))
 
