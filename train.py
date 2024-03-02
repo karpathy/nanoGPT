@@ -29,6 +29,7 @@ from torch.distributed import init_process_group, destroy_process_group
 
 from model import GPTConfig, GPT
 
+from export_data import ExportData
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
@@ -277,6 +278,7 @@ t0 = time.time()
 local_iter_num = 0  # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model  # unwrap DDP container if needed
 running_mfu = -1.0
+exporter = ExportData()
 while True:
 
     # determine and set the learning rate for this iteration
@@ -355,6 +357,7 @@ while True:
             running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
         print(
             f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+        exporter.add(iter_num, lossf, dt*1000, running_mfu*100)
     iter_num += 1
     local_iter_num += 1
 
@@ -364,3 +367,5 @@ while True:
 
 if ddp:
     destroy_process_group()
+
+exporter.save(out_dir)
