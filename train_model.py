@@ -27,7 +27,6 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 # from model import GPTConfig, GPT
-print('$$$$$$&&&&&&$$$$$', globals().items())
 GPTConfig = globals()['GPTConfig']
 GPT = globals()['GPT']
 # -----------------------------------------------------------------------------
