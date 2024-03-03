@@ -291,6 +291,8 @@ while True:
         losses = estimate_loss()
         print(
             f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        exporter.add(iter_num, float(losses['train']), float(
+            losses['val']), lr, running_mfu*100)
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
@@ -357,7 +359,6 @@ while True:
             running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
         print(
             f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
-        exporter.add(iter_num, lossf, dt*1000, running_mfu*100)
     iter_num += 1
     local_iter_num += 1
 
