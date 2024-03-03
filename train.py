@@ -26,6 +26,7 @@ import numpy as np
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
+from torch.optim import lr_scheduler
 
 from model import GPTConfig, GPT
 
@@ -198,6 +199,13 @@ scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
 # optimizer
 optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type, opt_type)
+
+if lr_schedule != 'None' or lr_schedule == '':
+    if lr_schedule == 'linear'
+        scheduler = lr_scheduler.LinearLR(optimizer, total_iters=max_iters)
+    elif lr_schedule == 'exponential':
+        scheduler = lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
+
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory
@@ -256,9 +264,17 @@ running_mfu = -1.0
 while True:
 
     # determine and set the learning rate for this iteration
-    lr = get_lr(iter_num) if decay_lr else learning_rate
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
+    if lr_schedule != 'None' or lr_schedule == '':
+        if iter_num == 0:
+            lr = learning_rate
+        else:
+            scheduler.step() if decay_lr else learning_rate
+            for param_group in optimizer.param_groups:
+                lr = param_group['lr']
+    else:
+        lr = get_lr(iter_num) if decay_lr else learning_rate
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
