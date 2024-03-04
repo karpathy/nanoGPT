@@ -75,6 +75,10 @@ class CausalSelfAttention(nn.Module):
             if self.softmax_variant_attn == "sigsoftmax":
               self.softmax_layer = SigSoftmax(config)
 
+        if self.window_size is not None:
+            # TODO: look into supporting sliding window attn for flash attn
+            self.flash = False
+
         if not self.flash:
             print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
             # causal mask to ensure that attention is only applied to the left in the input sequence
@@ -87,14 +91,15 @@ class CausalSelfAttention(nn.Module):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
         if self.window_size is not None:
             window_mask = torch.ones((1, 1, T, T), device=x.device)
-            window_mask = torch.tril(window_mask, diagonal=self.window_size) * torch.triu(window_mask, diagonal=-self.window_size)
+            window_mask = torch.triu(window_mask, diagonal=-self.window_size)
+            window_mask = self.bias[:,:,:T,:T] * window_mask
         else:
             window_mask = torch.ones((1, 1, T, T), device=x.device)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
         if self.gate:
-            Gating = nn.Linear(self.n_embd, self.n_embd, bias=True)
+            Gating = nn.Linear(self.n_embd, self.n_embd, bias=True, device=x.device)
             gate_ = torch.sigmoid(Gating(x))
             q = q * gate_
             k = k * gate_
@@ -110,12 +115,21 @@ class CausalSelfAttention(nn.Module):
         else:
             # manual implementation of attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            combined_mask = self.bias[:,:,:T,:T] * window_mask
-            att = att.masked_fill(combined_mask == 0, float('-inf'))
+
+            # apply masks
+            if self.window_size is not None:
+                # add mask for sliding window attention
+                att = att.masked_fill(window_mask == 0, float('-inf'))
+            else:
+                # regular lower triangle attention
+                att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+
+            # softmax variation
             if self.softmax_variant_attn != 'softmax':
                 att = self.softmax_layer(att)
             else:
                 att = F.softmax(att, dim=-1)
+
             att = self.attn_dropout(att)
             y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
         y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
