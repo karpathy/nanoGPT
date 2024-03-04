@@ -172,12 +172,14 @@
         "n_embd":["512"]
       }
     ],
-    "max_iters": ["6000"],
+    "max_iters": ["30000"],
+    "use_post_ln": [false],
     "sharing_mlp": [true],
+    "compile": [true],
     "block_size": ["256"],
     "device": ["cuda"],
     "dtype": ["bfloat16"],
-    "dataset": ["shakespeare_char"],
+    "dataset": ["wikitext103"],
     "use_rotary_embeddings": [false],
     "use_abs_pos_embeddings": [true],
     "tensorboard_run_name": ["same_size_param_sweep"]
