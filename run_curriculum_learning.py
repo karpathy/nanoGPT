@@ -16,7 +16,6 @@ def run_experiments_command(training_stage, config):
     # base command
     command = ["python3", "run_experiments.py"]
     command.extend(["--config", f"explorations/{config}"])
-    command.append("--value_only")
     # directory to output csv logs
     command.extend(["--csv_ckpt_dir", csv_dir])
     # directory to output ckpts
