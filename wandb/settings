@@ -1,0 +1,5 @@
+[default]
+entity = raveeroj-b
+project = nanogpt
+base_url = https://api.wandb.ai
+

@@ -260,7 +260,7 @@ class GPT(nn.Module):
 
         return model
 
-    def configure_optimizers(self, weight_decay, learning_rate, betas, device_type):
+    def configure_optimizers(self, weight_decay, learning_rate, betas, device_type, opt_type):
         # start with all of the candidate parameters
         param_dict = {pn: p for pn, p in self.named_parameters()}
         # filter out those that do not require grad
@@ -277,12 +277,26 @@ class GPT(nn.Module):
         num_nodecay_params = sum(p.numel() for p in nodecay_params)
         print(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
         print(f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
-        # Create AdamW optimizer and use the fused version if it is available
+        
+        # Use the fused version if it is available for ADAM family optimizers
         fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
         use_fused = fused_available and device_type == 'cuda'
         extra_args = dict(fused=True) if use_fused else dict()
-        optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
-        print(f"using fused AdamW: {use_fused}")
+
+        if opt_type == 'rmsprop':
+            optimizer = torch.optim.RMSprop(optim_groups, lr=learning_rate)
+        elif opt_type == 'adagrad':
+            optimizer = torch.optim.Adagrad(optim_groups, lr=learning_rate)
+        elif opt_type == 'sgd':
+            optimizer = torch.optim.SGD(optim_groups, lr=learning_rate)
+        elif opt_type == 'sgdm':
+            optimizer = torch.optim.SGD(optim_groups, lr=learning_rate, momentum=0.9)
+        elif opt_type == 'adam':
+            optimizer = torch.optim.Adam(optim_groups, lr=learning_rate, betas=betas, **extra_args)
+            print(f"using fused Adam: {use_fused}")
+        else:
+            optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
+            print(f"using fused AdamW: {use_fused}")
 
         return optimizer
 
