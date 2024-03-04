@@ -48,13 +48,13 @@ Finally, run `prepare.py` script to process the dataset for training.
 ##### SentencePiece
 
 ```bash
-python3 prepare.py input.txt --method sentencepiece --vocab_size 1000
+python3 prepare.py -t input.txt --method sentencepiece --vocab_size 1000
 ```
 
 ##### TikToken
 
 ```bash
-python3 prepare.py input.txt --method tiktoken
+python3 prepare.py -t input.txt --method tiktoken
 ```
 
 ##### Character Level Tokenization
@@ -62,7 +62,13 @@ python3 prepare.py input.txt --method tiktoken
 This command will tokenize the text in from the input file at the character level.
 
 ```bash
-python3 prepare.py input.txt --method char
+python3 prepare.py -t input.txt --method char
+```
+
+##### Custom
+
+```bash
+python3 prepare.py -t input.txt --method custom --tokens_file phoneme_list.txt
 ```
 
 ### Additional details about the `prepare.py` script
