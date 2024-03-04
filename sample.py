@@ -23,6 +23,7 @@ def parseargs():
   parser.add_argument("--seed", type=int, default=1337, help="seed for psuedorandom number generator")
   parser.add_argument("--dtype", type=str, default="bfloat16", choices=["bfloat16", "float16", "float32"], help="torch data type for inference, e.g. 'int8'")
   parser.add_argument('--compile', default=False, action=argparse.BooleanOptionalAction)
+  parser.add_argument('--sample_file', type=str, default=None, help="output file for inference")
 
   return parser.parse_args()
 
@@ -102,11 +103,17 @@ with torch.no_grad():
         for k in range(args.num_samples):
             y = model.generate(x, args.max_new_tokens,
                                temperature=args.temperature, top_k=args.top_k)
+
+            output_line = None
             if separator_token == None:
-                print("[bold green]" + decode(y[0].tolist()))
-                print('---------------')
+                output_line = decode(y[0].tolist())
             else:
-                print(separator_token)
-                print("[bold green]" + decode(y[0].tolist()).replace(separator_token, " "))
-                print('---------------')
+                output_line = decode(y[0].tolist()).replace(separator_token, " ")
+
+            print("[bold green]" + output_line)
+            print('---------------')
+
+            if args.sample_file != None:
+                with open(args.sample_file, "a") as file:
+                    file.write(output_line)
 
