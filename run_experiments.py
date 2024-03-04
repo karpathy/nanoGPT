@@ -56,38 +56,35 @@ def expand_range(value):
 
 def generate_combinations(config):
     print("Generating parameter combinations...")
-    base_params = {k: v if isinstance(v, list) else [v] for k, v in config.items() if not isinstance(v, dict)}
+    # Extract parameter groups if present, otherwise use an empty list to simplify logic
+    parameter_groups = config.pop('parameter_groups', [{}])
+    # Prepare base and conditional parameters
+    base_params = {k: expand_range(v) if isinstance(v, dict) and 'range' in v else v for k, v in config.items() if not isinstance(v, dict) or ('range' in v)}
+    base_params = {k: v if isinstance(v, list) else [v] for k, v in base_params.items()}
     conditional_params = {k: v for k, v in config.items() if isinstance(v, dict) and 'conditions' in v}
 
-    for k, v in config.items():
-        if isinstance(v, dict) and 'range' in v:
-            base_params[k] = expand_range(v)
+    for group in parameter_groups:
+        current_base_params = {**base_params, **group}
+        base_combinations = list(product(*[[(k, v) for v in values] for k, values in current_base_params.items()]))
 
-    base_combinations = list(product(*[[(k, v) for v in values] for k, values in base_params.items()]))
+        for base_combination in base_combinations:
+            combo_dict = dict(base_combination)
+            valid_combos = [combo_dict]
 
-    if not conditional_params:
-        for combo in base_combinations:
-            yield dict(combo)
-        return
+            for cond_param, values in conditional_params.items():
+                new_combos = []
+                for combo in valid_combos:
+                    if check_conditions(values['conditions'], combo):
+                        option_values = values['options'] if isinstance(values['options'], list) else [values['options']]
+                        for option_value in option_values:
+                            new_combo = {**combo, cond_param: option_value}
+                            new_combos.append(new_combo)
+                    else:
+                        new_combos.append(combo)
+                valid_combos = new_combos
 
-    for base_combination in base_combinations:
-        combo_dict = dict(base_combination)
-        valid_combos = [combo_dict]
-
-        for cond_param, values in conditional_params.items():
-            new_combos = []
             for combo in valid_combos:
-                if check_conditions(values['conditions'], combo):
-                    option_values = values['options'] if isinstance(values['options'], list) else [values['options']]
-                    for option_value in option_values:
-                        new_combo = {**combo, cond_param: option_value}
-                        new_combos.append(new_combo)
-                else:
-                    new_combos.append(combo)
-            valid_combos = new_combos
-
-        for combo in valid_combos:
-            yield combo
+                yield combo
 
 def format_config_name(config, config_basename, prefix, add_names):
     if add_names:
