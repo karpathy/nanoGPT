@@ -6,21 +6,21 @@ cd ../
 dataset="shakespeare_char"
 python3 "data/${dataset}/prepare.py"
 
-activation_variation=("celu",
-            "elu",
-            "gelu",
-            "glu",
-            "leaky_relu",
-            "mish",
-            "prelu",
-            "relu6",
-            "rrelu",
-            "selu",
-            "sigmoid",
-            "silu",
-            "softplus",
-            "softsign",
-            "squared_relu",
+activation_variation=("celu"
+            "elu"
+            "gelu"
+            "glu"
+            "leaky_relu"
+            "mish"
+            "prelu"
+            "relu6"
+            "rrelu"
+            "selu"
+            "sigmoid"
+            "silu"
+            "softplus"
+            "softsign"
+            "squared_relu"
             "tanh")
 
 n_layer="2"
