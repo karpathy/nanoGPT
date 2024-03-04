@@ -54,8 +54,8 @@ def parse_args():
     model_group.add_argument('--n_embd', default=384, type=int)
     model_group.add_argument('--dropout', default=0.2, type=float)
     model_group.add_argument('--use_post_ln', default=True, action=argparse.BooleanOptionalAction)
-    model_group.add_argument('--window_size', default=128, type=int)
-    model_group.add_argument('--gate', default=False)
+    model_group.add_argument('--window_size', default=None, type=int, help="Sliding window size, note this cannot be greater than block size")
+    model_group.add_argument('--gate', default=False, action=argparse.BooleanOptionalAction, help="option for gated attention see https://arxiv.org/abs/2306.12929")
 
     # Shared Parameter Settings
     model_group.add_argument('--sharing_mlp', default=False, action=argparse.BooleanOptionalAction)
