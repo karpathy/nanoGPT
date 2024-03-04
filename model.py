@@ -37,6 +37,8 @@ class CausalSelfAttention(nn.Module):
         self.n_head = config.n_head
         self.n_embd = config.n_embd
         self.dropout = config.dropout
+        self.window_size = config.window_size
+        self.gate = config.gate
 
         # Rotary Positional Embeddings
         self.rotary_emb = None
@@ -73,6 +75,10 @@ class CausalSelfAttention(nn.Module):
             if self.softmax_variant_attn == "sigsoftmax":
               self.softmax_layer = SigSoftmax(config)
 
+        if self.window_size is not None:
+            # TODO: look into supporting sliding window attn for flash attn
+            self.flash = False
+
         if not self.flash:
             print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
             # causal mask to ensure that attention is only applied to the left in the input sequence
@@ -83,9 +89,21 @@ class CausalSelfAttention(nn.Module):
         if self.rotary_emb is not None:
           x = self.rotary_emb(x)
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+        if self.window_size is not None:
+            window_mask = torch.ones((1, 1, T, T), device=x.device)
+            window_mask = torch.triu(window_mask, diagonal=-self.window_size)
+            window_mask = self.bias[:,:,:T,:T] * window_mask
+        else:
+            window_mask = torch.ones((1, 1, T, T), device=x.device)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
+        if self.gate:
+            Gating = nn.Linear(self.n_embd, self.n_embd, bias=True, device=x.device)
+            gate_ = torch.sigmoid(Gating(x))
+            q = q * gate_
+            k = k * gate_
+            v = v * gate_
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
@@ -97,11 +115,21 @@ class CausalSelfAttention(nn.Module):
         else:
             # manual implementation of attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+
+            # apply masks
+            if self.window_size is not None:
+                # add mask for sliding window attention
+                att = att.masked_fill(window_mask == 0, float('-inf'))
+            else:
+                # regular lower triangle attention
+                att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+
+            # softmax variation
             if self.softmax_variant_attn != 'softmax':
                 att = self.softmax_layer(att)
             else:
                 att = F.softmax(att, dim=-1)
+
             att = self.attn_dropout(att)
             y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
         y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
@@ -174,6 +202,8 @@ class GPTConfig:
     n_head: int = 12
     n_embd: int = 768
     dropout: float = 0.0
+    window_size: int = 128
+    gate: bool = False
 
     # Shared parameters
     sharing_mlp: bool = False
@@ -372,6 +402,7 @@ class GPT(nn.Module):
         config_args['vocab_size'] = 50257 # always 50257 for GPT model checkpoints
         config_args['block_size'] = 1024 # always 1024 for GPT model checkpoints
         config_args['bias'] = True # always True for GPT model checkpoints
+        config_args['window_size'] = 128 # always None for GPT model checkpoints
         # we can override the dropout rate, if desired
         if 'dropout' in override_args:
             print(f"overriding dropout rate to {override_args['dropout']}")
