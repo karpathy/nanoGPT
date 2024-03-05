@@ -26,6 +26,7 @@ import numpy as np
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
+import wandb
 
 from model import GPTConfig, GPT
 
@@ -94,6 +95,9 @@ for params in grid_search(opt_type):
     weight_decay = params[1]
     beta1 = params[2]
     beta2 = params[3]
+    wandb_run_name = f'{opt_type}_{learning_rate}_{weight_decay}'
+    config = {k: globals()[k]
+              for k in config_keys}  # will be useful for logging
     # various inits, derived attributes, I/O setup
     ddp = int(os.environ.get('RANK', -1)) != -1  # is this a ddp run?
     if ddp:
@@ -276,7 +280,6 @@ for params in grid_search(opt_type):
 
     # logging
     if wandb_log and master_process:
-        import wandb
         wandb.init(project=wandb_project,
                    name=wandb_run_name, config=config)
 
@@ -386,6 +389,7 @@ for params in grid_search(opt_type):
            'final_val_loss': final_val_loss})
     scores.append((str(learning_rate), str(weight_decay),
                   str(beta1), str(beta2), str(final_val_loss)))
+    wandb.finish()
     iter_num = 0
     local_iter_num = 0
     if ddp:
