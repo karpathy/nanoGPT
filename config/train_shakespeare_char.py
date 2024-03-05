@@ -36,6 +36,7 @@ always_save_checkpoint = False # we expect to overfit on this small dataset, so 
 wandb_project = 'shakespeare-adam'
 dataset = 'shakespeare_char'
 out_dir = 'out-shakespeare-char'
+
 wandb_run_name = \
         '{}  | '.format(opt_type) + \
         'lr: {:.2e}-{:.2e} | '.format(min_lr, learning_rate) + \
@@ -45,5 +46,4 @@ wandb_run_name = \
         'warmup: {}  | '.format(warmup_iters) + \
         'lr-scheduler: {}  | '.format(lr_schedule) + \
         'max-iters: {}'.format(max_iters)
-
 
