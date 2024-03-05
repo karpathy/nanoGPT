@@ -1,4 +1,3 @@
-
 # nanoGPT
 
 AMATH 515 Project  

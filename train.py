@@ -201,7 +201,7 @@ scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type, opt_type)
 
 if lr_schedule != 'None' or lr_schedule == '':
-    if lr_schedule == 'linear'
+    if lr_schedule == 'linear':
         scheduler = lr_scheduler.LinearLR(optimizer, total_iters=max_iters)
     elif lr_schedule == 'exponential':
         scheduler = lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
