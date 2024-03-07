@@ -55,6 +55,8 @@ def parse_args():
     model_group.add_argument('--n_embd', default=384, type=int)
     model_group.add_argument('--dropout', default=0.2, type=float)
     model_group.add_argument('--use_post_ln', default=True, action=argparse.BooleanOptionalAction)
+    model_group.add_argument('--window_size', default=None, type=int, help="Sliding window size, note this cannot be greater than block size")
+    model_group.add_argument('--gate', default=False, action=argparse.BooleanOptionalAction, help="option for gated attention see https://arxiv.org/abs/2306.12929")
 
     # Shared Parameter Settings
     model_group.add_argument('--sharing_mlp', default=False, action=argparse.BooleanOptionalAction)
@@ -225,7 +227,7 @@ class Trainer:
             ckpt_path = os.path.join(self.args.out_dir, 'ckpt.pt')
             checkpoint = torch.load(ckpt_path, map_location=self.device)
             checkpoint_model_args = checkpoint['model_args']
-            for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
+            for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size', 'window_size', 'gate']:
                 self.model_args[k] = checkpoint_model_args[k]
             self.load_data()
             gptconf = GPTConfig(**self.model_args)
@@ -240,14 +242,14 @@ class Trainer:
         elif self.args.init_from.startswith('gpt2'):
             override_args = dict(dropout=self.args.dropout)
             self.model = GPT.from_pretrained(self.args.init_from, override_args)
-            for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
+            for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size', 'window_size', 'gate']:
                 self.model_args[k] = getattr(self.model.config, k)
             self.load_data()
         elif self.args.init_from == 'prev_run':
             ckpt_path = os.path.join(self.args.prev_run_ckpt, 'ckpt.pt')
             checkpoint = torch.load(ckpt_path, map_location=self.device)
             checkpoint_model_args = checkpoint['model_args']
-            for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
+            for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size', 'window_size', 'gate']:
                 self.model_args[k] = checkpoint_model_args[k]
             self.load_data()
             gptconf = GPTConfig(**self.model_args)
