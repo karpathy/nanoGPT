@@ -63,7 +63,8 @@ class CausalSelfAttention(nn.Module):
             # efficient attention using Flash Attention CUDA kernels
             y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
         else:
-            # manual implementation of attention
+            # manual implementation of attention with RoPE
+            q, k = apply_rotary_pos_emb(q, k, self.get_angles(T, self.n_embd // self.n_head, q.device))
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
             att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
             att = F.softmax(att, dim=-1)
@@ -171,12 +172,13 @@ class GPT(nn.Module):
         device = idx.device
         b, t = idx.size()
         assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
-        pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
+
+        # generate sinusoidal positional embeddings
+        pos = get_sinusoidal_pos(t, self.config.n_embd, device)
 
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
-        pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
-        x = self.transformer.drop(tok_emb + pos_emb)
+        x = self.transformer.drop(tok_emb + pos)
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)
@@ -328,3 +330,11 @@ class GPT(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
 
         return idx
+
+def get_sinusoidal_pos(t, n_embd, device):
+    position = torch.arange(0, t, dtype=torch.float, device=device).unsqueeze(1)
+    div_term = torch.exp(torch.arange(0, n_embd, 2).float().to(device) * (-math.log(10000.0) / n_embd))
+    pos_emb = torch.zeros((t, n_embd), device=device)
+    pos_emb[:, 0::2] = torch.sin(position * div_term)
+    pos_emb[:, 1::2] = torch.cos(position * div_term)
+    return pos_emb.unsqueeze(0)
