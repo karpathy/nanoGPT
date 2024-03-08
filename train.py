@@ -30,7 +30,6 @@ from torch.optim import lr_scheduler
 
 from model import GPTConfig, GPT
 
-from export_data import ExportData
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
@@ -58,8 +57,8 @@ dropout = 0.0  # for pretraining 0 is good, for finetuning try 0.1+
 bias = False  # do we use bias inside LayerNorm and Linear layers?
 # adamw optimizer
 opt_type = 'adamw'
-learning_rate = 6e-4 # max learning rate
-max_iters = 600000 # total number of training iterations
+learning_rate = 6e-4  # max learning rate
+max_iters = 600000  # total number of training iterations
 weight_decay = 1e-1
 beta1 = 0.9
 beta2 = 0.95
@@ -218,7 +217,8 @@ model.to(device)
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
 # optimizer
-optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type, opt_type)
+optimizer = model.configure_optimizers(
+    weight_decay, learning_rate, (beta1, beta2), device_type, opt_type)
 
 if lr_schedule != 'None' or lr_schedule == '':
     if lr_schedule == 'linear':
@@ -286,7 +286,6 @@ t0 = time.time()
 local_iter_num = 0  # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model  # unwrap DDP container if needed
 running_mfu = -1.0
-exporter = ExportData()
 while True:
 
     # determine and set the learning rate for this iteration
@@ -307,8 +306,6 @@ while True:
         losses = estimate_loss()
         print(
             f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-        exporter.add(iter_num, float(losses['train']), float(
-            losses['val']), lr, running_mfu*100)
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
@@ -384,5 +381,3 @@ while True:
 
 if ddp:
     destroy_process_group()
-
-exporter.save(out_dir)
