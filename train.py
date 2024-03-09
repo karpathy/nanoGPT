@@ -37,7 +37,7 @@ def parse_args():
     # Checkpoint args
     training_group.add_argument('--only_save_checkpoint_at_end', action='store_true')
     training_group.add_argument('--always_save_checkpoint', action='store_true')
-    training_group.add_argument('--patience', default=3, type=int)
+    training_group.add_argument('--patience', default=42, type=int)
     training_group.add_argument('--init_from', default='scratch', choices=['scratch', 'prev_run', 'resume', 'gpt2*'], type=str)
     training_group.add_argument('--prev_run_ckpt', default='', type=str)
     training_group.add_argument('--csv_ckpt_dir', default='', type=str)
