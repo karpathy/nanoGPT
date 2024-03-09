@@ -1,0 +1,32 @@
+[
+  {
+    "n_head":["6"],
+    "n_kv_group":["1","2","3","6"],
+    "n_layer":["6"],
+    "n_embd":["384"],
+    "max_iters": ["5000"],
+    "use_post_ln": [false, true],
+    "sharing_mlp": [false],
+    "compile": [false],
+    "block_size": ["256"],
+    "softmax_variant_attn": ["polymax", "softmax"],
+    "device": ["cuda"],
+    "dtype": ["bfloat16"],
+    "dataset": ["shakespeare_char"],
+    "parameter_groups": [
+      {
+      "use_rotary_embeddings": [true],
+      "use_abs_pos_embeddings": [true]
+      },
+      {
+      "use_rotary_embeddings": [false],
+      "use_abs_pos_embeddings": [true]
+      },
+      {
+      "use_rotary_embeddings": [true],
+      "use_abs_pos_embeddings": [false]
+      }
+    ],
+    "tensorboard_run_name": ["group_query_sweep"]
+  }
+]
