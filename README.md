@@ -74,7 +74,7 @@ If you are compatible with cu11.8, then use the following:
 ```bash
 python3 -m pip install --upgrade pip
 python3 -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-python3 -m pip install numpy transformers datasets tiktoken wandb tqdm tensorboard
+python3 -m pip install numpy transformers datasets tiktoken wandb tqdm tensorboard rich
 ```
 
 If unsure, visit the pytorch page and subtitute the appropriate line for the `torch` installation line above: https://pytorch.org/get-started/locally/
@@ -145,7 +145,7 @@ checkpoints created from training using `validation loss` as a figure of merit.
 To run the experiment create or modify an existing json file in the `explorations` folder:
 
 ```bash
-python3 run_experiments.py --config explorations/config.json --value_only --output_dir out_test
+python3 run_experiments.py --config explorations/config.json --output_dir out_test
 ```
 
 This will create logs in the following directories:
