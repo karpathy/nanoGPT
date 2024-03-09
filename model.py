@@ -49,21 +49,17 @@ class CausalSelfAttention(nn.Module):
         self.rotary_emb_q = None
         self.rotary_emb_k = None
         if config.use_rotary_embeddings:
+            # TODO update variant name after completing rope and shortrope updates
+            if config.rope_variant == "rope":
+                self.rotary_emb_q = SymmetricalOverlapAngularPositions(config, size=config.n_embd)
+                self.rotary_emb_k = SymmetricalOverlapAngularPositions(config, size=(config.n_embd // config.n_head) * config.n_kv_group, num_angles=256)
+            # TODO update rope and shortrope to accomodate new GQA additions
             # if config.rope_variant == "rope":
             #     self.rotary_emb_q = RotaryEmbedding(config, size=config.n_embd)
             #     self.rotary_emb_k = RotaryEmbedding(config, size=config.n_embd // config.n_head * config.n_kv_group)
-            if config.rope_variant == "rope":
-                self.rotary_emb_q = SymmetricalOverlapAngularPositions(config, size=config.n_embd)
-                self.rotary_emb_k = SymmetricalOverlapAngularPositions(config,
-                                                                       size=(config.n_embd
-                                                                             //
-                                                                             config.n_head)
-                                                                       *
-                                                                       config.n_kv_group,
-                                                                       num_angles=256)
-            if config.rope_variant == "shortrope":
-                self.rotary_emb_q = RotaryEmbedding(config, size=config.n_embd)
-                self.rotary_emb_k = RotaryEmbedding(config, size=config.n_embd // config.n_head * config.n_kv_group)
+            # if config.rope_variant == "shortrope":
+            #     self.rotary_emb_q = RotaryEmbedding(config, size=config.n_embd)
+            #     self.rotary_emb_k = RotaryEmbedding(config, size=config.n_embd // config.n_head * config.n_kv_group)
 
         # Softmax Variant Selection
         self.softmax_variant_attn = config.softmax_variant_attn
