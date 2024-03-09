@@ -18,7 +18,7 @@ from torch.nn import functional as F
 # Variations
 from variations.softmax_variations import Softermax, Constantmax, Constantmax_quan, Strongermax, Polymax, SigSoftmax
 from variations.normalization_variations import LayerNorm, RMSNorm
-from variations.position_encoding_variations import RotaryEmbedding, ShortRope
+from variations.position_encoding_variations import RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions
 from variations.activation_variations import SquaredReLU, activation_dictionary
 
 
@@ -27,8 +27,11 @@ class CausalSelfAttention(nn.Module):
     def __init__(self, config):
         super().__init__()
         assert config.n_embd % config.n_head == 0
+        assert config.n_head % config.n_kv_group == 0
         # key, query, value projections for all heads, but in a batch
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+        self.c_attn_q = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.c_attn_k = nn.Linear(config.n_embd, (config.n_embd // config.n_head) * config.n_kv_group, bias=config.bias)
+        self.c_attn_v = nn.Linear(config.n_embd, (config.n_embd // config.n_head) * config.n_kv_group, bias=config.bias)
         # output projection
         self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
         # regularization
@@ -36,17 +39,31 @@ class CausalSelfAttention(nn.Module):
         self.resid_dropout = nn.Dropout(config.dropout)
         self.n_head = config.n_head
         self.n_embd = config.n_embd
+        self.n_kv_group = config.n_kv_group
         self.dropout = config.dropout
         self.window_size = config.window_size
+        self.n_embd = config.n_embd
         self.gate = config.gate
 
         # Rotary Positional Embeddings
-        self.rotary_emb = None
+        self.rotary_emb_q = None
+        self.rotary_emb_k = None
         if config.use_rotary_embeddings:
+            # if config.rope_variant == "rope":
+            #     self.rotary_emb_q = RotaryEmbedding(config, size=config.n_embd)
+            #     self.rotary_emb_k = RotaryEmbedding(config, size=config.n_embd // config.n_head * config.n_kv_group)
             if config.rope_variant == "rope":
-                self.rotary_emb = RotaryEmbedding(config)
+                self.rotary_emb_q = SymmetricalOverlapAngularPositions(config, size=config.n_embd)
+                self.rotary_emb_k = SymmetricalOverlapAngularPositions(config,
+                                                                       size=(config.n_embd
+                                                                             //
+                                                                             config.n_head)
+                                                                       *
+                                                                       config.n_kv_group,
+                                                                       num_angles=256)
             if config.rope_variant == "shortrope":
-                self.rotary_emb = ShortRope(config)
+                self.rotary_emb_q = RotaryEmbedding(config, size=config.n_embd)
+                self.rotary_emb_k = RotaryEmbedding(config, size=config.n_embd // config.n_head * config.n_kv_group)
 
         # Softmax Variant Selection
         self.softmax_variant_attn = config.softmax_variant_attn
@@ -85,10 +102,18 @@ class CausalSelfAttention(nn.Module):
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
 
+
     def forward(self, x):
-        if self.rotary_emb is not None:
-          x = self.rotary_emb(x)
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+
+        q = self.c_attn_q(x)
+        k = self.c_attn_k(x)
+        v = self.c_attn_v(x)
+
+        if self.rotary_emb_q is not None:
+            q = self.rotary_emb_q(q)
+            k = self.rotary_emb_k(k)
+
         if self.window_size is not None:
             window_mask = torch.ones((1, 1, T, T), device=x.device)
             window_mask = torch.triu(window_mask, diagonal=-self.window_size)
@@ -96,25 +121,32 @@ class CausalSelfAttention(nn.Module):
         else:
             window_mask = torch.ones((1, 1, T, T), device=x.device)
 
-        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
         if self.gate:
             Gating = nn.Linear(self.n_embd, self.n_embd, bias=True, device=x.device)
             gate_ = torch.sigmoid(Gating(x))
             q = q * gate_
             k = k * gate_
             v = v * gate_
-        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 
+        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, n_h, T, hs)
+        k = k.view(B, T, self.n_kv_group, C // self.n_head).transpose(1, 2) # (B, n_kv, T, hs)
+        v = v.view(B, T, self.n_kv_group, C // self.n_head).transpose(1, 2) # (B, n_kv, T, hs)
+
+        y = None
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
+        self.flash = False
         if self.flash:
             # efficient attention using Flash Attention CUDA kernels
             y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
         else:
+            att = None
             # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+            if self.n_head != self.n_kv_group:
+              k_repeated = k.repeat_interleave(self.n_head // self.n_kv_group, dim=1)
+              att = (q @ k_repeated.transpose(-2, -1)) / math.sqrt(k.size(-1))
+            else:
+              att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+
 
             # apply masks
             if self.window_size is not None:
@@ -131,7 +163,11 @@ class CausalSelfAttention(nn.Module):
                 att = F.softmax(att, dim=-1)
 
             att = self.attn_dropout(att)
-            y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+            if self.n_head != self.n_kv_group:
+                v_repeated = v.repeat_interleave(self.n_head // self.n_kv_group, dim=1)
+                y = att @ v_repeated # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+            else:
+                y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
         y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
 
         # output projection
@@ -200,6 +236,7 @@ class GPTConfig:
     vocab_size: int = 50304 # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
     n_layer: int = 12
     n_head: int = 12
+    n_kv_group: int = 2
     n_embd: int = 768
     dropout: float = 0.0
     window_size: int = 128
