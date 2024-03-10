@@ -11,13 +11,14 @@ softmax_variation=("softmax" "polymax")
 n_layer="6"
 n_head="6"
 n_kv_groups=("1" "3" "6")
-n_embd="60"
+n_embd="30"
+gate=("--gate" "--no-gate")
 max_iters="50"
 block_size="32"
 eval_iters="50"
 eval_interval="50"
 timestamp="$(date +%F_%T)"
-notes="check_all_softmax_variations"
+notes="check_all_gqa_variations"
 run_name="${dataset}_${softmax_variant}_${max_iters}_${block_size}_${n_layer}_${n_head}_${n_embd}_${notes}"
 
 # Loop over the array
@@ -34,7 +35,8 @@ do
       --max_iters "$max_iters" \
       --n_layer "$n_layer" \
       --n_head "$n_head" \
-      --n_head "$n_kv_group" \
+      --n_kv_group "$n_kv_group" \
+      "$gate" \
       --n_embd "$n_embd" \
       --eval_iters "$eval_iters" \
       --eval_interval "$eval_interval" \

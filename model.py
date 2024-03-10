@@ -92,7 +92,7 @@ class CausalSelfAttention(nn.Module):
             # TODO: look into supporting sliding window attn for flash attn
             self.flash = False
 
-        if self.n_kv_group != self.n_head:
+        if self.n_kv_group != self.n_head and self.n_kv_group != None:
             self.flash = False
 
         if not self.flash:
@@ -119,11 +119,20 @@ class CausalSelfAttention(nn.Module):
             window_mask = self.bias[:,:,:T,:T] * window_mask
 
         if self.gate:
-            Gating = nn.Linear(self.n_embd, self.n_embd, bias=True, device=x.device)
-            gate_ = torch.sigmoid(Gating(x))
-            q = q * gate_
-            k = k * gate_
-            v = v * gate_
+            if self.n_kv_group == None or self.n_kv_group == self.n_head:
+                Gating = nn.Linear(self.n_embd, self.n_embd, bias=True, device=x.device)
+                gate_ = torch.sigmoid(Gating(x))
+                q = q * gate_
+                k = k * gate_
+                v = v * gate_
+            else:
+                Gating_q = nn.Linear(self.n_embd, self.n_embd, bias=True, device=x.device)
+                Gating_kv = nn.Linear(self.n_embd, self.n_embd // self.n_head * self.n_kv_group, bias=True, device=x.device)
+                gate_q = torch.sigmoid(Gating_q(x))
+                gate_kv = torch.sigmoid(Gating_kv(x))
+                q = q * gate_q
+                k = k * gate_kv
+                v = v * gate_kv
 
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, n_h, T, hs)
         k = k.view(B, T, self.n_kv_group, C // self.n_head).transpose(1, 2) # (B, n_kv, T, hs)

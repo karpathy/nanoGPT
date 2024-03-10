@@ -1,4 +1,4 @@
-name: Install Then Test All Softmaxes
+name: Install Then Test GQA Variations
 on: [push, pull_request]
 jobs:
   Install-And-Test-Softmax:
