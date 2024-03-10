@@ -133,12 +133,7 @@ class CausalSelfAttention(nn.Module):
                 v = v * gate_
             else:
                 # TODO: Test more methods to merge Attention Gates with GQA
-                # Gating_kv = nn.Linear(self.n_embd, self.kv_dim, bias=True, device=x.device)
-                # gate_kv = torch.sigmoid(Gating_kv(x))
-                # q = q * gate_kv.repeat_interleave(self.n_head//self.n_kv_group, dim=2)
-                # k = k * gate_kv
-                # v = v * gate_kv
-
+                # TODO: Evaluate each method's ability to even out parameter sizes
                 Gating_q = nn.Linear(self.n_embd, self.n_embd, bias=True, device=x.device)
                 Gating_kv = nn.Linear(self.n_embd, self.kv_dim, bias=True, device=x.device)
                 gate_qx = Gating_q(x)
@@ -147,22 +142,6 @@ class CausalSelfAttention(nn.Module):
                 q = q * gate_q
                 k = k * gate_kv
                 v = v * gate_kv
-
-                # Gating_q = nn.Linear(self.n_embd, self.n_embd, bias=True, device=x.device)
-                # Gating_kv = nn.Linear(self.n_embd, self.kv_dim, bias=True, device=x.device)
-                # gate_q = torch.sigmoid(Gating_q(x))
-                # gate_kv = torch.sigmoid(Gating_kv(gate_q))
-                # q = q * gate_q
-                # k = k * gate_kv
-                # v = v * gate_kv
-
-                # Gating_q = nn.Linear(self.n_embd, self.n_embd, bias=True, device=x.device)
-                # Gating_kv = nn.Linear(self.n_embd, self.kv_dim, bias=True, device=x.device)
-                # gate_q = torch.sigmoid(Gating_q(x))
-                # gate_kv = torch.sigmoid(Gating_kv(x))
-                # q = q * gate_q
-                # k = k * gate_kv
-                # v = v * gate_kv
 
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, n_h, T, hs)
         k = k.view(B, T, self.n_kv_group, C // self.n_head).transpose(1, 2) # (B, n_kv, T, hs)
