@@ -27,19 +27,25 @@ class CausalSelfAttention(nn.Module):
     def __init__(self, config):
         super().__init__()
         assert config.n_embd % config.n_head == 0
-        assert config.n_head % config.n_kv_group == 0
         # key, query, value projections for all heads, but in a batch
         self.c_attn_q = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
-        self.c_attn_k = nn.Linear(config.n_embd, (config.n_embd // config.n_head) * config.n_kv_group, bias=config.bias)
-        self.c_attn_v = nn.Linear(config.n_embd, (config.n_embd // config.n_head) * config.n_kv_group, bias=config.bias)
+
+        self.n_head = config.n_head
+        if config.n_kv_group == None:
+            self.n_kv_group = config.n_head
+        else:
+            assert config.n_head % config.n_kv_group == 0
+            self.n_kv_group = config.n_kv_group
+
+        self.kv_dim = (config.n_embd // config.n_head) * self.n_kv_group
+        self.c_attn_k = nn.Linear(config.n_embd, self.kv_dim, bias=config.bias)
+        self.c_attn_v = nn.Linear(config.n_embd, self.kv_dim, bias=config.bias)
         # output projection
         self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
         # regularization
         self.attn_dropout = nn.Dropout(config.dropout)
         self.resid_dropout = nn.Dropout(config.dropout)
-        self.n_head = config.n_head
         self.n_embd = config.n_embd
-        self.n_kv_group = config.n_kv_group
         self.dropout = config.dropout
         self.window_size = config.window_size
         self.n_embd = config.n_embd
@@ -52,7 +58,7 @@ class CausalSelfAttention(nn.Module):
             # TODO update variant name after completing rope and shortrope updates
             if config.rope_variant == "rope":
                 self.rotary_emb_q = SymmetricalOverlapAngularPositions(config, size=config.n_embd)
-                self.rotary_emb_k = SymmetricalOverlapAngularPositions(config, size=(config.n_embd // config.n_head) * config.n_kv_group, num_angles=256)
+                self.rotary_emb_k = SymmetricalOverlapAngularPositions(config, size=self.kv_dim, num_angles=256)
             # TODO update rope and shortrope to accomodate new GQA additions
             # if config.rope_variant == "rope":
             #     self.rotary_emb_q = RotaryEmbedding(config, size=config.n_embd)
@@ -92,7 +98,7 @@ class CausalSelfAttention(nn.Module):
             # TODO: look into supporting sliding window attn for flash attn
             self.flash = False
 
-        if self.n_kv_group != self.n_head and self.n_kv_group != None:
+        if self.n_kv_group != self.n_head:
             self.flash = False
 
         if not self.flash:
@@ -119,20 +125,44 @@ class CausalSelfAttention(nn.Module):
             window_mask = self.bias[:,:,:T,:T] * window_mask
 
         if self.gate:
-            if self.n_kv_group == None or self.n_kv_group == self.n_head:
+            if self.n_kv_group == self.n_head:
                 Gating = nn.Linear(self.n_embd, self.n_embd, bias=True, device=x.device)
                 gate_ = torch.sigmoid(Gating(x))
                 q = q * gate_
                 k = k * gate_
                 v = v * gate_
             else:
+                # TODO: Test more methods to merge Attention Gates with GQA
+                # Gating_kv = nn.Linear(self.n_embd, self.kv_dim, bias=True, device=x.device)
+                # gate_kv = torch.sigmoid(Gating_kv(x))
+                # q = q * gate_kv.repeat_interleave(self.n_head//self.n_kv_group, dim=2)
+                # k = k * gate_kv
+                # v = v * gate_kv
+
                 Gating_q = nn.Linear(self.n_embd, self.n_embd, bias=True, device=x.device)
-                Gating_kv = nn.Linear(self.n_embd, self.n_embd // self.n_head * self.n_kv_group, bias=True, device=x.device)
-                gate_q = torch.sigmoid(Gating_q(x))
-                gate_kv = torch.sigmoid(Gating_kv(x))
+                Gating_kv = nn.Linear(self.n_embd, self.kv_dim, bias=True, device=x.device)
+                gate_qx = Gating_q(x)
+                gate_q = torch.sigmoid(gate_qx)
+                gate_kv = torch.sigmoid(Gating_kv(gate_qx))
                 q = q * gate_q
                 k = k * gate_kv
                 v = v * gate_kv
+
+                # Gating_q = nn.Linear(self.n_embd, self.n_embd, bias=True, device=x.device)
+                # Gating_kv = nn.Linear(self.n_embd, self.kv_dim, bias=True, device=x.device)
+                # gate_q = torch.sigmoid(Gating_q(x))
+                # gate_kv = torch.sigmoid(Gating_kv(gate_q))
+                # q = q * gate_q
+                # k = k * gate_kv
+                # v = v * gate_kv
+
+                # Gating_q = nn.Linear(self.n_embd, self.n_embd, bias=True, device=x.device)
+                # Gating_kv = nn.Linear(self.n_embd, self.kv_dim, bias=True, device=x.device)
+                # gate_q = torch.sigmoid(Gating_q(x))
+                # gate_kv = torch.sigmoid(Gating_kv(x))
+                # q = q * gate_q
+                # k = k * gate_kv
+                # v = v * gate_kv
 
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, n_h, T, hs)
         k = k.view(B, T, self.n_kv_group, C // self.n_head).transpose(1, 2) # (B, n_kv, T, hs)
@@ -241,7 +271,7 @@ class GPTConfig:
     vocab_size: int = 50304 # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
     n_layer: int = 12
     n_head: int = 12
-    n_kv_group: int = 2
+    n_kv_group: int = 12
     n_embd: int = 768
     dropout: float = 0.0
     window_size: int = 128
