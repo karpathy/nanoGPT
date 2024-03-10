@@ -105,8 +105,8 @@ def parse_args():
                              default="softmax", choices=["constantmax_quan", "constantmax", "polymax", "strongermax", "softermax", "sigsoftmax", "softmax"])
 
     ## Custom Softmax Variation Options
-    model_group.add_argument("--constantmax_initial_beta", type=float, default=0.0)
-    model_group.add_argument("--constantmax_initial_gamma", type=float, default=100.0)
+    model_group.add_argument("--constantmax_initial_beta", type=float, default=6.1)
+    model_group.add_argument("--constantmax_initial_gamma", type=float, default=1.0)
     model_group.add_argument('--constantmax_use_euler_base', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument("--constantmax_base", type=float, default=2.0)
 
@@ -313,7 +313,7 @@ class Trainer:
             sys.exit(f"Error: File not found - {meta_path}")
 
     def load_data(self):
-        if self.model_args['vocab_size'] is None: 
+        if self.model_args['vocab_size'] is None:
             sys.exit("Error: no vocab size specified")
         elif self.model_args['vocab_size'] == 100277:
             # cl100k_base, vocab size 100277, requires np.uint32
