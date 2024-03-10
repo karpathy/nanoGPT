@@ -92,6 +92,9 @@ class CausalSelfAttention(nn.Module):
             # TODO: look into supporting sliding window attn for flash attn
             self.flash = False
 
+        if self.n_kv_group != self.n_head:
+            self.flash = False
+
         if not self.flash:
             print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
             # causal mask to ensure that attention is only applied to the left in the input sequence
@@ -114,8 +117,6 @@ class CausalSelfAttention(nn.Module):
             window_mask = torch.ones((1, 1, T, T), device=x.device)
             window_mask = torch.triu(window_mask, diagonal=-self.window_size)
             window_mask = self.bias[:,:,:T,:T] * window_mask
-        else:
-            window_mask = torch.ones((1, 1, T, T), device=x.device)
 
         if self.gate:
             Gating = nn.Linear(self.n_embd, self.n_embd, bias=True, device=x.device)
