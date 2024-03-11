@@ -27,7 +27,7 @@ prepare.py midi_12.csv --method char
 Use the run_experiments.py script to train the model on the prepared dataset.
 
 ```sh
-python3 run_experiments.py --config explorations/bach.json --out out --value_only
+python3 run_experiments.py --config explorations/bach.json --out out
 ```
 
 ### Step 3: Run sample.py and Save Output to a File
@@ -35,7 +35,7 @@ python3 run_experiments.py --config explorations/bach.json --out out --value_onl
 Generate samples from the trained model and redirect the output to a CSV file.
 
 ```sh
-python3 sample.py --out_dir out --num_samples 1 --temperature 0.8 > ./data/midi_jsbach/generated_music.csv
+python3 sample.py --out_dir out --num_samples 1 --temperature 0.8 --sample_file ./data/midi_jsbach/generated_music.csv
 ```
 
 ### Step 4: Open File with Vim or Editor to trim file to just CSV Contents
@@ -60,7 +60,7 @@ bash sample_result_to_midi.sh generated_music.csv
 Repeat step 3 with different settings for and explore different results:
 
 ```sh
-python3 sample.py --out_dir out --num_samples 1 --temperature 1.2 > ./data/midi_jsbach/generated_music.csv
+python3 sample.py --out_dir out --num_samples 1 --temperature 1.2 --sample_file ./data/midi_jsbach/generated_music.csv
 ```
 
 ## References:
