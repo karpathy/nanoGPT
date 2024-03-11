@@ -1,7 +1,7 @@
 name: Install Then Test GQA Variations
 on: [push, pull_request]
 jobs:
-  Install-And-Test-Softmax:
+  Install-And-Test-GQA:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository code
