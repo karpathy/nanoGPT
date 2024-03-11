@@ -37,7 +37,7 @@ def parse_args():
     # Checkpoint args
     training_group.add_argument('--only_save_checkpoint_at_end', action='store_true')
     training_group.add_argument('--always_save_checkpoint', action='store_true')
-    training_group.add_argument('--patience', default=42, type=int)
+    training_group.add_argument('--patience', default=None, type=int)
     training_group.add_argument('--init_from', default='scratch', choices=['scratch', 'prev_run', 'resume', 'gpt2*'], type=str)
     training_group.add_argument('--prev_run_ckpt', default='', type=str)
     training_group.add_argument('--csv_ckpt_dir', default='', type=str)
@@ -443,7 +443,7 @@ class Trainer:
                         }
                         print(f"saving checkpoint to {self.args.out_dir}")
                         torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
-                if num_steps_with_worse_loss >= self.args.patience:
+                if self.args.patience is not None and num_steps_with_worse_loss >= self.args.patience:
                     print(f"Early Stopping: loss has not decreased in {self.args.patience} steps")
                     break
                 if losses['val'] > self.best_val_loss:
