@@ -258,6 +258,7 @@ class GPTConfig:
 
     # Shared parameters
     sharing_mlp: bool = False
+    shared_mlp_grouping: int = 1
     sharing_attn: bool = False
 
     # Softmax Alternatives and Options
@@ -318,22 +319,50 @@ class GPT(nn.Module):
             self.normalization_variant = RMSNorm(config.n_embd)
 
         # Shared Parameters
-        shared_mlp = None
+
+        config.sharing_mlp = True
+        config.shared_mlp_grouping = 6
+        shared_mlp_grouping = config.shared_mlp_grouping
+        # TODO Change name confusing
+        shared_mlp_group = []
         if config.sharing_mlp:
-          shared_mlp = MLP(config)
+            layer_mlp = None
+            for i in range (config.n_layer):
+                if i % shared_mlp_grouping == 0:
+                    layer_mlp = MLP(config)
+                shared_mlp_group.append(layer_mlp)
 
-        shared_attn = None
+        config.sharing_attn = True
+        config.shared_attn_grouping = 6
+        shared_attn_grouping = config.shared_attn_grouping
+        # TODO Change name confusing
+        shared_attn_group = []
         if config.sharing_attn:
-          shared_attn = CausalSelfAttention(config)
+            layer_attn = None
+            for i in range (config.n_layer):
+                if i % shared_attn_grouping == 0:
+                    layer_attn = CausalSelfAttention(config)
+                shared_attn_group.append(layer_attn)
 
-        # Building up Transformer
-        self.transformer = nn.ModuleDict(dict(
-            wte = nn.Embedding(config.vocab_size, config.n_embd),
-            wpe = nn.Embedding(config.block_size, config.n_embd),
-            drop = nn.Dropout(config.dropout),
-            h = nn.ModuleList([Block(config, shared_mlp, shared_attn) for _ in range(config.n_layer)]),
-            ln_f = self.normalization_variant,
-        ))
+
+        if True:
+            self.transformer = nn.ModuleDict(dict(
+                wte = nn.Embedding(config.vocab_size, config.n_embd),
+                wpe = nn.Embedding(config.block_size, config.n_embd),
+                drop = nn.Dropout(config.dropout),
+                h = nn.ModuleList([Block(config, mlp=shared_mlp_group[i], attn=shared_attn_group[i]) for i in range(config.n_layer)]),
+                ln_f = self.normalization_variant,
+            ))
+        else:
+            print("second")
+            # Building up Transformer
+            self.transformer = nn.ModuleDict(dict(
+                wte = nn.Embedding(config.vocab_size, config.n_embd),
+                wpe = nn.Embedding(config.block_size, config.n_embd),
+                drop = nn.Dropout(config.dropout),
+                h = nn.ModuleList([Block(config, mlp=shared_mlp, attn=shared_attn) for _ in range(config.n_layer)]),
+                ln_f = self.normalization_variant,
+            ))
 
         # Select softmax variant for output layer
         self.softmax_variant_output = config.softmax_variant_output
