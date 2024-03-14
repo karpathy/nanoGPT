@@ -171,6 +171,10 @@ def main():
         "-v", "--val_input", type=str, help="Path to the validation input text file"
     )
 
+    parser.add_argument(
+        "-p", "--percentage_train", type=float, default=0.9, help="value between 0 and 1.0 for train percentage split"
+    )
+
     args = parser.parse_args()
 
     if args.use_separate_files:
@@ -196,8 +200,12 @@ def main():
         with open(args.train_input, "r") as f:
             data = f.read()
         n = len(data)
-        train_data = data[: int(n * 0.9)]
-        val_data = data[int(n * 0.9) :]
+        if args.percentage_train == 1.0:
+            train_data = data
+            val_data = None
+        else:
+            train_data = data[: int(n * args.percentage_train)]
+            val_data = data[int(n * args.percentage_train) :]
 
     if args.method == "sentencepiece":
         # Train and use SentencePiece
@@ -206,7 +214,8 @@ def main():
         sp = spm.SentencePieceProcessor()
         sp.load(f"{spm_model_prefix}.model")
         train_ids = tokenize_sentencepiece(sp, train_data)
-        val_ids = tokenize_sentencepiece(sp, val_data)
+        if val_data != None:
+            val_ids = tokenize_sentencepiece(sp, val_data)
 
         # Create stoi (string-to-index) and itos (index-to-string) mappings
         stoi = {sp.id_to_piece(id): id for id in range(sp.GetPieceSize())}
@@ -230,7 +239,8 @@ def main():
         # Use TikToken
         enc = tiktoken.get_encoding(args.tiktoken_encoding)
         train_ids = tokenize_tiktoken(enc, train_data)
-        val_ids = tokenize_tiktoken(enc, val_data)
+        if val_data != None:
+            val_ids = tokenize_tiktoken(enc, val_data)
 
         vocab_size = enc.n_vocab
         print("vocab size", vocab_size)
@@ -254,9 +264,10 @@ def main():
             tokens = [line.strip() for line in f.readlines() if line.strip()]
             tokens = [token.replace("\\n", "\n").replace("\\t", "\t") for token in tokens]
         train_ids, train_coverage, stoi, itos, remaining_train = tokenize_custom_tokens_and_replace(train_data, tokens)
-        val_ids, val_coverage, _, _, remaining_val = tokenize_custom_tokens_and_replace(val_data, tokens)
         print(f"Training data coverage by tokens: {train_coverage*100:.2f}%")
-        print(f"Validation data coverage by tokens: {val_coverage*100:.2f}%")
+        if val_data != None:
+            val_ids, val_coverage, _, _, remaining_val = tokenize_custom_tokens_and_replace(val_data, tokens)
+            print(f"Validation data coverage by tokens: {val_coverage*100:.2f}%")
 
         # Write the remaining data (with tokens replaced by underscores) to remaining.txt
         with open("remaining.txt", "w") as f:
@@ -274,9 +285,10 @@ def main():
             tokens = [token.replace("\\n", "\n").replace("\\t", "\t") for token in tokens]
 
         train_ids, train_coverage, stoi, itos = tokenize_custom_tokens(train_data, tokens)
-        val_ids, val_coverage, _, _ = tokenize_custom_tokens(val_data, tokens)
         print(f"Training data coverage by tokens: {train_coverage*100:.2f}%")
-        print(f"Validation data coverage by tokens: {val_coverage*100:.2f}%")
+        if val_data != None:
+            val_ids, val_coverage, _, _ = tokenize_custom_tokens(val_data, tokens)
+            print(f"Validation data coverage by tokens: {val_coverage*100:.2f}%")
 
         # Save metadata including stoi and itos in a pickle file
         meta = {"vocab_size": len(tokens), "stoi": stoi, "itos": itos}
@@ -297,7 +309,8 @@ def main():
         print(f"Vocab size: {vocab_size}")
 
         train_ids, stoi, itos = encode_char_level(train_data, chars)
-        val_ids, _, _ = encode_char_level(val_data, chars)
+        if val_data != None:
+            val_ids, _, _ = encode_char_level(val_data, chars)
 
         # Save the meta information
         meta = {"vocab_size": vocab_size, "itos": itos, "stoi": stoi}
@@ -309,10 +322,12 @@ def main():
     print(f"val has {len(val_ids):,} tokens")
     if args.tiktoken_encoding == "cl100k_base":
         np.array(train_ids, dtype=np.uint32).tofile(args.train_output)
-        np.array(val_ids, dtype=np.uint32).tofile(args.val_output)
+        if val_data != None:
+            np.array(val_ids, dtype=np.uint32).tofile(args.val_output)
     else:
         np.array(train_ids, dtype=np.uint16).tofile(args.train_output)
-        np.array(val_ids, dtype=np.uint16).tofile(args.val_output)
+        if val_data != None:
+            np.array(val_ids, dtype=np.uint16).tofile(args.val_output)
 
 
 if __name__ == "__main__":
