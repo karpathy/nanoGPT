@@ -319,7 +319,8 @@ def main():
 
     # Print token counts and export to bin files
     print(f"train has {len(train_ids):,} tokens")
-    print(f"val has {len(val_ids):,} tokens")
+    if val_data != None:
+        print(f"val has {len(val_ids):,} tokens")
     if args.tiktoken_encoding == "cl100k_base":
         np.array(train_ids, dtype=np.uint32).tofile(args.train_output)
         if val_data != None:
