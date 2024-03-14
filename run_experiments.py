@@ -16,6 +16,9 @@ def parse_args():
     parser.add_argument("--add_names", action="store_true", help="Include names of values of the configuration parameters in addition to values (may cause too long a file name).")
     parser.add_argument("--use-best-val-loss-from", nargs=2, metavar=('csv_dir', 'output_dir'), type=str, default=['', ''],
                         help="Grab the best val loss of the run given by the csv_dir. Then, use the corresponding ckpt from the matching output_dir")
+    parser.add_argument('--override_max_iters', default=None, type=int)
+    parser.add_argument('--override_dataset', default=None, type=str)
+    parser.add_argument('--override_block_size', default=None, type=int)
     return parser.parse_args()
 
 def find_best_val_loss(csv_dir, output_dir):
@@ -94,10 +97,18 @@ def format_config_name(config, config_basename, prefix, add_names):
 
     return f"{prefix}{config_basename}-{'-'.join(config_items)}"
 
-def run_command(config, config_basename, output_dir, csv_ckpt_dir, prefix, add_names, best_val_loss_from):
+def run_command(config, config_basename, output_dir, csv_ckpt_dir, prefix, add_names, 
+                best_val_loss_from, override_max_iters, override_dataset, override_block_size):
     formatted_name = format_config_name(config, config_basename, prefix, add_names)
     config['tensorboard_run_name'] = formatted_name
     config['out_dir'] = os.path.join(output_dir, f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{formatted_name}")
+    
+    if override_max_iters:
+        config['max_iters'] = str(override_max_iters)
+    if override_dataset:
+        config['dataset'] = override_dataset
+    if override_block_size:
+        config['block_size'] = str(override_block_size)
 
     base_command = ["python3", "train.py"]
     for key, value in config.items():
@@ -129,8 +140,9 @@ def main():
 
     for config in original_configurations:
         for combination in generate_combinations(config):
-            run_command(combination, config_basename, args.output_dir,
-                        args.csv_ckpt_dir, args.prefix, args.add_names, args.use_best_val_loss_from)
+            run_command(combination, config_basename, args.output_dir, args.csv_ckpt_dir, 
+                        args.prefix, args.add_names, args.use_best_val_loss_from, 
+                        args.override_max_iters, args.override_dataset, args.override_block_size)
 
 if __name__ == "__main__":
     main()
