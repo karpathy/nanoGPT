@@ -2,7 +2,7 @@
     {
       "config": "template.json", 
       "max_iters": 3000,
-      "dataset": "shakespeare_char",
+      "dataset": "openwebtext",
       "block_size": 256
     },
     {
