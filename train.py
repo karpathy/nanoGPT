@@ -100,12 +100,21 @@ def parse_args():
     # SOFTMAX VARIATIONS
     ## Selection of softmax variation for attention and output layers
     model_group.add_argument("--softmax_variant_attn", type=str,
-                             default="softmax", choices=["constantmax_quan", "constantmax", "polymax", "strongermax", "softermax", "sigsoftmax", "softmax"])
+                             default="softmax", choices=["constantmax_quan",
+                                                         "constantmax",
+                                                         "polymax",
+                                                         "strongermax",
+                                                         "softermax",
+                                                         "sigsoftmax",
+                                                         "softmax",
+                                                         "saturatingconsmax",
+                                                         "exppolymax",
+                                                         ])
     model_group.add_argument("--softmax_variant_output", type=str,
                              default="softmax", choices=["constantmax_quan", "constantmax", "polymax", "strongermax", "softermax", "sigsoftmax", "softmax"])
 
     ## Custom Softmax Variation Options
-    model_group.add_argument("--constantmax_initial_beta", type=float, default=0.0)
+    model_group.add_argument("--constantmax_initial_beta", type=float, default=2.5)
     model_group.add_argument("--constantmax_initial_gamma", type=float, default=100.0)
     model_group.add_argument('--constantmax_use_euler_base', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument("--constantmax_base", type=float, default=2.0)
@@ -115,10 +124,18 @@ def parse_args():
     model_group.add_argument("--polymax_power", type=float, default=2.0)
     model_group.add_argument("--polymax_divisor", type=float, default=1000.0)
 
-    model_group.add_argument("--sigsoftmax_use_euler_base", type=float, default=2.0)
+    model_group.add_argument('--sigsoftmax_use_euler_base', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument("--sigsoftmax_base", type=float, default=2.0)
 
     model_group.add_argument("--strongermax_strength", type=float, default=2.0)
+    model_group.add_argument('--strongermax_sum_to_1', default=True, action=argparse.BooleanOptionalAction)
+    model_group.add_argument("--strongermax_divisor", type=float, default=1.0)
+    model_group.add_argument('--strongermax_use_xmax', default=True, action=argparse.BooleanOptionalAction)
+
+    model_group.add_argument("--exppolymax_base", type=float, default="2.719")
+    model_group.add_argument("--exppolymax_y_intercept", type=float, default=1.0)
+    model_group.add_argument("--exppolymax_power", type=float, default=2.0)
+    model_group.add_argument("--exppolymax_divisor", type=float, default=1.0)
 
     # Softermax Specific Options
     model_group.add_argument('--softermax_use_xmax', default=True, action=argparse.BooleanOptionalAction)

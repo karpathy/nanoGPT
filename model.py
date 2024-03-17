@@ -75,6 +75,12 @@ class CausalSelfAttention(nn.Module):
             if self.softmax_variant_attn == "sigsoftmax":
               self.softmax_layer = SigSoftmax(config)
 
+            if self.softmax_variant_attn == "saturatingconsmax":
+              self.softmax_layer_attn = SaturatingConSmax(config)
+
+            if self.softmax_variant_attn == "exppolymax":
+              self.softmax_layer_attn = ExpPolymax(config)
+
         if self.window_size is not None:
             # TODO: look into supporting sliding window attn for flash attn
             self.flash = False
@@ -234,6 +240,15 @@ class GPTConfig:
 
     ## Strongermax options
     strongermax_strength: float = 2.0 # Softermax with option of 'stronger' (larger integer) bases
+    strongermax_sum_to_1: bool = False # Softermax with option of 'stronger' (larger integer) bases
+    strongermax_divisor: float = 1.0 # Softermax with option of 'stronger' (larger integer) bases
+    strongermax_use_xmax: bool = True # Softermax with option of 'stronger' (larger integer) bases
+
+    ## ExpPolymax options
+    exppolymax_base: float = 2.719
+    exppolymax_y_intercept: float = 1.0
+    exppolymax_power: float = 2.0
+    exppolymax_divisor: float = 1.0
 
     # Positional Embeddings Variations
     use_abs_pos_embeddings: bool = False # Note: one can use this AND rotary embeddings

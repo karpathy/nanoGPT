@@ -106,14 +106,21 @@ class Strongermax(nn.Module):
         super().__init__()
         self.dim = dim
         self.strength = config.strongermax_strength
-        self.subtract_max = config.softermax_use_xmax
+        self.subtract_max = config.strongermax_use_xmax
+        self.sum_to_1 = config.strongermax_sum_to_1
+        self.divisor = config.strongermax_divisor
 
     def forward(self, x):
         if self.subtract_max:
             max_x = x.max(dim=self.dim, keepdim=True).values
             x = x - max_x
-        e_x = torch.pow(self.strength, x)
-        return e_x / e_x.sum(dim=self.dim, keepdim=True)
+
+        result = torch.pow(self.strength, x)
+
+        if self.sum_to_1:
+            result = result / result.sum(dim=self.dim, keepdim=True)
+
+        return result / self.divisor
 
 # Using polynomial instead of exponential for Softmax separation non-linearity
 class Polymax(nn.Module):
@@ -123,7 +130,7 @@ class Polymax(nn.Module):
         assert(config.polymax_x_intercept < 0) # ensure x_intercept is strictly left of the y-axis
 
         self.x_intercept = config.polymax_x_intercept # where to transition from y=0 to m*x+b
-        self.y_intercept = config.polymax_y_intercept # where teh graph crosses y-axis
+        self.y_intercept = config.polymax_y_intercept # where the graph crosses y-axis
 
         self.power = config.polymax_power
         self.divisor = config.polymax_divisor
@@ -148,13 +155,67 @@ class Polymax(nn.Module):
         # Combine sections
         return (poly_piece + linear_piece + flat_piece)/self.divisor
 
+# Merging of ConSmax body for gradient prop and Polymax head for numerical stability
+class SaturatingConSmax(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+
+        if config.constantmax_use_euler_base:
+            self.constantmax_base = math.e
+        else:
+            self.constantmax_base = config.constantmax_base
+
+        self.divisor = config.constantmax_initial_gamma
+        self.beta = config.constantmax_initial_beta
+        self.x_sat = 11 + config.constantmax_initial_beta
+
+    def forward(self, x):
+        # Overview:
+        # exponential section:    -inf < x < 10
+        # flat section:           10 < x < inf
+
+        # Exponential section
+        exponential_piece = torch.where(
+            (x < (self.x_sat)),
+            torch.pow(self.constantmax_base, x - self.beta),
+            torch.tensor(0.0, device=x.device))
+
+        # flat section
+        flat_piece = torch.where(x >= (self.x_sat), torch.tensor(self.x_sat, device=x.device), torch.tensor(0.0, device=x.device))
+
+        # Combine sections
+        return (exponential_piece + flat_piece)/self.divisor
+
+# Merging of ConSmax body for gradient prop and Polymax head for numerical stability
+class ExpPolymax(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+
+        self.exppolymax_base = config.exppolymax_base
+        self.y_intercept = config.exppolymax_y_intercept # where the graph crosses y-axis
+        self.power = config.exppolymax_power
+        self.divisor = config.exppolymax_divisor
+
+    def forward(self, x):
+        # Overview:
+        # exponential section:    -inf < x < 0
+        # Polynomial section:     0 < x < inf
+
+        # Exponential section
+        exponential_piece = torch.where((x < 0), torch.pow(self.constantmax_base, x), torch.tensor(0.0, device=x.device))
+
+        # Polynomial section
+        poly_piece = torch.where(x > 0, x**self.power + self.y_intercept, torch.tensor(0.0, device=x.device))
+
+        # Combine sections
+        return (poly_piece + exponential_piece)/self.divisor
+
 # SigSoftmax from https://arxiv.org/abs/1805.10829
 class SigSoftmax(nn.Module):
     """ Softmax variant based on arxiv 1805.10829 with added handles for base """
     def __init__(self, config, dim=-1):
         super().__init__()
         self.dim = dim
-        self.base = config.sigsoftmax_base
 
         # Set the base of the exponent
         if config.sigsoftmax_use_euler_base:
