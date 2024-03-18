@@ -112,7 +112,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--url",
         type=str,
-        default="https://huggingface.co/datasets/Helsinki-NLP/opus-100/tree/main/en-fr",
+        default=None,
         help="URL to scrape for Parquet files.",
     )
     parser.add_argument(
@@ -143,4 +143,8 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
+
+    if args.url == None:
+        args.url=f"https://huggingface.co/datasets/Helsinki-NLP/opus-100/tree/main/{args.from_lang_code}-{args.to_lang_code}",
+
     main(args.url, args.output_text_file, args.from_lang_code, args.to_lang_code, args.phonemize)
