@@ -145,6 +145,11 @@ def main():
         default=None,
         help="Path to the SentencePiece vocabulary file (not always needed but can be used for additional functionality)",
     )
+    parser.add_argument(
+        "--skip_sp_tokenization",
+        action="store_true",
+        help="Skip tokenization and creation of .bin files after training SentencePiece model",
+    )
 
     # Tiktoken only argument
     parser.add_argument(
@@ -168,6 +173,7 @@ def main():
         default="val.bin",
         help="Output file for tokenized validation data",
     )
+
 
     # Options for using separate training and validation input files
     parser.add_argument(
@@ -225,13 +231,16 @@ def main():
             sp = spm.SentencePieceProcessor()
             sp.load(args.spm_model_file)
         else:
-
-            # Train and use SentencePiece
+            # Train SentencePiece
             spm_model_prefix = "trained_spm_model"
             train_sentencepiece_model(input_files, spm_model_prefix, args.vocab_size)
             sp = spm.SentencePieceProcessor()
             sp.load(f"{spm_model_prefix}.model")
+            if args.skip_sp_tokenization:
+                print("SentencePiece model training complete. Skipping tokenization and .bin file creation.")
+                return
 
+        # Perform Tokenization with SentencePiece
         train_ids = tokenize_sentencepiece(sp, train_data)
         if val_data != None:
             val_ids = tokenize_sentencepiece(sp, val_data)
