@@ -126,12 +126,24 @@ def main():
         help="Tokenization method",
     )
 
-    # Sentence Piece only argument
+    # Sentence Piece only arguments
     parser.add_argument(
         "--vocab_size",
         type=int,
         default=500,
         help="Vocabulary size for SentencePiece model",
+    )
+    parser.add_argument(
+        "--spm_model_file",
+        type=str,
+        default=None,
+        help="Path to the pre-trained SentencePiece model file",
+    )
+    parser.add_argument(
+        "--spm_vocab_file",
+        type=str,
+        default=None,
+        help="Path to the SentencePiece vocabulary file (not always needed but can be used for additional functionality)",
     )
 
     # Tiktoken only argument
@@ -208,11 +220,18 @@ def main():
             val_data = data[int(n * args.percentage_train) :]
 
     if args.method == "sentencepiece":
-        # Train and use SentencePiece
-        spm_model_prefix = "trained_spm_model"
-        train_sentencepiece_model(input_files, spm_model_prefix, args.vocab_size)
-        sp = spm.SentencePieceProcessor()
-        sp.load(f"{spm_model_prefix}.model")
+        if args.spm_model_file and args.spm_vocab_file:
+            # Load pre-trained SentencePiece model
+            sp = spm.SentencePieceProcessor()
+            sp.load(args.spm_model_file)
+        else:
+
+            # Train and use SentencePiece
+            spm_model_prefix = "trained_spm_model"
+            train_sentencepiece_model(input_files, spm_model_prefix, args.vocab_size)
+            sp = spm.SentencePieceProcessor()
+            sp.load(f"{spm_model_prefix}.model")
+
         train_ids = tokenize_sentencepiece(sp, train_data)
         if val_data != None:
             val_ids = tokenize_sentencepiece(sp, val_data)
