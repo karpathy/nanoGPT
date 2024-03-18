@@ -87,7 +87,7 @@ if __name__ == "__main__":
         "-o",
         "--output_text_file",
         type=str,
-        default="output.txt",
+        default="input.txt",
         help="Path to the output text file where the contents should be saved.",
     )
 
