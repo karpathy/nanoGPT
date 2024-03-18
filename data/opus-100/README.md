@@ -35,7 +35,7 @@ A typical data instance in OPUS-100 looks like this:
 
 Get dataset:
 ```bash
-python3 get_dataset.py -f en -t fr
+python3 get_dataset.py -f en -t es
 ```
 
 Partition into smaller files if necessary:
@@ -52,30 +52,34 @@ python3 batch_prepare.py --input_dir interleaved_files --prepare_script prepare.
 
 Get dataset and split into to and from txt files:
 ```bash
-python3 get_dataset.py -f en -t fr  --phonemize
+python3 get_dataset.py -f en -t es  --phonemize
 ```
 
 Create phonemized texts:
 ```bash
 bash txt_to_phonemes.sh -l en -o  from_input.txt en_pho.txt
-bash txt_to_phonemes.sh -l fr -o  to_input.txt fr_pho.txt
+bash txt_to_phonemes.sh -l es -o  to_input.txt es_pho.txt
 ```
 
 Train sentencepiece, skipping tokenization:
 ```bash
-cat en_pho.txt fr_pho.txt > enfr_pho.txt
-python3 prepare.py -t enfr_pho.txt --method sentencepiece --vocab_size 2048 --skip_sp_tokenization
+cat en_pho.txt es_pho.txt > enes_pho.txt
+python3 prepare.py -t enes_pho.txt --method sentencepiece --vocab_size 2048 --skip_sp_tokenization
 ```
 
 Interleave outputs:
 ```bash
-python3 interleave_files.py -f1 en_pho.txt -f2 fr_pho.txt -m 50 -o test --forbidden_strings "(en)" "(fr)"
+python3 interleave_files.py -f1 en_pho.txt -f2 es_pho.txt -m 50 -o test --forbidden_strings "(en)" "(es)"
 ```
 
 Batch process into single set of train.bin and val.bin files:
 ```bash
 python3 batch_prepare.py --input_dir interleaved_files --prepare_script prepare.py --tokenizer sentencepiece
 ```
+
+## Notes
+
+Certain languages are easier for espeak to phonemize than others.
 
 
 ## Citation
