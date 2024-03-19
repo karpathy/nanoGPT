@@ -16,7 +16,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 # Variations
-from variations.softmax_variations import Softermax, Constantmax, Constantmax_quan, Strongermax, Polymax, SigSoftmax
+from variations.softmax_variations import Softermax, Constantmax, Constantmax_quan, Strongermax, Polymax, SigSoftmax, ExpPolymax, SaturatingConSmax
 from variations.normalization_variations import LayerNorm, RMSNorm
 from variations.position_encoding_variations import RotaryEmbedding, ShortRope
 from variations.activation_variations import SquaredReLU, activation_dictionary
