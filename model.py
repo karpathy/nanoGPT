@@ -76,10 +76,10 @@ class CausalSelfAttention(nn.Module):
               self.softmax_layer = SigSoftmax(config)
 
             if self.softmax_variant_attn == "saturatingconsmax":
-              self.softmax_layer_attn = SaturatingConSmax(config)
+              self.softmax_layer = SaturatingConSmax(config)
 
             if self.softmax_variant_attn == "exppolymax":
-              self.softmax_layer_attn = ExpPolymax(config)
+              self.softmax_layer = ExpPolymax(config)
 
         if self.window_size is not None:
             # TODO: look into supporting sliding window attn for flash attn
