@@ -59,8 +59,10 @@ def parse_args():
     model_group.add_argument('--gate', default=False, action=argparse.BooleanOptionalAction, help="option for gated attention see https://arxiv.org/abs/2306.12929")
 
     # Shared Parameter Settings
-    model_group.add_argument('--sharing_mlp', default=False, action=argparse.BooleanOptionalAction)
-    model_group.add_argument('--sharing_attn', default=False, action=argparse.BooleanOptionalAction)
+    model_group.add_argument('--shared_mlp_size', default=1, type=int, help="every 'k' contiguous blocks of mlp are shared")
+    model_group.add_argument('--shared_mlp_sym', default=False, action=argparse.BooleanOptionalAction)
+    model_group.add_argument('--shared_attn_size', default=1, type=int, help="every 'k' contiguous blocks of attn are shared")
+    model_group.add_argument('--shared_attn_sym', default=False, action=argparse.BooleanOptionalAction, help="symmetrical attention sharing")
 
     # NORM VARIATIONS
     model_group.add_argument("--layernorm_variant", type=str, default="rmsnorm", choices=["rmsnorm", "layernorm"])
