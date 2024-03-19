@@ -54,7 +54,7 @@ def parse_args():
     model_group.add_argument('--n_kv_group', default=2, type=int)
     model_group.add_argument('--n_embd', default=384, type=int)
     model_group.add_argument('--dropout', default=0.2, type=float)
-    model_group.add_argument('--use_post_ln', default=True, action=argparse.BooleanOptionalAction)
+    model_group.add_argument('--use_post_ln', default=False, action=argparse.BooleanOptionalAction)
     model_group.add_argument('--window_size', default=None, type=int, help="Sliding window size, note this cannot be greater than block size")
     model_group.add_argument('--gate', default=False, action=argparse.BooleanOptionalAction, help="option for gated attention see https://arxiv.org/abs/2306.12929")
 
@@ -92,10 +92,10 @@ def parse_args():
     )
 
     # POSITIONAL EMBEDDING VARIATIONS
-    model_group.add_argument('--use_rotary_embeddings', default=True, action=argparse.BooleanOptionalAction)
+    model_group.add_argument('--use_rotary_embeddings', default=False, action=argparse.BooleanOptionalAction)
     model_group.add_argument("--rope_variant", type=str, default="rope", choices=["shortrope", "rope"])
     model_group.add_argument("--shortrope_length", type=int, default="16", help="number of embeddings to use with rope, must be <= length, and be even")
-    model_group.add_argument('--use_abs_pos_embeddings', default=False, action=argparse.BooleanOptionalAction)
+    model_group.add_argument('--use_abs_pos_embeddings', default=True, action=argparse.BooleanOptionalAction)
 
     # SOFTMAX VARIATIONS
     ## Selection of softmax variation for attention and output layers
@@ -125,7 +125,7 @@ def parse_args():
 
     # Optimizer args
     training_group.add_argument('--learning_rate', default=1e-3, type=float)
-    training_group.add_argument('--max_iters', default=5000, type=int)
+    training_group.add_argument('--max_iters', default=3500, type=int)
     training_group.add_argument('--weight_decay', default=1e-1, type=float)
     training_group.add_argument('--beta1', default=0.9, type=float)
     training_group.add_argument('--beta2', default=0.99, type=float)
@@ -134,7 +134,7 @@ def parse_args():
     # LR schedule args
     training_group.add_argument('--decay_lr', action='store_true')
     training_group.add_argument('--warmup_iters', default=100, type=int)
-    training_group.add_argument('--lr_decay_iters', default=5000, type=int)
+    training_group.add_argument('--lr_decay_iters', default=3500, type=int)
     training_group.add_argument('--min_lr', default=1e-4, type=float)
 
     # DDP args
