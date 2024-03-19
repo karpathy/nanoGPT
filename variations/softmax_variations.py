@@ -123,7 +123,7 @@ class Polymax(nn.Module):
         assert(config.polymax_x_intercept < 0) # ensure x_intercept is strictly left of the y-axis
 
         self.x_intercept = config.polymax_x_intercept # where to transition from y=0 to m*x+b
-        self.y_intercept = config.polymax_y_intercept # where teh graph crosses y-axis
+        self.y_intercept = config.polymax_y_intercept # where the graph crosses y-axis
 
         self.power = config.polymax_power
         self.divisor = config.polymax_divisor
