@@ -1,12 +1,12 @@
 import subprocess
 import argparse
 import os
-import sys
+import json
 
 prev_csv_dir = ""
 prev_output_dir = ""
 
-def run_experiments_command(training_stage, config):
+def run_experiments_command(training_stage, config, **kwargs):
     global prev_csv_dir
     global prev_output_dir
 
@@ -24,14 +24,25 @@ def run_experiments_command(training_stage, config):
         command.extend(["--use-best-val-loss-from", "csv_logs/" + prev_csv_dir, prev_output_dir])
     prev_csv_dir = csv_dir
     prev_output_dir = output_dir
+    
+    for key, val in kwargs.items():
+        command.extend([f"--override_{key}", str(val)])
     return command
 
 def main(config_file):
-    with open(config_file) as f:
-        configs = f.read().splitlines()
+    ext = os.path.splitext(config_file)
+    if ext[1] == ".py":
+        with open(config_file, "r") as f:
+            configs = f.read().splitlines()
+            
+        for i, config in enumerate(configs):
+            subprocess.run(run_experiments_command(i+1, config))
+    elif ext[1] == ".json":
+        with open(config_file, "r") as f:
+            configs = json.load(f)
 
-    for i, config in enumerate(configs):
-        subprocess.run(run_experiments_command(i+1, config))
+        for i, config in enumerate(configs):
+            subprocess.run(run_experiments_command(i+1, **config))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

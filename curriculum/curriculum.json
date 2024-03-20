@@ -1,0 +1,32 @@
+[
+    {
+      "config": "template.json", 
+      "max_iters": 3000,
+      "dataset": "openwebtext",
+      "block_size": 256
+    },
+    {
+      "config": "template.json", 
+      "max_iters": 3000,
+      "dataset": "wikitext103",
+      "block_size": 256
+    },
+    {
+      "config": "template.json", 
+      "max_iters": 3000,
+      "dataset": "xsum",
+      "block_size": 256
+    },
+    {
+      "config": "template.json", 
+      "max_iters": 3000,
+      "dataset": "billsum",
+      "block_size": 256
+    },
+    {
+      "config": "template.json", 
+      "max_iters": 3000,
+      "dataset": "cnn_dailymail",
+      "block_size": 256
+    }
+]
