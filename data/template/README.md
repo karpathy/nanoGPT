@@ -26,11 +26,9 @@ Also for phonemization ensure that `espeak` and `GNU Parallel` are installed.
 
 ##### 1. Create a New Data Folder
 
-First copy this folder into a new folder:
-
 ```bash
 # from the ./data directory
-cp -r ./template ./new_data_folder
+bash create_new_dataset.sh <name-of-dataset-folder>
 ```
 
 ##### 2. Add data to folder
