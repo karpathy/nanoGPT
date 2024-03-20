@@ -1,7 +1,7 @@
-name: Basic Pytorch Installation, Data Prep, CPU Training, CPU Inference
+name: Install Then Test GQA Variations
 on: [push, pull_request]
 jobs:
-  Install-Dependencies_Data-Prep_CPU-Training_CPU-Inference:
+  Install-And-Test-GQA:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository code
@@ -25,11 +25,9 @@ jobs:
           python3 -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           python3 -m pip install numpy transformers datasets tiktoken wandb tqdm tensorboard
           python3 -m pip install -r requirements_cpu.txt
-      - name: Run Small Network on CPU
+      - name: Test all softmax variations
         run: |
           python3 data/shakespeare_char/prepare.py
-          python3 train.py --out_dir=out --device=cpu --eval_interval=2 --log_interval=1 --block_size=2 --batch_size=2 --n_layer=2 --n_head=2 --n_kv_group 2 --n_embd=16 --max_iters=3 --lr_decay_iters=2 --dropout=0.0
-      - name: Run CPU Inference
-        run: |
-          python3 sample.py --device=cpu --out_dir="out"
+          cd tests
+          source test_gqa_variations_cpu.sh
 

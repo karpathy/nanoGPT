@@ -9,6 +9,7 @@ https://github.com/huggingface/transformers/blob/main/src/transformers/models/gp
 
 import math
 import inspect
+import sys
 from dataclasses import dataclass
 
 import torch
@@ -18,9 +19,55 @@ from torch.nn import functional as F
 # Variations
 from variations.softmax_variations import Softermax, Constantmax, Constantmax_quan, Strongermax, Polymax, SigSoftmax, ExpPolymax, SaturatingConSmax
 from variations.normalization_variations import LayerNorm, RMSNorm
-from variations.position_encoding_variations import RotaryEmbedding, ShortRope
+from variations.position_encoding_variations import RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions
 from variations.activation_variations import SquaredReLU, activation_dictionary
 
+def create_shared_param_group(layer_type, config):
+    shared_size = None
+    shared_sym = None # if true, output array is symmetrical
+    layer_block = None
+    shared_group = []
+
+    if layer_type == "mlp":
+        shared_size = config.shared_mlp_size
+        shared_sym = config.shared_mlp_sym
+    elif layer_type == "attn":
+        shared_size = config.shared_attn_size
+        shared_sym = config.shared_attn_sym
+    else:
+        sys.exit(f"{layer_type} not supported, exiting")
+
+    for i in range (config.n_layer):
+
+        # Create new layer block every "shared_size"
+        if i % shared_size == 0:
+            if layer_type == "mlp":
+              layer_block = MLP(config)
+            elif layer_type == "attn":
+              layer_block = CausalSelfAttention(config)
+            else:
+                sys.exit(f"{layer_type} not supported, exiting")
+
+        # Add layer block
+        shared_group.append(layer_block)
+
+        # If symmetrical and halfway, then mirror extend and exit
+        if shared_sym:
+            # Even
+            if config.n_layer % 2 == 0:
+                if i == (config.n_layer // 2 - 1):
+                    # Append going backwards
+                    for j in range(i+1):
+                        shared_group.append(shared_group[i - j])
+                    return shared_group
+            # Odd
+            else:
+                if i == (config.n_layer // 2):
+                    # Append going backwards
+                    for j in range(i):
+                        shared_group.append(shared_group[i - j])
+                    return shared_group
+    return shared_group
 
 class CausalSelfAttention(nn.Module):
 
@@ -28,25 +75,44 @@ class CausalSelfAttention(nn.Module):
         super().__init__()
         assert config.n_embd % config.n_head == 0
         # key, query, value projections for all heads, but in a batch
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+        self.c_attn_q = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+
+        self.n_head = config.n_head
+        if config.n_kv_group == None:
+            self.n_kv_group = config.n_head
+        else:
+            assert config.n_head % config.n_kv_group == 0
+            self.n_kv_group = config.n_kv_group
+
+        self.kv_dim = (config.n_embd // config.n_head) * self.n_kv_group
+        self.c_attn_k = nn.Linear(config.n_embd, self.kv_dim, bias=config.bias)
+        self.c_attn_v = nn.Linear(config.n_embd, self.kv_dim, bias=config.bias)
         # output projection
         self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
         # regularization
         self.attn_dropout = nn.Dropout(config.dropout)
         self.resid_dropout = nn.Dropout(config.dropout)
-        self.n_head = config.n_head
         self.n_embd = config.n_embd
         self.dropout = config.dropout
         self.window_size = config.window_size
+        self.n_embd = config.n_embd
         self.gate = config.gate
 
         # Rotary Positional Embeddings
-        self.rotary_emb = None
+        self.rotary_emb_q = None
+        self.rotary_emb_k = None
         if config.use_rotary_embeddings:
+            # TODO update variant name after completing rope and shortrope updates
             if config.rope_variant == "rope":
-                self.rotary_emb = RotaryEmbedding(config)
-            if config.rope_variant == "shortrope":
-                self.rotary_emb = ShortRope(config)
+                self.rotary_emb_q = SymmetricalOverlapAngularPositions(config, size=config.n_embd)
+                self.rotary_emb_k = SymmetricalOverlapAngularPositions(config, size=self.kv_dim, num_angles=256)
+            # TODO update rope and shortrope to accomodate new GQA additions
+            # if config.rope_variant == "rope":
+            #     self.rotary_emb_q = RotaryEmbedding(config, size=config.n_embd)
+            #     self.rotary_emb_k = RotaryEmbedding(config, size=config.n_embd // config.n_head * config.n_kv_group)
+            # if config.rope_variant == "shortrope":
+            #     self.rotary_emb_q = RotaryEmbedding(config, size=config.n_embd)
+            #     self.rotary_emb_k = RotaryEmbedding(config, size=config.n_embd // config.n_head * config.n_kv_group)
 
         # Softmax Variant Selection
         self.softmax_variant_attn = config.softmax_variant_attn
@@ -85,42 +151,69 @@ class CausalSelfAttention(nn.Module):
             # TODO: look into supporting sliding window attn for flash attn
             self.flash = False
 
+        if self.n_kv_group != self.n_head:
+            self.flash = False
+
         if not self.flash:
             print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
             # causal mask to ensure that attention is only applied to the left in the input sequence
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
 
+
     def forward(self, x):
-        if self.rotary_emb is not None:
-          x = self.rotary_emb(x)
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+
+        q = self.c_attn_q(x)
+        k = self.c_attn_k(x)
+        v = self.c_attn_v(x)
+
+        if self.rotary_emb_q is not None:
+            q = self.rotary_emb_q(q)
+            k = self.rotary_emb_k(k)
+
         if self.window_size is not None:
             window_mask = torch.ones((1, 1, T, T), device=x.device)
             window_mask = torch.triu(window_mask, diagonal=-self.window_size)
             window_mask = self.bias[:,:,:T,:T] * window_mask
-        else:
-            window_mask = torch.ones((1, 1, T, T), device=x.device)
 
-        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
         if self.gate:
-            Gating = nn.Linear(self.n_embd, self.n_embd, bias=True, device=x.device)
-            gate_ = torch.sigmoid(Gating(x))
-            q = q * gate_
-            k = k * gate_
-            v = v * gate_
-        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+            if self.n_kv_group == self.n_head:
+                Gating = nn.Linear(self.n_embd, self.n_embd, bias=True, device=x.device)
+                gate_ = torch.sigmoid(Gating(x))
+                q = q * gate_
+                k = k * gate_
+                v = v * gate_
+            else:
+                # TODO: Test more methods to merge Attention Gates with GQA
+                # TODO: Evaluate each method's ability to even out parameter sizes
+                Gating_q = nn.Linear(self.n_embd, self.n_embd, bias=True, device=x.device)
+                Gating_kv = nn.Linear(self.n_embd, self.kv_dim, bias=True, device=x.device)
+                gate_qx = Gating_q(x)
+                gate_q = torch.sigmoid(gate_qx)
+                gate_kv = torch.sigmoid(Gating_kv(gate_qx))
+                q = q * gate_q
+                k = k * gate_kv
+                v = v * gate_kv
 
+        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, n_h, T, hs)
+        k = k.view(B, T, self.n_kv_group, C // self.n_head).transpose(1, 2) # (B, n_kv, T, hs)
+        v = v.view(B, T, self.n_kv_group, C // self.n_head).transpose(1, 2) # (B, n_kv, T, hs)
+
+        y = None
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
             # efficient attention using Flash Attention CUDA kernels
             y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
         else:
+            att = None
             # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+            if self.n_head != self.n_kv_group:
+              k_repeated = k.repeat_interleave(self.n_head // self.n_kv_group, dim=1)
+              att = (q @ k_repeated.transpose(-2, -1)) / math.sqrt(k.size(-1))
+            else:
+              att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+
 
             # apply masks
             if self.window_size is not None:
@@ -137,7 +230,11 @@ class CausalSelfAttention(nn.Module):
                 att = F.softmax(att, dim=-1)
 
             att = self.attn_dropout(att)
-            y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+            if self.n_head != self.n_kv_group:
+                v_repeated = v.repeat_interleave(self.n_head // self.n_kv_group, dim=1)
+                y = att @ v_repeated # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+            else:
+                y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
         y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
 
         # output projection
@@ -206,14 +303,19 @@ class GPTConfig:
     vocab_size: int = 50304 # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
     n_layer: int = 12
     n_head: int = 12
+    n_kv_group: int = 12
     n_embd: int = 768
     dropout: float = 0.0
     window_size: int = 128
     gate: bool = False
 
     # Shared parameters
-    sharing_mlp: bool = False
-    sharing_attn: bool = False
+    # MLP
+    shared_mlp_size: int = 1
+    shared_mlp_sym: bool = False
+    # ATTN
+    shared_attn_size: int = 1
+    shared_attn_sym: bool = False
 
     # Softmax Alternatives and Options
     softmax_variant_attn: str = "softmax" # Choices: "softmax" "softermax" "sigsoftmax" "polymax" "strongermax" "constantmax"
@@ -258,7 +360,6 @@ class GPTConfig:
 
     # Structuring Options, remember to compile the model
     use_post_ln: bool = True
-    use_pre_ln: bool = False
 
     # Layernorm Alternatives and Options
     layernorm_variant: str = "rmsnorm" # Current options "rmsnorm" or "layernorm"
@@ -281,21 +382,16 @@ class GPT(nn.Module):
         if config.layernorm_variant == "rmsnorm":
             self.normalization_variant = RMSNorm(config.n_embd)
 
-        # Shared Parameters
-        shared_mlp = None
-        if config.sharing_mlp:
-          shared_mlp = MLP(config)
+        # Shared Parameters MLP
+        shared_mlp_array = create_shared_param_group("mlp", config)
+        # Shared Parameters Attention
+        shared_attn_array = create_shared_param_group("attn", config)
 
-        shared_attn = None
-        if config.sharing_attn:
-          shared_attn = CausalSelfAttention(config)
-
-        # Building up Transformer
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
             wpe = nn.Embedding(config.block_size, config.n_embd),
             drop = nn.Dropout(config.dropout),
-            h = nn.ModuleList([Block(config, shared_mlp, shared_attn) for _ in range(config.n_layer)]),
+            h = nn.ModuleList([Block(config, mlp=shared_mlp_array[i], attn=shared_attn_array[i]) for i in range(config.n_layer)]),
             ln_f = self.normalization_variant,
         ))
 

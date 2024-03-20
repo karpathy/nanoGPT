@@ -24,8 +24,9 @@ activation_variation=("celu"
             "tanh")
 
 n_layer="2"
-n_head="3"
-n_embd="384"
+n_head="2"
+n_kv_group="2"
+n_embd="60"
 max_iters="50"
 block_size="32"
 eval_iters="50"
