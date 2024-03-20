@@ -9,6 +9,7 @@ https://github.com/huggingface/transformers/blob/main/src/transformers/models/gp
 
 import math
 import inspect
+import sys
 from dataclasses import dataclass
 
 import torch
@@ -21,6 +22,52 @@ from variations.normalization_variations import LayerNorm, RMSNorm
 from variations.position_encoding_variations import RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions
 from variations.activation_variations import SquaredReLU, activation_dictionary
 
+def create_shared_param_group(layer_type, config):
+    shared_size = None
+    shared_sym = None # if true, output array is symmetrical
+    layer_block = None
+    shared_group = []
+
+    if layer_type == "mlp":
+        shared_size = config.shared_mlp_size
+        shared_sym = config.shared_mlp_sym
+    elif layer_type == "attn":
+        shared_size = config.shared_attn_size
+        shared_sym = config.shared_attn_sym
+    else:
+        sys.exit(f"{layer_type} not supported, exiting")
+
+    for i in range (config.n_layer):
+
+        # Create new layer block every "shared_size"
+        if i % shared_size == 0:
+            if layer_type == "mlp":
+              layer_block = MLP(config)
+            elif layer_type == "attn":
+              layer_block = CausalSelfAttention(config)
+            else:
+                sys.exit(f"{layer_type} not supported, exiting")
+
+        # Add layer block
+        shared_group.append(layer_block)
+
+        # If symmetrical and halfway, then mirror extend and exit
+        if shared_sym:
+            # Even
+            if config.n_layer % 2 == 0:
+                if i == (config.n_layer // 2 - 1):
+                    # Append going backwards
+                    for j in range(i+1):
+                        shared_group.append(shared_group[i - j])
+                    return shared_group
+            # Odd
+            else:
+                if i == (config.n_layer // 2):
+                    # Append going backwards
+                    for j in range(i):
+                        shared_group.append(shared_group[i - j])
+                    return shared_group
+    return shared_group
 
 class CausalSelfAttention(nn.Module):
 
@@ -257,8 +304,12 @@ class GPTConfig:
     gate: bool = False
 
     # Shared parameters
-    sharing_mlp: bool = False
-    sharing_attn: bool = False
+    # MLP
+    shared_mlp_size: int = 1
+    shared_mlp_sym: bool = False
+    # ATTN
+    shared_attn_size: int = 1
+    shared_attn_sym: bool = False
 
     # Softmax Alternatives and Options
     softmax_variant_attn: str = "softmax" # Choices: "softmax" "softermax" "sigsoftmax" "polymax" "strongermax" "constantmax"
@@ -316,21 +367,16 @@ class GPT(nn.Module):
         if config.layernorm_variant == "rmsnorm":
             self.normalization_variant = RMSNorm(config.n_embd)
 
-        # Shared Parameters
-        shared_mlp = None
-        if config.sharing_mlp:
-          shared_mlp = MLP(config)
+        # Shared Parameters MLP
+        shared_mlp_array = create_shared_param_group("mlp", config)
+        # Shared Parameters Attention
+        shared_attn_array = create_shared_param_group("attn", config)
 
-        shared_attn = None
-        if config.sharing_attn:
-          shared_attn = CausalSelfAttention(config)
-
-        # Building up Transformer
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
             wpe = nn.Embedding(config.block_size, config.n_embd),
             drop = nn.Dropout(config.dropout),
-            h = nn.ModuleList([Block(config, shared_mlp, shared_attn) for _ in range(config.n_layer)]),
+            h = nn.ModuleList([Block(config, mlp=shared_mlp_array[i], attn=shared_attn_array[i]) for i in range(config.n_layer)]),
             ln_f = self.normalization_variant,
         ))
 
