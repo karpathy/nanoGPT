@@ -17,7 +17,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 # Variations
-from variations.softmax_variations import Softermax, Constantmax, Constantmax_quan, Strongermax, Polymax, SigSoftmax
+from variations.softmax_variations import Softermax, Constantmax, Constantmax_quan, Strongermax, Polymax, SigSoftmax, ExpPolymax, SaturatingConSmax
 from variations.normalization_variations import LayerNorm, RMSNorm
 from variations.position_encoding_variations import RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions
 from variations.activation_variations import SquaredReLU, activation_dictionary
@@ -140,6 +140,12 @@ class CausalSelfAttention(nn.Module):
 
             if self.softmax_variant_attn == "sigsoftmax":
               self.softmax_layer = SigSoftmax(config)
+
+            if self.softmax_variant_attn == "saturatingconsmax":
+              self.softmax_layer = SaturatingConSmax(config)
+
+            if self.softmax_variant_attn == "exppolymax":
+              self.softmax_layer = ExpPolymax(config)
 
         if self.window_size is not None:
             # TODO: look into supporting sliding window attn for flash attn
@@ -336,6 +342,15 @@ class GPTConfig:
 
     ## Strongermax options
     strongermax_strength: float = 2.0 # Softermax with option of 'stronger' (larger integer) bases
+    strongermax_sum_to_1: bool = False # Softermax with option of 'stronger' (larger integer) bases
+    strongermax_divisor: float = 1.0 # Softermax with option of 'stronger' (larger integer) bases
+    strongermax_use_xmax: bool = True # Softermax with option of 'stronger' (larger integer) bases
+
+    ## ExpPolymax options
+    exppolymax_base: float = 2.719
+    exppolymax_y_intercept: float = 1.0
+    exppolymax_power: float = 2.0
+    exppolymax_divisor: float = 1.0
 
     # Positional Embeddings Variations
     use_abs_pos_embeddings: bool = False # Note: one can use this AND rotary embeddings
