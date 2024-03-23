@@ -1,0 +1,26 @@
+2024-03-09 22:01:39,702 INFO    MainThread:14757 [wandb_setup.py:_flush():76] Current SDK version is 0.16.4
+2024-03-09 22:01:39,702 INFO    MainThread:14757 [wandb_setup.py:_flush():76] Configure stats pid to 14757
+2024-03-09 22:01:39,702 INFO    MainThread:14757 [wandb_setup.py:_flush():76] Loading settings from /home/jond/.config/wandb/settings
+2024-03-09 22:01:39,702 INFO    MainThread:14757 [wandb_setup.py:_flush():76] Loading settings from /home/jond/src/nanoGPT/wandb/settings
+2024-03-09 22:01:39,702 INFO    MainThread:14757 [wandb_setup.py:_flush():76] Loading settings from environment variables: {}
+2024-03-09 22:01:39,702 INFO    MainThread:14757 [wandb_setup.py:_flush():76] Applying setup settings: {'_disable_service': False}
+2024-03-09 22:01:39,702 INFO    MainThread:14757 [wandb_setup.py:_flush():76] Inferring run settings from compute environment: {'program_relpath': 'train-gabe.py', 'program_abspath': '/home/jond/src/nanoGPT/train-gabe.py', 'program': 'train-gabe.py'}
+2024-03-09 22:01:39,702 INFO    MainThread:14757 [wandb_setup.py:_flush():76] Applying login settings: {'mode': 'offline'}
+2024-03-09 22:01:39,703 INFO    MainThread:14757 [wandb_init.py:_log_setup():526] Logging user logs to /home/jond/src/nanoGPT/wandb/offline-run-20240309_220139-ct8nwitg/logs/debug.log
+2024-03-09 22:01:39,703 INFO    MainThread:14757 [wandb_init.py:_log_setup():527] Logging internal logs to /home/jond/src/nanoGPT/wandb/offline-run-20240309_220139-ct8nwitg/logs/debug-internal.log
+2024-03-09 22:01:39,703 INFO    MainThread:14757 [wandb_init.py:init():566] calling init triggers
+2024-03-09 22:01:39,703 INFO    MainThread:14757 [wandb_init.py:init():573] wandb.init called with sweep_config: {}
+config: {'out_dir': 'out-gabe', 'eval_interval': 1000, 'log_interval': 10, 'eval_iters': 200, 'eval_only': False, 'always_save_checkpoint': True, 'init_from': 'scratch', 'wandb_log': True, 'wandb_project': 'gabe', 'wandb_run_name': 'gpt2-124M-gabe', 'dataset': 'gabe', 'gradient_accumulation_steps': 40, 'batch_size': 12, 'block_size': 1024, 'n_layer': 12, 'n_head': 12, 'n_embd': 768, 'dropout': 0.0, 'bias': False, 'learning_rate': 0.0006, 'max_iters': 600000, 'weight_decay': 0.1, 'beta1': 0.9, 'beta2': 0.95, 'grad_clip': 1.0, 'decay_lr': True, 'warmup_iters': 2000, 'lr_decay_iters': 600000, 'min_lr': 6e-05, 'backend': 'nccl', 'device': 'cuda', 'dtype': 'bfloat16', 'compile': True}
+2024-03-09 22:01:39,703 INFO    MainThread:14757 [wandb_init.py:init():616] starting backend
+2024-03-09 22:01:39,703 INFO    MainThread:14757 [wandb_init.py:init():620] setting up manager
+2024-03-09 22:01:39,704 INFO    MainThread:14757 [backend.py:_multiprocessing_setup():105] multiprocessing start_methods=fork,spawn,forkserver, using: spawn
+2024-03-09 22:01:39,705 INFO    MainThread:14757 [wandb_init.py:init():628] backend started and connected
+2024-03-09 22:01:39,707 INFO    MainThread:14757 [wandb_init.py:init():720] updated telemetry
+2024-03-09 22:01:39,730 INFO    MainThread:14757 [wandb_init.py:init():753] communicating run to backend with 90.0 second timeout
+2024-03-09 22:01:39,734 INFO    MainThread:14757 [wandb_init.py:init():804] starting run threads in backend
+2024-03-09 22:01:40,937 INFO    MainThread:14757 [wandb_run.py:_console_start():2241] atexit reg
+2024-03-09 22:01:40,937 INFO    MainThread:14757 [wandb_run.py:_redirect():2096] redirect: wrap_raw
+2024-03-09 22:01:40,937 INFO    MainThread:14757 [wandb_run.py:_redirect():2161] Wrapping output streams.
+2024-03-09 22:01:40,937 INFO    MainThread:14757 [wandb_run.py:_redirect():2186] Redirects installed.
+2024-03-09 22:01:40,937 INFO    MainThread:14757 [wandb_init.py:init():847] run started, returning control to user process
+2024-03-10 11:25:36,631 WARNING MsgRouterThr:14757 [router.py:message_loop():77] message_loop has been closed

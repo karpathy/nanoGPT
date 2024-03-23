@@ -1,0 +1,170 @@
+{
+    "os": "Linux-6.5.0-25-generic-x86_64-with-glibc2.17",
+    "python": "3.8.18",
+    "heartbeatAt": "2024-03-10T06:01:39.807944",
+    "startedAt": "2024-03-10T06:01:39.700863",
+    "docker": null,
+    "cuda": null,
+    "args": [
+        "config/train_gabe_gpt2.py"
+    ],
+    "state": "running",
+    "program": "train-gabe.py",
+    "codePathLocal": "train-gabe.py",
+    "codePath": "train-gabe.py",
+    "git": {
+        "remote": "git@github.com:karpathy/nanoGPT.git",
+        "commit": "325be85d9be8c81b436728a420e85796c57dba7e"
+    },
+    "email": null,
+    "root": "/home/jond/src/nanoGPT",
+    "host": "jond-kubuntu",
+    "username": "jond",
+    "executable": "/home/jond/miniconda3/envs/nanoGPT/bin/python",
+    "cpu_count": 12,
+    "cpu_count_logical": 24,
+    "cpu_freq": {
+        "current": 3009.4772916666666,
+        "min": 2200.0,
+        "max": 3700.0
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 3531.742,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 3902.112,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 2877.289,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 3626.053,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 4435.401,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 3079.22,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 3684.658,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 2895.86,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 3717.27,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 3099.278,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 4593.011,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 3603.014,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 4064.53,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 3745.559,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3700.0
+        },
+        {
+            "current": 2800.0,
+            "min": 2200.0,
+            "max": 3700.0
+        }
+    ],
+    "disk": {
+        "/": {
+            "total": 456.8854446411133,
+            "used": 27.27722930908203
+        }
+    },
+    "gpu": "NVIDIA GeForce RTX 3090",
+    "gpu_count": 1,
+    "gpu_devices": [
+        {
+            "name": "NVIDIA GeForce RTX 3090",
+            "memory_total": 25769803776
+        }
+    ],
+    "memory": {
+        "total": 62.69076156616211
+    }
+}
