@@ -131,10 +131,10 @@ Finally, to train on a single GPU simply run the `$ python train.py` script. Hav
 OpenAI GPT-2 checkpoints allow us to get some baselines in place for openwebtext. We can get the numbers as follows:
 
 ```
-$ python train.py eval_gpt2
-$ python train.py eval_gpt2_medium
-$ python train.py eval_gpt2_large
-$ python train.py eval_gpt2_xl
+$ python train.py config/eval_gpt2.py
+$ python train.py config/eval_gpt2_medium.py
+$ python train.py config/eval_gpt2_large.py
+$ python train.py config/eval_gpt2_xl.py
 ```
 
 and observe the following losses on train and val:
