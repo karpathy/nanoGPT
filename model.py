@@ -298,7 +298,7 @@ class GPT(nn.Module):
         flops_per_iter = flops_per_fwdbwd * fwdbwd_per_iter
         # express our flops throughput as ratio of A100 bfloat16 peak flops
         flops_achieved = flops_per_iter * (1.0/dt) # per second
-        if torch.cuda.get_device_name() == 'NVIDIA H100 80GB HBM3:
+        if torch.cuda.get_device_name() == 'NVIDIA H100 80GB HBM3':
             flops_promised = 989e12 # H100 GPU bfloat16 peak flops is 989 TFLOPs
         else:
             flops_promised = 312e12 # A100 GPU bfloat16 peak flops is 312 TFLOPS
