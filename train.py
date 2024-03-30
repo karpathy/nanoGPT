@@ -169,6 +169,7 @@ def parse_args():
     # Logging args
     logging_group.add_argument('--log_project', default='out-test', type=str)
     logging_group.add_argument('--log_run_name', default='logs-test', type=str)
+    logging_group.add_argument('--timestamp', default='', type=str)
 
     # CSV logging
     logging_group.add_argument('--csv_log', default=True, action=argparse.BooleanOptionalAction)
@@ -305,6 +306,8 @@ class Trainer:
         self.raw_model = self.model.module if self.ddp else self.model
 
         timestamp_prefix = time.strftime("%Y%m%d-%H%M%S")
+        if self.args.timestamp:
+            timestamp_prefix = self.args.timestamp
 
         # Tensorboard
         if self.args.tensorboard_log:
