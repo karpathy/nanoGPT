@@ -101,8 +101,10 @@ def run_command(config, config_basename, output_dir, csv_ckpt_dir, prefix, add_n
                 best_val_loss_from, override_max_iters, override_dataset, override_block_size):
     formatted_name = format_config_name(config, config_basename, prefix, add_names)
     config['tensorboard_run_name'] = formatted_name
-    config['out_dir'] = os.path.join(output_dir, f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{formatted_name}")
-    
+    timestamp_prefix = datetime.now().strftime('%Y%m%d_%H%M%S')
+    config['out_dir'] = os.path.join(output_dir, f"{timestamp_prefix}_{formatted_name}")
+    base_command.extend(["--timestamp", timestamp_prefix])
+
     if override_max_iters:
         config['max_iters'] = str(override_max_iters)
     if override_dataset:
