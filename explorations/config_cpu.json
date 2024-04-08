@@ -1,0 +1,20 @@
+[
+  {
+    "max_iters": ["100"],
+    "n_layer": ["3"],
+    "n_head": ["6"],
+    "n_kv_group": ["6"],
+    "n_embd": ["384"],
+    "block_size":["16","32"],
+    "shared_mlp_size": ["3"],
+    "shared_mlp_sym": [true],
+    "shared_attn_size": ["1"],
+    "shared_attn_sym": [true],
+    "device": ["cpu"],
+    "dtype": ["bfloat16"],
+    "dataset": ["shakespeare_char"],
+    "use_rotary_embeddings": [false],
+    "use_abs_pos_embeddings": [true],
+    "tensorboard_run_name": ["cpu_shakespeare_test"]
+  }
+]
