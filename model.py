@@ -357,8 +357,8 @@ class GPTConfig:
     exppolymax_divisor: float = 1.0
 
     # Positional Embeddings Variations
-    use_abs_pos_embeddings: bool = False # Note: one can use this AND rotary embeddings
-    use_rotary_embeddings: bool = True # If True, uses rotary embeddings, else use conventional absolute position encoding
+    use_abs_pos_embeddings: bool = True # Note: one can use this AND rotary embeddings
+    use_rotary_embeddings: bool = False # If True, uses rotary embeddings, else use conventional absolute position encoding
     rope_variant: str = "rope" # options: "shortrope", "rope"
     shortrope_length: int = 8 # number of embeddings to use in shortrope
 
