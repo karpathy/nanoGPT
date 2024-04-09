@@ -94,6 +94,18 @@ def parse_args():
         ],
     )
 
+    # LINEAR VARIATIONS
+    model_group.add_argument(
+        "--linear_variant",
+        type=str,
+        default="linear",
+        choices=[
+            "linear",
+            "bitlinear",
+            "bitlinear_optimized",
+        ],
+    )
+
     # POSITIONAL EMBEDDING VARIATIONS
     model_group.add_argument('--use_rotary_embeddings', default=False, action=argparse.BooleanOptionalAction)
     model_group.add_argument("--rope_variant", type=str, default="rope", choices=["shortrope", "rope"])

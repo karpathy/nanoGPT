@@ -2,6 +2,12 @@ import torch
 import torch.nn as nn
 import math
 
+linear_dictionary = {
+    "linear": nn.Linear(),
+    "bitlinear": BitLinear(),
+    "bitlinear_optimized": BitLinearOptimized(),
+}
+
 
 class BitLinear(nn.Linear):
     """PyTorch BitLinear Layer
