@@ -1,0 +1,20 @@
+[
+    {
+      "max_iters": ["3500"],
+      "n_layer": ["6"],
+      "n_head": ["6"],
+      "n_embd": ["384"],
+      "block_size":["256"],
+      "use_post_ln": [true, false],
+      "use_parallel_mlp": [true, false],
+      "device": ["cuda"],
+      "dtype": ["bfloat16"],
+      "dataset": ["shakespeare_char"],
+      "use_rotary_embeddings": [false],
+      "use_abs_pos_embeddings": [true],
+      "compile": [true],
+      "softmax_variant_attn": ["softmax", "polymax", "saturatingconsmax"],
+      "tensorboard_run_name": ["mlp_parallelization"]
+    }
+  ]
+
