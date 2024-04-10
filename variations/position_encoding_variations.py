@@ -144,3 +144,48 @@ class ShortRope(nn.Module):
 
         return x
 
+class FIRE(nn.Module):
+    """
+    _F_unctional _I_nterpolation For _R_elative Position _E_ncoding
+
+    Description:
+    An advanced positional embedding method which promises high extrapolation of
+    learned context length.  Train with short context and extend e.g. from 2048
+    to 8192.
+
+    Arxiv Paper Source: https://arxiv.org/pdf/2310.04418.pdf
+    """
+
+    def __init__(self, num_heads=12, mlp_width=32, init_c=0.1, init_L=512.0, eps=1e-6):
+        super(FIRE, self).__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(1, mlp_width), nn.ReLU(), nn.Linear(mlp_width, num_heads)
+        )
+        self.c = nn.Parameter(torch.tensor(init_c, dtype=torch.float))
+        self.init_L = nn.Parameter(torch.tensor(init_L, dtype=torch.float), requires_grad=False)
+        self.L_multiplier = nn.Parameter(torch.tensor(1.0, dtype=torch.float))
+        self.eps = eps
+
+    def forward(self, x: torch.Tensor):
+        seq_length = x.size(1)
+        positions = torch.arange(seq_length, dtype=torch.float, device=x.device)
+        rel_distance = positions[:, None] - positions[None, :]
+
+        # Apply absolute value and ensure positive before log
+        abs_rel_distance = torch.abs(rel_distance) + self.eps
+
+        threshold = torch.abs(self.L_multiplier * self.init_L)
+        pos_normalizer = torch.max(positions, threshold)
+        pos_normalizer = pos_normalizer[:, None] + self.eps  # Ensure pos_normalizer is never zero
+
+        # Use safe log operation
+        log_rel_distance = torch.log(abs_rel_distance * self.c + self.eps)
+        log_pos_normalizer = torch.log(torch.abs(self.c * pos_normalizer) + self.eps)
+
+        normalized_distance = log_rel_distance - log_pos_normalizer  # Subtraction instead of division
+
+        fire_bias = self.mlp(normalized_distance.unsqueeze(-1))
+        fire_bias = fire_bias.unsqueeze(0).permute(0, 3, 1, 2)
+
+        return fire_bias
+

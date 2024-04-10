@@ -19,7 +19,7 @@ from torch.nn import functional as F
 # Variations
 from variations.softmax_variations import Softermax, Constantmax, Constantmax_quan, Strongermax, Polymax, SigSoftmax, ExpPolymax, SaturatingConSmax
 from variations.normalization_variations import LayerNorm, RMSNorm
-from variations.position_encoding_variations import RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions
+from variations.position_encoding_variations import RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions, FIRE
 from variations.activation_variations import SquaredReLU, activation_dictionary
 from variations.linear_variations import BitLinear1p58, BitLinear, BitLinearOptimized, linear_dictionary
 
@@ -98,6 +98,9 @@ class CausalSelfAttention(nn.Module):
         self.window_size = config.window_size
         self.n_embd = config.n_embd
         self.gate = config.gate
+        if config.use_fire_embeddings:
+            self.use_fire_embeddings = config.use_fire_embeddings
+            self.fire_pos_enc = FIRE(num_heads=config.n_head)
 
         # Rotary Positional Embeddings
         self.rotary_emb_q = None
@@ -223,6 +226,11 @@ class CausalSelfAttention(nn.Module):
             else:
                 # regular lower triangle attention
                 att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+
+            # fire position embeddings
+            if self.use_fire_embeddings:
+                # add learned fire bias
+                att = att + self.fire_pos_enc(x)
 
             # softmax variation
             if self.softmax_variant_attn != 'softmax':
@@ -370,7 +378,8 @@ class GPTConfig:
 
     # Positional Embeddings Variations
     use_abs_pos_embeddings: bool = True # Note: one can use this AND rotary embeddings
-    use_rotary_embeddings: bool = False # If True, uses rotary embeddings, else use conventional absolute position encoding
+    use_fire_embeddings: bool = False
+    use_rotary_embeddings: bool = False
     rope_variant: str = "rope" # options: "shortrope", "rope"
     shortrope_length: int = 8 # number of embeddings to use in shortrope
 
