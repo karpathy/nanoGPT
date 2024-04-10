@@ -21,6 +21,7 @@ from variations.softmax_variations import Softermax, Constantmax, Constantmax_qu
 from variations.normalization_variations import LayerNorm, RMSNorm
 from variations.position_encoding_variations import RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions
 from variations.activation_variations import SquaredReLU, activation_dictionary
+from variations.linear_variations import BitLinear1p58, BitLinear, BitLinearOptimized, linear_dictionary
 
 def create_shared_param_group(layer_type, config):
     shared_size = None
@@ -246,12 +247,15 @@ class MLP(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
+
+        # Select linear variant
+        self.linear_variant = linear_dictionary[config.linear_variant]
+        self.c_fc = self.linear_variant(config.n_embd, 4 * config.n_embd, bias=config.bias)
 
         # Select activation variant
         self.activation_variant = activation_dictionary[config.activation_variant]
 
-        self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
+        self.c_proj = self.linear_variant(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
@@ -365,8 +369,8 @@ class GPTConfig:
     exppolymax_divisor: float = 1.0
 
     # Positional Embeddings Variations
-    use_abs_pos_embeddings: bool = False # Note: one can use this AND rotary embeddings
-    use_rotary_embeddings: bool = True # If True, uses rotary embeddings, else use conventional absolute position encoding
+    use_abs_pos_embeddings: bool = True # Note: one can use this AND rotary embeddings
+    use_rotary_embeddings: bool = False # If True, uses rotary embeddings, else use conventional absolute position encoding
     rope_variant: str = "rope" # options: "shortrope", "rope"
     shortrope_length: int = 8 # number of embeddings to use in shortrope
 
@@ -374,11 +378,14 @@ class GPTConfig:
     use_post_ln: bool = True
 
     # Layernorm Alternatives and Options
-    layernorm_variant: str = "rmsnorm" # Current options "rmsnorm" or "layernorm"
+    layernorm_variant: str = "rmsnorm"
     bias: bool = False # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
 
     # Activation Alternatives
-    activation_variant: str = "gelu" # Current options "gelu", "relu", "squared_relu"
+    activation_variant: str = "gelu"
+
+    # Linear Alternatives
+    linear_variant: str = "linear"
 
 class GPT(nn.Module):
 

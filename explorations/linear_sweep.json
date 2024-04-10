@@ -1,0 +1,20 @@
+[
+    {
+      "max_iters": ["100000"],
+      "n_layer": ["6"],
+      "n_kv_group": ["6"],
+      "n_head": ["6"],
+      "n_embd": ["384"],
+      "block_size":["256"],
+      "eval_interval": ["250"],
+      "patience": ["10"],
+      "device": ["cuda"],
+      "dtype": ["float16"],
+      "dataset": ["shakespeare_char"],
+      "linear_variant": ["bitlinear_1p58", "bitlinear", "bitlinear_optimized", "linear"],
+      "compile": [true],
+      "softmax_variant_attn": ["softmax", "polymax"],
+      "tensorboard_run_name": ["linear_variation_sweep"]
+    }
+  ]
+

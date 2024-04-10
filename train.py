@@ -37,7 +37,7 @@ def parse_args():
     # Checkpoint args
     training_group.add_argument('--only_save_checkpoint_at_end', action='store_true')
     training_group.add_argument('--always_save_checkpoint', action='store_true')
-    training_group.add_argument('--patience', default=None, type=int)
+    training_group.add_argument('--patience', default=None, type=int, help="if set, will stop training if the number of evaluations since val loss was seen to decrease exceeds 'patience' setting.")
     training_group.add_argument('--init_from', default='scratch', choices=['scratch', 'prev_run', 'resume', 'gpt2*'], type=str)
     training_group.add_argument('--prev_run_ckpt', default='', type=str)
     training_group.add_argument('--csv_ckpt_dir', default='', type=str)
@@ -92,6 +92,19 @@ def parse_args():
             "softsign",
             "squared_relu",
             "tanh",
+        ],
+    )
+
+    # LINEAR VARIATIONS
+    model_group.add_argument(
+        "--linear_variant",
+        type=str,
+        default="linear",
+        choices=[
+            "linear",
+            "bitlinear",
+            "bitlinear_1p58",
+            "bitlinear_optimized",
         ],
     )
 
