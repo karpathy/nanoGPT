@@ -268,33 +268,43 @@ class Block(nn.Module):
 
         if config.layernorm_variant == 'rmsnorm':
             self.ln_1 = RMSNorm(config.n_embd)
-            self.ln_2 = RMSNorm(config.n_embd)
+            if not config.use_parallel_mlp:
+                self.ln_2 = RMSNorm(config.n_embd)
 
         if config.layernorm_variant == 'layernorm':
             self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
-            self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
+            if not config.use_parallel_mlp:
+                self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
 
         self.use_post_ln = config.use_post_ln
+        self.use_parallel_mlp = config.use_parallel_mlp
 
         # Allow for sharing attn between blocks
         if attn == None:
-          self.attn = CausalSelfAttention(config)
+            self.attn = CausalSelfAttention(config)
         else:
-          self.attn = attn
+            self.attn = attn
 
         # Allow for sharing mlp between blocks
         if mlp == None:
-          self.mlp = MLP(config)
+            self.mlp = MLP(config)
         else:
-          self.mlp = mlp
+            self.mlp = mlp
 
     def forward(self, x):
         if self.use_post_ln:
-          x = self.ln_1(x + self.attn(x))
-          x = self.ln_2(x + self.mlp(x))
+            if self.use_parallel_mlp:
+                x = self.ln_1(x + self.attn(x) + self.mlp(x))
+            else:
+                x = self.ln_1(x + self.attn(x))
+                x = self.ln_2(x + self.mlp(x))
         else:
-          x = x + self.attn(self.ln_1(x))
-          x = x + self.mlp(self.ln_2(x))
+            if self.use_parallel_mlp:
+                ln_1 = self.ln_1(x)
+                x = x + self.attn(ln_1) + self.mlp(ln_1)
+            else:
+                x = x + self.attn(self.ln_1(x))
+                x = x + self.mlp(self.ln_2(x))
         return x
 
 @dataclass
@@ -308,6 +318,8 @@ class GPTConfig:
     dropout: float = 0.0
     window_size: int = 128
     gate: bool = False
+
+    use_parallel_mlp: bool = False
 
     # Shared parameters
     # MLP
