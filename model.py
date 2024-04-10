@@ -21,7 +21,7 @@ from variations.softmax_variations import Softermax, Constantmax, Constantmax_qu
 from variations.normalization_variations import LayerNorm, RMSNorm
 from variations.position_encoding_variations import RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions
 from variations.activation_variations import SquaredReLU, activation_dictionary
-from variations.linear_variations import BitLinear, BitLinearOptimized, linear_dictionary
+from variations.linear_variations import BitLinear1p58, BitLinear, BitLinearOptimized, linear_dictionary
 
 def create_shared_param_group(layer_type, config):
     shared_size = None

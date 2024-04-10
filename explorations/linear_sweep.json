@@ -11,7 +11,7 @@
       "device": ["cuda"],
       "dtype": ["float16"],
       "dataset": ["shakespeare_char"],
-      "linear_variant": ["bitlinear", "bitlinear_optimized", "linear"],
+      "linear_variant": ["bitlinear_1p58", "bitlinear", "bitlinear_optimized", "linear"],
       "compile": [true],
       "softmax_variant_attn": ["softmax", "polymax"],
       "tensorboard_run_name": ["linear_variation_sweep"]

@@ -102,6 +102,7 @@ def parse_args():
         choices=[
             "linear",
             "bitlinear",
+            "bitlinear_1p58",
             "bitlinear_optimized",
         ],
     )
