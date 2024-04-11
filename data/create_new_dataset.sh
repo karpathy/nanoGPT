@@ -1,14 +1,14 @@
 #!/bin/bash
 
 new_dataset="${1}"
-mkdir "$new_dataset"
+mkdir -p "${new_dataset}/utils"
 pushd "$new_dataset"
 
 # Use softlinks so we can use template/prepare.py for development
 ln -s ../template/prepare.py prepare.py
-ln -s ../template/meta_util.py meta_util.py
-ln -s ../template/txt_to_phonemes.sh txt_to_phonemes.sh
+ln -s ../template/utils/meta_util.py utils/meta_util.py
+ln -s ../template/utils/txt_to_phonemes.sh utils/txt_to_phonemes.sh
 
 # Different datasets may have different phoneme sets
-cp ../template/phoneme_list.txt .
+cp ../template/utils/phoneme_list.txt utils/phoneme_list.txt
 
