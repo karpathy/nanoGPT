@@ -114,6 +114,7 @@ def parse_args():
     model_group.add_argument("--shortrope_length", type=int, default="16", help="number of embeddings to use with rope, must be <= length, and be even")
     model_group.add_argument('--use_abs_pos_embeddings', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument('--use_fire_embeddings', default=False, action=argparse.BooleanOptionalAction)
+    model_group.add_argument('--shared_fire_embeddings', default=False, action=argparse.BooleanOptionalAction)
 
     # SOFTMAX VARIATIONS
     ## Selection of softmax variation for attention and output layers
