@@ -182,7 +182,7 @@ class FIRE(nn.Module):
         log_rel_distance = torch.log(abs_rel_distance * self.c + self.eps)
         log_pos_normalizer = torch.log(torch.abs(self.c * pos_normalizer) + self.eps)
 
-        normalized_distance = log_rel_distance - log_pos_normalizer  # Subtraction instead of division
+        normalized_distance = log_rel_distance / log_pos_normalizer
 
         fire_bias = self.mlp(normalized_distance.unsqueeze(-1))
         fire_bias = fire_bias.unsqueeze(0).permute(0, 3, 1, 2)
