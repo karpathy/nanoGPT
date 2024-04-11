@@ -1,27 +1,27 @@
 [
     {
-        "max_iters": ["500"],
+        "max_iters": ["5000"],
         "n_layer": ["6"],
+        "n_kv_group": ["6"],
         "n_head": ["6"],
         "n_embd": ["384"],
-       "block_size":["256"],
+        "block_size":["256"],
         "device": ["cuda"],
         "dtype": ["float16"],
         "dataset": ["shakespeare_char"],
         "use_rotary_embeddings": [true, false],
         "use_abs_pos_embeddings": [true, false],
-        "rope_variant": {
-            "conditions": [["use_rotary_embeddings", true]],
-            "options": ["rope", "shortrope"],
-            "nested": {
-                "shortrope_length": {
-                    "conditions": [["rope_variant", "shortrope"]],
-                    "options": [16, 32, 64, 128,]
-                }
-            }
+        "use_fire_embeddings": [true, false],
+        "shared_fire_embeddings": {
+            "conditions": [["use_fire_embeddings", true]],
+            "options": [true, false]
         },
+        "shared_mlp_size": ["3"],
+        "shared_mlp_sym": [true],
+        "shared_attn_size": ["2"],
+        "shared_attn_sym": [true],
+        "compile": [true],
         "tensorboard_run_name": "pos_emb_sweep"
-
     }
 ]
 

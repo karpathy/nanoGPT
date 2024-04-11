@@ -19,7 +19,7 @@ from torch.nn import functional as F
 # Variations
 from variations.softmax_variations import Softermax, Constantmax, Constantmax_quan, Strongermax, Polymax, SigSoftmax, ExpPolymax, SaturatingConSmax
 from variations.normalization_variations import LayerNorm, RMSNorm
-from variations.position_encoding_variations import RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions
+from variations.position_encoding_variations import RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions, FIRE
 from variations.activation_variations import SquaredReLU, activation_dictionary
 from variations.linear_variations import BitLinear1p58, BitLinear, BitLinearOptimized, linear_dictionary
 
@@ -38,14 +38,19 @@ def create_shared_param_group(layer_type, config):
     else:
         sys.exit(f"{layer_type} not supported, exiting")
 
+    # if attn layer check if using shared fire embeddings
+    fire_pos_enc = None
+    if layer_type == "attn" and config.shared_fire_embeddings:
+        fire_pos_enc = FIRE(num_heads=config.n_head)
+
     for i in range (config.n_layer):
 
         # Create new layer block every "shared_size"
         if i % shared_size == 0:
             if layer_type == "mlp":
-              layer_block = MLP(config)
+                layer_block = MLP(config)
             elif layer_type == "attn":
-              layer_block = CausalSelfAttention(config)
+                layer_block = CausalSelfAttention(config, fire_pos_enc=fire_pos_enc)
             else:
                 sys.exit(f"{layer_type} not supported, exiting")
 
@@ -72,7 +77,7 @@ def create_shared_param_group(layer_type, config):
 
 class CausalSelfAttention(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, config, fire_pos_enc=None):
         super().__init__()
         assert config.n_embd % config.n_head == 0
         # key, query, value projections for all heads, but in a batch
@@ -98,6 +103,15 @@ class CausalSelfAttention(nn.Module):
         self.window_size = config.window_size
         self.n_embd = config.n_embd
         self.gate = config.gate
+        self.use_fire_embeddings = None
+        if config.use_fire_embeddings:
+            self.use_fire_embeddings = config.use_fire_embeddings
+            if fire_pos_enc is not None:
+                self.fire_pos_enc = fire_pos_enc
+                print("shared fire")
+            else:
+                self.fire_pos_enc = FIRE(num_heads=config.n_head)
+                print("indiv fire")
 
         # Rotary Positional Embeddings
         self.rotary_emb_q = None
@@ -223,6 +237,11 @@ class CausalSelfAttention(nn.Module):
             else:
                 # regular lower triangle attention
                 att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+
+            # fire position embeddings
+            if self.use_fire_embeddings is not None:
+                # add learned fire bias
+                att = att + self.fire_pos_enc(x)
 
             # softmax variation
             if self.softmax_variant_attn != 'softmax':
@@ -370,7 +389,9 @@ class GPTConfig:
 
     # Positional Embeddings Variations
     use_abs_pos_embeddings: bool = True # Note: one can use this AND rotary embeddings
-    use_rotary_embeddings: bool = False # If True, uses rotary embeddings, else use conventional absolute position encoding
+    use_fire_embeddings: bool = False
+    shared_fire_embeddings: bool = False
+    use_rotary_embeddings: bool = False
     rope_variant: str = "rope" # options: "shortrope", "rope"
     shortrope_length: int = 8 # number of embeddings to use in shortrope
 
