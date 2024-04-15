@@ -1,0 +1,28 @@
+[
+    {
+        "max_iters": ["30000"],
+        "eval_iters": ["200"],
+        "eval_interval": ["250"],
+        "log_interval": ["10"],
+        "n_layer": ["8"],
+        "n_kv_group": ["4"],
+        "n_head": ["8"],
+        "n_embd": ["384"],
+        "block_size": ["256"],
+        "shared_mlp_size" : ["1"],
+        "shared_mlp_sym" : [true],
+        "shared_attn_size" : ["2"],
+        "shared_attn_sym" : [true],
+        "device": ["cuda"],
+        "dataset": ["mnist"],
+        "compile": [true],
+        "use_post_ln": [false],
+        "softmax_variant_attn": ["softmax"],
+        "use_abs_pos_embeddings": [false],
+        "use_rotary_embeddings": [false],
+        "use_fire_embeddings": [true],
+        "shared_fire_embeddings": [true],
+        "tensorboard_run_name": ["mnist_ascii"]
+    }
+]
+
