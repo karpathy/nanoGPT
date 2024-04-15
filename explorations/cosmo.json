@@ -1,0 +1,25 @@
+[
+    {
+      "max_iters": ["50000"],
+      "n_layer": ["12"],
+      "n_kv_group": ["4"],
+      "n_head": ["8"],
+      "n_embd": ["512"],
+      "block_size":["256"],
+      "shared_mlp_size":["1"],
+      "shared_mlp_sym":[true],
+      "shared_attn_size":["2"],
+      "shared_attn_sym":[true],
+      "activation_variant": ["leaky_relu"],
+      "device": ["cuda"],
+      "dtype": ["bfloat16"],
+      "dataset": ["cosmopedia_100k"],
+      "use_abs_pos_embeddings": [false],
+      "shared_fire_embeddings": [true],
+      "use_fire_embeddings": [true],
+      "compile": [false],
+      "softmax_variant_attn": ["saturatingconsmax", "softmax"],
+      "tensorboard_run_name": ["cosmo100k"]
+    }
+  ]
+
