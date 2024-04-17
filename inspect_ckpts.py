@@ -5,6 +5,7 @@ import csv
 from rich.console import Console
 from rich.table import Table
 
+
 def get_best_val_loss_and_iter_num(checkpoint_file):
     """
     Extracts the best validation loss and the corresponding iteration number from a PyTorch checkpoint file.
@@ -74,7 +75,12 @@ def main():
     elif args.sort == 'iter':
         ckpt_data.sort(key=lambda x: x[2], reverse=args.reverse)
 
-    console = Console()
+    console = None
+    # Check if the TERM environment variable is set to a value that supports ANSI escape codes
+    if 'TERM' in os.environ and os.environ['TERM'] in ['xterm', 'xterm-color', 'xterm-256color', 'screen', 'screen-256color', 'tmux', 'tmux-256color']:
+        console = Console(color_system="standard")
+    else:
+        console = Console()
     table = Table(show_header=True, header_style="bold magenta")
     table.add_column("Checkpoint File", style="dim", width=50)
     table.add_column("Best Validation Loss", justify="right")
