@@ -157,11 +157,33 @@ logs/
 
 and save checkpoints for inference in `out_test`
 
+### Inspect best losses
+
+Often we want to run a large number of experiments and find the best validation
+loss (a metric for how well the model does on next token prediction on a given
+dataset).
+
+The included `inspect_ckpts.py` script to recursively check the best valiation
+loss and associated iteration number for all ckpt.pt files in a given directory:
+```bash
+python3 inspect_ckpts.py --directory ./out --sort loss
+```
+
+![image](./images/inspect_ckpts.png)
+
+This can be wrapped with color via the watch command for a realtime dashboard.
+
+For example to look at all checkpoint files in the out directory:
+```bash
+watch --color 'python3 inspect_ckpts.py --directory ./out --sort loss'
+```
+
+As with remainder of the repo, this script is provided as a base to open up for
+additional community contributions.
 
 ### Start Tensorboard Logging
 
-If using tensorboard for logging (recommended as this is the means tested by the
-development team), we have provided a convenience script:
+If using tensorboard for logging, we have provided a convenience script:
 
 ```bash
 bash start_tensorboard.sh
