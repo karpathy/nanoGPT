@@ -1,6 +1,7 @@
 import argparse
 import os
 import torch
+import csv
 from rich.console import Console
 from rich.table import Table
 
@@ -45,6 +46,7 @@ def main():
     parser.add_argument('directory', type=str, help='Path to the directory containing the checkpoint files.')
     parser.add_argument('--sort', type=str, choices=['path', 'loss', 'iter'], default='path', help='Sort the table by checkpoint file path, best validation loss, or iteration number.')
     parser.add_argument('--reverse', action='store_true', help='Reverse the sort order.')
+    parser.add_argument('--output', type=str, help='Path to the output CSV file.')
     args = parser.parse_args()
 
     ckpt_files = find_ckpt_files(args.directory)
@@ -66,8 +68,17 @@ def main():
     table.add_column("Best Validation Loss", justify="right")
     table.add_column("Iteration Number", justify="right")
 
-    for ckpt_file, best_val_loss, iter_num in ckpt_data:
-        table.add_row(ckpt_file, f"{best_val_loss:.4f}", str(iter_num))
+    if args.output:
+        with open(args.output, 'w', newline='') as csvfile:
+            csv_writer = csv.writer(csvfile)
+            csv_writer.writerow(["Checkpoint File", "Best Validation Loss", "Iteration Number"])
+            for ckpt_file, best_val_loss, iter_num in ckpt_data:
+                table.add_row(ckpt_file, f"{best_val_loss:.4f}", str(iter_num))
+                csv_writer.writerow([ckpt_file, f"{best_val_loss:.4f}", str(iter_num)])
+            print(f"Results exported to {args.output}")
+    else:
+        for ckpt_file, best_val_loss, iter_num in ckpt_data:
+            table.add_row(ckpt_file, f"{best_val_loss:.4f}", str(iter_num))
 
     console.print(table)
 
