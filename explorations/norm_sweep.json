@@ -1,0 +1,19 @@
+[
+    {
+      "max_iters": ["3500"],
+      "n_layer": ["6"],
+      "n_kv_group": ["6"],
+      "n_head": ["6"],
+      "n_embd": ["384"],
+      "block_size":["256"],
+      "norm_variant_attn" : ["rmsnorm", "prmsnorm", "layernorm"],
+      "norm_variant_output" : ["prmsnorm"],
+      "prmsnorm_pct": ["0.03125", "0.0625", "0.1250", "0.25", "1.00"],
+      "softmax_variant_attn": ["softmax", "polymax", "saturatingconsmax"],
+      "device": ["cuda"],
+      "dtype": ["float16"],
+      "compile": [true],
+      "dataset": ["shakespeare_char"]
+    }
+]
+

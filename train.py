@@ -67,8 +67,10 @@ def parse_args():
     model_group.add_argument('--shared_attn_sym', default=False, action=argparse.BooleanOptionalAction, help="symmetrical attention sharing")
 
     # NORM VARIATIONS
-    model_group.add_argument("--layernorm_variant", type=str, default="rmsnorm", choices=["rmsnorm", "layernorm"])
+    model_group.add_argument("--norm_variant_attn", type=str, default="rmsnorm", choices=["prmsnorm", "rmsnorm", "layernorm"])
+    model_group.add_argument("--norm_variant_output", type=str, default="rmsnorm", choices=["prmsnorm", "rmsnorm", "layernorm"])
     model_group.add_argument('--bias', default=False, action=argparse.BooleanOptionalAction, help="only used for layernorm variation option")
+    model_group.add_argument("--prmsnorm_pct", default=0.0625, type=float, help="percentage (1 being 100 percent) of first entries used for partial rms" )
 
     # ACTIVATION VARIATIONS
     model_group.add_argument(
