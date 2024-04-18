@@ -1,0 +1,17 @@
+[
+    {
+      "max_iters": ["3500"],
+      "n_layer": ["6"],
+      "n_kv_group": ["6"],
+      "n_head": ["6"],
+      "n_embd": ["384"],
+      "block_size":["256"],
+      "layernorm_variant" : ["rmsnorm", "layernorm", "prmsnorm"],
+      "device": ["cuda"],
+      "dtype": ["float16"],
+      "dataset": ["shakespeare_char"],
+      "compile": [true],
+      "softmax_variant_attn": ["softmax", "polymax", "saturatingconsmax"]
+    }
+]
+
