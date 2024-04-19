@@ -2,7 +2,6 @@ import argparse
 import sys
 from rich import print
 import os
-import sys
 import time
 import csv
 from datetime import datetime
