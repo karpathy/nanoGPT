@@ -17,7 +17,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 # Variations
-from variations.softmax_variations import Softermax, Constantmax, Constantmax_quan, Strongermax, Polymax, SigSoftmax, ExpPolymax, SaturatingConSmax
+from variations.softmax_variations import softmax_dictionary, Softermax, Constantmax, Constantmax_quan, Strongermax, Polymax, SigSoftmax, ExpPolymax, SaturatingConSmax
 from variations.norm_variations import norm_dictionary, LayerNorm, RMSNorm, pRMSNorm, kRMSNorm
 from variations.position_encoding_variations import RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions, FIRE
 from variations.activation_variations import SquaredReLU, activation_dictionary
@@ -137,30 +137,8 @@ class CausalSelfAttention(nn.Module):
         else:
             # Remove flash attention (only compatible with 'softmax')
             self.flash = False
-
-            if self.softmax_variant_attn == "softermax":
-              self.softmax_layer = Softermax(config)
-
-            if self.softmax_variant_attn == "constantmax":
-              self.softmax_layer = Constantmax(config)
-
-            if self.softmax_variant_attn == "constantmax_quan":
-                self.softmax_layer = Constantmax_quan(config)
-
-            if self.softmax_variant_attn == "strongermax":
-              self.softmax_layer = Strongermax(config)
-
-            if self.softmax_variant_attn == "polymax":
-              self.softmax_layer = Polymax(config)
-
-            if self.softmax_variant_attn == "sigsoftmax":
-              self.softmax_layer = SigSoftmax(config)
-
-            if self.softmax_variant_attn == "saturatingconsmax":
-              self.softmax_layer = SaturatingConSmax(config)
-
-            if self.softmax_variant_attn == "exppolymax":
-              self.softmax_layer = ExpPolymax(config)
+            # Set softmax_layer_attn to custom softmax alternative
+            self.softmax_layer_attn = softmax_dictionary[config.softmax_variant_attn](config)
 
         if self.window_size is not None:
             # TODO: look into supporting sliding window attn for flash attn
@@ -245,7 +223,7 @@ class CausalSelfAttention(nn.Module):
 
             # softmax variation
             if self.softmax_variant_attn != 'softmax':
-                att = self.softmax_layer(att)
+                att = self.softmax_layer_attn(att)
             else:
                 att = F.softmax(att, dim=-1)
 
@@ -435,23 +413,7 @@ class GPT(nn.Module):
         # Select softmax variant for output layer
         self.softmax_variant_output = config.softmax_variant_output
         if self.softmax_variant_output != "softmax":
-            if self.softmax_variant_output == "softermax":
-                self.softmax_layer_output = Softermax(config)
-
-            if self.softmax_variant_output == "constantmax":
-                self.softmax_layer_output = Constantmax(config)
-
-            if self.softmax_variant_output == "constantmax_quan":
-                self.softmax_layer_output = Constantmax_quan(config)
-
-            if self.softmax_variant_output == "strongermax":
-              self.softmax_layer_output = Strongermax(config)
-
-            if self.softmax_variant_output == "polymax":
-              self.softmax_layer_output = Polymax(config)
-
-            if self.softmax_variant_output == "sigsoftmax":
-              self.softmax_layer_output = SigSoftmax(config)
+            self.softmax_layer_output = softmax_dictionary[config.softmax_variant_output](config)
 
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         # with weight tying when using torch.compile() some warnings get generated:

@@ -94,7 +94,12 @@ def main():
     elif args.sort == 'iter':
         ckpt_data.sort(key=lambda x: x[2], reverse=args.reverse)
 
-    console = Console()
+    console = None
+    # Check if the TERM environment variable is set to a value that supports ANSI escape codes
+    if 'TERM' in os.environ and os.environ['TERM'] in ['xterm', 'xterm-color', 'xterm-256color', 'screen', 'screen-256color', 'tmux', 'tmux-256color']:
+        console = Console(color_system="standard")
+    else:
+        console = Console()
 
     # Determine the maximum length of the checkpoint file paths
     max_path_length = max(len(ckpt_file) for ckpt_file, _, _ in ckpt_data)

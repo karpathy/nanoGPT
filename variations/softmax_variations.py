@@ -202,7 +202,7 @@ class ExpPolymax(nn.Module):
         # Polynomial section:     0 < x < inf
 
         # Exponential section
-        exponential_piece = torch.where((x < 0), torch.pow(self.constantmax_base, x), torch.tensor(0.0, device=x.device))
+        exponential_piece = torch.where((x < 0), torch.pow(self.exppolymax_base, x), torch.tensor(0.0, device=x.device))
 
         # Polynomial section
         poly_piece = torch.where(x > 0, x**self.power + self.y_intercept, torch.tensor(0.0, device=x.device))
@@ -238,3 +238,14 @@ class SigSoftmax(nn.Module):
 
         return numerator / denominator
 
+# Note: we use the built in library for regular softmax
+softmax_dictionary = {
+    "constantmax": Constantmax,
+    "constantmax_quan": Constantmax_quan,
+    "exppolymax": ExpPolymax,
+    "polymax": Polymax,
+    "saturatingconsmax": SaturatingConSmax,
+    "sigsoftmax": SigSoftmax,
+    "softermax": Softermax,
+    "strongermax": Strongermax,
+}
