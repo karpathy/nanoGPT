@@ -159,15 +159,15 @@ def parse_args():
     model_group.add_argument('--sigsoftmax_use_euler_base', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument("--sigsoftmax_base", type=float, default=2.0)
 
-    model_group.add_argument("--strongermax_strength", type=float, default=2.0)
+    model_group.add_argument("--strongermax_strength", type=float, default=4.0)
     model_group.add_argument('--strongermax_sum_to_1', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument("--strongermax_divisor", type=float, default=1.0)
     model_group.add_argument('--strongermax_use_xmax', default=True, action=argparse.BooleanOptionalAction)
 
-    model_group.add_argument("--exppolymax_base", type=float, default="2.719")
+    model_group.add_argument("--exppolymax_base", type=float, default="4")
     model_group.add_argument("--exppolymax_y_intercept", type=float, default=1.0)
     model_group.add_argument("--exppolymax_power", type=float, default=2.0)
-    model_group.add_argument("--exppolymax_divisor", type=float, default=1.0)
+    model_group.add_argument("--exppolymax_divisor", type=float, default=1000.0)
 
     # Softermax Specific Options
     model_group.add_argument('--softermax_use_xmax', default=True, action=argparse.BooleanOptionalAction)
