@@ -18,7 +18,7 @@ from torch.nn import functional as F
 
 # Variations
 from variations.softmax_variations import Softermax, Constantmax, Constantmax_quan, Strongermax, Polymax, SigSoftmax, ExpPolymax, SaturatingConSmax
-from variations.normalization_variations import LayerNorm, RMSNorm
+from variations.norm_variations import norm_dictionary, LayerNorm, RMSNorm, pRMSNorm, kRMSNorm
 from variations.position_encoding_variations import RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions, FIRE
 from variations.activation_variations import SquaredReLU, activation_dictionary
 from variations.linear_variations import BitLinear1p58, BitLinear, BitLinearOptimized, linear_dictionary
@@ -289,15 +289,11 @@ class Block(nn.Module):
     def __init__(self, config, mlp=None, attn=None):
         super().__init__()
 
-        if config.layernorm_variant == 'rmsnorm':
-            self.ln_1 = RMSNorm(config.n_embd)
-            if not config.use_parallel_mlp:
-                self.ln_2 = RMSNorm(config.n_embd)
-
-        if config.layernorm_variant == 'layernorm':
-            self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
-            if not config.use_parallel_mlp:
-                self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
+        # Initialize and set attn normalization (e.g. rmsnorm)
+        norm_variant_attn = norm_dictionary[config.norm_variant_attn]
+        self.ln_1 = norm_variant_attn(config)
+        if not config.use_parallel_mlp:
+            self.ln_2 = norm_variant_attn(config)
 
         self.use_post_ln = config.use_post_ln
         self.use_parallel_mlp = config.use_parallel_mlp
@@ -399,8 +395,11 @@ class GPTConfig:
     use_post_ln: bool = True
 
     # Layernorm Alternatives and Options
-    layernorm_variant: str = "rmsnorm"
+    norm_variant_attn: str = "rmsnorm"
+    norm_variant_output: str = "rmsnorm"
     bias: bool = False # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    prmsnorm_pct: float = 0.0625
+    krmsnorm_num: float = 10
 
     # Activation Alternatives
     activation_variant: str = "gelu"
@@ -417,10 +416,8 @@ class GPT(nn.Module):
 
         self.config = config
 
-        if config.layernorm_variant == "layernorm":
-            self.normalization_variant = LayerNorm(config.n_embd, bias=config.bias)
-        if config.layernorm_variant == "rmsnorm":
-            self.normalization_variant = RMSNorm(config.n_embd)
+        # Initialize and set ouptut normalization (e.g. rmsnorm)
+        self.norm_variant_output = norm_dictionary[config.norm_variant_output](config)
 
         # Shared Parameters MLP
         shared_mlp_array = create_shared_param_group("mlp", config)
@@ -432,7 +429,7 @@ class GPT(nn.Module):
             wpe = nn.Embedding(config.block_size, config.n_embd),
             drop = nn.Dropout(config.dropout),
             h = nn.ModuleList([Block(config, mlp=shared_mlp_array[i], attn=shared_attn_array[i]) for i in range(config.n_layer)]),
-            ln_f = self.normalization_variant,
+            ln_f = self.norm_variant_output,
         ))
 
         # Select softmax variant for output layer
