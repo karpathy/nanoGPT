@@ -133,7 +133,16 @@ def parse_args():
                                                          "exppolymax",
                                                          ])
     model_group.add_argument("--softmax_variant_output", type=str,
-                             default="softmax", choices=["constantmax_quan", "constantmax", "polymax", "strongermax", "softermax", "sigsoftmax", "softmax"])
+                             default="softmax", choices=["constantmax_quan",
+                                                         "constantmax",
+                                                         "polymax",
+                                                         "strongermax",
+                                                         "softermax",
+                                                         "sigsoftmax",
+                                                         "softmax",
+                                                         "saturatingconsmax",
+                                                         "exppolymax",
+                                                         ])
 
     ## Custom Softmax Variation Options
     model_group.add_argument("--constantmax_initial_beta", type=float, default=2.5)

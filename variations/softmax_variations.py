@@ -238,3 +238,14 @@ class SigSoftmax(nn.Module):
 
         return numerator / denominator
 
+# Note: we use the built in library for regular softmax
+softmax_dictionary = {
+    "constantmax": Constantmax,
+    "constantmax_quan": Constantmax_quan,
+    "exppolymax": ExpPolymax,
+    "polymax": Polymax,
+    "saturatingconsmax": SaturatingConSmax,
+    "sigsoftmax": SigSoftmax,
+    "softermax": Softermax,
+    "strongermax": Strongermax,
+}
