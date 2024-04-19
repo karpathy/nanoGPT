@@ -49,8 +49,30 @@ class pRMSNorm(nn.Module):
 
         return x / prms * self.gain
 
+class kRMSNorm(nn.Module):
+    """First k elements RMS Normalization"""
+
+    def __init__(self, config):
+        super().__init__()
+        ndim = config.n_embd
+        self.gain = nn.Parameter(torch.ones(ndim))
+        self.k = config.krmsnorm_num # percent of elements to use
+
+    def forward(self, x):
+        # Calculate the number of elements to use for pRMS
+        k = min(x.size(-1), self.k)
+
+        # Select the first k elements along the last dimension
+        x_part = x[..., :k]
+
+        # Calculate kRMS
+        krms = x_part.norm(2, dim=-1, keepdim=True) / math.sqrt(k)
+
+        return x / krms * self.gain
+
 norm_dictionary = {
     "layernorm": LayerNorm,
     "rmsnorm": RMSNorm,
     "prmsnorm": pRMSNorm,
+    "krmsnorm": kRMSNorm,
 }

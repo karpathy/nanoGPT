@@ -18,7 +18,7 @@ from torch.nn import functional as F
 
 # Variations
 from variations.softmax_variations import Softermax, Constantmax, Constantmax_quan, Strongermax, Polymax, SigSoftmax, ExpPolymax, SaturatingConSmax
-from variations.norm_variations import norm_dictionary, LayerNorm, RMSNorm, pRMSNorm
+from variations.norm_variations import norm_dictionary, LayerNorm, RMSNorm, pRMSNorm, kRMSNorm
 from variations.position_encoding_variations import RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions, FIRE
 from variations.activation_variations import SquaredReLU, activation_dictionary
 from variations.linear_variations import BitLinear1p58, BitLinear, BitLinearOptimized, linear_dictionary
@@ -399,6 +399,7 @@ class GPTConfig:
     norm_variant_output: str = "rmsnorm"
     bias: bool = False # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
     prmsnorm_pct: float = 0.0625
+    krmsnorm_num: float = 10
 
     # Activation Alternatives
     activation_variant: str = "gelu"
