@@ -38,6 +38,7 @@ Hardware Related
   * [Perform Inference From Custom Model](#perform-inference-from-custom-model)
 * [Explorations](#explorations)
   * [Start Exploration](#start-exploration)
+  * [Inspect and Monitor Best Val Losses](#inspect-and-monitor-best-val-losses)
   * [Start Tensorboard Logging](#start-tensorboard-logging)
   * [Troubleshooting](#troubleshooting)
   * [Creating New Features and Exploration Scripts](#creating-new-features-and-exploration-scripts)
@@ -157,14 +158,17 @@ logs/
 
 and save checkpoints for inference in `out_test`
 
-### Inspect best losses
+### Inspect and Monitor Best Val Losses
 
-Often we want to run a large number of experiments and find the best validation
-loss (a metric for how well the model does on next token prediction on a given
-dataset).
+Often for large explorations with `run_experiments` one wants to monitor the
+the best validation losses so far (a metric for how well the model does on next
+token prediction on the current dataset).
 
-The included `inspect_ckpts.py` script to recursively check the best valiation
-loss and associated iteration number for all ckpt.pt files in a given directory:
+The included `inspect_ckpts.py` script reports the best valiation loss and
+associated iteration number for all ckpt.pt files recursivel for a specified
+parent directory.
+
+Example usage:
 ```bash
 python3 inspect_ckpts.py --directory ./out --sort loss
 ```
