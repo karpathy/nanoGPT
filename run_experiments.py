@@ -6,6 +6,9 @@ import pandas as pd
 import argparse
 from datetime import datetime
 from itertools import product
+from rich import print
+from rich.console import Console
+from rich.table import Table
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run experiments based on a json configuration file.")
@@ -97,7 +100,7 @@ def format_config_name(config, config_basename, prefix, add_names):
 
     return f"{prefix}{config_basename}-{'-'.join(config_items)}"
 
-def run_command(config, config_basename, output_dir, csv_ckpt_dir, prefix, add_names, 
+def run_command(config, config_basename, output_dir, csv_ckpt_dir, prefix, add_names,
                 best_val_loss_from, override_max_iters, override_dataset, override_block_size):
     formatted_name = format_config_name(config, config_basename, prefix, add_names)
     base_command = ["python3", "train.py"]
@@ -112,6 +115,17 @@ def run_command(config, config_basename, output_dir, csv_ckpt_dir, prefix, add_n
         config['dataset'] = override_dataset
     if override_block_size:
         config['block_size'] = str(override_block_size)
+
+    # Print the entered arguments before each run
+    console = Console()
+    table = Table(title="Entered Arguments", show_header=True, header_style="bold magenta")
+    table.add_column("Argument", style="cyan")
+    table.add_column("Value", style="green")
+
+    for key, value in config.items():
+        table.add_row(key, str(value))
+
+    console.print(table)
 
     for key, value in config.items():
         if isinstance(value, bool):
@@ -142,8 +156,8 @@ def main():
 
     for config in original_configurations:
         for combination in generate_combinations(config):
-            run_command(combination, config_basename, args.output_dir, args.csv_ckpt_dir, 
-                        args.prefix, args.add_names, args.use_best_val_loss_from, 
+            run_command(combination, config_basename, args.output_dir, args.csv_ckpt_dir,
+                        args.prefix, args.add_names, args.use_best_val_loss_from,
                         args.override_max_iters, args.override_dataset, args.override_block_size)
 
 if __name__ == "__main__":
