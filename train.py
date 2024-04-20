@@ -2,7 +2,6 @@ import argparse
 import sys
 from rich import print
 import os
-import sys
 import time
 import csv
 from datetime import datetime
@@ -201,8 +200,8 @@ def parse_args():
 
     # CSV logging
     logging_group.add_argument('--csv_log', default=True, action=argparse.BooleanOptionalAction)
-    training_group.add_argument('--csv_dir', default='csv_logs', type=str)
-    training_group.add_argument('--csv_name', default='output', type=str, help="Output csv basename. Note, the .csv will be automatically appended.")
+    logging_group.add_argument('--csv_dir', default='csv_logs', type=str)
+    logging_group.add_argument('--csv_name', default='output', type=str, help="Output csv basename. Note, the .csv will be automatically appended.")
 
     # Tensorboard args
     logging_group.add_argument('--tensorboard_log', default=True, action=argparse.BooleanOptionalAction)
@@ -229,7 +228,6 @@ class Trainer:
         self.ddp = int(os.environ.get('RANK', -1)) != -1
         if self.ddp:
             init_process_group(backend=self.args.backend)
-            print(self.args)
             self.ddp_rank = int(os.environ['RANK'])
             self.ddp_local_rank = int(os.environ['LOCAL_RANK'])
             self.ddp_world_size = int(os.environ['WORLD_SIZE'])
@@ -263,7 +261,6 @@ class Trainer:
         # Model
         # TODO only add if they are defined from the argparse
         self.model_args = {action.dest: getattr(self.args, action.dest) for action in self.model_group._group_actions}
-        print(self.model_args)
         self.model_args['vocab_size'] = None
 
         if self.args.init_from == 'scratch':
