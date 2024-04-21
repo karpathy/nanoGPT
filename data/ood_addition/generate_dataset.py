@@ -46,17 +46,23 @@ def detailed_addition(a, b):
 
     return outputs, int(final_result)
 
-
-def test_all_additions(max_digits, output_file, random_mode):
+def test_all_additions(max_digits, output_file, random_mode, max_examples_per_digit):
     start_time = time.time()
     correct = 0
     processed = 0
 
-    # Calculate the total tests and prepare the range of numbers
-    ranges = [(a, b) for a in range(1, 10) for num_digits in range(1, max_digits + 1)
-              for b in range(10**(num_digits-1), 10**num_digits)]
+    # Prepare the range of numbers and limit them as per the max_examples_per_digit
+    ranges = []
+    for num_digits in range(1, max_digits + 1):
+        number_range = range(10**(num_digits-1), 10**num_digits)
+        if max_examples_per_digit:
+            number_range = random.sample(list(number_range), min(len(number_range), max_examples_per_digit))
+        for a in range(1, 10):
+            for b in number_range:
+                ranges.append((a, b))
+    
     if random_mode:
-        ranges = random.sample(ranges, len(ranges))  # Randomly shuffle without repetition
+        ranges = random.sample(ranges, len(ranges))  # Randomly shuffle the entire list
 
     total_tests = len(ranges)
 
@@ -81,9 +87,7 @@ def test_all_additions(max_digits, output_file, random_mode):
             current_size = os.path.getsize(output_file) / (1024 * 1024)
             processed += 1
 
-            # Update progress with time and file size estimates
-            elapsed_time = time.time() - start_time
-            update_progress(progress, task, processed, total_tests, elapsed_time, current_size)
+            update_progress(progress, task, processed, total_tests, start_time, current_size)
 
             if script_result != correct_result:
                 print(f"Error in addition a={a} and b={b}: Expected {correct_result}, got {script_result}")
@@ -93,23 +97,20 @@ def test_all_additions(max_digits, output_file, random_mode):
         progress.remove_task(task)
     print(f"Number of correct results: {correct}/{total_tests}")
 
-def update_progress(progress, task, processed, total_tests, elapsed_time, current_size):
-    if processed > 0:
-        avg_time_per_test = elapsed_time / processed
-        eta_seconds = int(avg_time_per_test * (total_tests - processed))
-        eta_minutes, eta_seconds = divmod(eta_seconds, 60)
-        eta = f"{eta_minutes}m {eta_seconds}s"
 
-        completion_time = datetime.now() + timedelta(seconds=eta_seconds)
-        completion_time_str = completion_time.strftime('%Y-%m-%d %H:%M:%S')
-        final_mb_estimate = (current_size / processed) * total_tests
-    else:
-        eta = "Calculating..."
-        completion_time_str = "Calculating..."
-        final_mb_estimate = "Calculating..."
+def update_progress(progress, task, processed, total_tests, start_time, current_size):
+    elapsed_time = time.time() - start_time
+    avg_time_per_test = elapsed_time / processed if processed > 0 else 0
+    eta_seconds = int(avg_time_per_test * (total_tests - processed))
+    eta = f"{eta_seconds // 60}m {eta_seconds % 60}s" if processed > 0 else "Calculating..."
+
+    completion_time = datetime.now() + timedelta(seconds=eta_seconds)
+    completion_time_str = completion_time.strftime('%Y-%m-%d %H:%M:%S')
+    final_mb_estimate = (current_size / processed) * total_tests if processed > 0 else 0
 
     progress.update(task, advance=1, mb=f"{current_size:.2f}", eta=eta,
-                    completion_time=completion_time_str, final_mb_estimate=f"{final_mb_estimate:.2f}")
+                    completion_time=completion_time_str, final_mb_estimate=f"{final_mb_estimate:.2f} MB")
+
 
 
 def main():
@@ -117,10 +118,10 @@ def main():
     parser.add_argument("--digits", type=int, default=2, help="Number of digits for the second number b")
     parser.add_argument("--output_file", type=str, default="input.txt", help="Output file name for results")
     parser.add_argument("--random", action="store_true", help="Enable random selection of number combinations")
+    parser.add_argument("--max_examples", type=int, default=None, help="Maximum examples per digit length")
 
     args = parser.parse_args()
-    test_all_additions(args.digits, args.output_file, args.random)
+    test_all_additions(args.digits, args.output_file, args.random, args.max_examples)
 
 if __name__ == "__main__":
     main()
-
