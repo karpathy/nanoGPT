@@ -1,12 +1,11 @@
 [
     {
-      "max_iters": ["3500"],
+      "max_iters": ["8000"],
       "n_layer": ["6"],
-      "n_kv_group": ["6"],
+      "n_kv_group": ["2"],
       "n_head": ["6"],
       "n_embd": ["384"],
       "block_size":["256"],
-      "use_post_ln": [false],
       "device": ["cuda"],
       "dtype": ["float16"],
       "dataset": ["shakespeare_char"],
@@ -16,6 +15,8 @@
       "softmax_variant_attn": ["strongermax"],
       "strongermax_strength": ["1.5", "2", "2.719", "3", "4", "5"],
       "strongermax_divisor": ["1.0", "10.0", "100.0", "1000.0"],
+      "use_post_ln": [true, false],
+      "strongermax_use_xmax" : [true, false],
       "strongermax_sum_to_1": [true, false]
     }
   ]
