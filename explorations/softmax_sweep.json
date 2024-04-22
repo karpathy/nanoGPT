@@ -12,7 +12,7 @@
       "use_rotary_embeddings": [false],
       "use_abs_pos_embeddings": [true],
       "compile": [false],
-      "softmax_variant_attn": ["strongermax", "softmax", "constantmax", "polymax", "exppolymax", "saturatingconsmax"],
+      "softmax_variant_attn": ["strongermax", "softmax", "consmax", "polymax", "exppolymax", "saturatingconsmax"],
       "polymax_divisor": {
           "conditions": [["softmax_variant_attn", "polymax"]],
           "options": ["10.0", "1000.0", "10000.0"]
@@ -41,11 +41,11 @@
           "conditions": [["softmax_variant_attn", "exppolymax"]],
           "options": ["2.0", "3.0"]
       },
-      "constantmax_initial_beta": {
+      "consmax_initial_beta": {
           "conditions": [["softmax_variant_attn", "saturatingconsmax"]],
           "options": ["1.5", "2.5", "3.5"]
       },
-      "constantmax_initial_gamma": {
+      "consmax_initial_gamma": {
           "conditions": [["softmax_variant_attn", "saturatingconsmax"]],
           "options": ["50.0", "100.0", "200.0"]
       },

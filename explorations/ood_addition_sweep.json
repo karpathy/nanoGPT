@@ -1,0 +1,31 @@
+[
+    {
+      "max_iters": ["1000000"],
+      "patience": ["20"],
+      "n_layer": ["6"],
+      "n_kv_group": ["2"],
+      "n_head": ["6"],
+      "shared_mlp_size": ["1"],
+      "shared_mlp_sym": [true],
+      "shared_attn_size": ["2"],
+      "shared_attn_sym": [true],
+      "n_embd": ["384"],
+      "block_size":["88"],
+      "device": ["cuda"],
+      "dtype": ["float16"],
+      "dataset": ["ood_addition"],
+      "use_rotary_embeddings": [true],
+      "use_abs_pos_embeddings": [true],
+      "compile": [true],
+      "use_post_ln": [true, false],
+      "softmax_variant_attn": ["softmax", "polymax", "exppolymax", "saturatingconsmax"],
+      "consmax_initial_gamma": ["100.0"],
+      "consmax_initial_beta": ["2.5"],
+      "consmax_learnable_gamma": [false],
+      "consmax_learnable_beta": {
+          "conditions": [["softmax_variant_attn", "saturatingconsmax"]],
+          "options": [true, false]
+      }
+    }
+  ]
+
