@@ -43,7 +43,6 @@ def parse_args():
 
     # Data args
     training_group.add_argument('--dataset', default='shakespeare_char', type=str)
-    training_group.add_argument('--gradient_accumulation_steps', default=1, type=int)
     training_group.add_argument('--batch_size', default=64, type=int)
     training_group.add_argument("--seed", default=1337, type=int)
 
@@ -191,17 +190,20 @@ def parse_args():
     training_group.add_argument('--grad_clip', default=1.0, type=float)
 
     # LR schedule args
-    training_group.add_argument('--decay_lr', action='store_true')
-    training_group.add_argument('--warmup_iters', default=100, type=int)
-    training_group.add_argument('--lr_decay_iters', default=3500, type=int)
+    training_group.add_argument('--learning_rate', default=1e-3, type=float)
     training_group.add_argument('--min_lr', default=1e-4, type=float)
+    training_group.add_argument('--decay_lr', default=False, action=argparse.BooleanOptionalAction)
+    training_group.add_argument('--lr_decay_iters', default=3500, type=int)
+    training_group.add_argument('--lr_decay_match_max_iters', default=True, action=argparse.BooleanOptionalAction)
+    training_group.add_argument('--warmup_iters', default=100, type=int)
 
     # DDP args
     training_group.add_argument('--backend', default='nccl', type=str)
+    training_group.add_argument('--gradient_accumulation_steps', default=1, type=int)
 
     # System args
     training_group.add_argument('--device', default='cuda', type=str)
-    training_group.add_argument("--dtype", type=str, default="bfloat16", choices=["bfloat16", "float16", "float32"], help="torch data type for inference, e.g. 'int8'")
+    training_group.add_argument("--dtype", type=str, default="float16", choices=["bfloat16", "float16", "float32"], help="torch data type for inference, e.g. 'int8'")
     training_group.add_argument('--compile', default=False, action=argparse.BooleanOptionalAction)
 
     # Logging args
@@ -232,6 +234,11 @@ class Trainer:
     def __init__(self, args, model_group):
         self.args = args
         self.model_group = model_group
+
+        # typically make the decay iters equal to max_iters
+        if self.args.lr_decay_match_max_iters:
+            self.args.lr_decay_iters = self.args.max_iters
+
         self.setup()
 
     def setup(self):
