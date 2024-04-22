@@ -178,12 +178,15 @@ class SaturatingConSmax(nn.Module):
         else:
             self.consmax_base = config.consmax_base
 
+        # ConSmax saturation is like ReLU6 but happens where e^x normally would overflow
+        # Since we're subtracting x by beta, we only need to guard at "beta + x_sat_value)
+        # Note: for e^x this is around 11 for fp16 precision
         self.x_sat = config.consmax_saturation + config.consmax_initial_beta
 
     def forward(self, x):
         # Overview:
-        # exponential section:    -inf < x < 10
-        # flat section:           10 < x < inf
+        # exponential section:    -inf < x < (sat_point)
+        # flat section:           (sat_point) <= x < inf
 
         # Exponential section
         exponential_piece = torch.where(
