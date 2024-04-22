@@ -19,9 +19,9 @@
           "step": 827
         }
       },
-      "softmax_variant_attn": ["softermax", "softmax", "constantmax"],
-      "constantmax_initial_beta": {
-          "conditions": [["softmax_variant_attn", "constantmax"]],
+      "softmax_variant_attn": ["softermax", "softmax", "consmax"],
+      "consmax_initial_beta": {
+          "conditions": [["softmax_variant_attn", "consmax"]],
           "options": ["2.5", "5.0", "10.0"]
       },
       "tensorboard_run_name": ["random_seed_tests"]

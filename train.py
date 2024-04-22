@@ -121,58 +121,69 @@ def parse_args():
     # SOFTMAX VARIATIONS
     ## Selection of softmax variation for attention and output layers
     model_group.add_argument("--softmax_variant_attn", type=str,
-                             default="softmax", choices=["constantmax_quan",
-                                                         "constantmax",
+                             default="softmax", choices=[
+                                                         "saturatingconsmax",
+                                                         "consmax",
+                                                         "consmax_quan",
                                                          "polymax",
                                                          "strongermax",
                                                          "softermax",
                                                          "sigsoftmax",
                                                          "softmax",
-                                                         "saturatingconsmax",
                                                          "exppolymax",
                                                          ])
     model_group.add_argument("--softmax_variant_output", type=str,
-                             default="softmax", choices=["constantmax_quan",
-                                                         "constantmax",
+                             default="softmax", choices=[
+                                                         "saturatingconsmax",
+                                                         "consmax",
+                                                         "consmax_quan",
                                                          "polymax",
                                                          "strongermax",
                                                          "softermax",
                                                          "sigsoftmax",
                                                          "softmax",
-                                                         "saturatingconsmax",
                                                          "exppolymax",
                                                          ])
 
     ## Custom Softmax Variation Options
-    model_group.add_argument("--constantmax_initial_beta", type=float, default=2.5)
-    model_group.add_argument("--constantmax_initial_gamma", type=float, default=100.0)
+    ### ConSmax and SaturatingConSmax Options
+    model_group.add_argument("--consmax_initial_beta", type=float, default=2.5)
+    model_group.add_argument("--consmax_initial_gamma", type=float, default=100.0)
+    model_group.add_argument('--consmax_use_euler_base', default=True, action=argparse.BooleanOptionalAction)
+    model_group.add_argument("--consmax_base", type=float, default=2.0)
 
-    model_group.add_argument('--constantmax_use_euler_base', default=True, action=argparse.BooleanOptionalAction)
-    model_group.add_argument("--constantmax_base", type=float, default=2.0)
+    ### Special Options for SaturatingConSmax
+    model_group.add_argument("--consmax_saturation", type=float, default=11.0, help="point where we transition from consmax to linear saturatingconsmax, defaults to 11 to approximate e^x sat for fp16")
+    model_group.add_argument('--consmax_learnable_beta', default=True, action=argparse.BooleanOptionalAction)
+    model_group.add_argument('--consmax_learnable_gamma', default=True, action=argparse.BooleanOptionalAction)
 
+    ### Polymax Options
     model_group.add_argument("--polymax_x_intercept", type=float, default=-100.0)
     model_group.add_argument("--polymax_y_intercept", type=float, default=1.0)
     model_group.add_argument("--polymax_power", type=float, default=2.0)
     model_group.add_argument("--polymax_divisor", type=float, default=1000.0)
 
+    ### SigSoftmax Options
     model_group.add_argument('--sigsoftmax_use_euler_base', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument("--sigsoftmax_base", type=float, default=2.0)
 
+    ### Strongermax Options - Testing Incremental Adjustments to Regular Softmax
     model_group.add_argument("--strongermax_strength", type=float, default=4.0)
     model_group.add_argument('--strongermax_sum_to_1', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument("--strongermax_divisor", type=float, default=1.0)
     model_group.add_argument('--strongermax_use_xmax', default=True, action=argparse.BooleanOptionalAction)
 
+    ### ExpPolymax Options
+    model_group.add_argument('--exppolymax_use_euler_base', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument("--exppolymax_base", type=float, default="4")
     model_group.add_argument("--exppolymax_y_intercept", type=float, default=1.0)
     model_group.add_argument("--exppolymax_power", type=float, default=2.0)
     model_group.add_argument("--exppolymax_divisor", type=float, default=1000.0)
 
-    # Softermax Specific Options
+    ### Softermax Specific Options
     model_group.add_argument('--softermax_use_xmax', default=True, action=argparse.BooleanOptionalAction)
 
     # Optimizer args
-    training_group.add_argument('--learning_rate', default=1e-3, type=float)
     training_group.add_argument('--max_iters', default=3500, type=int)
     training_group.add_argument('--weight_decay', default=1e-1, type=float)
     training_group.add_argument('--beta1', default=0.9, type=float)
