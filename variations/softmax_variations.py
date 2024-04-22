@@ -206,7 +206,7 @@ class ExpPolymax(nn.Module):
         super().__init__()
 
         # Base selection
-        if config.expolymax_use_euler_base:
+        if config.exppolymax_use_euler_base:
             self.exppolymax_base = math.e
         else:
             self.exppolymax_base = config.exppolymax_base
@@ -224,7 +224,7 @@ class ExpPolymax(nn.Module):
         if config.exppolymax_power == 1.0:
             # Note: this only works with y=x an e^x, since we'd have to implement a multiplier or shift teh exponent otherwise.
             self.x_derivative_match_shift = 0
-        elif config.expolymax_use_euler_base:
+        elif config.exppolymax_use_euler_base:
             # ln(e) = 1
             self.x_derivative_match_shift = (1.0 / config.exppolymax_power)**(1/(config.exppolymax_power - 1))
         else:
