@@ -19,7 +19,7 @@ from torch.nn import functional as F
 from gpt_conf import GPTConfig
 
 # Variations
-from variations.softmax_variations import softmax_dictionary, Softermax, ConSmax, ConSmaxQuan, Strongermax, Polymax, SigSoftmax, ExpPolymax, SaturatingConSmax
+from variations.softmax_variations import softmax_dictionary, Softermax, ConSmax, ConSmaxQuan, Strongermax, Polymax, SigSoftmax, ExpPolymax, SaturatingConSmax, Softplus
 from variations.norm_variations import norm_dictionary, LayerNorm, RMSNorm, pRMSNorm, kRMSNorm
 from variations.position_encoding_variations import RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions, FIRE
 from variations.activation_variations import SquaredReLU, activation_dictionary
