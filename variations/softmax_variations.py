@@ -284,6 +284,20 @@ class Softplus(nn.Module):
 
         return self.softplus(x) / 100.0
 
+
+class Squareplus(nn.Module):
+    """Squareplus activation function.
+       This is a computation friendly version of softplus
+       source: https://arxiv.org/abs/2112.11687
+    """
+
+    def __init__(self, b=4.0*torch.log(2)**2):
+        super().__init__()
+        self.b = b
+
+    def forward(self, x):
+        return 0.5 * (x + torch.sqrt(x**2 + self.b))
+
 # Note: we use the built in library for regular softmax
 softmax_dictionary = {
     "consmax": ConSmax,
@@ -295,4 +309,5 @@ softmax_dictionary = {
     "strongermax": Strongermax,
     "sigsoftmax": SigSoftmax,
     "softplus": Softplus,
+    "squareplus": Squareplus,
 }

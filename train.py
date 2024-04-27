@@ -130,6 +130,7 @@ def parse_args():
                                                          "sigsoftmax",
                                                          "softmax",
                                                          "softplus",
+                                                         "squareplus",
                                                          "exppolymax",
                                                          ])
     model_group.add_argument("--softmax_variant_output", type=str,
@@ -143,6 +144,7 @@ def parse_args():
                                                          "sigsoftmax",
                                                          "softmax",
                                                          "softplus",
+                                                         "squareplus",
                                                          "exppolymax",
                                                          ])
 
