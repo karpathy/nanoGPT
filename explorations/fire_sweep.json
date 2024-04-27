@@ -9,6 +9,7 @@
       "device": ["cuda"],
       "dataset": ["shakespeare_char"],
       "compile": [true],
+      "save_nan_checkoint": [true],
       "use_rotary_embeddings": [false],
       "use_abs_pos_embeddings": [false],
       "softmax_variant_attn": ["polymax", "softplus", "softmax"],
