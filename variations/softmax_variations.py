@@ -291,7 +291,7 @@ class Squareplus(nn.Module):
        source: https://arxiv.org/abs/2112.11687
     """
 
-    def __init__(self, b=4.0*torch.log(2)**2):
+    def __init__(self, b=4.0*math.log(2)**2):
         super().__init__()
         self.b = b
 
