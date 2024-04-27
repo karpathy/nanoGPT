@@ -149,6 +149,9 @@ class CausalSelfAttention(nn.Module):
         if self.n_kv_group != self.n_head:
             self.flash = False
 
+        if self.use_fire_embeddings:
+            self.flash = False
+
         if not self.flash:
             print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
             # causal mask to ensure that attention is only applied to the left in the input sequence
