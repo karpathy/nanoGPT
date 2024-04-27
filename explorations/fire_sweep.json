@@ -1,29 +1,29 @@
 [
     {
-      "max_iters": ["50000"],
-      "patience": ["20"],
+      "max_iters": ["3500"],
+      "patience": ["100"],
       "n_layer": ["6"],
-      "n_kv_group": ["6"],
       "n_head": ["6"],
       "n_embd": ["384"],
       "block_size":["256"],
-      "use_post_ln": [false],
       "device": ["cuda"],
-      "dtype": ["bfloat16"],
-      "dataset": ["wikitext103"],
+      "dataset": ["shakespeare_char"],
+      "compile": [true],
       "use_rotary_embeddings": [false],
       "use_abs_pos_embeddings": [false],
+      "softmax_variant_attn": ["polymax", "softplus", "softmax"],
+      "n_kv_group": ["6", "2"],
+      "dtype": ["bfloat16", "float16"],
       "use_fire_embeddings": [true],
-      "compile": [true],
+      "shared_fire_embeddings": [true, false],
+      "use_post_ln": [false, true],
       "seed": {
         "range": {
           "start": 1,
-          "end": 6,
+          "end": 2,
           "step": 1
         }
-      },
-      "softmax_variant_attn": ["polymax", "softplus", "softmax"],
-      "tensorboard_run_name": ["activation_sweep"]
+      }
     }
   ]
 
