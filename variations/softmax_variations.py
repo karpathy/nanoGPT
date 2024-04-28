@@ -219,7 +219,7 @@ class ExpPolymax(nn.Module):
         # derivative of poly at 0 should equal a^0
         # d(x^n + y-int) = d(a^x|x=0) = ln(a) * a^0 = ln(a)
         # n * x^(n-1) = ln(a)
-        # x = ln(a) * ( 1 / n ) ** (1/(n-1))
+        # x = (ln(a) * ( 1 / n )) ** (1/(n-1))
         # Note: if n==1 (straight line) match is already attained, and calculation would nan, so test this case first
         if config.exppolymax_power == 1.0:
             # Note: this only works with y=x an e^x, since we'd have to implement a multiplier or shift teh exponent otherwise.
@@ -228,8 +228,8 @@ class ExpPolymax(nn.Module):
             # ln(e) = 1
             self.x_derivative_match_shift = (1.0 / config.exppolymax_power)**(1/(config.exppolymax_power - 1))
         else:
-            # ln(a) must be calculated
-            self.x_derivative_match_shift = torch.log2(config.exppolymax_base) * (1.0 / config.exppolymax_power)**(1/(config.exppolymax_power - 1))
+            # ln(a) must be calculated, note torch.log is the natural log 'ln'
+            self.x_derivative_match_shift = (torch.log(config.exppolymax_base) * (1.0 / config.exppolymax_power))**(1/(config.exppolymax_power - 1))
 
     def forward(self, x):
         # Overview:
