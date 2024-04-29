@@ -273,6 +273,31 @@ class SigSoftmax(nn.Module):
 
         return numerator / denominator
 
+class Softplus(nn.Module):
+    """ Softmax variant based on arxiv 1805.10829 with added handles for base """
+    def __init__(self, config, dim=-1):
+        super().__init__()
+        self.dim = dim
+        self.softplus = nn.Softplus()
+
+    def forward(self, x):
+
+        return self.softplus(x) / 100.0
+
+
+class Squareplus(nn.Module):
+    """Squareplus activation function.
+       This is a computation friendly version of softplus
+       source: https://arxiv.org/abs/2112.11687
+    """
+
+    def __init__(self, b=4.0*math.log(2)**2):
+        super().__init__()
+        self.b = b
+
+    def forward(self, x):
+        return 0.5 * (x + torch.sqrt(x**2 + self.b))
+
 # Note: we use the built in library for regular softmax
 softmax_dictionary = {
     "consmax": ConSmax,
@@ -283,4 +308,6 @@ softmax_dictionary = {
     "softermax": Softermax,
     "strongermax": Strongermax,
     "sigsoftmax": SigSoftmax,
+    "softplus": Softplus,
+    "squareplus": Squareplus,
 }

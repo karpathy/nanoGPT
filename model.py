@@ -19,7 +19,7 @@ from torch.nn import functional as F
 from gpt_conf import GPTConfig
 
 # Variations
-from variations.softmax_variations import softmax_dictionary, Softermax, ConSmax, ConSmaxQuan, Strongermax, Polymax, SigSoftmax, ExpPolymax, SaturatingConSmax
+from variations.softmax_variations import softmax_dictionary, Softermax, ConSmax, ConSmaxQuan, Strongermax, Polymax, SigSoftmax, ExpPolymax, SaturatingConSmax, Softplus, Squareplus
 from variations.norm_variations import norm_dictionary, LayerNorm, RMSNorm, pRMSNorm, kRMSNorm
 from variations.position_encoding_variations import RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions, FIRE
 from variations.activation_variations import SquaredReLU, activation_dictionary
@@ -147,6 +147,9 @@ class CausalSelfAttention(nn.Module):
             self.flash = False
 
         if self.n_kv_group != self.n_head:
+            self.flash = False
+
+        if self.use_fire_embeddings:
             self.flash = False
 
         if not self.flash:

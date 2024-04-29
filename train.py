@@ -129,6 +129,8 @@ def parse_args():
                                                          "softermax",
                                                          "sigsoftmax",
                                                          "softmax",
+                                                         "softplus",
+                                                         "squareplus",
                                                          "exppolymax",
                                                          ])
     model_group.add_argument("--softmax_variant_output", type=str,
@@ -141,6 +143,8 @@ def parse_args():
                                                          "softermax",
                                                          "sigsoftmax",
                                                          "softmax",
+                                                         "softplus",
+                                                         "squareplus",
                                                          "exppolymax",
                                                          ])
 
@@ -210,6 +214,7 @@ def parse_args():
     logging_group.add_argument('--log_project', default='out-test', type=str)
     logging_group.add_argument('--log_run_name', default='logs-test', type=str)
     logging_group.add_argument('--timestamp', default='', type=str)
+    logging_group.add_argument('--save_nan_checkpoint', default=False, action=argparse.BooleanOptionalAction)
 
     # CSV logging
     logging_group.add_argument('--csv_log', default=True, action=argparse.BooleanOptionalAction)
@@ -497,6 +502,7 @@ class Trainer:
 
                 if losses['val'] < self.best_val_loss or self.args.always_save_checkpoint:
                     if losses['val'] < self.best_val_loss:
+                        self.iter_num_best_val_loss = self.iter_num
                         self.best_val_loss = losses['val']
                         num_steps_with_worse_loss = 0
                     if self.iter_num > 0:
@@ -506,6 +512,8 @@ class Trainer:
                             'model_args': self.model_args,
                             'iter_num': self.iter_num,
                             'best_val_loss': self.best_val_loss,
+                            'nan_iter_num' : None,
+                            'nan' : None,
                             'config': vars(self.args),
                         }
                         print(f"saving checkpoint to {self.args.out_dir}")
@@ -550,6 +558,19 @@ class Trainer:
                     running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
                 print(f"iter {self.iter_num}: loss {lossf:.4f}, time {dt*1000:.2f} ms, mfu {running_mfu*100:.2f}%")
                 if math.isnan(lossf):
+                    if self.args.save_nan_checkpoint:
+                        checkpoint = {
+                            'model': self.raw_model.state_dict(),
+                            'optimizer': self.optimizer.state_dict(),
+                            'model_args': self.model_args,
+                            'iter_num': self.iter_num_best_val_loss,
+                            'best_val_loss': self.best_val_loss,
+                            'nan_iter_num' : self.iter_num,
+                            'nan' : True,
+                            'config': vars(self.args),
+                        }
+                        print(f"saving checkpoint to {self.args.out_dir}")
+                        torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
                     sys.exit("Exiting training loss is NaN")
                 self.log_metrics_non_validation(lossf, running_mfu, self.iter_num)
 
@@ -564,7 +585,9 @@ class Trainer:
                         'model_args': self.model_args,
                         'iter_num': self.iter_num,
                         'best_val_loss': self.best_val_loss,
-                        'config': self.args,
+                        'nan_iter_num' : None,
+                        'nan' : None,
+                        'config': vars(self.args),
                     }
                     print(f"saving checkpoint to {self.args.out_dir}")
                     torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
