@@ -8,7 +8,7 @@
       "block_size":["256"],
       "device": ["cuda"],
       "dataset": ["shakespeare_char"],
-      "compile": [true],
+      "compile": [false],
       "save_nan_checkpoint": [true],
       "use_rotary_embeddings": [false],
       "use_abs_pos_embeddings": [false],
@@ -21,7 +21,7 @@
       "seed": {
         "range": {
           "start": 1,
-          "end": 2,
+          "end": 1,
           "step": 1
         }
       }
