@@ -245,6 +245,43 @@ class ExpPolymax(nn.Module):
         # Combine sections
         return (poly_piece + exponential_piece)/self.divisor
 
+class PolymaxQuan(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        assert(config.polymax_x_intercept < 0)  # ensure x_intercept is strictly left of the y-axis
+        self.x_intercept = config.polymax_x_intercept  # where to transition from y=0 to m*x+b
+        self.y_intercept = config.polymax_y_intercept  # where the graph crosses y-axis
+        self.power = config.polymax_power
+        self.divisor = config.polymax_divisor
+
+    def forward(self, x):
+        # Forward pass: ReLU^2
+        relu_squared = torch.where(x > 0, x**2, torch.tensor(0.0, device=x.device))
+        return relu_squared / self.divisor
+
+    def backward(self, x):
+        # Backward pass: Polymax
+        # Flat section
+        flat_piece = torch.where(x < self.x_intercept, torch.tensor(0.0, device=x.device), torch.tensor(0.0, device=x.device))
+
+        # Linear section
+        m = self.y_intercept / self.x_intercept  # aka 'slope', also x intercept != 0
+        b = self.y_intercept
+        linear_piece = torch.where((x >= self.x_intercept) & (x <= 0), m * x + b, torch.tensor(0.0, device=x.device))
+
+        # Polynomial section
+        poly_piece = torch.where(x > 0, x**self.power + self.y_intercept, torch.tensor(0.0, device=x.device))
+
+        # Combine sections
+        return (poly_piece + linear_piece + flat_piece) / self.divisor
+
+    def straight_through(self, x):
+        # Straight-through estimator
+        out = self.forward(x)
+        out.data = self.backward(x.data)
+        return out
+
+
 # SigSoftmax from https://arxiv.org/abs/1805.10829
 class SigSoftmax(nn.Module):
     """ Softmax variant based on arxiv 1805.10829 with added handles for base """
@@ -305,6 +342,7 @@ softmax_dictionary = {
     "saturatingconsmax": SaturatingConSmax,
     "polymax": Polymax,
     "exppolymax": ExpPolymax,
+    "polymax_quan": PolymaxQuan,
     "softermax": Softermax,
     "strongermax": Strongermax,
     "sigsoftmax": SigSoftmax,

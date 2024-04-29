@@ -19,7 +19,6 @@ def get_best_val_loss_and_iter_num(checkpoint_file, args):
     """
     # Load the checkpoint on CPU
     checkpoint = torch.load(checkpoint_file, map_location=torch.device('cpu'))
-
     best_val_loss = checkpoint['best_val_loss']
     iter_num = checkpoint['iter_num']
 
@@ -56,20 +55,24 @@ def find_ckpt_files(directory, path_regex=None):
                     ckpt_files.append(ckpt_file)
     return ckpt_files
 
-def get_short_ckpt_file(ckpt_file):
+def get_short_ckpt_file(ckpt_file, n_fields=None):
     """
-    Removes the '/ckpt.pt' suffix from the checkpoint file path.
+    Extracts the last n fields (separated by hyphens) from the checkpoint file path.
 
     Args:
         ckpt_file (str): The full checkpoint file path.
+        n_fields (int): The number of fields to display from the end of the file path.
 
     Returns:
-        str: The checkpoint file path with the '/ckpt.pt' suffix removed.
+        str: The shortened checkpoint file path with the last n fields.
     """
     if ckpt_file.endswith('/ckpt.pt'):
-        return ckpt_file[:-8]
-    else:
-        return ckpt_file
+        ckpt_file = ckpt_file[:-8]
+    if n_fields is not None:
+        fields = ckpt_file.split('-')
+        if len(fields) > n_fields:
+            return '-'.join(fields[-n_fields:])
+    return ckpt_file
 
 def main():
     parser = argparse.ArgumentParser(description='Extract best validation loss and iteration number from PyTorch checkpoint files.')
@@ -80,6 +83,7 @@ def main():
     parser.add_argument('--sort', type=str, choices=['path', 'loss', 'iter', 'nan', 'nan_iter'], default='path', help='Sort the table by checkpoint file path, best validation loss, or iteration number.')
     parser.add_argument('--reverse', action='store_true', help='Reverse the sort order.')
     parser.add_argument('--output', type=str, help='Path to the output CSV file.')
+    parser.add_argument('--n_fields', type=int, help='Number of fields to display from the end of the checkpoint file path.')
     args = parser.parse_args()
 
     if args.csv_file:
@@ -164,3 +168,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
