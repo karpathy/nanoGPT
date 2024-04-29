@@ -77,33 +77,34 @@ def main():
     parser.add_argument('--directory', type=str, help='Path to the directory containing the checkpoint files.')
     parser.add_argument('--csv_file', type=str, help='Path to the CSV file containing the checkpoint data.')
     parser.add_argument('--path_regex', type=str, help='Regular expression to filter the checkpoint file paths.')
-    parser.add_argument('--sort', type=str, choices=['path', 'loss', 'iter'], default='path', help='Sort the table by checkpoint file path, best validation loss, or iteration number.')
+    parser.add_argument('--sort', type=str, choices=['path', 'loss', 'iter', 'nan', 'nan_iter'], default='path', help='Sort the table by checkpoint file path, best validation loss, or iteration number.')
     parser.add_argument('--reverse', action='store_true', help='Reverse the sort order.')
     parser.add_argument('--output', type=str, help='Path to the output CSV file.')
     args = parser.parse_args()
 
-    if args.directory:
-        ckpt_files = find_ckpt_files(args.directory, args.path_regex)
-
-        # Extract the best validation loss and iteration number for each checkpoint file
-        ckpt_data = [(get_short_ckpt_file(ckpt_file),
-                      *get_best_val_loss_and_iter_num(ckpt_file, args)) for ckpt_file in ckpt_files]
-    elif args.csv_file:
+    if args.csv_file:
         ckpt_data = []
         with open(args.csv_file, 'r') as csvfile:
             csv_reader = csv.reader(csvfile)
             next(csv_reader)  # Skip the header row
             if args.inspect_nan:
                 for row in csv_reader:
-                    ckpt_data.append((get_short_ckpt_file(row[0]),
-                                      float(row[1]),
-                                      int(row[2]),
-                                      str(row[3]),
-                                      str(row[4])
-                                      ))
+                    if args.path_regex is None or re.search(args.path_regex, row[0]):
+                        ckpt_data.append((get_short_ckpt_file(row[0]),
+                                          float(row[1]),
+                                          int(row[2]),
+                                          str(row[3]),
+                                          str(row[4])
+                                          ))
             else:
                 for row in csv_reader:
                     ckpt_data.append((get_short_ckpt_file(row[0]), float(row[1]), int(row[2])))
+    elif args.directory:
+        ckpt_files = find_ckpt_files(args.directory, args.path_regex)
+
+        # Extract the best validation loss and iteration number for each checkpoint file
+        ckpt_data = [(get_short_ckpt_file(ckpt_file),
+                      *get_best_val_loss_and_iter_num(ckpt_file, args)) for ckpt_file in ckpt_files]
     else:
         print("Please provide either a directory or a CSV file.")
         return
