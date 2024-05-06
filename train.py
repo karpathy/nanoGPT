@@ -7,6 +7,9 @@ from datetime import datetime
 import math
 import pickle
 from contextlib import nullcontext
+import plotly.graph_objects as go
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 import pandas as pd
 import numpy as np
@@ -130,6 +133,11 @@ def parse_args():
     logging_group.add_argument('--wandb_log', default=False, action=argparse.BooleanOptionalAction)
     logging_group.add_argument('--wandb_project', type=str, default='out-test')
     logging_group.add_argument('--wandb_run_name', type=str, default='logs-test')
+    logging_group.add_argument('--statistic', choices=[
+        'input_mean', 'input_median', 'input_stdev', 'input_max',
+        'output_mean', 'output_median', 'output_stdev', 'output_max'
+    ], default='input_mean', help='Select the statistic and type to display, e.g., input_mean, output_max, etc.')
+
 
     args = parser.parse_args()
     return args, model_group, training_group, logging_group
@@ -140,6 +148,16 @@ class Trainer:
         self.args = args
         self.model_group = model_group
         self.setup()
+        self.stats = {
+            'mean': [[] for _ in range(self.args.n_layer)],
+            'median': [[] for _ in range(self.args.n_layer)],
+            'stdev': [[] for _ in range(self.args.n_layer)],
+            'o_mean': [[] for _ in range(self.args.n_layer)],
+            'o_median': [[] for _ in range(self.args.n_layer)],
+            'o_stdev': [[] for _ in range(self.args.n_layer)],
+            'max': [[] for _ in range(self.args.n_layer)],
+            'o_max': [[] for _ in range(self.args.n_layer)]
+        }
 
     def setup(self):
         # Setup DDP
@@ -350,6 +368,49 @@ class Trainer:
                 "train/loss": loss_training,
                 "mfu": running_mfu*100,
             })
+    
+    def plot_statistics(self):
+        parts = self.args.statistic.split('_')
+        data_type = parts[0]  # 'input' or 'output'
+        stat_type = parts[1]  # 'mean', 'median', 'stdev', 'max'
+
+        # Use data_type to set the prefix for accessing the correct data
+        stat_prefix = 'o_' if data_type == 'output' else ''
+        directory_path = 'out/images'
+        os.makedirs(directory_path, exist_ok=True)
+
+        # Setup the plot with Plotly and Matplotlib
+        fig = go.Figure()
+        plt.figure(figsize=(10, 6))
+        for layer_idx, stats_per_layer in enumerate(self.stats[stat_prefix + stat_type]):
+            for head_idx, data in enumerate(stats_per_layer):
+                fig.add_trace(go.Scatter(
+                    x=list(range(len(data))),
+                    y=data,
+                    mode='lines',
+                    name=f'Layer {layer_idx + 1} Head {head_idx + 1}'
+                ))
+                plt.plot(data, label=f'Layer {layer_idx + 1} Head {head_idx + 1}')
+
+        # Update Plotly plot layout
+        fig.update_layout(
+            title=f'Change in {stat_type.title()} Values for {data_type.capitalize()} During Training',
+            xaxis_title='Training Iteration',
+            yaxis_title=f'{stat_type.title()} of {data_type.capitalize()} Softmax Inputs',
+            legend_title='Head/Layer'
+        )
+        fig.write_html(f'{directory_path}/{data_type}_{stat_type}_changes_plot.html')
+
+        # Update Matplotlib
+        plt.title(f'Change in {stat_type.title()} Values for {data_type.capitalize()} During Training')
+        plt.xlabel('Training Iteration')
+        plt.ylabel(f'{stat_type.title()} of {data_type.capitalize()} Softmax Inputs')
+        plt.legend(title='Head/Layer')
+        plt.grid(True)
+        plt.savefig(f'{directory_path}/{data_type}_{stat_type}_changes_plot.png')
+        plt.close()
+
+
 
     def train(self):
         self.X, self.Y = self.get_batch('train')
@@ -418,7 +479,7 @@ class Trainer:
 
 
 
-            if self.args.softmax_variant_attn == "constantmax" and self.iter_num%50==0:
+            if self.args.softmax_variant_attn == "constantmax":
                 betas = []
                 gammas = []
                 i_sum_vals = []
@@ -426,6 +487,7 @@ class Trainer:
                 i_medians = []
                 i_stdevs = []
                 i_max_values = []
+                denominator = []
                 o_sum_vals = []
                 o_means = []
                 o_medians = []
@@ -441,10 +503,25 @@ class Trainer:
                     i_first_batch = softmax_input[0]
                     i_first_batch[i_first_batch == float('-inf')] = float('NaN')
 
-                    for i_head in i_first_batch:
+                    if len(self.stats['mean'][layer]) == 0:
+                        num_heads = len(i_first_batch)
+                        self.stats['mean'][layer] = [[] for _ in range(num_heads)]
+                        self.stats['median'][layer] = [[] for _ in range(num_heads)]
+                        self.stats['stdev'][layer] = [[] for _ in range(num_heads)]
+                        self.stats['o_mean'][layer] = [[] for _ in range(num_heads)]
+                        self.stats['o_median'][layer] = [[] for _ in range(num_heads)]
+                        self.stats['o_stdev'][layer] = [[] for _ in range(num_heads)]
+                        self.stats['max'][layer] = [[] for _ in range(num_heads)]
+                        self.stats['o_max'][layer] = [[] for _ in range(num_heads)]
+
+
+                    for i, i_head in enumerate(i_first_batch):
+                        
 
                         ## Flatten across heads, height, and width
                         flattened = i_head.view(-1)
+
+                        
 
                         ## Calculate statistics
                         i_means.append(torch.nanmean(flattened).item())
@@ -458,11 +535,22 @@ class Trainer:
                         # Max, temporarily replacing NaNs with -inf for calculation
                         i_max_values.append(torch.max(torch.where(torch.isnan(i_head), torch.tensor(float('-inf')), i_head)).item())
 
+                        # Append each statistic to the appropriate list for each head in each layer
+                        self.stats['mean'][layer][i].append(torch.nanmean(flattened).item())
+                        self.stats['median'][layer][i].append(torch.nanmedian(flattened).item())
+                        self.stats['stdev'][layer][i].append(torch.std(i_head[mask]).item())
+                        self.stats['max'][layer][i].append(torch.max(torch.where(torch.isnan(i_head), torch.tensor(float('-inf')), i_head)).item())
+
+                        # Denominator computation for i_head
+                        exp_flattened = torch.exp(i_head[mask])
+                        sum = torch.sum(exp_flattened)
+                        denominator.append(sum.item())
+
                     outputs_location = f"transformer.h[{layer}].attn.softmax_layer.outputs"
                     softmax_output = eval(f"self.model.{outputs_location}").to('cpu').to(torch.float32)
                     o_first_batch = softmax_output[0]
                     o_first_batch[o_first_batch == float('-inf')] = float('NaN')
-                    for o_head in o_first_batch:
+                    for i, o_head in enumerate(o_first_batch):
 
                         # Step 3: Flatten across heads, height, and width
                         flattened = o_head.view(-1)
@@ -477,6 +565,10 @@ class Trainer:
                         o_sum_vals.append(torch.sum(o_head[mask]).item())
                         # Max, temporarily replacing NaNs with -inf for calculation
                         o_max_values.append(torch.max(torch.where(torch.isnan(o_head), torch.tensor(float('-inf')), o_head)).item())
+                        self.stats['o_mean'][layer][i].append(torch.nanmean(flattened).item())
+                        self.stats['o_median'][layer][i].append(torch.nanmedian(flattened).item())
+                        self.stats['o_stdev'][layer][i].append(torch.std(o_head[mask]).item())
+                        self.stats['o_max'][layer][i].append(torch.max(torch.where(torch.isnan(o_head), torch.tensor(float('-inf')), o_head)).item())
 
                     #BETA GAMMA
                     gamma_location = f"transformer.h[{layer}].attn.softmax_layer.gamma"
@@ -499,6 +591,7 @@ class Trainer:
                                   *i_medians,
                                   *i_stdevs,
                                   *i_max_values,
+                                  *denominator,
                                   prefix="inputs")
                 self.write_to_csv(self.iter_num,
                                   *o_sum_vals,
@@ -537,6 +630,7 @@ class Trainer:
             local_iter_num += 1
 
             if self.iter_num > self.args.max_iters:
+                self.plot_statistics()
                 if self.args.only_save_checkpoint_at_end:
                     checkpoint = {
                         'model': self.raw_model.state_dict(),
