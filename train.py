@@ -497,7 +497,9 @@ class Trainer:
                 for layer in range (self.args.n_layer):
                     # Inputs
                     inputs_location = f"transformer.h[{layer}].attn.softmax_layer.inputs"
+                    
                     softmax_input = eval(f"self.model.{inputs_location}").to('cpu').to(torch.float32)
+                    
 
                     ## Get first batch
                     i_first_batch = softmax_input[0]
@@ -548,6 +550,7 @@ class Trainer:
 
                     outputs_location = f"transformer.h[{layer}].attn.softmax_layer.outputs"
                     softmax_output = eval(f"self.model.{outputs_location}").to('cpu').to(torch.float32)
+                   
                     o_first_batch = softmax_output[0]
                     o_first_batch[o_first_batch == float('-inf')] = float('NaN')
                     for i, o_head in enumerate(o_first_batch):
