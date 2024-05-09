@@ -107,6 +107,7 @@ torch.manual_seed(1337 + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
+use_grad_scaler = (device_type == 'cuda') and (dtype != 'float32')
 # note: float16 data type will automatically use a GradScaler
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
@@ -302,14 +303,21 @@ while True:
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, Y = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
-        scaler.scale(loss).backward()
+        if use_grad_scaler:
+            scaler.scale(loss).backward()
+        else:
+            loss.backward()
     # clip the gradient
     if grad_clip != 0.0:
-        scaler.unscale_(optimizer)
+        if use_grad_scaler:
+            scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
     # step the optimizer and scaler if training in fp16
-    scaler.step(optimizer)
-    scaler.update()
+    if use_grad_scaler:
+        scaler.step(optimizer)
+        scaler.update()
+    else:
+        optimizer.step()
     # flush the gradients as soon as we can, no need for this memory anymore
     optimizer.zero_grad(set_to_none=True)
 
@@ -334,3 +342,4 @@ while True:
 
 if ddp:
     destroy_process_group()
+
