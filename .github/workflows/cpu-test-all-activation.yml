@@ -1,0 +1,33 @@
+name: Install Then Test All activations
+on: [push, pull_request]
+jobs:
+  Install-And-Test-Activations:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - run: echo "${{ github.repository }} repository has been cloned to the runner."
+      - run: echo "Currently on ${{ github.ref }} branch"
+      - name: ls of directory
+        run: |
+          ls ${{ github.workspace }}
+             # Caching pip dependencies
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements_cpu.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      - name: Install CPU Dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+          python3 -m pip install numpy transformers datasets tiktoken wandb tqdm tensorboard
+          python3 -m pip install -r requirements_cpu.txt
+      - name: Test all activation variations
+        run: |
+          python3 data/shakespeare_char/prepare.py
+          cd tests
+          source test_all_activation_variations_cpu.sh
+

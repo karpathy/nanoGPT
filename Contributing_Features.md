@@ -89,7 +89,7 @@ Run the sweep with `run_experiments.py` from the repo root specifying our
 config file.
 
 ```
-python3 run_experiments.py --config explorations/config.json --value_only --output_dir out_test`
+python3 run_experiments.py --config explorations/config.json --output_dir out_test
 ```
 
 This will automatically timestamp and apply labels to your tensorboard logs,

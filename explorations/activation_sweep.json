@@ -1,0 +1,44 @@
+[
+    {
+      "max_iters": ["3000"],
+      "n_layer": ["6"],
+      "n_head": ["6"],
+      "n_embd": ["384"],
+      "block_size":["256"],
+      "use_post_ln": [true, false],
+      "device": ["cuda"],
+      "dtype": ["bfloat16"],
+      "dataset": ["shakespeare_char"],
+      "use_rotary_embeddings": [false],
+      "use_abs_pos_embeddings": [true],
+      "compile": [true],
+      "activation_variant": [
+        "celu",
+        "elu",
+        "gelu",
+        "glu",
+        "leaky_relu",
+        "mish",
+        "prelu",
+        "relu6",
+        "rrelu",
+        "selu",
+        "sigmoid",
+        "silu",
+        "softplus",
+        "softsign",
+        "squared_relu",
+        "tanh"
+      ],
+      "seed": {
+        "range": {
+          "start": 1337,
+          "end": 1339,
+          "step": 1
+        }
+      },
+      "softmax_variant_attn": ["softmax"],
+      "tensorboard_run_name": ["activation_sweep"]
+    }
+  ]
+

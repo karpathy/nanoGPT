@@ -38,6 +38,7 @@ Hardware Related
   * [Perform Inference From Custom Model](#perform-inference-from-custom-model)
 * [Explorations](#explorations)
   * [Start Exploration](#start-exploration)
+  * [Inspect and Monitor Best Val Losses](#inspect-and-monitor-best-val-losses)
   * [Start Tensorboard Logging](#start-tensorboard-logging)
   * [Troubleshooting](#troubleshooting)
   * [Creating New Features and Exploration Scripts](#creating-new-features-and-exploration-scripts)
@@ -48,7 +49,7 @@ Hardware Related
 
 This section contains installation locally with GPU acceleration.
 
-(If you do not have a GPU, check out this [colab](TODO), which has a T4 GPU
+(If you do not have a GPU, check out this [colab](./NanoGPT_Quickstart.ipynb), which has a T4 GPU
 runtime (at time of writing) for ML acceleration.)
 
 ### Step 1 (Recommended) Adding a Virtual Env
@@ -74,7 +75,7 @@ If you are compatible with cu11.8, then use the following:
 ```bash
 python3 -m pip install --upgrade pip
 python3 -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-python3 -m pip install numpy transformers datasets tiktoken wandb tqdm tensorboard
+python3 -m pip install numpy transformers datasets tiktoken wandb tqdm tensorboard rich
 ```
 
 If unsure, visit the pytorch page and subtitute the appropriate line for the `torch` installation line above: https://pytorch.org/get-started/locally/
@@ -145,7 +146,7 @@ checkpoints created from training using `validation loss` as a figure of merit.
 To run the experiment create or modify an existing json file in the `explorations` folder:
 
 ```bash
-python3 run_experiments.py --config explorations/config.json --value_only --output_dir out_test`
+python3 run_experiments.py --config explorations/config.json --output_dir out_test
 ```
 
 This will create logs in the following directories:
@@ -157,11 +158,36 @@ logs/
 
 and save checkpoints for inference in `out_test`
 
+### Inspect and Monitor Best Val Losses
+
+Often for large explorations with `run_experiments` one wants to monitor the
+the best validation losses so far (a metric for how well the model does on next
+token prediction on the current dataset).
+
+The included `inspect_ckpts.py` script reports the best valiation loss and
+associated iteration number for all ckpt.pt files recursivel for a specified
+parent directory.
+
+Example usage:
+```bash
+python3 inspect_ckpts.py --directory ./out --sort loss
+```
+
+![image](./images/inspect_ckpts.png)
+
+This can be wrapped with color via the watch command for a realtime dashboard.
+
+For example to look at all checkpoint files in the out directory:
+```bash
+watch --color 'python3 inspect_ckpts.py --directory ./out --sort loss'
+```
+
+As with remainder of the repo, this script is provided as a base to open up for
+additional community contributions.
 
 ### Start Tensorboard Logging
 
-If using tensorboard for logging (recommended as this is the means tested by the
-development team), we have provided a convenience script:
+If using tensorboard for logging, we have provided a convenience script:
 
 ```bash
 bash start_tensorboard.sh
