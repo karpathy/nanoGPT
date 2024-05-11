@@ -35,7 +35,7 @@ networkx==3.0
 numpy==1.26.1
 oauthlib==3.2.2
 packaging==23.2
-pandas==2.1.2
+pandas==2.1.3
 pathspec==0.11.2
 pathtools==0.1.2
 Pillow==9.3.0
@@ -73,3 +73,5 @@ Werkzeug==3.0.1
 xxhash==3.4.1
 yarl==1.9.2
 rich==13.5.3
+plotly==5.22.0
+seaborn==0.13.2
