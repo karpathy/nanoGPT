@@ -14,7 +14,7 @@ class Softermax(nn.Module):
         if self.subtract_max:
             max_x = x.max(dim=self.dim, keepdim=True).values
             x = x - max_x
-        e_x = torch.pow(2.0, x)
+        e_x = torch.pow(math.e, x)
         return e_x / e_x.sum(dim=self.dim, keepdim=True)
 
 # Softmax variation with learnable constant parameters for xmax and denominator
@@ -22,6 +22,10 @@ class ConSmax(nn.Module):
     """ Constant learnable parameters for xmax and denominator """
     def __init__(self, config, dim=-1):
         super().__init__()
+
+        # Input and Output Logging
+        self.inputs = []
+        self.outputs = []
 
         # learnable 'xmax' - beta
         self.beta = nn.Parameter(torch.Tensor([config.consmax_initial_beta]))
@@ -36,9 +40,12 @@ class ConSmax(nn.Module):
           self.consmax_base = config.consmax_base
 
     def forward(self, x):
+        self.inputs = x
         x = x - self.beta
         e_x = torch.pow(self.consmax_base, x)
-        return e_x / self.gamma
+        outputs = e_x / self.gamma
+        self.outputs = outputs
+        return outputs
 
 # Constantmax Quantized
 
