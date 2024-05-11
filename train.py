@@ -136,28 +136,44 @@ def parse_args():
     logging_group.add_argument('--statistic', choices=[
         'input_mean', 'input_median', 'input_stdev', 'input_max',
         'output_mean', 'output_median', 'output_stdev', 'output_max'
-    ], default='input_mean', help='Select the statistic and type to display, e.g., input_mean, output_max, etc.')
+    ], default='input_mean', help='Select the statistic and type to display, example: input_mean, output_max')
 
 
     args = parser.parse_args()
     return args, model_group, training_group, logging_group
 
+def initialize_statistics(num_layers, num_heads):
+        stats = {
+            'mean': [],
+            'median': [],
+            'stdev': [],
+            'max': [],
+            'o_mean': [],
+            'o_median': [],
+            'o_stdev': [],
+            'o_max': []
+        }
+    
+        for _ in range(num_layers):
+            stats['mean'].append([[] for _ in range(num_heads)])
+            stats['median'].append([[] for _ in range(num_heads)])
+            stats['stdev'].append([[] for _ in range(num_heads)])
+            stats['max'].append([[] for _ in range(num_heads)])
+            stats['o_mean'].append([[] for _ in range(num_heads)])
+            stats['o_median'].append([[] for _ in range(num_heads)])
+            stats['o_stdev'].append([[] for _ in range(num_heads)])
+            stats['o_max'].append([[] for _ in range(num_heads)])
+        
+        return stats
+
 
 class Trainer:
+    
     def __init__(self, args, model_group):
         self.args = args
         self.model_group = model_group
         self.setup()
-        self.stats = {
-            'mean': [[] for _ in range(self.args.n_layer)],
-            'median': [[] for _ in range(self.args.n_layer)],
-            'stdev': [[] for _ in range(self.args.n_layer)],
-            'o_mean': [[] for _ in range(self.args.n_layer)],
-            'o_median': [[] for _ in range(self.args.n_layer)],
-            'o_stdev': [[] for _ in range(self.args.n_layer)],
-            'max': [[] for _ in range(self.args.n_layer)],
-            'o_max': [[] for _ in range(self.args.n_layer)]
-        }
+        self.stats = initialize_statistics(self.args.n_layer, self.args.n_head)
 
     def setup(self):
         # Setup DDP
@@ -374,12 +390,12 @@ class Trainer:
         data_type = parts[0]  # 'input' or 'output'
         stat_type = parts[1]  # 'mean', 'median', 'stdev', 'max'
 
-        # Use data_type to set the prefix for accessing the correct data
+        # to decide whether to use the input or output statistics
         stat_prefix = 'o_' if data_type == 'output' else ''
         directory_path = 'out/images'
         os.makedirs(directory_path, exist_ok=True)
 
-        # Setup the plot with Plotly and Matplotlib
+        # draw the plot
         fig = go.Figure()
         plt.figure(figsize=(10, 6))
         for layer_idx, stats_per_layer in enumerate(self.stats[stat_prefix + stat_type]):
@@ -392,7 +408,7 @@ class Trainer:
                 ))
                 plt.plot(data, label=f'Layer {layer_idx + 1} Head {head_idx + 1}')
 
-        # Update Plotly plot layout
+        # add titles and legend to Plotly
         fig.update_layout(
             title=f'Change in {stat_type.title()} Values for {data_type.capitalize()} During Training',
             xaxis_title='Training Iteration',
@@ -401,15 +417,14 @@ class Trainer:
         )
         fig.write_html(f'{directory_path}/{data_type}_{stat_type}_changes_plot.html')
 
-        # Update Matplotlib
+        # add titles and lengend to Matplotlib
         plt.title(f'Change in {stat_type.title()} Values for {data_type.capitalize()} During Training')
         plt.xlabel('Training Iteration')
-        plt.ylabel(f'{stat_type.title()} of {data_type.capitalize()} Softmax Inputs')
+        plt.ylabel(f'{stat_type.title()} of {data_type.capitalize()}')
         plt.legend(title='Head/Layer')
         plt.grid(True)
         plt.savefig(f'{directory_path}/{data_type}_{stat_type}_changes_plot.png')
         plt.close()
-
 
 
     def train(self):
@@ -505,17 +520,6 @@ class Trainer:
                     i_first_batch = softmax_input[0]
                     i_first_batch[i_first_batch == float('-inf')] = float('NaN')
 
-                    if len(self.stats['mean'][layer]) == 0:
-                        num_heads = len(i_first_batch)
-                        self.stats['mean'][layer] = [[] for _ in range(num_heads)]
-                        self.stats['median'][layer] = [[] for _ in range(num_heads)]
-                        self.stats['stdev'][layer] = [[] for _ in range(num_heads)]
-                        self.stats['o_mean'][layer] = [[] for _ in range(num_heads)]
-                        self.stats['o_median'][layer] = [[] for _ in range(num_heads)]
-                        self.stats['o_stdev'][layer] = [[] for _ in range(num_heads)]
-                        self.stats['max'][layer] = [[] for _ in range(num_heads)]
-                        self.stats['o_max'][layer] = [[] for _ in range(num_heads)]
-
 
                     for i, i_head in enumerate(i_first_batch):
                         
@@ -524,7 +528,6 @@ class Trainer:
                         flattened = i_head.view(-1)
 
                         
-
                         ## Calculate statistics
                         i_means.append(torch.nanmean(flattened).item())
                         i_medians.append(torch.nanmedian(flattened).item())
@@ -537,16 +540,18 @@ class Trainer:
                         # Max, temporarily replacing NaNs with -inf for calculation
                         i_max_values.append(torch.max(torch.where(torch.isnan(i_head), torch.tensor(float('-inf')), i_head)).item())
 
-                        # Append each statistic to the appropriate list for each head in each layer
+                        # Denominator computation for i_head
+                        exp_flattened = torch.exp(i_head[mask])
+                        sum = torch.sum(exp_flattened)
+                        denominator.append(sum.item())
+
+                        # Append statistic to the input list of each head in each layer
                         self.stats['mean'][layer][i].append(torch.nanmean(flattened).item())
                         self.stats['median'][layer][i].append(torch.nanmedian(flattened).item())
                         self.stats['stdev'][layer][i].append(torch.std(i_head[mask]).item())
                         self.stats['max'][layer][i].append(torch.max(torch.where(torch.isnan(i_head), torch.tensor(float('-inf')), i_head)).item())
 
-                        # Denominator computation for i_head
-                        exp_flattened = torch.exp(i_head[mask])
-                        sum = torch.sum(exp_flattened)
-                        denominator.append(sum.item())
+
 
                     outputs_location = f"transformer.h[{layer}].attn.softmax_layer.outputs"
                     softmax_output = eval(f"self.model.{outputs_location}").to('cpu').to(torch.float32)
@@ -568,6 +573,8 @@ class Trainer:
                         o_sum_vals.append(torch.sum(o_head[mask]).item())
                         # Max, temporarily replacing NaNs with -inf for calculation
                         o_max_values.append(torch.max(torch.where(torch.isnan(o_head), torch.tensor(float('-inf')), o_head)).item())
+
+                        # Append statistic to the output list of each head in each layer
                         self.stats['o_mean'][layer][i].append(torch.nanmean(flattened).item())
                         self.stats['o_median'][layer][i].append(torch.nanmedian(flattened).item())
                         self.stats['o_stdev'][layer][i].append(torch.std(o_head[mask]).item())
