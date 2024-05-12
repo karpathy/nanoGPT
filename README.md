@@ -8,8 +8,7 @@ Follow instructions from NanoGPT README below
 
 In `ThunderKittens/examples/attn_causal`, run:
 
-```
-bash
+```bash
 python h100_fwd_setup.py build
 ```
 
