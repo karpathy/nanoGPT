@@ -6,7 +6,14 @@ Follow instructions from NanoGPT README below
 
 ## Import build from TK
 
-Copy `build` directory from `ThunderKittens/examples/attn_causal` after running `python h100_fwd_setup.py build`
+In `ThunderKittens/examples/attn_causal`, run:
+
+```
+bash
+python h100_fwd_setup.py build
+```
+
+Copy `build` directory from `ThunderKittens/examples/attn_causal` into `nanoGPT-TK`
 
 ## Benchmark
 
