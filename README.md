@@ -10,7 +10,7 @@ Copy `build` directory from `ThunderKittens/examples/attn_causal` after running 
 
 ## Benchmark
 
-Prepare `data` of choice from NanoGPT README below (modify `dataset` in `bench.py` path accordingly - default = `shakespeare_char`). 
+Prepare `data` of choice from NanoGPT README below (modify ``dataset`` in `bench.py` path accordingly - default = `shakespeare_char`). 
 To benchmark the TK Forward Causal Attention, set `TK_kernel` = True in `bench.py` and run:
 
 ```bash
