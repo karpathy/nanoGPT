@@ -9,8 +9,11 @@ import torch
 from model import GPTConfig, GPT
 
 # -----------------------------------------------------------------------------
-batch_size = 12
-block_size = 1024
+TK_kernel  = True  # expected MFU on H100 = 51%
+TK_kernel  = False # expected MFU on H100 = 36%
+
+batch_size = 16
+block_size = 4096
 bias = False
 real_data = True
 seed = 1337
@@ -31,7 +34,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 # data loading init
 if real_data:
-    dataset = 'openwebtext'
+    dataset = 'shakespeare_char'
     data_dir = os.path.join('data', dataset)
     train_data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
     def get_batch(split):
@@ -53,6 +56,8 @@ gptconf = GPTConfig(
     n_layer = 12, n_head = 12, n_embd = 768, # size of the model
     dropout = 0, # for determinism
     bias = bias,
+    batch_size = batch_size,
+    TK_kernel = TK_kernel,
 )
 model = GPT(gptconf)
 model.to(device)
