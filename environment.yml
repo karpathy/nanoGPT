@@ -1,4 +1,4 @@
-name: sim
+name: TK-nano
 channels:
   - defaults
 dependencies:
