@@ -1,10 +1,8 @@
 # Working with TK
 
-## Activate env
+## Install dependencies
 
-```bash
-conda env create -f environment.yml
-```
+Follow instructions from NanoGPT README below
 
 ## Import build from TK
 
