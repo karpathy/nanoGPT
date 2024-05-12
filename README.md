@@ -1,3 +1,21 @@
+# Working with TK
+
+## Activate env
+
+```bash
+conda env create -f environment.yml
+```
+
+## Import build from TK
+
+Copy `build` directory from `ThunderKittens/examples/attn_causal` after running `python h100_fwd_setup.py build`
+
+## Benchmark
+
+`shakespeare_char` is already prepared in `data` - to benchmarking the TK Forward Causal Attention, set `TK_kernel` = True in `bench.py` and run:
+```bash
+python bench.py
+```
 
 # nanoGPT
 
