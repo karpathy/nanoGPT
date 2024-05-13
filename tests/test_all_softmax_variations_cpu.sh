@@ -32,6 +32,7 @@ do
     --max_iters "$max_iters" \
     --n_layer "$n_layer" \
     --n_head "$n_head" \
+    --n_kv_group "$n_kv_group" \
     --n_embd "$n_embd" \
     --eval_iters "$eval_iters" \
     --eval_interval "$eval_interval" \
