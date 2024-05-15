@@ -116,6 +116,8 @@ class Strongermax(nn.Module):
         self.subtract_max = config.strongermax_use_xmax
         self.sum_to_1 = config.strongermax_sum_to_1
         self.divisor = config.strongermax_divisor
+        self.div_by_seq_len = config.div_by_seq_len
+        return e_x / divisor
 
     def forward(self, x):
         if self.subtract_max:
@@ -127,6 +129,10 @@ class Strongermax(nn.Module):
         if self.sum_to_1:
             result = result / result.sum(dim=self.dim, keepdim=True)
 
+        if self.div_by_seq_len:
+            seq_len = x.shape[self.dim]
+            result = result / seq_len
+
         return result / self.divisor
 
 # Using polynomial instead of exponential for Softmax separation non-linearity
@@ -135,6 +141,8 @@ class Polymax(nn.Module):
         super().__init__()
 
         assert(config.polymax_x_intercept < 0) # ensure x_intercept is strictly left of the y-axis
+
+        self.div_by_seq_len = config.div_by_seq_len
 
         self.x_intercept = config.polymax_x_intercept # where to transition from y=0 to m*x+b
         self.y_intercept = config.polymax_y_intercept # where the graph crosses y-axis
@@ -159,7 +167,14 @@ class Polymax(nn.Module):
         poly_piece = torch.where(x > 0, x**self.power + self.y_intercept, torch.tensor(0.0, device=x.device))
 
         # Combine sections
-        return (poly_piece + linear_piece + flat_piece)/self.divisor
+        result = (poly_piece + linear_piece + flat_piece)/self.divisor
+
+        # Divide by sequence length
+        if self.div_by_seq_len:
+            seq_len = x.shape[self.dim]
+            result = result / seq_len
+
+        return result
 
 class VPolymax(nn.Module):
     """ variation of polymax with a v-shape, and is non-monotonically increasing"""
@@ -167,6 +182,7 @@ class VPolymax(nn.Module):
         super().__init__()
 
         assert(config.polymax_x_intercept < 0) # ensure x_intercept is strictly left of the y-axis
+        self.div_by_seq_len = config.div_by_seq_len
 
         self.x_intercept = config.polymax_x_intercept # where to transition from y=0 to m*x+b
         self.y_intercept = config.polymax_y_intercept # where the graph crosses y-axis
@@ -191,7 +207,14 @@ class VPolymax(nn.Module):
         poly_piece = torch.where(x > 0, x**self.power + self.y_intercept, torch.tensor(0.0, device=x.device))
 
         # Combine sections
-        return (poly_piece + linear_piece + flat_piece)/self.divisor
+        result = (poly_piece + linear_piece + flat_piece)/self.divisor
+
+        # divide by sequence length
+        if self.div_by_seq_len:
+            seq_len = x.shape[self.dim]
+            result = result / seq_len
+
+        return result
 
 # Merging of ConSmax body for gradient prop and Polymax head for numerical stability
 class SaturatingConSmax(nn.Module):
@@ -216,6 +239,8 @@ class SaturatingConSmax(nn.Module):
         else:
             self.consmax_base = config.consmax_base
 
+        self.div_by_seq_len = config.div_by_seq_len
+
         # ConSmax saturation is like ReLU6 but happens where e^x normally would overflow
         # Since we're subtracting x by beta, we only need to guard at "beta + x_sat_value)
         # Note: for e^x this is around 11 for fp16 precision
@@ -236,12 +261,21 @@ class SaturatingConSmax(nn.Module):
         flat_piece = torch.where(x >= (self.x_sat), torch.tensor(self.x_sat, device=x.device), torch.tensor(0.0, device=x.device))
 
         # Combine sections
-        return (exponential_piece + flat_piece)/self.gamma
+        result = (exponential_piece + flat_piece)/self.gamma
+
+        # divide by sequence length
+        if self.div_by_seq_len:
+            seq_len = x.shape[self.dim]
+            result = result / seq_len
+
+        return result
 
 # Merging of ConSmax body for gradient prop and Polymax head for numerical stability
 class ExpPolymax(nn.Module):
     def __init__(self, config):
         super().__init__()
+
+        self.div_by_seq_len = config.div_by_seq_len
 
         # Base selection
         if config.exppolymax_use_euler_base:
@@ -281,7 +315,15 @@ class ExpPolymax(nn.Module):
         poly_piece = torch.where(x >= 0, (x + self.x_derivative_match_shift)**self.power + self.y_intercept, torch.tensor(0.0, device=x.device))
 
         # Combine sections
-        return (poly_piece + exponential_piece)/self.divisor
+        result = (poly_piece + exponential_piece)/self.divisor
+
+        # divide by sequence length
+        if self.div_by_seq_len:
+            seq_len = x.shape[self.dim]
+            result = result / seq_len
+
+        return result
+
 
 # SigSoftmax from https://arxiv.org/abs/1805.10829
 class SigSoftmax(nn.Module):
@@ -318,10 +360,18 @@ class Softplus(nn.Module):
         self.dim = dim
         self.softplus = nn.Softplus()
         self.softplus_divisor = config.softplus_divisor
+        self.div_by_seq_len = config.div_by_seq_len
 
     def forward(self, x):
 
-        return self.softplus(x) / self.softplus_divisor
+        result = self.softplus(x) / self.softplus_divisor
+
+        # divide by sequence length
+        if self.div_by_seq_len:
+            seq_len = x.shape[self.dim]
+            result = result / seq_len
+
+        return result
 
 
 class Squareplus(nn.Module):
@@ -334,9 +384,17 @@ class Squareplus(nn.Module):
         super().__init__()
         self.b = b
         self.squareplus_divisor = config.squareplus_divisor
+        self.div_by_seq_len = config.div_by_seq_len
 
     def forward(self, x):
-        return 0.5 * (x + torch.sqrt(x**2 + self.b)) / self.squareplus_divisor
+        result = 0.5 * (x + torch.sqrt(x**2 + self.b)) / self.squareplus_divisor
+
+        # divide by sequence length
+        if self.div_by_seq_len:
+            seq_len = x.shape[self.dim]
+            result = result / seq_len
+
+        return result
 
 # Note: we use the built in library for regular softmax
 softmax_dictionary = {
