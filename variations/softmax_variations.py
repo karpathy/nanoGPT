@@ -117,7 +117,6 @@ class Strongermax(nn.Module):
         self.sum_to_1 = config.strongermax_sum_to_1
         self.divisor = config.strongermax_divisor
         self.div_by_seq_len = config.div_by_seq_len
-        return e_x / divisor
 
     def forward(self, x):
         if self.subtract_max:
