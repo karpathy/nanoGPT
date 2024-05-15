@@ -14,7 +14,7 @@ class Softermax(nn.Module):
         if self.subtract_max:
             max_x = x.max(dim=self.dim, keepdim=True).values
             x = x - max_x
-        e_x = torch.pow(math.e, x)
+        e_x = torch.pow(2.0, x)
         return e_x / e_x.sum(dim=self.dim, keepdim=True)
 
 # Softmax variation with learnable constant parameters for xmax and denominator
