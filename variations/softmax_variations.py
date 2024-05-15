@@ -138,6 +138,7 @@ class Polymax(nn.Module):
 
         self.x_intercept = config.polymax_x_intercept # where to transition from y=0 to m*x+b
         self.y_intercept = config.polymax_y_intercept # where the graph crosses y-axis
+        self.linear_slope = (self.y_intercept - 0)/(0 - self.x_intercept) # aka 'slope', also x intercept !=0
 
         self.power = config.polymax_power
         self.divisor = config.polymax_divisor
@@ -152,9 +153,39 @@ class Polymax(nn.Module):
         flat_piece = torch.where(x < self.x_intercept, torch.tensor(0.0, device=x.device), torch.tensor(0.0, device=x.device))
 
         # Linear section
-        m = self.y_intercept/self.x_intercept # aka 'slope', also x intercept !=0
-        b = self.y_intercept
-        linear_piece = torch.where((x >= self.x_intercept) & (x <= 0), m * x + b, torch.tensor(0.0, device=x.device))
+        linear_piece = torch.where((x >= self.x_intercept) & (x <= 0), self.linear_slope * x + self.y_intercept, torch.tensor(0.0, device=x.device))
+
+        # Polynomial section
+        poly_piece = torch.where(x > 0, x**self.power + self.y_intercept, torch.tensor(0.0, device=x.device))
+
+        # Combine sections
+        return (poly_piece + linear_piece + flat_piece)/self.divisor
+
+class VPolymax(nn.Module):
+    """ variation of polymax with a v-shape, and is non-monotonically increasing"""
+    def __init__(self, config):
+        super().__init__()
+
+        assert(config.polymax_x_intercept < 0) # ensure x_intercept is strictly left of the y-axis
+
+        self.x_intercept = config.polymax_x_intercept # where to transition from y=0 to m*x+b
+        self.y_intercept = config.polymax_y_intercept # where the graph crosses y-axis
+        self.linear_slope = (self.y_intercept - 0)/(self.x_intercept - 0) # vpoly uses reverse slope
+
+        self.power = config.polymax_power
+        self.divisor = config.polymax_divisor
+
+    def forward(self, x):
+        # Overview:
+        # Flat section:       -inf < x < x_intercept
+        # Linear section:     x_intercept <= x <= 0
+        # Polynomial section: 0 < x < inf
+
+        # Flat section
+        flat_piece = torch.where(x < self.x_intercept, torch.tensor(0.0, device=x.device), torch.tensor(0.0, device=x.device))
+
+        # Linear section
+        linear_piece = torch.where((x >= self.x_intercept) & (x <= 0), self.linear_slope * x + self.y_intercept, torch.tensor(0.0, device=x.device))
 
         # Polynomial section
         poly_piece = torch.where(x > 0, x**self.power + self.y_intercept, torch.tensor(0.0, device=x.device))
