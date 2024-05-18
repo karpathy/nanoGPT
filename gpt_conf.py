@@ -26,6 +26,9 @@ class GPTConfig:
     softmax_variant_attn: str = "softmax" # Choices: "softmax" "softermax" "sigsoftmax" "polymax" "strongermax" "consmax"
     softmax_variant_output: str = "softmax" # Choices: "softmax" "softermax" "sigsoftmax" "polymax" "strongermax" "consmax"
 
+    ## General Options
+    div_by_seq_len: bool = False # for supported functions will divide by seq length
+
     ## ConSmax Options
     consmax_initial_beta: float = 2.0 # beta adjustment
     consmax_initial_gamma: float = 100.0 # denominator adjustment
@@ -62,6 +65,12 @@ class GPTConfig:
     exppolymax_y_intercept: float = 1.0
     exppolymax_power: float = 2.0
     exppolymax_divisor: float = 1.0
+
+    ## Softplus options
+    softplus_divisor: float = 100.0
+
+    ## Squareplus options
+    squareplus_divisor: float = 100.0
 
     # Positional Embeddings Variations
     use_abs_pos_embeddings: bool = True # Note: one can use this AND rotary embeddings

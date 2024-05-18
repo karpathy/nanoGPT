@@ -14,7 +14,7 @@ class Softermax(nn.Module):
         if self.subtract_max:
             max_x = x.max(dim=self.dim, keepdim=True).values
             x = x - max_x
-        e_x = torch.pow(math.e, x)
+        e_x = torch.pow(2.0, x)
         return e_x / e_x.sum(dim=self.dim, keepdim=True)
 
 # Softmax variation with learnable constant parameters for xmax and denominator
@@ -116,6 +116,7 @@ class Strongermax(nn.Module):
         self.subtract_max = config.strongermax_use_xmax
         self.sum_to_1 = config.strongermax_sum_to_1
         self.divisor = config.strongermax_divisor
+        self.div_by_seq_len = config.div_by_seq_len
 
     def forward(self, x):
         if self.subtract_max:
@@ -127,6 +128,10 @@ class Strongermax(nn.Module):
         if self.sum_to_1:
             result = result / result.sum(dim=self.dim, keepdim=True)
 
+        if self.div_by_seq_len:
+            seq_len = x.shape[self.dim]
+            result = result / seq_len
+
         return result / self.divisor
 
 # Using polynomial instead of exponential for Softmax separation non-linearity
@@ -136,8 +141,11 @@ class Polymax(nn.Module):
 
         assert(config.polymax_x_intercept < 0) # ensure x_intercept is strictly left of the y-axis
 
+        self.div_by_seq_len = config.div_by_seq_len
+
         self.x_intercept = config.polymax_x_intercept # where to transition from y=0 to m*x+b
         self.y_intercept = config.polymax_y_intercept # where the graph crosses y-axis
+        self.linear_slope = (self.y_intercept - 0)/(0 - self.x_intercept) # aka 'slope', also x intercept !=0
 
         self.power = config.polymax_power
         self.divisor = config.polymax_divisor
@@ -152,15 +160,60 @@ class Polymax(nn.Module):
         flat_piece = torch.where(x < self.x_intercept, torch.tensor(0.0, device=x.device), torch.tensor(0.0, device=x.device))
 
         # Linear section
-        m = self.y_intercept/self.x_intercept # aka 'slope', also x intercept !=0
-        b = self.y_intercept
-        linear_piece = torch.where((x >= self.x_intercept) & (x <= 0), m * x + b, torch.tensor(0.0, device=x.device))
+        linear_piece = torch.where((x >= self.x_intercept) & (x <= 0), self.linear_slope * x + self.y_intercept, torch.tensor(0.0, device=x.device))
 
         # Polynomial section
         poly_piece = torch.where(x > 0, x**self.power + self.y_intercept, torch.tensor(0.0, device=x.device))
 
         # Combine sections
-        return (poly_piece + linear_piece + flat_piece)/self.divisor
+        result = (poly_piece + linear_piece + flat_piece)/self.divisor
+
+        # Divide by sequence length
+        if self.div_by_seq_len:
+            seq_len = x.shape[self.dim]
+            result = result / seq_len
+
+        return result
+
+class VPolymax(nn.Module):
+    """ variation of polymax with a v-shape, and is non-monotonically increasing"""
+    def __init__(self, config):
+        super().__init__()
+
+        assert(config.polymax_x_intercept < 0) # ensure x_intercept is strictly left of the y-axis
+        self.div_by_seq_len = config.div_by_seq_len
+
+        self.x_intercept = config.polymax_x_intercept # where to transition from y=0 to m*x+b
+        self.y_intercept = config.polymax_y_intercept # where the graph crosses y-axis
+        self.linear_slope = (self.y_intercept - 0)/(self.x_intercept - 0) # vpoly uses reverse slope
+
+        self.power = config.polymax_power
+        self.divisor = config.polymax_divisor
+
+    def forward(self, x):
+        # Overview:
+        # Flat section:       -inf < x < x_intercept
+        # Linear section:     x_intercept <= x <= 0
+        # Polynomial section: 0 < x < inf
+
+        # Flat section
+        flat_piece = torch.where(x < self.x_intercept, torch.tensor(0.0, device=x.device), torch.tensor(0.0, device=x.device))
+
+        # Linear section
+        linear_piece = torch.where((x >= self.x_intercept) & (x <= 0), self.linear_slope * x + self.y_intercept, torch.tensor(0.0, device=x.device))
+
+        # Polynomial section
+        poly_piece = torch.where(x > 0, x**self.power + self.y_intercept, torch.tensor(0.0, device=x.device))
+
+        # Combine sections
+        result = (poly_piece + linear_piece + flat_piece)/self.divisor
+
+        # divide by sequence length
+        if self.div_by_seq_len:
+            seq_len = x.shape[self.dim]
+            result = result / seq_len
+
+        return result
 
 # Merging of ConSmax body for gradient prop and Polymax head for numerical stability
 class SaturatingConSmax(nn.Module):
@@ -185,6 +238,8 @@ class SaturatingConSmax(nn.Module):
         else:
             self.consmax_base = config.consmax_base
 
+        self.div_by_seq_len = config.div_by_seq_len
+
         # ConSmax saturation is like ReLU6 but happens where e^x normally would overflow
         # Since we're subtracting x by beta, we only need to guard at "beta + x_sat_value)
         # Note: for e^x this is around 11 for fp16 precision
@@ -205,12 +260,21 @@ class SaturatingConSmax(nn.Module):
         flat_piece = torch.where(x >= (self.x_sat), torch.tensor(self.x_sat, device=x.device), torch.tensor(0.0, device=x.device))
 
         # Combine sections
-        return (exponential_piece + flat_piece)/self.gamma
+        result = (exponential_piece + flat_piece)/self.gamma
+
+        # divide by sequence length
+        if self.div_by_seq_len:
+            seq_len = x.shape[self.dim]
+            result = result / seq_len
+
+        return result
 
 # Merging of ConSmax body for gradient prop and Polymax head for numerical stability
 class ExpPolymax(nn.Module):
     def __init__(self, config):
         super().__init__()
+
+        self.div_by_seq_len = config.div_by_seq_len
 
         # Base selection
         if config.exppolymax_use_euler_base:
@@ -229,7 +293,7 @@ class ExpPolymax(nn.Module):
         # x = (ln(a) * ( 1 / n )) ** (1/(n-1))
         # Note: if n==1 (straight line) match is already attained, and calculation would nan, so test this case first
         if config.exppolymax_power == 1.0:
-            # Note: this only works with y=x an e^x, since we'd have to implement a multiplier or shift teh exponent otherwise.
+            # Note: this only works with y=x and e^x, since we'd have to implement a multiplier or shift teh exponent otherwise.
             self.x_derivative_match_shift = 0
         elif config.exppolymax_use_euler_base:
             # ln(e) = 1
@@ -250,43 +314,14 @@ class ExpPolymax(nn.Module):
         poly_piece = torch.where(x >= 0, (x + self.x_derivative_match_shift)**self.power + self.y_intercept, torch.tensor(0.0, device=x.device))
 
         # Combine sections
-        return (poly_piece + exponential_piece)/self.divisor
+        result = (poly_piece + exponential_piece)/self.divisor
 
-class PolymaxQuan(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        assert(config.polymax_x_intercept < 0)  # ensure x_intercept is strictly left of the y-axis
-        self.x_intercept = config.polymax_x_intercept  # where to transition from y=0 to m*x+b
-        self.y_intercept = config.polymax_y_intercept  # where the graph crosses y-axis
-        self.power = config.polymax_power
-        self.divisor = config.polymax_divisor
+        # divide by sequence length
+        if self.div_by_seq_len:
+            seq_len = x.shape[self.dim]
+            result = result / seq_len
 
-    def forward(self, x):
-        # Forward pass: ReLU^2
-        relu_squared = torch.where(x > 0, x**2, torch.tensor(0.0, device=x.device))
-        return relu_squared / self.divisor
-
-    def backward(self, x):
-        # Backward pass: Polymax
-        # Flat section
-        flat_piece = torch.where(x < self.x_intercept, torch.tensor(0.0, device=x.device), torch.tensor(0.0, device=x.device))
-
-        # Linear section
-        m = self.y_intercept / self.x_intercept  # aka 'slope', also x intercept != 0
-        b = self.y_intercept
-        linear_piece = torch.where((x >= self.x_intercept) & (x <= 0), m * x + b, torch.tensor(0.0, device=x.device))
-
-        # Polynomial section
-        poly_piece = torch.where(x > 0, x**self.power + self.y_intercept, torch.tensor(0.0, device=x.device))
-
-        # Combine sections
-        return (poly_piece + linear_piece + flat_piece) / self.divisor
-
-    def straight_through(self, x):
-        # Straight-through estimator
-        out = self.forward(x)
-        out.data = self.backward(x.data)
-        return out
+        return result
 
 
 # SigSoftmax from https://arxiv.org/abs/1805.10829
@@ -323,10 +358,19 @@ class Softplus(nn.Module):
         super().__init__()
         self.dim = dim
         self.softplus = nn.Softplus()
+        self.softplus_divisor = config.softplus_divisor
+        self.div_by_seq_len = config.div_by_seq_len
 
     def forward(self, x):
 
-        return self.softplus(x) / 100.0
+        result = self.softplus(x) / self.softplus_divisor
+
+        # divide by sequence length
+        if self.div_by_seq_len:
+            seq_len = x.shape[self.dim]
+            result = result / seq_len
+
+        return result
 
 
 class Squareplus(nn.Module):
@@ -338,18 +382,27 @@ class Squareplus(nn.Module):
     def __init__(self, b=4.0*math.log(2)**2):
         super().__init__()
         self.b = b
+        self.squareplus_divisor = config.squareplus_divisor
+        self.div_by_seq_len = config.div_by_seq_len
 
     def forward(self, x):
-        return 0.5 * (x + torch.sqrt(x**2 + self.b))
+        result = 0.5 * (x + torch.sqrt(x**2 + self.b)) / self.squareplus_divisor
+
+        # divide by sequence length
+        if self.div_by_seq_len:
+            seq_len = x.shape[self.dim]
+            result = result / seq_len
+
+        return result
 
 # Note: we use the built in library for regular softmax
 softmax_dictionary = {
     "consmax": ConSmax,
     "consmax_quan": ConSmaxQuan,
     "saturatingconsmax": SaturatingConSmax,
+    "vpolymax": VPolymax,
     "polymax": Polymax,
     "exppolymax": ExpPolymax,
-    "polymax_quan": PolymaxQuan,
     "softermax": Softermax,
     "strongermax": Strongermax,
     "sigsoftmax": SigSoftmax,
