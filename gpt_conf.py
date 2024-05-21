@@ -12,7 +12,9 @@ class GPTConfig:
     window_size: int = 128
     gate: bool = False
 
+    # MLP Options
     use_parallel_mlp: bool = False
+    use_swiglu: bool = False
 
     # Shared parameters
     # MLP

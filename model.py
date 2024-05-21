@@ -246,24 +246,40 @@ class CausalSelfAttention(nn.Module):
 
 
 class MLP(nn.Module):
-
     def __init__(self, config):
         super().__init__()
 
         # Select linear variant
         self.linear_variant = linear_dictionary[config.linear_variant]
-        self.c_fc = self.linear_variant(config.n_embd, 4 * config.n_embd, bias=config.bias)
 
         # Select activation variant
         self.activation_variant = activation_dictionary[config.activation_variant]
 
-        self.c_proj = self.linear_variant(4 * config.n_embd, config.n_embd, bias=config.bias)
+        # Whether to ues swiglu
+        self.use_swiglu = config.use_swiglu
+
+        if self.use_swiglu:
+            self.c_fc_in1 = linear_dictionary[config.linear_variant](config.n_embd, 4 * config.n_embd, bias=config.bias)
+            self.c_fc_in2 = linear_dictionary[config.linear_variant](config.n_embd, 4 * config.n_embd, bias=config.bias)
+            self.c_fc_out = linear_dictionary[config.linear_variant](4 * config.n_embd, config.n_embd, bias=config.bias)
+        else:
+            self.c_fc = linear_dictionary[config.linear_variant](config.n_embd, 4 * config.n_embd, bias=config.bias)
+            self.c_proj = linear_dictionary[config.linear_variant](4 * config.n_embd, config.n_embd, bias=config.bias)
+
+        self.activation_variant = activation_dictionary[config.activation_variant]
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
-        x = self.c_fc(x)
-        x = self.activation_variant(x)
-        x = self.c_proj(x)
+        if self.use_swiglu:
+            x_in1 = self.c_fc_in1(x)
+            x_in1 = self.activation_variant(x_in1)
+            x_in2 = self.c_fc_in2(x)
+            x_out = x_in1 * x_in2
+            x = self.c_fc_out(x_out)
+        else:
+            x = self.c_fc(x)
+            x = self.activation_variant(x)
+            x = self.c_proj(x)
         x = self.dropout(x)
         return x
 
