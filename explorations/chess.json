@@ -1,0 +1,23 @@
+[
+    {
+      "max_iters": ["30000"],
+      "patience": ["25"],
+      "n_layer": ["6"],
+      "n_kv_group": ["6"],
+      "n_head": ["6"],
+      "n_embd": ["384"],
+      "block_size":["256"],
+      "eval_interval": ["250"],
+      "patience": ["25"],
+      "device": ["cuda"],
+      "dataset": ["chess3"],
+      "compile": [true],
+      "lr_decay_iters": ["30000"],
+      "decay_lr": [true, false],
+      "dtype": ["bfloat16","float16"],
+      "use_rotary_embeddings": [true, false],
+      "batch_size": ["64", "128", "256"],
+      "softmax_variant_attn": ["softmax", "polymax"]
+    }
+  ]
+

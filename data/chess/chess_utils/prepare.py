@@ -5,20 +5,6 @@ import pickle
 import sentencepiece as spm
 import tempfile
 import tiktoken
-import sys
-
-def get_key_from_meta(keyname):
-    # Data loader
-    meta_path = 'meta.pkl'
-    if os.path.exists(meta_path):
-        with open(meta_path, 'rb') as f:
-            meta = pickle.load(f)
-            if keyname in meta:
-                return meta[keyname]
-            else:
-                sys.exit(f"Error: {keyname} key not found in {meta_path}")
-    else:
-        sys.exit(f"Error: File not found - {meta_path}")
 
 def tokenize_custom_tokens_and_replace(data, tokens):
     """Tokenize data using custom tokens and replace found tokens with underscores."""
@@ -92,7 +78,6 @@ def train_sentencepiece_model(input_files, model_prefix, vocab_size):
     # Train the SentencePiece model
     spm.SentencePieceTrainer.train(
         num_threads=num_threads,
-        user_defined_symbols="\n, ",
         input=input_arg,
         model_prefix=model_prefix,
         split_digits=True,
@@ -161,9 +146,9 @@ def main():
         help="Path to the SentencePiece vocabulary file (not always needed but can be used for additional functionality)",
     )
     parser.add_argument(
-        "--skip_tokenization",
+        "--skip_sp_tokenization",
         action="store_true",
-        help="Skip creation of .bin files",
+        help="Skip tokenization and creation of .bin files after training SentencePiece model",
     )
 
     # Tiktoken only argument
@@ -173,13 +158,6 @@ def main():
         choices=["gpt2", "r50k_base", "p50k_base", "cl100k_base"],
         default="gpt2",
         help="version of tiktoken encoding to utilize, which effects performance and vocab size, e.g. cl100k_base is better for coding than gpt2.",
-    )
-
-    # Char only arguments
-    parser.add_argument(
-        "--reuse_chars",
-        action="store_true",
-        help="reuse character list",
     )
 
     # Customize output names for bins
@@ -216,9 +194,6 @@ def main():
     )
 
     args = parser.parse_args()
-
-    # initalize train_ids, which are used for binarization
-    train_ids = None
 
     if args.use_separate_files:
         if not args.train_input or not args.val_input:
@@ -261,7 +236,7 @@ def main():
             train_sentencepiece_model(input_files, spm_model_prefix, args.vocab_size)
             sp = spm.SentencePieceProcessor()
             sp.load(f"{spm_model_prefix}.model")
-            if args.skip_tokenization:
+            if args.skip_sp_tokenization:
                 print("SentencePiece model training complete. Skipping tokenization and .bin file creation.")
                 return
 
@@ -350,42 +325,27 @@ def main():
 
     # Rest of the main function remains unchanged, includ
     elif args.method == "char":
+        # Print the total length of the dataset in characters
+        total_len = len(train_data) + len(val_data)
+        print(f"Length of dataset in characters: {total_len:,}")
+        # Character-level tokenization
+        chars = sorted(
+            list(set(train_data + val_data))
+        )  # Get unique characters in train data
+        vocab_size = len(chars)
+        print("All unique characters:", "".join(chars))
+        print(f"Vocab size: {vocab_size}")
 
-        if args.reuse_chars:
-            chars = get_key_from_meta('chars')
-            train_ids, stoi, itos = encode_char_level(train_data, chars)
-            if val_data != None:
-                val_ids, _, _ = encode_char_level(val_data, chars)
-        else:
-            # Print the total length of the dataset in characters
-            total_len = len(train_data) + len(val_data)
-            print(f"Length of dataset in characters: {total_len:,}")
-            # Character-level tokenization
-            chars = sorted(
-                list(set(train_data + val_data))
-            )  # Get unique characters in train data
-            vocab_size = len(chars)
-            print("All unique characters:", "".join(chars))
-            print(f"Vocab size: {vocab_size}")
+        train_ids, stoi, itos = encode_char_level(train_data, chars)
+        if val_data != None:
+            val_ids, _, _ = encode_char_level(val_data, chars)
 
-
-            train_ids, stoi, itos = encode_char_level(train_data, chars)
-            if val_data != None:
-                val_ids, _, _ = encode_char_level(val_data, chars)
-
-            # Save the meta information
-            meta = {"vocab_size": vocab_size, "itos": itos, "stoi": stoi, "chars": chars}
-            with open(os.path.join(os.path.dirname(__file__), "meta.pkl"), "wb") as f:
-                pickle.dump(meta, f)
-
-        if args.skip_tokenization:
-            print("Char method skipping tokenization and .bin file creation.")
-            return
+        # Save the meta information
+        meta = {"vocab_size": vocab_size, "itos": itos, "stoi": stoi}
+        with open(os.path.join(os.path.dirname(__file__), "meta.pkl"), "wb") as f:
+            pickle.dump(meta, f)
 
     # Print token counts and export to bin files
-    if train_ids == None:
-        sys.exit(f"train_ids none, exiting with error")
-
     print(f"train has {len(train_ids):,} tokens")
     if val_data != None:
         print(f"val has {len(val_ids):,} tokens")
