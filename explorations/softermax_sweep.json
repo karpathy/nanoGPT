@@ -12,13 +12,12 @@
       "use_rotary_embeddings": [false],
       "use_abs_pos_embeddings": [true],
       "compile": [true],
-      "softmax_variant_attn": ["strongermax"],
-      "strongermax_strength": ["1.5", "2", "2.719", "3", "4", "5"],
-      "strongermax_divisor": ["1.0", "10.0", "100.0", "1000.0"],
+      "softmax_variant_attn": ["softermax"],
       "use_post_ln": [true, false],
-      "strongermax_use_xmax" : [true, false],
-      "strongermax_sum_to_1": [true, false],
-      "div_by_seq_len" : [true,false]
+      "softermax_use_xmax" : [true,false]
     }
   ]
+
+
+  
 

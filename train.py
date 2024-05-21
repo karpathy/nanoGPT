@@ -194,6 +194,15 @@ def parse_args():
     ### Softermax Specific Options
     model_group.add_argument('--softermax_use_xmax', default=True, action=argparse.BooleanOptionalAction)
 
+    ### SoftPlus Options
+    model_group.add_argument('--softplus_divisor', type=float,default=100.0)
+    ### SquarePlus Options
+    model_group.add_argument('--squareplus_divisor', type=float,default=100.0)
+
+    ### Sequence Length Division https://arxiv.org/abs/2309.
+    model_group.add_argument('--div_by_seq_len', default=True, action=argparse.BooleanOptionalAction)
+
+
     # Optimizer args
     training_group.add_argument('--max_iters', default=3500, type=int)
     training_group.add_argument('--weight_decay', default=1e-1, type=float)

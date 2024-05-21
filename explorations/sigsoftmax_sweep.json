@@ -1,0 +1,24 @@
+[
+  {
+    "max_iters": ["3500"],
+    "n_layer": ["6"],
+    "n_kv_group": ["2"],
+    "n_head": ["6"],
+    "n_embd": ["384"],
+    "block_size":["256"],
+    "device": ["cuda"],
+    "dtype": ["float16"],
+    "dataset": ["shakespeare_char"],
+    "use_rotary_embeddings": [false],
+    "use_abs_pos_embeddings": [true],
+    "compile": [true],
+    "softmax_variant_attn": ["sigsoftmax"],
+    "use_post_ln": [true, false],
+    "sigsoftmax_use_euler_base" : [true,false],
+    "sigsoftmax_base":["1.5", "2", "2.719", "3", "4", "5"]
+  }
+]
+
+
+
+

@@ -1,0 +1,24 @@
+[
+  {
+    "max_iters": ["3500"],
+    "n_layer": ["6"],
+    "n_kv_group": ["2"],
+    "n_head": ["6"],
+    "n_embd": ["384"],
+    "block_size":["256"],
+    "device": ["cuda"],
+    "dtype": ["float16"],
+    "dataset": ["shakespeare_char"],
+    "use_rotary_embeddings": [false],
+    "use_abs_pos_embeddings": [true],
+    "compile": [true],
+    "softmax_variant_attn": ["softplus"],
+    "use_post_ln": [true, false],
+    "div_by_seq_len" : [true,false],
+    "softplus_divisor":["1.0", "10.0", "100.0", "1000.0"]
+  }
+]
+
+
+
+

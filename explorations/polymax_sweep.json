@@ -1,4 +1,4 @@
-[
+    [
     {
       "max_iters": ["3500"],
       "n_layer": ["6"],
@@ -12,13 +12,12 @@
       "use_rotary_embeddings": [false],
       "use_abs_pos_embeddings": [true],
       "compile": [true],
-      "softmax_variant_attn": ["strongermax"],
-      "strongermax_strength": ["1.5", "2", "2.719", "3", "4", "5"],
-      "strongermax_divisor": ["1.0", "10.0", "100.0", "1000.0"],
-      "use_post_ln": [true, false],
-      "strongermax_use_xmax" : [true, false],
-      "strongermax_sum_to_1": [true, false],
-      "div_by_seq_len" : [true,false]
+      "softmax_variant_attn": ["polymax"],
+      "polymax_x_intercept":["-100","-80","-60","-40","-20","0"],
+      "polymax_y_intercept":["0.2","0.4","0.6","0.8","1.0"],
+      "polymax_power":["2.0","3.0","4.0","5.0"],
+      "polymax_divisor":["1.0", "10.0", "100.0", "1000.0"],
+      "use_post_ln": [true, false]
     }
   ]
 
