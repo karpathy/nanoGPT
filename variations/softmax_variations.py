@@ -136,10 +136,12 @@ class Strongermax(nn.Module):
 
 # Using polynomial instead of exponential for Softmax separation non-linearity
 class Polymax(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, dim=-1):
         super().__init__()
 
         assert(config.polymax_x_intercept < 0) # ensure x_intercept is strictly left of the y-axis
+
+        self.dim = dim
 
         self.div_by_seq_len = config.div_by_seq_len
 
@@ -177,10 +179,11 @@ class Polymax(nn.Module):
 
 class VPolymax(nn.Module):
     """ variation of polymax with a v-shape, and is non-monotonically increasing"""
-    def __init__(self, config):
+    def __init__(self, config, dim=-1):
         super().__init__()
 
         assert(config.polymax_x_intercept < 0) # ensure x_intercept is strictly left of the y-axis
+        self.dim = dim
         self.div_by_seq_len = config.div_by_seq_len
 
         self.x_intercept = config.polymax_x_intercept # where to transition from y=0 to m*x+b
@@ -217,9 +220,10 @@ class VPolymax(nn.Module):
 
 # Merging of ConSmax body for gradient prop and Polymax head for numerical stability
 class SaturatingConSmax(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, dim=-1):
         super().__init__()
 
+        self.dim = dim
 
         if config.consmax_learnable_beta:
             # learnable 'xmax' is beta
@@ -271,8 +275,10 @@ class SaturatingConSmax(nn.Module):
 
 # Merging of ConSmax body for gradient prop and Polymax head for numerical stability
 class ExpPolymax(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, dim=-1):
         super().__init__()
+
+        self.dim = dim
 
         self.div_by_seq_len = config.div_by_seq_len
 
@@ -379,7 +385,7 @@ class Squareplus(nn.Module):
        source: https://arxiv.org/abs/2112.11687
     """
 
-    def __init__(self, b=4.0*math.log(2)**2):
+    def __init__(self, config, dim=-1, b=4.0*math.log(2)**2):
         super().__init__()
         self.b = b
         self.squareplus_divisor = config.squareplus_divisor
