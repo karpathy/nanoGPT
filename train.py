@@ -317,7 +317,7 @@ class Trainer:
             torch.cuda.set_device(self.device)
             self.master_process = self.ddp_rank == 0
             self.seed_offset = self.ddp_rank
-            self.gradient_accumulation_steps //= self.ddp_world_size
+            self.args.gradient_accumulation_steps //= self.ddp_world_size
         else:
             self.device = self.args.device
             self.master_process = True
