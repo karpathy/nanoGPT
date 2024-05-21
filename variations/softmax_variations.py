@@ -116,9 +116,12 @@ class Strongermax(nn.Module):
         self.subtract_max = config.strongermax_use_xmax
         self.sum_to_1 = config.strongermax_sum_to_1
         self.divisor = config.strongermax_divisor
+        self.inputs = []
+        self.outputs = []
         self.div_by_seq_len = config.div_by_seq_len
 
     def forward(self, x):
+        self.inputs = x
         if self.subtract_max:
             max_x = x.max(dim=self.dim, keepdim=True).values
             x = x - max_x
@@ -132,7 +135,10 @@ class Strongermax(nn.Module):
             seq_len = x.shape[self.dim]
             result = result / seq_len
 
-        return result / self.divisor
+        result = result / self.divisor
+        self.outputs = result
+
+        return result
 
 # Using polynomial instead of exponential for Softmax separation non-linearity
 class Polymax(nn.Module):
@@ -151,13 +157,15 @@ class Polymax(nn.Module):
 
         self.power = config.polymax_power
         self.divisor = config.polymax_divisor
+        self.inputs = []
+        self.outputs = []
 
     def forward(self, x):
         # Overview:
         # Flat section:       -inf < x < x_intercept
         # Linear section:     x_intercept <= x <= 0
         # Polynomial section: 0 < x < inf
-
+        self.inputs = x
         # Flat section
         flat_piece = torch.where(x < self.x_intercept, torch.tensor(0.0, device=x.device), torch.tensor(0.0, device=x.device))
 
@@ -174,6 +182,8 @@ class Polymax(nn.Module):
         if self.div_by_seq_len:
             seq_len = x.shape[self.dim]
             result = result / seq_len
+
+        self.outputs = result
 
         return result
 

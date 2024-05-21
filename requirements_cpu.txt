@@ -75,3 +75,4 @@ yarl==1.9.2
 rich==13.5.3
 plotly==5.22.0
 seaborn==0.13.2
+kaleido==0.2.1
