@@ -28,6 +28,7 @@ from variations.norm_variations import norm_dictionary, LayerNorm, RMSNorm, pRMS
 from variations.position_encoding_variations import RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions, FIRE
 from variations.activation_variations import SquaredReLU, activation_dictionary
 from variations.linear_variations import BitLinear1p58, BitLinear, BitLinearOptimized, linear_dictionary
+from KALnet import KAL_Net as KAN
 
 def create_shared_param_group(layer_type, config):
     shared_size = None
@@ -87,7 +88,8 @@ class CausalSelfAttention(nn.Module):
         super().__init__()
         assert config.n_embd % config.n_head == 0
         # key, query, value projections for all heads, but in a batch
-        self.c_attn_q = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        # self.c_attn_q = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.c_attn_q = KAN([config.n_embd, config.n_embd])
 
         self.n_head = config.n_head
         if config.n_kv_group == None:
@@ -97,10 +99,13 @@ class CausalSelfAttention(nn.Module):
             self.n_kv_group = config.n_kv_group
 
         self.kv_dim = (config.n_embd // config.n_head) * self.n_kv_group
-        self.c_attn_k = nn.Linear(config.n_embd, self.kv_dim, bias=config.bias)
-        self.c_attn_v = nn.Linear(config.n_embd, self.kv_dim, bias=config.bias)
+        self.c_attn_k = KAN([config.n_embd, self.kv_dim])
+        self.c_attn_v = KAN([config.n_embd, self.kv_dim])
+        # self.c_attn_k = nn.Linear(config.n_embd, self.kv_dim, bias=config.bias)
+        # self.c_attn_v = nn.Linear(config.n_embd, self.kv_dim, bias=config.bias)
         # output projection
-        self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.c_proj = KAN([config.n_embd, config.n_embd])
+        # self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
         # regularization
         self.attn_dropout = nn.Dropout(config.dropout)
         self.resid_dropout = nn.Dropout(config.dropout)
@@ -167,7 +172,6 @@ class CausalSelfAttention(nn.Module):
 
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
-
         q = self.c_attn_q(x)
         k = self.c_attn_k(x)
         v = self.c_attn_v(x)
