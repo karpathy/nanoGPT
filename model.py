@@ -10,6 +10,7 @@ https://github.com/huggingface/transformers/blob/main/src/transformers/models/gp
 import math
 import inspect
 import sys
+import re
 
 import torch
 import torch.nn as nn
@@ -563,3 +564,31 @@ class GPT(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
 
         return idx
+
+    @torch.no_grad()
+    def generate_with_stop(self, idx, max_new_tokens, stop_string, decode, temperature=1.0, top_k=None):
+        """
+        Generate tokens and stop on fixed string match, return the state for further input.
+        """
+        generated_text = ""
+        buffer = ""
+        for _ in range(max_new_tokens):
+            idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
+            logits, _ = self(idx_cond)
+            logits = logits[:, -1, :] / temperature
+            if top_k is not None:
+                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                logits[logits < v[:, [-1]]] = -float('Inf')
+            probs = F.softmax(logits, dim=-1)
+            idx_next = torch.multinomial(probs, num_samples=1)
+            idx = torch.cat((idx, idx_next), dim=1)
+
+            next_token_text = decode(idx_next[0].tolist())
+            generated_text += next_token_text
+            buffer += next_token_text
+
+            # Check if the buffer ends with the stop_string
+            if buffer.endswith(stop_string):
+                break
+
+        return idx, generated_text

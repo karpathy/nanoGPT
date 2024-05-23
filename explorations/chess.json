@@ -10,12 +10,12 @@
       "eval_interval": ["250"],
       "patience": ["25"],
       "device": ["cuda"],
-      "dataset": ["chess3"],
+      "dataset": ["chess"],
       "compile": [true],
       "lr_decay_iters": ["30000"],
-      "decay_lr": [true, false],
-      "dtype": ["bfloat16","float16"],
-      "use_rotary_embeddings": [true, false],
+      "decay_lr": [true],
+      "dtype": ["float16"],
+      "use_rotary_embeddings": [true],
       "batch_size": ["64", "128", "256"],
       "softmax_variant_attn": ["softmax", "polymax"]
     }

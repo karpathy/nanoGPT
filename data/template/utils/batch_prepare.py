@@ -38,11 +38,12 @@ def batch_prepare(input_dir, train_output, val_output, prepare_script, tokenizer
     elif tokenizer == "char":
         # Train files
         for file in files[:num_train]:
-            subprocess.run(['python3', prepare_script, '--method', tokenizer, '--spm_model_file', spm_model_file, '--spm_vocab_file', spm_vocab_file, '--train_input', file, '--train_output', file.replace('.txt', '.bin'), '-p 1.0'])
+            subprocess.run(['python3', prepare_script, '--method', tokenizer, '--reuse_char', '--train_input', file, '--train_output', file.replace('.txt', '.bin'), '-p 1.0'])
 
         # Validation files
         for file in files[num_train:]:
-            subprocess.run(['python3', prepare_script, '--method', tokenizer, '--spm_model_file', spm_model_file, '--spm_vocab_file', spm_vocab_file, '--train_input', file, '--train_output', file.replace('.txt', '.bin'), '-p 1.0'])
+            subprocess.run(['python3', prepare_script, '--method', tokenizer, '--reuse_char', '--train_input', file, '--train_output', file.replace('.txt', '.bin'), '-p 1.0'])
+
 
         # Combine bins
         combine_bins(files[:num_train], train_output)
