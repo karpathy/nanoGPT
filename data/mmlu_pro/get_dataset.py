@@ -36,7 +36,8 @@ def convert_to_json(parquet_path, json_path):
     else:
         print(f"{json_path} already exists, continuing")
 
-def emit_json_contents(json_path, output_text_file):
+
+def emit_json_contents(json_path, output_text_file, include_keys, value_prefixes):
     """
     Emit the contents of the JSON file
     Optionally, write the output to a text file.
@@ -45,13 +46,15 @@ def emit_json_contents(json_path, output_text_file):
         data = json.load(f)
 
     with open(output_text_file, "a") as f:
+        prev_item_written = False
         for item in data:
-            content_line = f"{item['inputs']}"
-            f.write(content_line.strip())
-            f.write("\n")  # Separator between items
-            content_line = f"{item['targets']}"
-            f.write(content_line.strip())
-            f.write("\n\n")  # Separator between items
+            for key, prefix in zip(include_keys, value_prefixes):
+                if key in item:
+                    if prev_item_written:
+                        f.write("\n")  # Single newline between items
+                    content_line = f"{prefix}{item[key]}"
+                    f.write(content_line.strip())
+                    prev_item_written = True
 
 def find_parquet_links(url):
     """
@@ -62,7 +65,7 @@ def find_parquet_links(url):
     links = [("https://huggingface.co" + a['href']) for a in soup.find_all('a', href=True) if a['href'].endswith('.parquet?download=true')]
     return links
 
-def main(url, output_text_file):
+def main(url, output_text_file, include_keys, value_prefixes):
     parquet_links = find_parquet_links(url)
 
     download_dir = "./downloaded_parquets"
@@ -88,7 +91,7 @@ def main(url, output_text_file):
         convert_to_json(parquet_path, json_path)
 
         # Emit the JSON contents and write output to a text file
-        emit_json_contents(json_path, output_text_file)
+        emit_json_contents(json_path, output_text_file, include_keys, value_prefixes)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -108,7 +111,21 @@ if __name__ == "__main__":
         default="input.txt",
         help="Path to the output text file where the contents should be saved.",
     )
-
+    parser.add_argument(
+        "-i",
+        "--include_keys",
+        type=str,
+        nargs="+",
+        required=True,
+        help="List of keys to include from the JSON contents.",
+    )
+    parser.add_argument(
+        "-p",
+        "--value_prefixes",
+        type=str,
+        nargs="+",
+        default=["", ""],
+        help="List of prefixes to be added to each individual value when emitting to the text file.",
+    )
     args = parser.parse_args()
-    main(args.url, args.output_text_file)
-
+    main(args.url, args.output_text_file, args.include_keys, args.value_prefixes)
