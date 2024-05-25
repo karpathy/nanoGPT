@@ -42,14 +42,7 @@ simplify the process of downloading the dataset.
 
 ##### 2a. (if parquet dataset) get_dataset.sh setup
 
-Use an editor to edit the following section of the `get_dataset.sh`:
-
-```bash
-url="INSERT_URL_WITH_PARQUET_FILES"
-include_keys=("question" "options" "cot_content" "answers")
-value_prefixes=("question: " "options: " "cot: " "answer: ") # Leave this array empty if no prefixes are needed
-skip_empty=true
-```
+Use an editor follow the instrudtions within the `get_dataset.sh`.
 
 After modification to the proper values for the dataset, run:
 

@@ -12,14 +12,14 @@
 # Add url with dataset here:
 url="INSERT_URL_WITH_FILES"
 
-# uncomment and fill in for json dataset
+# uncomment and fill in if url has json datasets
 # Note: the $'\n' syntax allows for special characters like \n
 # python3 ./utils/get_json_dataset.py \
 #   --url "${url}" \
 #   --include_keys "instruction" "response" \
 #   --value_prefix $'#U:\n' $'#B:\n'
 
-# uncomment and fill in for parquet dataset
+# uncomment and fill in if url has parquet datasets
 # python3 ./utils/get_json_dataset.py \
 #   --url "${url}" \
 #   --include_keys "instruction" "response" \
