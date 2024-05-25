@@ -80,7 +80,7 @@ def find_parquet_links(url):
     return links
 
 
-def main(url, output_text_file, no_output_text, include_keys, value_prefixes, required_key, skip_empty):
+def main(url, output_text_file, include_keys, value_prefixes, required_key, skip_empty):
     parquet_links = find_parquet_links(url)
     download_dir = "./downloaded_parquets"
     json_dir = "./json_output"
@@ -101,18 +101,15 @@ def main(url, output_text_file, no_output_text, include_keys, value_prefixes, re
         # Convert the Parquet file to JSON
         convert_to_json(parquet_path, json_path)
 
-        if no_output_text:
-            return
-        else:
-            # Emit the JSON contents and write output to a text file
-            emit_json_contents(
-                json_path,
-                output_text_file,
-                include_keys,
-                value_prefixes,
-                required_key,
-                skip_empty,
-            )
+        # Emit the JSON contents and write output to a text file
+        emit_json_contents(
+            json_path,
+            output_text_file,
+            include_keys,
+            value_prefixes,
+            required_key,
+            skip_empty,
+        )
 
 
 if __name__ == "__main__":
@@ -123,7 +120,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--url",
         type=str,
-        required=True,
+        default="https://huggingface.co/datasets/CohereForAI/aya_collection_language_split/tree/main/english",
         help="URL to scrape for Parquet files.",
     )
     parser.add_argument(
@@ -132,12 +129,6 @@ if __name__ == "__main__":
         type=str,
         default="input.txt",
         help="Path to the output text file where the contents should be saved.",
-    )
-    parser.add_argument(
-        "--no_output_text",
-        default=False,
-        action='store_true',
-        help="skip creation of output text",
     )
     parser.add_argument(
         "-i",
@@ -149,10 +140,10 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-p",
-        "--value_prefixes",
+        "--value_prefix",
         type=str,
         nargs="+",
-        default=["", ""],
+        required=True,
         help="List of prefixes to be added to each individual value when emitting to the text file.",
     )
     parser.add_argument(
@@ -166,16 +157,15 @@ if __name__ == "__main__":
         "-s",
         "--skip_empty",
         default=False,
-        action='store_true',
+        action=argparse.BooleanOptionalAction,
         help="Skip any item which is the empty string",
     )
     args = parser.parse_args()
     main(
         args.url,
         args.output_text_file,
-        args.no_output_text,
         args.include_keys,
-        args.value_prefixes,
+        args.value_prefix,
         args.required_key,
         args.skip_empty,
     )
