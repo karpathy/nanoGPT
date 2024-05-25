@@ -123,7 +123,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--url",
         type=str,
-        default="https://huggingface.co/datasets/CohereForAI/aya_collection_language_split/tree/main/english",
+        required=True,
         help="URL to scrape for Parquet files.",
     )
     parser.add_argument(
