@@ -37,6 +37,26 @@ Obtain a text format of the data for training.
 
 Note: make sure not to check in only the scripts and instructions, not the dataset.
 
+Note: For parquet datasets from urls see the `get_dataset.sh` script, which may
+simplify the process of downloading the dataset.
+
+##### 2a. (if parquet dataset) get_dataset.sh setup
+
+Use an editor follow the instrudtions within the `get_dataset.sh`.
+
+After modification to the proper values for the dataset, run:
+
+```bash
+bash get_dataset.sh
+```
+
+Which should bring necessary files (parquet -> json -> text) into the present folder.
+
+Again, feel free to modify or even fully replace the `get_dataset.sh` script with your own script.
+
+Other scripts may expect the file to be called `get_dataset.sh` so please title
+your script with this naming convention.
+
 ### 3. Run tokenization script
 
 Finally, run `prepare.py` script to process the dataset for training.
