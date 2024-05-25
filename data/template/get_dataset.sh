@@ -20,7 +20,7 @@ url="INSERT_URL_WITH_FILES"
 #   --value_prefix $'#U:\n' $'#B:\n'
 
 # uncomment and fill in if url has parquet datasets
-# python3 ./utils/get_json_dataset.py \
+# python3 ./utils/get_parquet_dataset.py \
 #   --url "${url}" \
 #   --include_keys "instruction" "response" \
 #   --value_prefix $'#U:\n' $'#B:\n'
