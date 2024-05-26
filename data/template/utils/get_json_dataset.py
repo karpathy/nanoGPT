@@ -83,7 +83,7 @@ def find_file_links(url):
     links = [
         "https://huggingface.co" + a["href"]
         for a in soup.find_all("a", href=True)
-        if a["href"].endswith(".json?download=true")
+        if a["href"].endswith(".json?download=true") or a["href"].endswith(".jsonl?download=true")
     ]
     return links
 
