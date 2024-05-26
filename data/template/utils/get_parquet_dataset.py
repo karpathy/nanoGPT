@@ -40,7 +40,13 @@ def convert_to_json(parquet_path, json_path):
 
 
 def emit_json_contents(
-    json_path, output_text_file, include_keys, value_prefixes, required_key, skip_empty
+    json_path,
+    output_text_file,
+    include_keys,
+    value_prefixes,
+    required_key,
+    skip_empty,
+    exclude,
 ):
     """
     Emit the contents of the JSON file
@@ -48,6 +54,15 @@ def emit_json_contents(
     """
     with open(json_path, "r") as f:
         data = json.load(f)
+
+    skip_item = False
+    excluded_pairs = {}
+    if exclude:
+        for pair in args.exclude:
+            for i in range(0, len(pair), 2):
+                key = pair[i]
+                value = pair[i+1]
+                excluded_pairs[key] = value
 
     with open(output_text_file, "a") as f:
         prev_item_written = False
@@ -59,6 +74,16 @@ def emit_json_contents(
                 if key in item:
                     if skip_empty and item[key] == "":
                         continue  # skip empty items if activated
+                    for i_key, i_value in item.items():
+                        if (i_key in excluded_pairs) and (i_value == excluded_pairs[i_key]):
+                            # print(key, item[key], "not included")
+                            skip_item=True
+                        if skip_item:
+                            break
+
+                    if skip_item:
+                        continue
+
                     if prev_item_written:
                         f.write("\n")  # Single newline between items
                     content_line = f"{prefix}{item[key]}"
@@ -80,7 +105,15 @@ def find_parquet_links(url):
     return links
 
 
-def main(url, output_text_file, include_keys, value_prefixes, required_key, skip_empty):
+def main(
+    url,
+    output_text_file,
+    include_keys,
+    value_prefixes,
+    required_key,
+    skip_empty,
+    exclude,
+):
     parquet_links = find_parquet_links(url)
     download_dir = "./downloaded_parquets"
     json_dir = "./json_output"
@@ -109,6 +142,7 @@ def main(url, output_text_file, include_keys, value_prefixes, required_key, skip
             value_prefixes,
             required_key,
             skip_empty,
+            exclude,
         )
 
 
@@ -137,6 +171,14 @@ if __name__ == "__main__":
         nargs="+",
         required=True,
         help="List of keys to include from the JSON contents.",
+    )
+    parser.add_argument(
+        "--exclude",
+        type=str,
+        nargs="+",
+        action="append",
+        metavar=("KEY", "VALUE"),
+        help="Specify key-value pairs to be excluded. Use the format: --exclude KEY VALUE [KEY VALUE ...]",
     )
     parser.add_argument(
         "-p",
@@ -168,4 +210,5 @@ if __name__ == "__main__":
         args.value_prefix,
         args.required_key,
         args.skip_empty,
+        args.exclude,
     )
