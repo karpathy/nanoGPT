@@ -24,7 +24,13 @@ def download_file(url, filename):
 
 
 def emit_json_contents(
-    json_path, output_text_file, include_keys, value_prefixes, required_key, skip_empty
+    json_path,
+    output_text_file,
+    include_keys,
+    value_prefixes,
+    required_key,
+    skip_empty,
+    exclude,
 ):
     print(f"Emitting contents from {json_path} to {output_text_file}")
     with open(json_path, "r") as f:
@@ -33,6 +39,15 @@ def emit_json_contents(
             data = [data]
 
     print(f"Loaded {len(data)} items from {json_path}")
+
+    skip_item = False
+    excluded_pairs = {}
+    if exclude:
+        for pair in args.exclude:
+            for i in range(0, len(pair), 2):
+                key = pair[i]
+                value = pair[i+1]
+                excluded_pairs[key] = value
 
     with open(output_text_file, "w") as output_file:
         prev_item_written = False
@@ -43,13 +58,23 @@ def emit_json_contents(
             for key, prefix in zip(include_keys, value_prefixes):
                 key = key.strip("'\"")
                 key = key.rstrip()
+                if key in item:
+                    if skip_empty and item[key] == "":
+                        continue  # skip empty items if activated
+                    for i_key, i_value in item.items():
+                        if (i_key in excluded_pairs) and (i_value == excluded_pairs[i_key]):
+                            skip_item=True
+                        if skip_item:
+                            break
+                    if skip_item:
+                        continue
 
-                if prev_item_written:
-                    output_file.write("\n")
+                    if prev_item_written:
+                        output_file.write("\n")
 
-                content_line = f"{prefix}{item[key]}"
-                output_file.write(content_line.strip())
-                prev_item_written = True
+                    content_line = f"{prefix}{item[key]}"
+                    output_file.write(content_line.strip())
+                    prev_item_written = True
 
 
 def find_file_links(url):
@@ -89,6 +114,7 @@ def main(
     value_prefixes,
     required_key,
     skip_empty,
+    exclude,
 ):
     file_links = find_file_links(url)
     download_dir = "./downloaded_jsons"
@@ -115,6 +141,7 @@ def main(
             value_prefixes,
             required_key,
             skip_empty,
+            exclude,
         )
 
 
@@ -142,6 +169,14 @@ if __name__ == "__main__":
         nargs="+",
         required=True,
         help="List of keys to include from the JSON contents.",
+    )
+    parser.add_argument(
+        "--exclude",
+        type=str,
+        nargs="+",
+        action="append",
+        metavar=("KEY", "VALUE"),
+        help="Specify key-value pairs to be excluded. Use the format: --exclude KEY VALUE [KEY VALUE ...]",
     )
     parser.add_argument(
         "-p",
@@ -174,4 +209,5 @@ if __name__ == "__main__":
         args.value_prefixes,
         args.required_key,
         args.skip_empty,
+        args.exclude,
     )
