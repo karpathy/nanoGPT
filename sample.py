@@ -1,3 +1,4 @@
+from torch.nn import functional as F
 import os
 import pickle
 from contextlib import nullcontext
@@ -6,6 +7,10 @@ import tiktoken
 from rich import print
 from model import GPTConfig, GPT
 import argparse
+import matplotlib.pyplot as plt
+import seaborn as sns
+from datetime import datetime
+import numpy as np
 
 def parseargs():
     parser = argparse.ArgumentParser(description='')
@@ -23,21 +28,28 @@ def parseargs():
     parser.add_argument('--sample_file', type=str, default=None, help="output file for inference")
     parser.add_argument('--interactive', default=False, action=argparse.BooleanOptionalAction)
     parser.add_argument('--stop_string', type=str, default='~W', help="fixed string to stop generation and allow user input")
+    parser.add_argument('--show_heatmaps', default=False, action=argparse.BooleanOptionalAction, help="show heatmaps of top-k choices for each token")
+    parser.add_argument('--last_k_tokens', type=int, default=10, help="number of last tokens to display in heatmaps")
 
     return parser.parse_args()
 
-def interactive_generation(model, start_ids, device, max_new_tokens, temperature, top_k, stop_string, decode, encode):
-    x = torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...]
-    while True:
-        x, generated_text = model.generate_with_stop(x, max_new_tokens, stop_string, decode, temperature, top_k)
-        print("[bold green]" + generated_text)
+def save_heatmap(probs, idx, decode, step, out_dir, last_k_tokens):
+    top_k_probs, top_k_indices = torch.topk(probs, k=probs.size(-1))
+    top_k_tokens = [decode([top_k_indices[0, i].item()]) for i in range(top_k_indices.size(1))]
+    top_k_tokens_annot = np.array(top_k_tokens).reshape(top_k_probs.size())
 
-        user_input = input("User input (or 'exit' to quit): ")
-        if user_input.lower() == 'exit':
-            break
-
-        # Append the user input directly after the stop string
-        x = torch.cat((x, torch.tensor(encode(user_input), dtype=torch.long, device=device)[None, ...]), dim=1)
+    plt.figure(figsize=(10, 6))
+    sns.heatmap(top_k_probs.cpu().numpy(), annot=top_k_tokens_annot, fmt='', cmap='viridis')
+    plt.title(f"Step {step}: Top-k Token Probabilities")
+    
+    last_tokens = decode(idx[0, -last_k_tokens:].tolist())
+    plt.xlabel(f"Last {last_k_tokens} Tokens: {last_tokens}")
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_path = os.path.join(out_dir, f"{timestamp}_step{step}.png")
+    os.makedirs(out_dir, exist_ok=True)
+    plt.savefig(out_path)
+    plt.close()
 
 args = parseargs()
 # -----------------------------------------------------------------------------
@@ -115,8 +127,21 @@ else:
     with torch.no_grad():
         with ctx:
             for k in range(args.num_samples):
-                y = model.generate(x, args.max_new_tokens, temperature=args.temperature, top_k=args.top_k)
-                output_line = decode(y[0].tolist()).replace(separator_token, " ") if separator_token else decode(y[0].tolist())
+                for step in range(args.max_new_tokens):
+                    idx_cond = x if x.size(1) <= model.config.block_size else x[:, -model.config.block_size:]
+                    logits, _ = model(idx_cond)
+                    logits = logits[:, -1, :] / args.temperature
+                    if args.top_k is not None:
+                        v, _ = torch.topk(logits, min(args.top_k, logits.size(-1)))
+                        logits[logits < v[:, [-1]]] = -float('Inf')
+                    probs = F.softmax(logits, dim=-1)
+                    idx_next = torch.multinomial(probs, num_samples=1)
+                    x = torch.cat((x, idx_next), dim=1)
+
+                    if args.show_heatmaps:
+                        save_heatmap(probs, x, decode, step, args.out_dir, args.last_k_tokens)
+
+                output_line = decode(x[0].tolist()).replace(separator_token, " ") if separator_token else decode(x[0].tolist())
                 print("[bold green]" + output_line)
                 print('---------------')
                 if args.sample_file:
