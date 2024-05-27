@@ -51,6 +51,19 @@ def save_heatmap(probs, idx, decode, step, out_dir, last_k_tokens):
     plt.savefig(out_path)
     plt.close()
 
+def interactive_generation(model, start_ids, device, max_new_tokens, temperature, top_k, stop_string, decode, encode):
+    x = torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...]
+    while True:
+        x, generated_text = model.generate_with_stop(x, max_new_tokens, stop_string, decode, temperature, top_k)
+        print("[bold green]" + generated_text)
+
+        user_input = input("User input (or 'exit' to quit): ")
+        if user_input.lower() == 'exit':
+            break
+
+        # Append the user input directly after the stop string
+        x = torch.cat((x, torch.tensor(encode(user_input), dtype=torch.long, device=device)[None, ...]), dim=1)
+
 args = parseargs()
 # -----------------------------------------------------------------------------
 
