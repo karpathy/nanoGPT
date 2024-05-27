@@ -30,17 +30,28 @@ def parseargs():
     parser.add_argument('--stop_string', type=str, default='~W', help="fixed string to stop generation and allow user input")
     parser.add_argument('--show_heatmaps', default=False, action=argparse.BooleanOptionalAction, help="show heatmaps of top-k choices for each token")
     parser.add_argument('--last_k_tokens', type=int, default=10, help="number of last tokens to display in heatmaps")
+    parser.add_argument('--chart_type', type=str, default='heatmap', choices=['heatmap', 'barchart'], help="type of chart to display: 'heatmap' or 'barchart'")
 
     return parser.parse_args()
 
-def save_heatmap(probs, idx, decode, step, out_dir, last_k_tokens):
+def save_chart(probs, idx, decode, step, out_dir, last_k_tokens, chart_type, selected_token):
     top_k_probs, top_k_indices = torch.topk(probs, k=probs.size(-1))
     top_k_tokens = [decode([top_k_indices[0, i].item()]) for i in range(top_k_indices.size(1))]
-    top_k_tokens_annot = np.array(top_k_tokens).reshape(top_k_probs.size())
 
     plt.figure(figsize=(10, 6))
-    sns.heatmap(top_k_probs.cpu().numpy(), annot=top_k_tokens_annot, fmt='', cmap='viridis')
-    plt.title(f"Step {step}: Top-k Token Probabilities")
+    
+    if chart_type == 'heatmap':
+        sns.heatmap(top_k_probs.cpu().numpy().reshape(1, -1), annot=np.array(top_k_tokens).reshape(1, -1), fmt='', cmap='viridis')
+        plt.title(f"Step {step}: Top-k Token Probabilities")
+    elif chart_type == 'barchart':
+        colors = sns.color_palette('viridis', len(top_k_tokens))
+        bars = plt.bar(top_k_tokens, top_k_probs.cpu().numpy().flatten(), color=colors)
+        plt.title(f"Step {step}: Top-k Token Probabilities")
+        plt.xticks(rotation=90)
+        for bar, token in zip(bars, top_k_tokens):
+            if token == selected_token:
+                bar.set_edgecolor('red')
+                bar.set_linewidth(2)
     
     last_tokens = decode(idx[0, -last_k_tokens:].tolist())
     plt.xlabel(f"Last {last_k_tokens} Tokens: {last_tokens}")
@@ -152,7 +163,8 @@ else:
                     x = torch.cat((x, idx_next), dim=1)
 
                     if args.show_heatmaps:
-                        save_heatmap(probs, x, decode, step, args.out_dir, args.last_k_tokens)
+                        selected_token = decode([idx_next[0].item()])
+                        save_chart(probs, x, decode, step, args.out_dir, args.last_k_tokens, args.chart_type, selected_token)
 
                 output_line = decode(x[0].tolist()).replace(separator_token, " ") if separator_token else decode(x[0].tolist())
                 print("[bold green]" + output_line)
