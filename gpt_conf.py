@@ -8,6 +8,7 @@ class GPTConfig:
     n_head: int = 12
     n_kv_group: int = 12
     n_embd: int = 768
+    n_embd_main: int = 768
     dropout: float = 0.0
     window_size: int = 128
     gate: bool = False

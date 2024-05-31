@@ -82,7 +82,7 @@ class CausalSelfAttention(nn.Module):
 
     def __init__(self, config, fire_pos_enc=None):
         super().__init__()
-        assert config.n_embd % config.n_head == 0
+        assert config.n_embd_main % config.n_head == 0
         # key, query, value projections for all heads, but in a batch
         self.c_attn_q = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
 
@@ -336,7 +336,7 @@ class GPT(nn.Module):
 
         self.config = config
 
-        # Initialize and set ouptut normalization (e.g. rmsnorm)
+        # Initialize and set output normalization (e.g., rmsnorm)
         self.norm_variant_output = norm_dictionary[config.norm_variant_output](config)
 
         # Shared Parameters MLP
@@ -352,27 +352,27 @@ class GPT(nn.Module):
             ln_f = self.norm_variant_output,
         ))
 
+        # Add a new linear layer to scale n_embd to n_embd_main
+        self.n_embd_main = config.n_embd_main
+        self.scale_linear = nn.Linear(config.n_embd, self.n_embd_main)
+
         # Select softmax variant for output layer
         self.softmax_variant_output = config.softmax_variant_output
         if self.softmax_variant_output != "softmax":
             self.softmax_layer_output = softmax_dictionary[config.softmax_variant_output](config)
 
-        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
-        # with weight tying when using torch.compile() some warnings get generated:
-        # "UserWarning: functional_call was passed multiple values for tied weights.
-        # This behavior is deprecated and will be an error in future versions"
-        # not 100% sure what this is, so far seems to be harmless. TODO investigate
-        self.transformer.wte.weight = self.lm_head.weight # https://paperswithcode.com/method/weight-tying
+        self.lm_head = nn.Linear(self.n_embd_main, config.vocab_size, bias=False)
+        self.transformer.wte.weight = self.lm_head.weight  # https://paperswithcode.com/method/weight-tying
 
-        # init all weights
+        # Initialize all weights
         self.apply(self._init_weights)
-        # apply special scaled init to the residual projections, per GPT-2 paper
+        # Apply special scaled init to the residual projections, per GPT-2 paper
         for pn, p in self.named_parameters():
             if pn.endswith('c_proj.weight'):
-                torch.nn.init.normal_(p, mean=0.0, std=0.02/math.sqrt(2 * config.n_layer))
+                torch.nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layer))
 
-        # report number of parameters
-        print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
+        # Report the number of parameters
+        print("number of parameters: %.2fM" % (self.get_num_params() / 1e6,))
 
     def get_num_params(self, non_embedding=True):
         """
@@ -398,30 +398,34 @@ class GPT(nn.Module):
         device = idx.device
         b, t = idx.size()
         assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
-        pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
+        pos = torch.arange(0, t, dtype=torch.long, device=device)  # shape (t)
 
-        # forward the GPT model itself
-        tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
+        # Forward the GPT model itself
+        tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
         x = None
         if self.config.use_abs_pos_embeddings:
-          pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
-          x = self.transformer.drop(tok_emb + pos_emb)
+            pos_emb = self.transformer.wpe(pos)  # position embeddings of shape (t, n_embd)
+            x = self.transformer.drop(tok_emb + pos_emb)
         else:
-          x = self.transformer.drop(tok_emb)
+            x = self.transformer.drop(tok_emb)
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)
 
+        # Pass through the new linear layer
+        x = self.scale_linear(x)
+
         if targets is not None:
-            # if we are given some desired targets also calculate the loss
+            # If we are given some desired targets, also calculate the loss
             logits = self.lm_head(x)
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
         else:
-            # inference-time mini-optimization: only forward the lm_head on the very last position
-            logits = self.lm_head(x[:, [-1], :]) # note: using list [-1] to preserve the time dim
+            # Inference-time mini-optimization: only forward the lm_head on the very last position
+            logits = self.lm_head(x[:, [-1], :])  # Note: using list [-1] to preserve the time dim
             loss = None
 
         return logits, loss
+
 
     def crop_block_size(self, block_size):
         # model surgery to decrease the block size if necessary
