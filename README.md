@@ -1,3 +1,6 @@
+# sign nanoGPT
+
+only train.py is modified, ctrl+f "ayy"
 
 # nanoGPT
 
