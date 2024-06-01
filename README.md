@@ -2,6 +2,16 @@
 
 only train.py is modified, ctrl+f "ayy"
 
+adamw:
+
+step 5000: train loss 0.6171, val loss 1.6973
+iter 5000: loss 0.8138, time 31669.98ms, mfu 4.02%
+
+sign descent:
+
+step 5000: train loss 1.0883, val loss 1.4821
+iter 5000: loss 1.1968, time 34425.73ms, mfu 3.27%
+
 # nanoGPT
 
 ![nanoGPT](assets/nanogpt.jpg)
