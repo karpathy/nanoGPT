@@ -26,6 +26,8 @@ sign descent:
 step 5000: train loss 1.0963, val loss 1.4689
 iter 5000: loss 1.2122, time 30964.94ms, mfu 4.05%
 
+![sign_nanoGPT](signs.png)
+
 # nanoGPT
 
 ![nanoGPT](assets/nanogpt.jpg)
