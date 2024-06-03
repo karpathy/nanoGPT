@@ -300,6 +300,7 @@ class Block(nn.Module):
 
         self.use_post_ln = config.use_post_ln
         self.use_parallel_mlp = config.use_parallel_mlp
+        self.gradient_checkpointing = config.gradient_checkpointing
 
         # Allow for sharing attn between blocks
         if attn is None:
@@ -331,7 +332,7 @@ class Block(nn.Module):
                     x = x + self.mlp(self.ln_2(x))
             return x
 
-        if x.requires_grad:
+        if self.gradient_checkpointing and x.requires_grad:
             return checkpoint.checkpoint(custom_forward, x, use_reentrant=False)
         else:
             return custom_forward(x)
@@ -421,6 +422,12 @@ class GPT(nn.Module):
             x = block(x)
 
         x.requires_grad_(True)  # Ensure requires_grad is True
+
+        for block in self.transformer.h:
+            if self.config.gradient_checkpointing:
+                x = checkpoint.checkpoint(block, x, use_reentrant=False)
+            else:
+                x = block(x)
 
         for block in self.transformer.h:
             x = checkpoint.checkpoint(block, x, use_reentrant=False)
