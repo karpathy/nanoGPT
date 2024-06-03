@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import datetime
 import numpy as np
+import json
 
 def parseargs():
     parser = argparse.ArgumentParser(description='')
@@ -31,6 +32,8 @@ def parseargs():
     parser.add_argument('--show_heatmaps', default=False, action=argparse.BooleanOptionalAction, help="show heatmaps of top-k choices for each token")
     parser.add_argument('--last_k_tokens', type=int, default=10, help="number of last tokens to display in heatmaps")
     parser.add_argument('--chart_type', type=str, default='heatmap', choices=['heatmap', 'barchart'], help="type of chart to display: 'heatmap' or 'barchart'")
+    parser.add_argument('--block_size', type=int, default=None, help="block size for context length, default is model's block size")
+    parser.add_argument('--sym_rot_num_angles', type=int, default=None, help="new symmetrical rotary embedding number of angles")
 
     return parser.parse_args()
 
@@ -39,7 +42,7 @@ def save_chart(probs, idx, decode, step, out_dir, last_k_tokens, chart_type, sel
     top_k_tokens = [decode([top_k_indices[0, i].item()]) for i in range(top_k_indices.size(1))]
 
     plt.figure(figsize=(10, 6))
-    
+
     if chart_type == 'heatmap':
         sns.heatmap(top_k_probs.cpu().numpy().reshape(1, -1), annot=np.array(top_k_tokens).reshape(1, -1), fmt='', cmap='viridis')
         plt.title(f"Step {step}: Top-k Token Probabilities")
@@ -52,10 +55,10 @@ def save_chart(probs, idx, decode, step, out_dir, last_k_tokens, chart_type, sel
             if token == selected_token:
                 bar.set_edgecolor('red')
                 bar.set_linewidth(2)
-    
+
     last_tokens = decode(idx[0, -last_k_tokens:].tolist())
     plt.xlabel(f"Last {last_k_tokens} Tokens: {last_tokens}")
-    
+
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_path = os.path.join(out_dir, f"{timestamp}_step{step}.png")
     os.makedirs(out_dir, exist_ok=True)
@@ -75,6 +78,10 @@ def interactive_generation(model, start_ids, device, max_new_tokens, temperature
         # Append the user input directly after the stop string
         x = torch.cat((x, torch.tensor(encode(user_input), dtype=torch.long, device=device)[None, ...]), dim=1)
 
+def save_args(args, out_dir):
+    with open(os.path.join(out_dir, 'args.json'), 'w') as f:
+        json.dump(vars(args), f, indent=4)
+
 args = parseargs()
 # -----------------------------------------------------------------------------
 
@@ -85,6 +92,14 @@ torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 device_type = 'cuda' if 'cuda' in args.device else 'cpu' # for later use in torch.autocast
 ptdtype = {'bfloat16': torch.bfloat16, 'float16': torch.float16, 'float32': torch.float32}[args.dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
+
+# Create timestamped directory within out_dir
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+out_dir = os.path.join(args.out_dir, timestamp)
+os.makedirs(out_dir, exist_ok=True)
+
+# Save argparse settings
+save_args(args, out_dir)
 
 # model
 if args.init_from == 'resume':
@@ -109,6 +124,14 @@ model.eval()
 model.to(args.device)
 if args.compile:
     model = torch.compile(model) # requires PyTorch 2.0 (optional)
+
+# Update block size if specified
+if args.block_size:
+    model.update_block_size(args.block_size)
+
+# Update num_angles if specified
+if args.sym_rot_num_angles:
+    model.update_num_angles(args.sym_rot_num_angles)
 
 # look for the meta pickle in case it is available in the dataset folder
 load_meta = False
@@ -151,8 +174,9 @@ else:
     with torch.no_grad():
         with ctx:
             for k in range(args.num_samples):
+                block_size = args.block_size if args.block_size else model.config.block_size
                 for step in range(args.max_new_tokens):
-                    idx_cond = x if x.size(1) <= model.config.block_size else x[:, -model.config.block_size:]
+                    idx_cond = x if x.size(1) <= block_size else x[:, -block_size:]
                     logits, _ = model(idx_cond)
                     logits = logits[:, -1, :] / args.temperature
                     if args.top_k is not None:
@@ -164,7 +188,7 @@ else:
 
                     if args.show_heatmaps:
                         selected_token = decode([idx_next[0].item()])
-                        save_chart(probs, x, decode, step, args.out_dir, args.last_k_tokens, args.chart_type, selected_token)
+                        save_chart(probs, x, decode, step, out_dir, args.last_k_tokens, args.chart_type, selected_token)
 
                 output_line = decode(x[0].tolist()).replace(separator_token, " ") if separator_token else decode(x[0].tolist())
                 print("[bold green]" + output_line)

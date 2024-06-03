@@ -31,40 +31,48 @@ class RotaryEmbedding(nn.Module):
 
         return x
 
+
 class SymmetricalOverlapAngularPositions(nn.Module):
-    """ Soap is a fresh and 'clean' implementation of Rotary Embeddings
+    """ SOAP is a fresh and 'clean' implementation of Rotary Embeddings.
 
-    Symmetries and rotational overlap to optimize storage requiremnets.
+    Symmetries and rotational overlap to optimize storage requirements.
 
-    Using symmetries, reduces the cache size in specialized hardware
+    Using symmetries reduces the cache size in specialized hardware
     by a factor of 8. (x <-> y symmetries, x-axis symmetries, y-axis symmetries)
 
-    Applies same rotation to each pair of elements per vector.
+    Applies the same rotation to each pair of elements per vector.
 
-    Likely to generalize with minimal finetuning via interpolation.
+    Likely to generalize with minimal fine-tuning via interpolation.
     """
-    def __init__(self, config, size=None, num_angles=256):
+    def __init__(self, config, size=None, num_angles=None):
         super().__init__()
 
         self.dim = size
-        assert self.dim % 2 == 0, "Target length dim of must be even for rotary embeddings"
+        assert self.dim % 2 == 0, "Target length dim must be even for rotary embeddings"
 
         self.num_angles = num_angles
-
-        # Create a list of angles, from zero up to, not including 2*pi
-        angles = torch.linspace(0, 2 * math.pi - ( 2 * math.pi/self.num_angles), steps=self.num_angles)
-        self.register_buffer('angles', angles)
-
         self.first_pass = True
+        self.angles = None
+
+    def _generate_angles(self, num_angles, device):
+        """Generate angles from 0 to 2*pi based on the number of angles."""
+        return torch.linspace(0, 2 * math.pi - (2 * math.pi / num_angles), steps=num_angles, device=device)
+
+    def update_num_angles(self, num_angles, device):
+        """Update the number of angles and regenerate angles tensor if needed."""
+        if self.num_angles != num_angles:
+            self.num_angles = num_angles
+            self.angles = self._generate_angles(num_angles, device)
 
     def forward(self, x):
+        if self.first_pass:
+            self.angles = self._generate_angles(self.num_angles, x.device)
+            self.first_pass = False
+
         seq_len = x.shape[-2]
         device = x.device
 
-        # utilize 0 for first pass
-        if not self.first_pass:
-            self.angles = torch.roll(self.angles, shifts=1, dims=0)
-        self.first_pass = False
+        self.angles = torch.roll(self.angles, shifts=1, dims=0)
 
         # Create index list, wrap around as necessary
         angle_indices = torch.arange(seq_len, device=device) % self.num_angles
@@ -72,7 +80,7 @@ class SymmetricalOverlapAngularPositions(nn.Module):
         # Assign angles
         selected_angles = self.angles[angle_indices]
 
-        # Run angles through sine and cosines
+        # Run angles through sine and cosine
         sin_angles = selected_angles.sin().unsqueeze(-1).repeat(1, self.dim // 2)
         cos_angles = selected_angles.cos().unsqueeze(-1).repeat(1, self.dim // 2)
 
@@ -85,8 +93,8 @@ class SymmetricalOverlapAngularPositions(nn.Module):
 
         # Reassemble rotated components
         x_combined = torch.empty_like(x, device=device)
-        x_combined[... ,::2], x_combined[..., 1::2] = x_rotated_even, x_rotated_odd
         # TODO shorten x_combined to manually set length, then replace corresponding portion of original x matrix to implement shortrope
+        x_combined[..., ::2], x_combined[..., 1::2] = x_rotated_even, x_rotated_odd
 
         return x_combined
 

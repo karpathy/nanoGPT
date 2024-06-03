@@ -121,9 +121,11 @@ class CausalSelfAttention(nn.Module):
         self.rotary_emb_k = None
         if config.use_rotary_embeddings:
             # TODO update variant name after completing rope and shortrope updates
+            # TODO Add shortrope to symmetrical rope
             if config.rope_variant == "rope":
-                self.rotary_emb_q = SymmetricalOverlapAngularPositions(config, size=config.n_embd)
-                self.rotary_emb_k = SymmetricalOverlapAngularPositions(config, size=self.kv_dim, num_angles=256)
+                self.sym_rot_num_angles = config.sym_rot_num_angles
+                self.rotary_emb_q = SymmetricalOverlapAngularPositions(config, size=config.n_embd, num_angles=self.sym_rot_num_angles)
+                self.rotary_emb_k = SymmetricalOverlapAngularPositions(config, size=self.kv_dim, num_angles=self.sym_rot_num_angles)
             # TODO update rope and shortrope to accomodate new GQA additions
             # if config.rope_variant == "rope":
             #     self.rotary_emb_q = RotaryEmbedding(config, size=config.n_embd)
@@ -220,7 +222,7 @@ class CausalSelfAttention(nn.Module):
                 att = att.masked_fill(window_mask == 0, float('-inf'))
             else:
                 # regular lower triangle attention
-                att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+                att = att.masked_fill(self.bias[:,:,:T,:T].to(x.device) == 0, float('-inf'))
 
             # fire position embeddings
             if self.use_fire_embeddings is not None:
@@ -386,6 +388,15 @@ class GPT(nn.Module):
             n_params -= self.transformer.wpe.weight.numel()
         return n_params
 
+    def update_block_size(self, new_block_size):
+        # Function to increase block size dynamically
+        if new_block_size > self.config.block_size:
+            self.config.block_size = new_block_size
+            self.transformer.wpe = nn.Embedding(new_block_size, self.config.n_embd)
+            for block in self.transformer.h:
+                if hasattr(block.attn, 'bias'):
+                    block.attn.bias = torch.tril(torch.ones(new_block_size, new_block_size)).view(1, 1, new_block_size, new_block_size)
+
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
@@ -394,16 +405,25 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
+    def update_num_angles(self, num_angles):
+        """Update the number of angles for rotary embeddings in all attention layers."""
+        device = next(self.parameters()).device
+        for block in self.transformer.h:
+            if hasattr(block.attn, 'rotary_emb_q') and hasattr(block.attn, 'rotary_emb_k'):
+                block.attn.rotary_emb_q.update_num_angles(num_angles, device)
+                block.attn.rotary_emb_k.update_num_angles(num_angles, device)
+
+
     def forward(self, idx, targets=None):
         device = idx.device
         b, t = idx.size()
-        assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
-        pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
+        # assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
 
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
         x = None
         if self.config.use_abs_pos_embeddings:
+          pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
           pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
           x = self.transformer.drop(tok_emb + pos_emb)
         else:
