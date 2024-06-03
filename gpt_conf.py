@@ -14,7 +14,7 @@ class GPTConfig:
 
     # Training options
     ## Gradient Checkpointing - More memory efficient (can do long contexts), but is slower
-    gradient_checkpointing: bool = False
+    use_gradient_checkpointing: bool = False
 
     # MLP Options
     use_parallel_mlp: bool = False

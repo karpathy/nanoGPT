@@ -206,7 +206,7 @@ def parse_args():
     model_group.add_argument('--div_by_seq_len', default=False, action=argparse.BooleanOptionalAction)
 
     # Gradient Checkpointing
-    training_group.add_argument('--gradient_checkpointing', default=False, action=argparse.BooleanOptionalAction, help="Memory efficient training, but takes longer time to train due to trading compute time for memory efficiency")
+    training_group.add_argument('--use_gradient_checkpointing', default=False, action=argparse.BooleanOptionalAction, help="Memory efficient training, but takes longer time to train due to trading compute time for memory efficiency")
 
     # Optimizer args
     training_group.add_argument('--max_iters', default=3500, type=int)
@@ -349,7 +349,7 @@ class Trainer:
         # TODO only add if they are defined from the argparse
         self.model_args = {action.dest: getattr(self.args, action.dest) for action in self.model_group._group_actions}
         self.model_args['vocab_size'] = None
-        self.model_args['gradient_checkpointing'] = self.args.gradient_checkpointing
+        self.model_args['use_gradient_checkpointing'] = self.args.use_gradient_checkpointing
 
         if self.args.init_from == 'scratch':
             self.model_args['vocab_size'] = self.get_vocab_size_from_meta()
