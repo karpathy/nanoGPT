@@ -206,7 +206,7 @@ def parse_args():
     model_group.add_argument('--div_by_seq_len', default=False, action=argparse.BooleanOptionalAction)
 
     # Gradient Checkpointing
-    training_group.add_argument('--use_gradient_checkpointing', default=False, action=argparse.BooleanOptionalAction, help="Memory efficient training, but takes longer time to train due to trading compute time for memory efficiency")
+    training_group.add_argument('--use_gradient_checkpointing', default=False, action=argparse.BooleanOptionalAction, help="Memory efficient training, but takes longer time to train due to trading compute time for memory efficiency. For best memory tradeoff omit the --compile flag. For medium memory tradeoff add --compile.")
 
     # Optimizer args
     training_group.add_argument('--max_iters', default=3500, type=int)
