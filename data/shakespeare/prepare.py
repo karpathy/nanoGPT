@@ -34,8 +34,9 @@ if not os.path.exists(input_file_path):
 with open(input_file_path, 'r', encoding='utf-8') as f:
     data = f.read()
 
-data = preprocess_text(data)
-data = ' '.join(data) # concatenate the words back together
+# original_data = data
+# data = preprocess_text(data)
+# data = ' '.join(data) # concatenate the words back together
 n = len(data)
 train_data = data[:int(n*0.9)]
 val_data = data[int(n*0.9):]
