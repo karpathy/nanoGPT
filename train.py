@@ -62,8 +62,13 @@ def parse_args():
     model_group.add_argument('--gate', default=False, action=argparse.BooleanOptionalAction, help="option for gated attention see https://arxiv.org/abs/2306.12929")
 
     ## MLP Options
-    model_group.add_argument('--use_swiglu', default=False, action=argparse.BooleanOptionalAction)
     model_group.add_argument('--use_parallel_mlp', default=False, action=argparse.BooleanOptionalAction)
+    model_group.add_argument("--mlp_variant", type=str, default="mlp", choices=["mlp", "kan", "swiglu"], help="MLP variation type")
+
+    ## KAN Options
+    model_group.add_argument("--kan_poly_order", type=int, default=3, help="Order of KAN non-linearity")
+    model_group.add_argument("--kan_base_activation", type=str, default="silu", help="initial KAN activation")
+    model_group.add_argument("--kan_middle_layers", type=int, nargs='+', help="List of integers", default=[])
 
     # Shared Parameter Settings
     model_group.add_argument('--shared_mlp_size', default=1, type=int, help="every 'k' contiguous blocks of mlp are shared")
@@ -113,6 +118,7 @@ def parse_args():
             "bitlinear",
             "bitlinear_1p58",
             "bitlinear_optimized",
+            "kan",
         ],
     )
 

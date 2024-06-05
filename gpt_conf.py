@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import List
 
 @dataclass
 class GPTConfig:
@@ -18,7 +19,12 @@ class GPTConfig:
 
     # MLP Options
     use_parallel_mlp: bool = False
-    use_swiglu: bool = False
+    mlp_variant: str = "mlp"
+
+    ## KAN Option
+    kan_poly_order: int = 3
+    kan_base_activation: str = "silu"
+    kan_middle_layers: List[int] = field(default_factory=lambda: [])
 
     # Shared parameters
     # MLP
