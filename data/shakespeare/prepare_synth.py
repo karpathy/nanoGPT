@@ -15,6 +15,11 @@ def preprocess_text(text):
     return words
 
 
+def preprocess_text(text):
+    text = text.lower()
+    words = re.findall(r'\b\w+\b|:', text)
+    return words
+
 def find_unique_words(text):
     words = preprocess_text(text)
     
@@ -34,8 +39,8 @@ if not os.path.exists(input_file_path):
 with open(input_file_path, 'r', encoding='utf-8') as f:
     data = f.read()
 
-data = preprocess_text(data)
-data = ' '.join(data) # concatenate the words back together
+# data = preprocess_text(data)
+# data = ' '.join(data) # concatenate the words back together
 n = len(data)
 train_data = data[:int(n*0.9)]
 val_data = data[int(n*0.9):]
