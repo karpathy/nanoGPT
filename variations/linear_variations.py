@@ -309,21 +309,25 @@ class KAL_Net(nn.Module):
         x = x.to(self.base_weights[0].device)
         batch_size, seq_len, feature_dim = x.size()
 
-        for i, (base_weight, poly_weight, layer_norm) in enumerate(zip(self.base_weights, self.poly_weights, self.layer_norms)):
+        for base_weight, poly_weight, layer_norm in zip(self.base_weights, self.poly_weights, self.layer_norms):
             base_output = F.linear(self.base_activation(x), base_weight)
 
             # Normalize x to range [-1, 1] for Legendre polynomial computation
-            x_normalized = 2 * (x - x.min(dim=1, keepdim=True)[0]) / (x.max(dim=1, keepdim=True)[0] - x.min(dim=1, keepdim=True)[0]) - 1
+            x_min = x.min(dim=1, keepdim=True)[0]
+            x_max = x.max(dim=1, keepdim=True)[0]
+            x_range = torch.clamp(x_max - x_min, min=1e-6)  # Avoid division by zero
+            x_normalized = 2 * (x - x_min) / x_range - 1
             legendre_basis = self.compute_legendre_polynomials(x_normalized, self.polynomial_order)
             legendre_basis = legendre_basis.view(batch_size * seq_len, -1)  # Flatten for linear layer
 
             poly_output = F.linear(legendre_basis, poly_weight)
             poly_output = poly_output.view(batch_size, seq_len, -1)  # Reshape back to match base_output
 
-            x = self.base_activation(layer_norm(base_output + poly_output))
+            combined_output = base_output + poly_output
+
+            x = self.base_activation(layer_norm(combined_output))
 
         return x
-
 
 linear_dictionary = {
     "linear": WrappedLinear,
