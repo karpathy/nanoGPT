@@ -429,12 +429,7 @@ class GPT(nn.Module):
             else:
                 x = block(x)
 
-        for block in self.transformer.h:
-            x = checkpoint.checkpoint(block, x, use_reentrant=False)
-
         x = self.transformer.ln_f(x)
-
-
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
