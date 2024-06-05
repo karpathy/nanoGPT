@@ -19,6 +19,9 @@ from torch.nn import functional as F
 # Config
 from gpt_conf import GPTConfig
 
+# Checkpointing
+import torch.utils.checkpoint as checkpoint
+
 # Variations
 from variations.softmax_variations import softmax_dictionary, Softermax, ConSmax, ConSmaxQuan, SaturatingConSmax, Strongermax, Polymax, SigSoftmax, ExpPolymax, Softplus, Squareplus
 from variations.norm_variations import norm_dictionary, LayerNorm, RMSNorm, pRMSNorm, kRMSNorm
@@ -284,8 +287,8 @@ class MLP(nn.Module):
         x = self.dropout(x)
         return x
 
-class Block(nn.Module):
 
+class Block(nn.Module):
     def __init__(self, config, mlp=None, attn=None):
         super().__init__()
 
@@ -297,35 +300,42 @@ class Block(nn.Module):
 
         self.use_post_ln = config.use_post_ln
         self.use_parallel_mlp = config.use_parallel_mlp
+        self.use_gradient_checkpointing = config.use_gradient_checkpointing
 
         # Allow for sharing attn between blocks
-        if attn == None:
+        if attn is None:
             self.attn = CausalSelfAttention(config)
         else:
             self.attn = attn
 
         # Allow for sharing mlp between blocks
-        if mlp == None:
+        if mlp is None:
             self.mlp = MLP(config)
         else:
             self.mlp = mlp
 
     def forward(self, x):
-        if self.use_post_ln:
-            if self.use_parallel_mlp:
-                x = self.ln_1(x + self.attn(x) + self.mlp(x))
+        def custom_forward(*inputs):
+            x = inputs[0]
+            if self.use_post_ln:
+                if self.use_parallel_mlp:
+                    x = self.ln_1(x + self.attn(x) + self.mlp(x))
+                else:
+                    x = self.ln_1(x + self.attn(x))
+                    x = self.ln_2(x + self.mlp(x))
             else:
-                x = self.ln_1(x + self.attn(x))
-                x = self.ln_2(x + self.mlp(x))
-        else:
-            if self.use_parallel_mlp:
-                ln_1 = self.ln_1(x)
-                x = x + self.attn(ln_1) + self.mlp(ln_1)
-            else:
-                x = x + self.attn(self.ln_1(x))
-                x = x + self.mlp(self.ln_2(x))
-        return x
+                if self.use_parallel_mlp:
+                    ln_1 = self.ln_1(x)
+                    x = x + self.attn(ln_1) + self.mlp(ln_1)
+                else:
+                    x = x + self.attn(self.ln_1(x))
+                    x = x + self.mlp(self.ln_2(x))
+            return x
 
+        if self.use_gradient_checkpointing and x.requires_grad:
+            return checkpoint.checkpoint(custom_forward, x, use_reentrant=False)
+        else:
+            return custom_forward(x)
 
 class GPT(nn.Module):
 
@@ -410,6 +420,15 @@ class GPT(nn.Module):
           x = self.transformer.drop(tok_emb)
         for block in self.transformer.h:
             x = block(x)
+
+        x.requires_grad_(True)  # Ensure requires_grad is True
+
+        for block in self.transformer.h:
+            if self.config.use_gradient_checkpointing:
+                x = checkpoint.checkpoint(block, x, use_reentrant=False)
+            else:
+                x = block(x)
+
         x = self.transformer.ln_f(x)
 
         if targets is not None:
