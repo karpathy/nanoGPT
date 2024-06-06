@@ -11,7 +11,7 @@ Because the code is so simple, it is very easy to hack to your needs, train new 
 
 ## create a virtual environment
 ```sh
-python -m venv nanoenv python=3.10.12
+python -m venv nanoenv
 source nanoenv/bin/activate
 ```
 
