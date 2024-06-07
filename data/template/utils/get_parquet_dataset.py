@@ -113,6 +113,7 @@ def main(
     required_key,
     skip_empty,
     exclude,
+    append,
 ):
     parquet_links = find_parquet_links(url)
     download_dir = "./downloaded_parquets"
@@ -120,7 +121,8 @@ def main(
     os.makedirs(download_dir, exist_ok=True)
     os.makedirs(json_dir, exist_ok=True)
 
-    open(output_text_file, "w").close()
+    if not append:
+        open(output_text_file, "w").close()
 
     for link in parquet_links:
         file_name = link.split("/")[-1].split("?")[0]  # Extract filename
@@ -202,6 +204,13 @@ if __name__ == "__main__":
         action=argparse.BooleanOptionalAction,
         help="Skip any item which is the empty string",
     )
+    parser.add_argument(
+        "-a",
+        "--append",
+        default=False,
+        action=argparse.BooleanOptionalAction,
+        help="append to the current input.txt file",
+    )
     args = parser.parse_args()
     main(
         args.url,
@@ -211,4 +220,5 @@ if __name__ == "__main__":
         args.required_key,
         args.skip_empty,
         args.exclude,
+        args.append,
     )

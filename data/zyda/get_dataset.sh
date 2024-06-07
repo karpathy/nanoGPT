@@ -11,6 +11,7 @@
 
 # Add url with dataset here:
 base_url="https://huggingface.co/datasets/Zyphra/Zyda/tree/main/data/zyda_no_starcoder/"
+# starcoder_base_url="https://huggingface.co/datasets/Zyphra/Zyda/tree/main/data/zyda_starcoder/"
 
 # Zyda without starcoder -- may take around 3TB of space
 datasets=(
@@ -22,18 +23,30 @@ datasets=(
     "zyda_slimpajama"
 )
 
-# uncomment and fill in if url has json datasets
-# Note: the $'\n' syntax allows for special characters like \n
-# python3 ./utils/get_json_dataset.py \
-#   --url "${url}" \
-#   --include_keys "instruction" "response" \
-#   --value_prefix $'#U:\n' $'#B:\n'
+# Uncomment for Starcoder
+# starcoder_datasets=(
+#     "zyda_starcoder-git-commits-cleaned"
+#     "zyda_starcoder-github-issues-filtered-structured"
+#     "zyda_starcoder-jupyter-structured-clean-dedup"
+#     "zyda_starcoder-languages"
+# )
 
 for dataset in "${datasets[@]}" ; do
   echo "$dataset"
   python3 ./utils/get_parquet_dataset.py \
     --url "${base_url}${dataset}" \
     --include_keys "text" \
-    --value_prefix ""
+    --value_prefix "" \
+    --append
 done
+
+# Uncomment for starcoder
+# for dataset in "${starcoder_datasets[@]}" ; do
+#   echo "$dataset"
+#   python3 ./utils/get_parquet_dataset.py \
+#     --url "${starcoder_base_url}${dataset}" \
+#     --include_keys "text" \
+#     --value_prefix "" \
+#     --append
+# done
 
