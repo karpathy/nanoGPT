@@ -115,34 +115,46 @@ def main(
     required_key,
     skip_empty,
     exclude,
+    direct_json_input
 ):
-    file_links = find_file_links(url)
-    download_dir = "./downloaded_jsons"
-    json_dir = "./json_output"
-    os.makedirs(download_dir, exist_ok=True)
-    os.makedirs(json_dir, exist_ok=True)
-
-    json_paths = []
-    for link in file_links:
-        file_name = link.split("/")[-1].split("?")[0]
-        file_path = os.path.join(download_dir, file_name)
-        if not os.path.exists(file_path):
-            download_file(link, file_path)
-        json_paths.append(file_path)
-
-    concatenated_json_path = os.path.join(json_dir, "concatenated.json")
-    concatenate_json_files(json_paths, concatenated_json_path)
-
-    if not no_output_text:
+    if direct_json_input is not None:
         emit_json_contents(
-            concatenated_json_path,
+            direct_json_input,
             output_text_file,
             include_keys,
             value_prefixes,
             required_key,
             skip_empty,
             exclude,
-        )
+            )
+    else:
+        file_links = find_file_links(url)
+        download_dir = "./downloaded_jsons"
+        json_dir = "./json_output"
+        os.makedirs(download_dir, exist_ok=True)
+        os.makedirs(json_dir, exist_ok=True)
+
+        json_paths = []
+        for link in file_links:
+            file_name = link.split("/")[-1].split("?")[0]
+            file_path = os.path.join(download_dir, file_name)
+            if not os.path.exists(file_path):
+                download_file(link, file_path)
+            json_paths.append(file_path)
+
+        concatenated_json_path = os.path.join(json_dir, "concatenated.json")
+        concatenate_json_files(json_paths, concatenated_json_path)
+
+        if not no_output_text:
+            emit_json_contents(
+                concatenated_json_path,
+                output_text_file,
+                include_keys,
+                value_prefixes,
+                required_key,
+                skip_empty,
+                exclude,
+            )
 
 
 if __name__ == "__main__":
@@ -150,7 +162,7 @@ if __name__ == "__main__":
         description="Scrape and convert JSON files from URL and save their contents to a text file."
     )
     parser.add_argument(
-        "--url", type=str, required=True, help="URL to scrape for JSON files."
+        "--url", type=str, help="URL to scrape for JSON files."
     )
     parser.add_argument(
         "-o",
@@ -199,6 +211,13 @@ if __name__ == "__main__":
         action="store_true",
         help="Skip any item which is an empty string.",
     )
+    parser.add_argument(
+        "-j",
+        "--direct_json_input",
+        type=str,
+        default=None,
+        help="skip download and process with manual json or jsonl input",
+    )
 
     args = parser.parse_args()
     main(
@@ -210,4 +229,5 @@ if __name__ == "__main__":
         args.required_key,
         args.skip_empty,
         args.exclude,
+        args.direct_json_input,
     )
