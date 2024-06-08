@@ -144,8 +144,8 @@ class RWKV_TimeMix_x051a(nn.Module):
         intra_chunk = ((rr @ kk.mT) * w_mask + u_diag) @ vv
         y = inter_chunk + intra_chunk
 
-        y = y.transpose(1, 2).contiguous().view(B * T, C)
-        y = self.ln_x(y).view(B, T, C) * g
+        y = y.view(v.shape).transpose(1, 2).contiguous().view(B, T, C)
+        y = self.ln_x(y)
 
         # output projection
         y = self.dropout(self.output(y))
