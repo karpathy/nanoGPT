@@ -1,12 +1,12 @@
 import argparse
 import random
 import sys
+from tqdm import tqdm
 
 class RubiksCube:
     def __init__(self, condensed_output=False):
-
-        # whather to print condensed form or cross format
-        self.condensed=condensed_output
+        # whether to print condensed form or cross format
+        self.condensed = condensed_output
 
         self.faces = {
             'U': [['W'] * 3 for _ in range(3)],
@@ -107,7 +107,7 @@ class RubiksCube:
 
     def shuffle(self, k):
         moves = list(self.moves.keys())
-        for _ in range(k):
+        for _ in tqdm(range(k), desc="Shuffling"):
             move = random.choice(moves)
             self.moves[move]()
 
@@ -153,7 +153,7 @@ def main():
         output.write("Initial solved cube:\n")
     cube.print_cube(output)
 
-    for _ in range(args.moves):
+    for _ in tqdm(range(args.moves), desc="Applying moves"):
         cube.random_move(output)
 
     if args.output:
