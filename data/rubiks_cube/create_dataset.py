@@ -138,6 +138,7 @@ def main():
     parser.add_argument('-m', '--moves', type=int, default=1, help="Number of moves to print to the stdout")
     parser.add_argument('-o', '--output', type=str, help="Optional output file to use instead of stdout")
     parser.add_argument('-c', '--condensed', action='store_true', help="Optional condensed form without spaces")
+    parser.add_argument('-p', '--prefix', type=str, default="m", help="Prefix to place before each movetype")
     args = parser.parse_args()
 
     if args.output:
