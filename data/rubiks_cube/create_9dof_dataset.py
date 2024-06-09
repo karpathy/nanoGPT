@@ -4,7 +4,7 @@ import sys
 from tqdm import tqdm
 
 class RubiksCube:
-    def __init__(self, condensed_output=False):
+    def __init__(self, condensed_output=False, allowed_moves=None):
         # whether to print condensed form or cross format
         self.condensed = condensed_output
 
@@ -16,7 +16,7 @@ class RubiksCube:
             'L': [['O'] * 3 for _ in range(3)],
             'R': [['R'] * 3 for _ in range(3)]
         }
-        self.moves = {
+        all_moves = {
             'u': self.rotate_U,
             'U': self.rotate_U_inv,
             'e': self.rotate_E,
@@ -42,6 +42,9 @@ class RubiksCube:
             'z': self.rotate_z,
             'Z': self.rotate_z_inv,
         }
+
+        # Limit to the allowed move list if not None
+        self.moves = {k: v for k, v in all_moves.items() if allowed_moves is None or k in allowed_moves}
 
     def rotate_face_clockwise(self, face):
         return [list(row) for row in zip(*face[::-1])]
@@ -232,6 +235,7 @@ def main():
     parser.add_argument('-p', '--prefix', type=str, default="m", help="Prefix to place before each move type")
     parser.add_argument('--charlist', action='store_true', help="Print the character list to char_list.txt")
     parser.add_argument('-i', '--interactive', action='store_true', help="Interactive mode to enter moves manually")
+    parser.add_argument('-a', '--allowed_moves', type=str, nargs='*', help="List of allowed moves")
     args = parser.parse_args()
 
     if args.output:
@@ -239,7 +243,7 @@ def main():
     else:
         output = sys.stdout
 
-    cube = RubiksCube(condensed_output=args.condensed)
+    cube = RubiksCube(condensed_output=args.condensed, allowed_moves=args.allowed_moves)
     if args.shuffle > 0:
         cube.shuffle(args.shuffle)
     cube.print_cube(output)
