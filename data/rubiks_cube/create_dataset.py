@@ -112,19 +112,21 @@ class RubiksCube:
             self.moves[move]()
 
     def print_cube(self, output):
-        def print_face(face):
-            return '\n'.join(''.join(row) for row in face)
 
         if self.condensed:
+            def print_face(face):
+                return '\n'.join(''.join(row) for row in face)
             output.write(print_face(self.faces['U']) + "\n")
             for i in range(3):
-                output.write(''.join(self.faces['F'][i]) + '' + ''.join(self.faces['R'][i]) + '' + ''.join(self.faces['B'][i]) + ''.join(self.faces['L'][i]) + "\n")
+                output.write(''.join(self.faces['F'][i]) + ''.join(self.faces['R'][i]) + ''.join(self.faces['B'][i]) + ''.join(self.faces['L'][i]) + "\n")
             output.write(print_face(self.faces['D']) + "\n")
         else:
-            output.write("    " + print_face(self.faces['U']).replace('\n', '\n    ') + "\n")
+            def print_face(face):
+                return '\n'.join(' '.join(row) for row in face)
+            output.write("      " + print_face(self.faces['U']).replace('\n', '\n      ') + "\n")
             for i in range(3):
                 output.write(' '.join(self.faces['L'][i]) + ' ' + ' '.join(self.faces['F'][i]) + ' ' + ' '.join(self.faces['R'][i]) + ' ' + ' '.join(self.faces['B'][i]) + "\n")
-            output.write("    " + print_face(self.faces['D']) + "\n")
+            output.write("      " + print_face(self.faces['D']).replace('\n', '\n      ') + "\n")
 
     def random_move(self, output, prefix):
         move = random.choice(list(self.moves.keys()))
@@ -140,14 +142,26 @@ class RubiksCube:
             for move in self.moves:
                 file.write(f"{move}\n")
 
+    def interactive_mode(self):
+        while True:
+            self.print_cube(sys.stdout)
+            move = input("Enter move (or 'q' to quit): ")
+            if move == 'q':
+                break
+            if move in self.moves:
+                self.moves[move]()
+            else:
+                print("Invalid move. Try again.")
+
 def main():
     parser = argparse.ArgumentParser(description="Simulate a Rubik's Cube and perform basic operations.")
     parser.add_argument('-s', '--shuffle', type=int, default=0, help="Number of random moves to shuffle the cube before starting to print")
     parser.add_argument('-m', '--moves', type=int, default=1, help="Number of moves to print to the stdout")
     parser.add_argument('-o', '--output', type=str, help="Optional output file to use instead of stdout")
     parser.add_argument('-c', '--condensed', action='store_true', help="Optional condensed form without spaces")
-    parser.add_argument('-p', '--prefix', type=str, default="m", help="Prefix to place before each movetype")
+    parser.add_argument('-p', '--prefix', type=str, default="m", help="Prefix to place before each move type")
     parser.add_argument('--charlist', action='store_true', help="Print the character list to char_list.txt")
+    parser.add_argument('-i', '--interactive', action='store_true', help="Interactive mode to enter moves manually")
     args = parser.parse_args()
 
     if args.output:
@@ -160,8 +174,11 @@ def main():
         cube.shuffle(args.shuffle)
     cube.print_cube(output)
 
-    for _ in tqdm(range(args.moves), desc="Applying moves"):
-        cube.random_move(output, args.prefix)
+    if args.interactive:
+        cube.interactive_mode()
+    else:
+        for _ in tqdm(range(args.moves), desc="Applying moves"):
+            cube.random_move(output, args.prefix)
 
     if args.charlist:
         cube.print_char_list(args.prefix)
