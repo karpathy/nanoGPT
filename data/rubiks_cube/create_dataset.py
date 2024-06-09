@@ -4,7 +4,7 @@ import sys
 from tqdm import tqdm
 
 class RubiksCube:
-    def __init__(self, condensed_output=False, allowed_moves=None):
+    def __init__(self, condensed_output=False, allowed_moves=None, shuffle_moves=None):
         # whether to print condensed form or cross format
         self.condensed = condensed_output
 
@@ -42,6 +42,9 @@ class RubiksCube:
             'z': self.rotate_z,
             'Z': self.rotate_z_inv,
         }
+
+        # Limit shuffle to the allowed move list if not None
+        self.shuffle_moves = {k: v for k, v in all_moves.items() if shuffle_moves is None or k in shuffle_moves}
 
         # Limit to the allowed move list if not None
         self.moves = {k: v for k, v in all_moves.items() if allowed_moves is None or k in allowed_moves}
@@ -181,7 +184,7 @@ class RubiksCube:
         self.rotate_B()
 
     def shuffle(self, k):
-        moves = list(self.moves.keys())
+        moves = list(self.shuffle_moves.keys())
         for _ in tqdm(range(k), desc="Shuffling"):
             move = random.choice(moves)
             self.moves[move]()
@@ -236,6 +239,7 @@ def main():
     parser.add_argument('--charlist', action='store_true', help="Print the character list to char_list.txt")
     parser.add_argument('-i', '--interactive', action='store_true', help="Interactive mode to enter moves manually")
     parser.add_argument('-a', '--allowed_moves', type=str, nargs='*', help="List of allowed moves")
+    parser.add_argument('-S', '--shuffle_moves', type=str, nargs='*', help="List of allowed moves for the shuffle stage")
     args = parser.parse_args()
 
     if args.output:
@@ -243,7 +247,7 @@ def main():
     else:
         output = sys.stdout
 
-    cube = RubiksCube(condensed_output=args.condensed, allowed_moves=args.allowed_moves)
+    cube = RubiksCube(condensed_output=args.condensed, allowed_moves=args.allowed_moves, shuffle_moves=args.shuffle_moves)
     if args.shuffle > 0:
         cube.shuffle(args.shuffle)
     cube.print_cube(output)
