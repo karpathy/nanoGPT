@@ -132,6 +132,14 @@ class RubiksCube:
         output.write(f'{prefix}{move}\n')
         self.print_cube(output)
 
+    def print_char_list(self, prefix, filename="char_list.txt"):
+        with open(filename, 'w') as file:
+            file.write(f"{prefix}\n")
+            for face in self.faces:
+                file.write(f"{face}\n")
+            for move in self.moves:
+                file.write(f"{move}\n")
+
 def main():
     parser = argparse.ArgumentParser(description="Simulate a Rubik's Cube and perform basic operations.")
     parser.add_argument('-s', '--shuffle', type=int, default=0, help="Number of random moves to shuffle the cube before starting to print")
@@ -139,6 +147,7 @@ def main():
     parser.add_argument('-o', '--output', type=str, help="Optional output file to use instead of stdout")
     parser.add_argument('-c', '--condensed', action='store_true', help="Optional condensed form without spaces")
     parser.add_argument('-p', '--prefix', type=str, default="m", help="Prefix to place before each movetype")
+    parser.add_argument('--charlist', action='store_true', help="Print the character list to char_list.txt")
     args = parser.parse_args()
 
     if args.output:
@@ -153,6 +162,9 @@ def main():
 
     for _ in tqdm(range(args.moves), desc="Applying moves"):
         cube.random_move(output, args.prefix)
+
+    if args.charlist:
+        cube.print_char_list(args.prefix)
 
     if args.output:
         output.close()
