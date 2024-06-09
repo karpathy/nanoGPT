@@ -1,10 +1,7 @@
 # Rubik's Cube Simulator
 
 ## Overview
-This project is a Rubik's Cube simulator implemented in Python. It allows you to
-simulate the operations and solution algorithms for the Rubik's Cube, providing
-options for shuffling the cube, applying moves, and printing the cube state in
-different formats.
+This project is a Rubik's Cube simulator implemented in Python. It allows you to simulate the operations and solution algorithms for the Rubik's Cube, providing options for shuffling the cube, applying moves, and printing the cube state in different formats.
 
 ## Features
 - **Shuffle**: Randomly shuffle the Rubik's Cube with a specified number of moves.
@@ -19,7 +16,10 @@ different formats.
 - `-m, --moves`: Number of moves to print to the stdout (default: 1).
 - `-o, --output`: Optional output file to use instead of stdout.
 - `-c, --condensed`: Optional condensed form without spaces.
-- `-p, --prefix`: Prefix to place before each move type (default: "m").
+- `-p, --prefix`: Prefix to place before each move type (default: "@").
+- `--charlist`: Print the character list to `char_list.txt`.
+- `-i, --interactive`: Interactive mode to enter moves manually.
+- `-a, --allowed_moves`: List of allowed moves (default: all moves).
 
 ### Example Commands
 
@@ -46,15 +46,15 @@ python rubiks_cube.py -s 20 -m 10 -o output.txt -c -p "@"
 
 This format is a little easier to read, centering attention on the green side.
 ```
-      W W W
-      W W W
-      W W W
-O O O G G G R R R B B B
-O O O G G G R R R B B B
-O O O G G G R R R B B B
-      Y Y Y
-      Y Y Y
-      Y Y Y
+   WWW
+   WWW
+   WWW
+OOOGGGRRRBBB
+OOOGGGRRRBBB
+OOOGGGRRRBBB
+   YYY
+   YYY
+   YYY
 ```
 
 #### Condensed Format

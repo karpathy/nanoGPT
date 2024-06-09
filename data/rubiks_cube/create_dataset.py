@@ -232,7 +232,7 @@ def main():
     parser.add_argument('-m', '--moves', type=int, default=1, help="Number of moves to print to the stdout")
     parser.add_argument('-o', '--output', type=str, help="Optional output file to use instead of stdout")
     parser.add_argument('-c', '--condensed', action='store_true', help="Optional condensed form without spaces")
-    parser.add_argument('-p', '--prefix', type=str, default="m", help="Prefix to place before each move type")
+    parser.add_argument('-p', '--prefix', type=str, default="@", help="Prefix to place before each move type, default is '@'")
     parser.add_argument('--charlist', action='store_true', help="Print the character list to char_list.txt")
     parser.add_argument('-i', '--interactive', action='store_true', help="Interactive mode to enter moves manually")
     parser.add_argument('-a', '--allowed_moves', type=str, nargs='*', help="List of allowed moves")
