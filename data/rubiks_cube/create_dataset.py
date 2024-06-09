@@ -126,10 +126,10 @@ class RubiksCube:
                 output.write(' '.join(self.faces['L'][i]) + ' ' + ' '.join(self.faces['F'][i]) + ' ' + ' '.join(self.faces['R'][i]) + ' ' + ' '.join(self.faces['B'][i]) + "\n")
             output.write("    " + print_face(self.faces['D']) + "\n")
 
-    def random_move(self, output):
+    def random_move(self, output, prefix):
         move = random.choice(list(self.moves.keys()))
         self.moves[move]()
-        output.write(f'Performed move: {move}\n')
+        output.write(f'{prefix}{move}\n')
         self.print_cube(output)
 
 def main():
@@ -149,13 +149,10 @@ def main():
     cube = RubiksCube(condensed_output=args.condensed)
     if args.shuffle > 0:
         cube.shuffle(args.shuffle)
-        output.write(f"Shuffled cube with {args.shuffle} random moves:\n")
-    else:
-        output.write("Initial solved cube:\n")
     cube.print_cube(output)
 
     for _ in tqdm(range(args.moves), desc="Applying moves"):
-        cube.random_move(output)
+        cube.random_move(output, args.prefix)
 
     if args.output:
         output.close()
