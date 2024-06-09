@@ -4,7 +4,7 @@ import sys
 from tqdm import tqdm
 
 class RubiksCube:
-    def __init__(self, condensed_output=False):
+    def __init__(self, condensed_output=False, allowed_moves=None):
         # whether to print condensed form or cross format
         self.condensed = condensed_output
 
@@ -16,20 +16,35 @@ class RubiksCube:
             'L': [['O'] * 3 for _ in range(3)],
             'R': [['R'] * 3 for _ in range(3)]
         }
-        self.moves = {
-            'a': self.rotate_U,
-            'v': self.rotate_D,
-            'c': self.rotate_F,
-            'd': self.rotate_B,
-            'e': self.rotate_L,
-            'f': self.rotate_R,
-            'A': self.rotate_U_inv,
-            'V': self.rotate_D_inv,
-            'C': self.rotate_F_inv,
-            'D': self.rotate_B_inv,
-            'E': self.rotate_L_inv,
-            'F': self.rotate_R_inv,
+        all_moves = {
+            'u': self.rotate_U,
+            'U': self.rotate_U_inv,
+            'e': self.rotate_E,
+            'E': self.rotate_E_inv,
+            'd': self.rotate_D,
+            'D': self.rotate_D_inv,
+            'f': self.rotate_F,
+            'F': self.rotate_F_inv,
+            's': self.rotate_S,
+            'S': self.rotate_S_inv,
+            'v': self.rotate_B,
+            'V': self.rotate_B_inv,
+            'l': self.rotate_L,
+            'L': self.rotate_L_inv,
+            'p': self.rotate_R,
+            'P': self.rotate_R_inv,
+            'm': self.rotate_M,
+            'M': self.rotate_M_inv,
+            'x': self.rotate_x,
+            'X': self.rotate_x_inv,
+            'i': self.rotate_y,
+            'I': self.rotate_y_inv,
+            'z': self.rotate_z,
+            'Z': self.rotate_z_inv,
         }
+
+        # Limit to the allowed move list if not None
+        self.moves = {k: v for k, v in all_moves.items() if allowed_moves is None or k in allowed_moves}
 
     def rotate_face_clockwise(self, face):
         return [list(row) for row in zip(*face[::-1])]
@@ -105,6 +120,66 @@ class RubiksCube:
             self.faces['U'][i][2], self.faces['F'][i][2], self.faces['D'][i][2], self.faces['B'][2 - i][0] = \
                 self.faces['B'][2 - i][0], self.faces['U'][i][2], self.faces['F'][i][2], self.faces['D'][i][2]
 
+    def rotate_M(self):
+        for i in range(3):
+            self.faces['U'][i][1], self.faces['F'][i][1], self.faces['D'][i][1], self.faces['B'][2 - i][1] = \
+                self.faces['B'][2 - i][1], self.faces['U'][i][1], self.faces['F'][i][1], self.faces['D'][i][1]
+
+    def rotate_M_inv(self):
+        for i in range(3):
+            self.faces['U'][i][1], self.faces['B'][2 - i][1], self.faces['D'][i][1], self.faces['F'][i][1] = \
+                self.faces['F'][i][1], self.faces['U'][i][1], self.faces['B'][2 - i][1], self.faces['D'][i][1]
+
+    def rotate_E(self):
+        for i in range(3):
+            self.faces['F'][1][i], self.faces['L'][1][i], self.faces['B'][1][i], self.faces['R'][1][i] = \
+                self.faces['R'][1][i], self.faces['F'][1][i], self.faces['L'][1][i], self.faces['B'][1][i]
+
+    def rotate_E_inv(self):
+        for i in range(3):
+            self.faces['F'][1][i], self.faces['R'][1][i], self.faces['B'][1][i], self.faces['L'][1][i] = \
+                self.faces['L'][1][i], self.faces['F'][1][i], self.faces['R'][1][i], self.faces['B'][1][i]
+
+    def rotate_S(self):
+        for i in range(3):
+            self.faces['U'][1][i], self.faces['R'][i][1], self.faces['D'][1][2 - i], self.faces['L'][2 - i][1] = \
+                self.faces['L'][2 - i][1], self.faces['U'][1][i], self.faces['R'][i][1], self.faces['D'][1][2 - i]
+
+    def rotate_S_inv(self):
+        for i in range(3):
+            self.faces['U'][1][i], self.faces['L'][2 - i][1], self.faces['D'][1][2 - i], self.faces['R'][i][1] = \
+                self.faces['R'][i][1], self.faces['U'][1][i], self.faces['L'][2 - i][1], self.faces['D'][1][2 - i]
+
+    def rotate_x(self):
+        self.rotate_R()
+        self.rotate_M_inv()
+        self.rotate_L_inv()
+
+    def rotate_x_inv(self):
+        self.rotate_R_inv()
+        self.rotate_M()
+        self.rotate_L()
+
+    def rotate_y(self):
+        self.rotate_U()
+        self.rotate_E()
+        self.rotate_D_inv()
+
+    def rotate_y_inv(self):
+        self.rotate_U_inv()
+        self.rotate_E_inv()
+        self.rotate_D()
+
+    def rotate_z(self):
+        self.rotate_F()
+        self.rotate_S()
+        self.rotate_B_inv()
+
+    def rotate_z_inv(self):
+        self.rotate_F_inv()
+        self.rotate_S_inv()
+        self.rotate_B()
+
     def shuffle(self, k):
         moves = list(self.moves.keys())
         for _ in tqdm(range(k), desc="Shuffling"):
@@ -112,21 +187,19 @@ class RubiksCube:
             self.moves[move]()
 
     def print_cube(self, output):
+        def print_face(face):
+            return '\n'.join(''.join(row) for row in face)
 
         if self.condensed:
-            def print_face(face):
-                return '\n'.join(''.join(row) for row in face)
             output.write(print_face(self.faces['U']) + "\n")
             for i in range(3):
                 output.write(''.join(self.faces['F'][i]) + ''.join(self.faces['R'][i]) + ''.join(self.faces['B'][i]) + ''.join(self.faces['L'][i]) + "\n")
             output.write(print_face(self.faces['D']) + "\n")
         else:
-            def print_face(face):
-                return '\n'.join(' '.join(row) for row in face)
-            output.write("      " + print_face(self.faces['U']).replace('\n', '\n      ') + "\n")
+            output.write("   " + print_face(self.faces['U']).replace('\n', '\n   ') + "\n")
             for i in range(3):
-                output.write(' '.join(self.faces['L'][i]) + ' ' + ' '.join(self.faces['F'][i]) + ' ' + ' '.join(self.faces['R'][i]) + ' ' + ' '.join(self.faces['B'][i]) + "\n")
-            output.write("      " + print_face(self.faces['D']).replace('\n', '\n      ') + "\n")
+                output.write(''.join(self.faces['L'][i]) + '' + ''.join(self.faces['F'][i]) + '' + ''.join(self.faces['R'][i]) + '' + ''.join(self.faces['B'][i]) + "\n")
+            output.write("   " + print_face(self.faces['D']).replace('\n', '\n   ') + "\n")
 
     def random_move(self, output, prefix):
         move = random.choice(list(self.moves.keys()))
@@ -162,6 +235,7 @@ def main():
     parser.add_argument('-p', '--prefix', type=str, default="m", help="Prefix to place before each move type")
     parser.add_argument('--charlist', action='store_true', help="Print the character list to char_list.txt")
     parser.add_argument('-i', '--interactive', action='store_true', help="Interactive mode to enter moves manually")
+    parser.add_argument('-a', '--allowed_moves', type=str, nargs='*', help="List of allowed moves")
     args = parser.parse_args()
 
     if args.output:
@@ -169,7 +243,7 @@ def main():
     else:
         output = sys.stdout
 
-    cube = RubiksCube(condensed_output=args.condensed)
+    cube = RubiksCube(condensed_output=args.condensed, allowed_moves=args.allowed_moves)
     if args.shuffle > 0:
         cube.shuffle(args.shuffle)
     cube.print_cube(output)
