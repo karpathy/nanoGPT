@@ -17,8 +17,8 @@ class RubiksCube:
             'R': [['R'] * 3 for _ in range(3)]
         }
         self.moves = {
-            'a': self.rotate_U,
-            'A': self.rotate_U_inv,
+            'u': self.rotate_U,
+            'U': self.rotate_U_inv,
             'e': self.rotate_E,
             'E': self.rotate_E_inv,
             'd': self.rotate_D,
