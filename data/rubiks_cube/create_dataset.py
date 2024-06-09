@@ -17,18 +17,18 @@ class RubiksCube:
             'R': [['R'] * 3 for _ in range(3)]
         }
         self.moves = {
-            'α': self.rotate_U,
-            'β': self.rotate_D,
-            'γ': self.rotate_F,
-            'δ': self.rotate_B,
-            'ε': self.rotate_L,
-            'ζ': self.rotate_R,
-            'Α': self.rotate_U_inv,
-            'Β': self.rotate_D_inv,
-            'Γ': self.rotate_F_inv,
-            'Δ': self.rotate_B_inv,
-            'Ε': self.rotate_L_inv,
-            'Ζ': self.rotate_R_inv,
+            'a': self.rotate_U,
+            'v': self.rotate_D,
+            'c': self.rotate_F,
+            'd': self.rotate_B,
+            'e': self.rotate_L,
+            'f': self.rotate_R,
+            'A': self.rotate_U_inv,
+            'V': self.rotate_D_inv,
+            'C': self.rotate_F_inv,
+            'D': self.rotate_B_inv,
+            'E': self.rotate_L_inv,
+            'F': self.rotate_R_inv,
         }
 
     def rotate_face_clockwise(self, face):
