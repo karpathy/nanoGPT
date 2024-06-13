@@ -149,7 +149,7 @@ def run_experiment_with_vizier(config, config_basename, output_dir, csv_ckpt_dir
     study_config.algorithm = "GAUSSIAN_PROCESS_BANDIT"
     study_client = clients.Study.from_study_config(study_config, owner='owner', study_id='example_study_id')
 
-    for i in range(5):  # Replace with the number of iterations you want
+    for i in range(100):  # Replace with the number of iterations you want
         print("Vizier Iteration", i)
         suggestions = study_client.suggest(count=1)
         for suggestion in suggestions:
