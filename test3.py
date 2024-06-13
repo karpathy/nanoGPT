@@ -1,4 +1,6 @@
 import json
+import torch
+import subprocess
 import os
 import sys
 import pandas as pd
@@ -24,7 +26,23 @@ def parse_args():
     parser.add_argument('--override_block_size', default=None, type=int)
     return parser.parse_args()
 
-def find_best_val_loss(csv_dir, output_dir):
+def get_best_val_loss(checkpoint_file):
+    """
+    Extracts the best validation loss and the corresponding iteration number from a PyTorch checkpoint file.
+
+    Args:
+        checkpoint_file (str): Path to the PyTorch checkpoint file.
+
+    Returns:
+        float: The best validation loss.
+    """
+    # Load the checkpoint on CPU
+    checkpoint = torch.load(checkpoint_file, map_location=torch.device('cpu'))
+    best_val_loss = checkpoint['best_val_loss']
+
+    return best_val_loss
+
+def find_best_val_loss(csv_dir):
     csvList = os.listdir(csv_dir)
 
     best_ckpt_loss = sys.float_info.max
@@ -98,37 +116,96 @@ def format_config_name(config, config_basename, prefix, add_names):
 
     return f"{prefix}{config_basename}-{'-'.join(config_items)}"
 
+def run_command(config, config_basename, output_dir, csv_ckpt_dir, prefix, add_names,
+                best_val_loss_from, override_max_iters, override_dataset, override_block_size):
+    formatted_name = format_config_name(config, config_basename, prefix, add_names)
+    base_command = ["python3", "train.py"]
+    config['tensorboard_run_name'] = formatted_name
+    timestamp_prefix = datetime.now().strftime('%Y%m%d_%H%M%S')
+    config['out_dir'] = os.path.join(output_dir, f"{timestamp_prefix}_{formatted_name}")
+    base_command.extend(["--timestamp", timestamp_prefix])
+
+    if override_max_iters:
+        config['max_iters'] = str(override_max_iters)
+    if override_dataset:
+        config['dataset'] = override_dataset
+    if override_block_size:
+        config['block_size'] = str(override_block_size)
+
+    # Print the entered arguments before each run
+    console = Console()
+    table = Table(title="Entered Arguments", show_header=True, header_style="bold magenta")
+    table.add_column("Argument", style="cyan")
+    table.add_column("Value", style="green")
+
+    for key, value in config.items():
+        table.add_row(key, str(value))
+
+    console.print(table)
+
+    for key, value in config.items():
+        if isinstance(value, bool):
+            base_command.extend([f"--{'' if value else 'no-'}{key}"])
+        elif isinstance(value, list):
+            for val in value:
+                base_command.extend([f"--{key}", str(val)])
+        else:
+            if isinstance(value, float) and value.is_integer():
+                value = int(value)
+            base_command.extend([f"--{key}", str(value)])
+
+    if best_val_loss_from[0] and best_val_loss_from[1]:
+        base_command.extend(["--init_from", "prev_run"])
+        ckpt_path, _ = find_best_val_loss(best_val_loss_from[0], best_val_loss_from[1])
+        base_command.extend(["--prev_run_ckpt", ckpt_path])
+
+    if csv_ckpt_dir:
+        base_command.extend(["--csv_ckpt_dir", csv_ckpt_dir])
+
+    print(f"Running command: {' '.join(base_command)}")
+    subprocess.run(base_command)
+    return config
+
 def run_experiment_with_vizier(config, config_basename, output_dir, csv_ckpt_dir, prefix, add_names, best_val_loss_from, override_max_iters, override_dataset, override_block_size):
-    study_config = vz.StudyConfig.from_problem(
-        vz.ProblemStatement(
-            search_space={
-                k: vz.ParameterConfig(k, parameter_type=type(v[0]).__name__.upper(), feasible_values=v)
-                for k, v in config.items()
-            },
-            metric_information=[
-                vz.MetricInformation(name="loss", goal=vz.ObjectiveMetricGoal.MINIMIZE)
-            ]
-        )
+    search_space = vz.SearchSpace()
+    for k, v in config.items():
+        if isinstance(v, list):
+            param_type = type(v[0]).__name__.upper()
+            if param_type == 'INT':
+                search_space.root.add_int_param(name=k, min_value=min(v), max_value=max(v))
+            elif param_type == 'FLOAT':
+                search_space.root.add_float_param(name=k, min_value=min(v), max_value=max(v))
+            elif param_type == 'STR':
+                search_space.root.add_categorical_param(name=k, feasible_values=v)
+        else:
+            param_type = type(v).__name__.upper()
+            if param_type == 'INT':
+                search_space.root.add_int_param(name=k, min_value=v, max_value=v)
+            elif param_type == 'FLOAT':
+                search_space.root.add_float_param(name=k, min_value=v, max_value=v)
+            elif param_type == 'STR':
+                search_space.root.add_categorical_param(name=k, feasible_values=[v])
+
+    print("search_space", search_space)
+    study_config = vz.StudyConfig(
+        search_space=search_space,
+        metric_information=[vz.MetricInformation(name="loss", goal=vz.ObjectiveMetricGoal.MINIMIZE)]
     )
     study_config.algorithm = "RANDOM_SEARCH"
     study_client = clients.Study.from_study_config(study_config, owner='owner', study_id='example_study_id')
 
-    def evaluate(params):
-        # Placeholder function to execute the experiment
-        # You'll need to implement the actual evaluation logic
-        # For now, we return a random value as the loss
-        import random
-        loss = random.random()
-        return loss
-
     for _ in range(100):  # Replace with the number of iterations you want
         suggestions = study_client.suggest(count=1)
         for suggestion in suggestions:
-            loss = evaluate(suggestion.parameters)
+            params = suggestion.parameters
+            config = run_command(params, config_basename, output_dir, csv_ckpt_dir, prefix, add_names, best_val_loss_from, override_max_iters, override_dataset, override_block_size)
+            loss = get_best_val_loss(config['out_dir']+"/ckpt.pt")
             suggestion.complete(vz.Measurement(metrics={'loss': loss}))
 
-    best_trial = study_client.optimal_trials()[0].materialize()
-    print(f"Best trial: {best_trial.parameters}, Loss: {best_trial.final_measurement.metrics['loss']}")
+    optimal_trials = study_client.optimal_trials()
+    for trial in optimal_trials:
+        best_trial = trial.materialize()
+        print(f"Best trial: {best_trial.parameters}, Loss: {best_trial.final_measurement.metrics['loss']}")
 
 def main():
     args = parse_args()
