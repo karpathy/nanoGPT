@@ -23,6 +23,8 @@ def parse_args():
     parser.add_argument('--override_max_iters', default=None, type=int)
     parser.add_argument('--override_dataset', default=None, type=str)
     parser.add_argument('--override_block_size', default=None, type=int)
+    parser.add_argument('--vizier_algorithm', choices=['GP_UCB_PE', 'GAUSSIAN_PROCESS_BANDIT', 'RANDOM_SEARCH', 'QUASI_RANDOM_SEARCH', 'GRID_SEARCH', 'SHUFFLED_GRID_SEARCH', 'EAGLE_STRATEGY', 'CMA_ES', 'EMUKIT_GP_EI', 'NSGA2', 'BOCS', 'HARMONICA'], default='RANDOM_SEARCH', help='Choose the Vizier algorithm to use.')
+    parser.add_argument('--vizier_iterations', type=int, default=100, help='Number of Vizier iterations.')
     return parser.parse_args()
 
 def get_best_val_loss(checkpoint_file):
@@ -91,11 +93,18 @@ def run_command(config, config_basename, output_dir, csv_ckpt_dir, prefix, add_n
 
     for key, value in config.items():
         if isinstance(value, bool):
+            print(key,value ,"bool")
             base_command.extend([f"--{'' if value else 'no-'}{key}"])
+        elif value == "True":
+            base_command.extend([f"--{key}"])
+        elif value == "False":
+            base_command.extend([f"--no-{key}"])
         elif isinstance(value, list):
+            print(key,value, "list")
             for val in value:
                 base_command.extend([f"--{key}", str(val)])
         else:
+            print(key,value, "else")
             if isinstance(value, float) and value.is_integer():
                 value = int(value)
             base_command.extend([f"--{key}", str(value)])
@@ -112,7 +121,7 @@ def run_command(config, config_basename, output_dir, csv_ckpt_dir, prefix, add_n
     subprocess.run(base_command)
     return config
 
-def run_experiment_with_vizier(config, config_basename, output_dir, csv_ckpt_dir, prefix, add_names, best_val_loss_from, override_max_iters, override_dataset, override_block_size):
+def run_experiment_with_vizier(config, config_basename, output_dir, csv_ckpt_dir, prefix, add_names, best_val_loss_from, override_max_iters, override_dataset, override_block_size, vizier_algorithm, vizier_iterations):
     search_space = vz.SearchSpace()
     for k, v in config.items():
         if isinstance(v, list):
@@ -123,6 +132,8 @@ def run_experiment_with_vizier(config, config_basename, output_dir, csv_ckpt_dir
                 search_space.root.add_float_param(name=k, min_value=min(map(float, v)), max_value=max(map(float, v)))
             elif param_type == 'STR':
                 search_space.root.add_categorical_param(name=k, feasible_values=v)
+            elif param_type == 'BOOL':
+                search_space.root.add_categorical_param(name=k, feasible_values=[str(val) for val in v])
         elif isinstance(v, dict) and 'range' in v:
             range_def = v['range']
             start, end, step = range_def['start'], range_def['end'], range_def['step']
@@ -139,17 +150,18 @@ def run_experiment_with_vizier(config, config_basename, output_dir, csv_ckpt_dir
                 search_space.root.add_float_param(name=k, min_value=v, max_value=v)
             elif param_type == 'STR':
                 search_space.root.add_categorical_param(name=k, feasible_values=[v])
+            elif param_type == 'BOOL':
+                search_space.root.add_categorical_param(name=k, feasible_values=[bool(v)])
 
     print("search_space", search_space)
     study_config = vz.StudyConfig(
         search_space=search_space,
         metric_information=[vz.MetricInformation(name="loss", goal=vz.ObjectiveMetricGoal.MINIMIZE)]
     )
-    # study_config.algorithm = "RANDOM_SEARCH"
-    study_config.algorithm = "GAUSSIAN_PROCESS_BANDIT"
+    study_config.algorithm = vizier_algorithm
     study_client = clients.Study.from_study_config(study_config, owner='owner', study_id='example_study_id')
 
-    for i in range(100):  # Replace with the number of iterations you want
+    for i in range(vizier_iterations):
         print("Vizier Iteration", i)
         suggestions = study_client.suggest(count=1)
         for suggestion in suggestions:
@@ -181,7 +193,9 @@ def main():
             args.use_best_val_loss_from,
             args.override_max_iters,
             args.override_dataset,
-            args.override_block_size
+            args.override_block_size,
+            args.vizier_algorithm,
+            args.vizier_iterations
         )
 
 if __name__ == "__main__":
