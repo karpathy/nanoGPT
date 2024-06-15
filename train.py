@@ -753,6 +753,7 @@ class Trainer:
                             'config': vars(self.args),
                         }
                         print(f"saving checkpoint to {self.args.out_dir}")
+                        # Save checkpoint
                         torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
                 if self.args.patience is not None and num_steps_with_worse_loss >= self.args.patience:
                     print(f"Early Stopping: loss has not decreased in {self.args.patience + 1} steps")
@@ -983,6 +984,7 @@ class Trainer:
             self.iter_num += 1
             local_iter_num += 1
 
+            # End of training actions
             if self.iter_num > self.args.max_iters:
                 self.plot_statistics(graph_y_labels)
                 if self.args.only_save_checkpoint_at_end:
