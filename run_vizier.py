@@ -11,6 +11,10 @@ from rich.table import Table
 import torch
 from vizier.service import clients, pyvizier as vz
 
+import warnings
+
+# Suppress all warnings
+warnings.filterwarnings("ignore")
 
 def parse_args():
     parser = argparse.ArgumentParser(
