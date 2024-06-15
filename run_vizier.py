@@ -64,7 +64,18 @@ def parse_args():
     return parser.parse_args()
 
 
-def get_best_val_loss(checkpoint_file):
+def get_best_val_loss(out_dir):
+    best_val_loss_file = out_dir + "/best_val_loss_and_iter.txt"
+    if os.path.exists(best_val_loss_file):
+        with open(best_val_loss_file, "r") as file:
+            try:
+                best_val_loss = float(file.readline().strip().split(",")[0])
+                return best_val_loss
+            except ValueError:
+                print("val_loss file not found, trying checkpoint...")
+
+    # if contained file doesn't exist, try ckpt.pt file
+    checkpoint_file = out_dir + "/ckpt.pt"
     checkpoint = torch.load(checkpoint_file, map_location=torch.device("cpu"))
     best_val_loss = checkpoint["best_val_loss"]
     return best_val_loss
@@ -194,7 +205,7 @@ def run_experiment_with_vizier(
         for suggestion in suggestions:
             params = suggestion.parameters
             config = run_command(params, config_basename, output_dir, add_names)
-            loss = get_best_val_loss(config["out_dir"] + "/ckpt.pt")
+            loss = get_best_val_loss(config["out_dir"])
             suggestion.complete(vz.Measurement(metrics={"loss": loss}))
 
     optimal_trials = study_client.optimal_trials()
