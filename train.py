@@ -1,26 +1,24 @@
 import argparse
-import sys
-from rich import print
-import os
-import time
-import csv
-from datetime import datetime
-import math
-import pickle
 from contextlib import nullcontext
-import plotly.graph_objects as go
-import seaborn as sns
-import matplotlib.pyplot as plt
+import csv
+import json
+import math
+import os
+import pickle
+import shutil
+import sys
+import time
 
-import pandas as pd
+import matplotlib.pyplot as plt
 import numpy as np
+import plotly.graph_objects as go
+from rich import print
 import torch
+from torch.distributed import destroy_process_group, init_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.distributed import init_process_group, destroy_process_group
 from torch.utils.tensorboard import SummaryWriter
 
-from model import GPTConfig, GPT
-
+from model import GPT, GPTConfig
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -300,9 +298,11 @@ def initialize_statistics(num_layers, num_heads):
 
 class Trainer:
 
-    def __init__(self, args, model_group):
+    def __init__(self, args, model_group, training_group, logging_group):
         self.args = args
         self.model_group = model_group
+        self.training_group = training_group 
+        self.logging_group = logging_group
 
         # typically make the decay iters equal to max_iters
         if self.args.lr_decay_match_max_iters:
@@ -346,14 +346,25 @@ class Trainer:
         self.ptdtype = {"bfloat16" : torch.bfloat16, "float16" : torch.float16, "float32" : torch.float32}[self.args.dtype]
         self.ctx = nullcontext() if self.device_type == 'cpu' else torch.amp.autocast(device_type=self.device_type, dtype=self.ptdtype)
 
-        # Model
+        # Model settings
         # TODO only add if they are defined from the argparse
         self.model_args = {action.dest: getattr(self.args, action.dest) for action in self.model_group._group_actions}
         self.model_args['vocab_size'] = None
         self.model_args['use_gradient_checkpointing'] = self.args.use_gradient_checkpointing
 
+        # Training settings
+        self.training_args = {action.dest: getattr(self.args, action.dest) for action in self.training_group._group_actions}
+
         if self.args.init_from == 'scratch':
             self.model_args['vocab_size'] = self.get_vocab_size_from_meta()
+
+            # Save full configuration used for training
+            config_json = {**self.model_args, **self.training_args}
+            with open(self.args.out_dir + "/full_config.json", "w") as configuration_file:
+                json.dump(config_json, configuration_file, indent=4)
+            with open(self.args.out_dir + "/best_val_loss_and_iter.txt", 'w') as file:
+                print("resetting best val loss file")
+
             self.load_data()
             gptconf = GPTConfig(**self.model_args)
             self.model = GPT(gptconf)
@@ -981,8 +992,8 @@ class Trainer:
             wandb.finish()
 
 def main():
-    args, model_group, _, _ = parse_args()
-    trainer = Trainer(args, model_group)
+    args, model_group, training_group, logging_group = parse_args()
+    trainer = Trainer(args, model_group, training_group, logging_group)
     trainer.train()
 
     if trainer.ddp:
