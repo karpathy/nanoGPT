@@ -451,6 +451,8 @@ class Trainer:
     def get_vocab_size_from_meta(self):
         # Data loader
         meta_path = os.path.join('data', self.args.dataset, 'meta.pkl')
+        # Save a copy of meta.pkl tokenization into the output folder
+        self.copy_file_to_directory(meta_path, self.args.out_dir)
         if os.path.exists(meta_path):
             with open(meta_path, 'rb') as f:
                 meta = pickle.load(f)
@@ -460,6 +462,18 @@ class Trainer:
                     sys.exit(f"Error: 'vocab_size' key not found in {meta_path}")
         else:
             sys.exit(f"Error: File not found - {meta_path}")
+
+    def copy_file_to_directory(self, src_file, dest_dir):
+        try:
+            # Ensure the destination directory exists
+            if not os.path.exists(dest_dir):
+                os.makedirs(dest_dir)
+
+            # Copy the file
+            shutil.copy(src_file, dest_dir)
+            print(f"File {src_file} copied to {dest_dir}")
+        except Exception as e:
+            print(f"Error copying file: {e}")
 
     def load_data(self):
         if self.model_args['vocab_size'] is None:
