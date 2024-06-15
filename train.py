@@ -282,7 +282,7 @@ def initialize_statistics(num_layers, num_heads):
             'o_max': [],
             'o_min': []
         }
-    
+
         for _ in range(num_layers):
             stats['mean'].append([[] for _ in range(num_heads)])
             stats['median'].append([[] for _ in range(num_heads)])
@@ -294,12 +294,12 @@ def initialize_statistics(num_layers, num_heads):
             stats['o_stdev'].append([[] for _ in range(num_heads)])
             stats['o_max'].append([[] for _ in range(num_heads)])
             stats['o_min'].append([[] for _ in range(num_heads)])
-        
+
         return stats
 
 
 class Trainer:
-    
+
     def __init__(self, args, model_group):
         self.args = args
         self.model_group = model_group
@@ -582,11 +582,11 @@ class Trainer:
         # ticks
         ax.get_xaxis().tick_bottom()
         ax.get_yaxis().tick_left()
-            
+
         ax.set_title(f"Boxplot of {data_type} {stat_type}")
         plt.savefig(f'{directory_path}/{data_type}_{stat_type}_boxplot_{timestamp}.png')
         plt.close()
-    
+
     def plot_statistics(self, graph_y_labels):
             statistics_to_plot = []
             timestamp = time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())
@@ -659,7 +659,7 @@ class Trainer:
                             for i in x_labels:
                                 plot_data[-1].append(data[i])
                     plot_data = np.array(plot_data)
-                    
+
                     ######
                     fig, ax = plt.subplots(figsize=(8,10))
                     im = ax.imshow(plot_data)
@@ -668,7 +668,7 @@ class Trainer:
                     ax.set_yticks(np.arange(len(graph_y_labels)), labels=graph_y_labels)
                     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
                     ax.set_xlabel("Number of Iterations", fontweight="bold")
-                    
+
                     # Create a colorbar
                     cbar = ax.figure.colorbar(im, ax=ax)
                     cbar.ax.set_ylabel(stat_type, rotation=-90, va="bottom")
@@ -803,13 +803,13 @@ class Trainer:
 
                 box_plot_input_data = []
                 box_plot_output_data = []
-                        
+
                 for layer in range (self.args.n_layer):
                     # Inputs
                     inputs_location = f"transformer.h[{layer}].attn.softmax_layer_attn.inputs"
-                    
+
                     softmax_input = eval(f"self.model.{inputs_location}").to('cpu').to(torch.float32)
-                    
+
 
                     ## Get first batch
                     i_first_batch = softmax_input[0]
@@ -818,7 +818,7 @@ class Trainer:
                     for i, i_head in enumerate(i_first_batch):
                         ## Flatten across heads, height, and width
                         flattened = i_head.view(-1)
-                        
+
                         ## Calculate statistics
                         i_means.append(torch.nanmean(flattened).item())
                         i_medians.append(torch.nanmedian(flattened).item())
@@ -850,7 +850,7 @@ class Trainer:
 
                     outputs_location = f"transformer.h[{layer}].attn.softmax_layer_attn.outputs"
                     softmax_output = eval(f"self.model.{outputs_location}").to('cpu').to(torch.float32)
-                   
+
                     o_first_batch = softmax_output[0]
                     o_first_batch[o_first_batch == float('-inf')] = float('NaN')
                     for i, o_head in enumerate(o_first_batch):
@@ -905,7 +905,7 @@ class Trainer:
                         self.create_box_plot(box_plot_input_data, graph_y_labels, timestamp, self.args.box_plot_statistic, self.iter_num)
                     else:
                         self.create_box_plot(box_plot_output_data, graph_y_labels, timestamp, self.args.box_plot_statistic, self.iter_num)
-                    
+
 
                 self.write_to_csv(self.iter_num,
                                   *i_sum_vals,
