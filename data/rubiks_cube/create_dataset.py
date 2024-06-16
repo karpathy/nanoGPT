@@ -187,7 +187,7 @@ class RubiksCube:
         moves = list(self.shuffle_moves.keys())
         for _ in tqdm(range(k), desc="Shuffling"):
             move = random.choice(moves)
-            self.moves[move]()
+            self.shuffle_moves[move]()
 
     def print_cube(self, output):
         def print_face(face):
@@ -232,14 +232,15 @@ class RubiksCube:
 def main():
     parser = argparse.ArgumentParser(description="Simulate a Rubik's Cube and perform basic operations.")
     parser.add_argument('-s', '--shuffle', type=int, default=0, help="Number of random moves to shuffle the cube before starting to print")
+    parser.add_argument('-t', '--trials', type=int, default=1, help="Number of sets of shuffle moves + regular moves to do")
     parser.add_argument('-m', '--moves', type=int, default=1, help="Number of moves to print to the stdout")
     parser.add_argument('-o', '--output', type=str, help="Optional output file to use instead of stdout")
     parser.add_argument('-c', '--condensed', action='store_true', help="Optional condensed form without spaces")
     parser.add_argument('-p', '--prefix', type=str, default="@", help="Prefix to place before each move type, default is '@'")
     parser.add_argument('--charlist', action='store_true', help="Print the character list to char_list.txt")
     parser.add_argument('-i', '--interactive', action='store_true', help="Interactive mode to enter moves manually")
-    parser.add_argument('-a', '--allowed_moves', type=str, nargs='*', help="List of allowed moves")
-    parser.add_argument('-S', '--shuffle_moves', type=str, nargs='*', help="List of allowed moves for the shuffle stage")
+    parser.add_argument('-a', '--allowed_moves', type=str, default=None, nargs='*', help="List of allowed moves")
+    parser.add_argument('-S', '--shuffle_moves', type=str, default=None, nargs='*', help="List of allowed moves for the shuffle stage")
     args = parser.parse_args()
 
     if args.output:
