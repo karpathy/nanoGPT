@@ -131,10 +131,21 @@ def main():
         model.update_num_angles(args.sym_rot_num_angles)
 
     load_meta = False
+    meta_path = None
     separator_token = None
     if args.init_from == 'resume' and 'config' in checkpoint and 'dataset' in checkpoint['config']:
-        meta_path = os.path.join('data', checkpoint['config']['dataset'], 'meta.pkl')
-        load_meta = os.path.exists(meta_path)
+
+        meta_paths = [
+                os.path.join(args.out_dir, 'meta.pkl'),
+                os.path.join('data', checkpoint['config']['dataset'], 'meta.pkl')
+                ]
+
+        load_meta = False
+        for meta_path in meta_paths:
+            if os.path.exists(meta_path):
+                load_meta = True
+                break
+
     if load_meta:
         print(f"Loading meta from {meta_path}...")
         with open(meta_path, 'rb') as f:

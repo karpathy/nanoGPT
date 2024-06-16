@@ -6,9 +6,9 @@ import re
 from rich.console import Console
 from rich.table import Table
 
-def get_best_val_loss_and_iter_num(checkpoint_file, args):
+def get_best_val_loss_and_iter_num(target_file, args):
     """
-    Extracts the best validation loss and the corresponding iteration number from a PyTorch checkpoint file.
+    Extracts the best validation loss and the corresponding iteration number from a PyTorch checkpoint file, unless 'best_val_loss_and_iter.txt' exists.
 
     Args:
         checkpoint_file (str): Path to the PyTorch checkpoint file.
@@ -17,45 +17,59 @@ def get_best_val_loss_and_iter_num(checkpoint_file, args):
         float: The best validation loss.
         int: The iteration number corresponding to the best validation loss.
     """
-    # Load the checkpoint on CPU
-    checkpoint = torch.load(checkpoint_file, map_location=torch.device('cpu'))
-    best_val_loss = checkpoint['best_val_loss']
-    iter_num = checkpoint['iter_num']
+    best_val_loss = "No Data"
+    iter_num = "No Data"
+    if args.fast:
+        if os.path.exists(target_file):
+            with open(target_file, "r") as file:
+                try:
+                    line = file.readline().strip().split(",")
+                    best_val_loss = float(line[0])
+                    iter_num = int(line[1])
+                except ValueError:
+                    print("val_loss file not found")
+        training_nan = "No Data"
+        training_nan_iter = "No Data"
+        return best_val_loss, iter_num, training_nan, training_nan_iter
+    else:
+        # Load the checkpoint on CPU
+        checkpoint = torch.load(target_file, map_location=torch.device('cpu'))
+        best_val_loss = checkpoint['best_val_loss']
+        iter_num = checkpoint['iter_num']
 
-    training_nan = None
-    training_nan_iter = None
-    if args.inspect_nan:
-        if 'nan' in checkpoint:
-            training_nan = checkpoint['nan']
-            training_nan_iter = checkpoint['nan_iter_num']
-        else:
-            training_nan = "No Data"
-            training_nan_iter = "No Data"
+        training_nan = None
+        training_nan_iter = None
+        if args.inspect_nan:
+            if 'nan' in checkpoint:
+                training_nan = checkpoint['nan']
+                training_nan_iter = checkpoint['nan_iter_num']
+            else:
+                training_nan = "No Data"
+                training_nan_iter = "No Data"
 
+        return best_val_loss, iter_num, training_nan, training_nan_iter
 
-    return best_val_loss, iter_num, training_nan, training_nan_iter
-
-def find_ckpt_files(directory, path_regex=None):
+def find_target_files(directory, target_string="ckpt.pt", path_regex=None):
     """
-    Recursively finds all 'ckpt.pt' files in the given directory.
+    Recursively finds all files in the given directory matching 'target string'.
 
     Args:
         directory (str): The directory to search.
         path_regex (str): Regular expression to filter the checkpoint file paths.
 
     Returns:
-        list: A list of paths to the 'ckpt.pt' files.
+        list: A list of paths to target files.
     """
     ckpt_files = []
     for root, dirs, files in os.walk(directory):
         for file in files:
-            if file.endswith('ckpt.pt'):
+            if file.endswith(target_string):
                 ckpt_file = os.path.join(root, file)
                 if path_regex is None or re.search(path_regex, ckpt_file):
                     ckpt_files.append(ckpt_file)
     return ckpt_files
 
-def get_short_ckpt_file(ckpt_file, n_fields=None):
+def get_shortname_target_file(ckpt_file, n_fields=None, target_string="ckpt.pt"):
     """
     Extracts the last n fields (separated by hyphens) from the checkpoint file path.
 
@@ -66,8 +80,8 @@ def get_short_ckpt_file(ckpt_file, n_fields=None):
     Returns:
         str: The shortened checkpoint file path with the last n fields.
     """
-    if ckpt_file.endswith('/ckpt.pt'):
-        ckpt_file = ckpt_file[:-8]
+    if ckpt_file.endswith(target_string):
+        ckpt_file = ckpt_file[:-(len(target_string) + 1)]
     if n_fields is not None:
         fields = ckpt_file.split('-')
         if len(fields) > n_fields:
@@ -77,13 +91,14 @@ def get_short_ckpt_file(ckpt_file, n_fields=None):
 def main():
     parser = argparse.ArgumentParser(description='Extract best validation loss and iteration number from PyTorch checkpoint files.')
     parser.add_argument('--inspect_nan', default=False, action=argparse.BooleanOptionalAction)
-    parser.add_argument('--directory', type=str, help='Path to the directory containing the checkpoint files.')
+    parser.add_argument('--directory', type=str, default=".", help='Path to the directory containing the checkpoint files.')
     parser.add_argument('--csv_file', type=str, help='Path to the CSV file containing the checkpoint data.')
     parser.add_argument('--path_regex', type=str, help='Regular expression to filter the checkpoint file paths.')
     parser.add_argument('--sort', type=str, choices=['path', 'loss', 'iter', 'nan', 'nan_iter'], default='path', help='Sort the table by checkpoint file path, best validation loss, or iteration number.')
     parser.add_argument('--reverse', action='store_true', help='Reverse the sort order.')
     parser.add_argument('--output', type=str, help='Path to the output CSV file.')
     parser.add_argument('--n_fields', type=int, help='Number of fields to display from the end of the checkpoint file path.')
+    parser.add_argument('--fast', action='store_true', help='only look for validation loss files from out_dirs')
     args = parser.parse_args()
 
     if args.csv_file:
@@ -94,7 +109,7 @@ def main():
             if args.inspect_nan:
                 for row in csv_reader:
                     if args.path_regex is None or re.search(args.path_regex, row[0]):
-                        ckpt_data.append((get_short_ckpt_file(row[0]),
+                        ckpt_data.append((get_shortname_target_file(row[0]),
                                           float(row[1]),
                                           int(row[2]),
                                           str(row[3]),
@@ -102,12 +117,17 @@ def main():
                                           ))
             else:
                 for row in csv_reader:
-                    ckpt_data.append((get_short_ckpt_file(row[0]), float(row[1]), int(row[2])))
-    elif args.directory:
-        ckpt_files = find_ckpt_files(args.directory, args.path_regex)
+                    ckpt_data.append((get_shortname_target_file(row[0]), float(row[1]), int(row[2])))
+    elif args.fast:
+        target_files = find_target_files(args.directory, target_string="best_val_loss_and_iter.txt", path_regex=args.path_regex)
 
         # Extract the best validation loss and iteration number for each checkpoint file
-        ckpt_data = [(get_short_ckpt_file(ckpt_file),
+        ckpt_data = [(get_shortname_target_file(target_file, target_string="best_val_loss_and_iter.txt"),
+                      *get_best_val_loss_and_iter_num(target_file, args)) for target_file in target_files]
+    elif args.directory:
+        ckpt_files = find_target_files(args.directory, target_string="ckpt.pt", path_regex=args.path_regex)
+        # Extract the best validation loss and iteration number for each checkpoint file
+        ckpt_data = [(get_shortname_target_file(ckpt_file),
                       *get_best_val_loss_and_iter_num(ckpt_file, args)) for ckpt_file in ckpt_files]
     else:
         print("Please provide either a directory or a CSV file.")
