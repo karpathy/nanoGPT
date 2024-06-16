@@ -249,21 +249,23 @@ def main():
         output = sys.stdout
 
     cube = RubiksCube(condensed_output=args.condensed, allowed_moves=args.allowed_moves, shuffle_moves=args.shuffle_moves)
-    if args.shuffle > 0:
-        cube.shuffle(args.shuffle)
-    cube.print_cube(output)
 
-    if args.interactive:
-        cube.interactive_mode()
-    else:
-        for _ in tqdm(range(args.moves), desc="Applying moves"):
-            cube.random_move(output, args.prefix)
+    for _ in tqdm(range(args.trials), desc="Trial"):
+        if args.shuffle > 0:
+            cube.shuffle(args.shuffle)
+        cube.print_cube(output)
 
-    if args.charlist:
-        cube.print_char_list(args.prefix)
+        if args.interactive:
+            cube.interactive_mode()
+        else:
+            for _ in tqdm(range(args.moves), desc="Applying moves"):
+                cube.random_move(output, args.prefix)
 
-    if args.output:
-        output.close()
+        if args.charlist:
+            cube.print_char_list(args.prefix)
+
+        if args.output:
+            output.close()
 
 if __name__ == "__main__":
     main()
