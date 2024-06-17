@@ -438,8 +438,6 @@ class GPT(nn.Module):
           x = self.transformer.drop(tok_emb + pos_emb)
         else:
           x = self.transformer.drop(tok_emb)
-        for block in self.transformer.h:
-            x = block(x)
 
         x.requires_grad_(True)  # Ensure requires_grad is True
 
