@@ -23,11 +23,11 @@ from gpt_conf import GPTConfig
 import torch.utils.checkpoint as checkpoint
 
 # Variations
-from variations.softmax_variations import softmax_dictionary, Softermax, ConSmax, ConSmaxQuan, SaturatingConSmax, Strongermax, Polymax, SigSoftmax, ExpPolymax, Softplus, Squareplus
-from variations.norm_variations import norm_dictionary, LayerNorm, RMSNorm, pRMSNorm, kRMSNorm
+from variations.softmax_variations import softmax_dictionary
+from variations.norm_variations import norm_dictionary
 from variations.position_encoding_variations import RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions, FIRE
-from variations.activation_variations import SquaredReLU, activation_dictionary
-from variations.linear_variations import BitLinear1p58, BitLinear, BitLinearOptimized, KAL_Net as KAN, linear_dictionary
+from variations.activation_variations import activation_dictionary
+from variations.linear_variations import linear_dictionary
 
 def create_shared_param_group(layer_type, config):
     shared_size = None
