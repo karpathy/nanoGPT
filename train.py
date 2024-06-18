@@ -121,6 +121,10 @@ def parse_args():
             "kan",
         ],
     )
+    ## Linear Weight Initialization Options
+    model_group.add_argument( "--linear_mean_init", type=float, default=0.0)
+    model_group.add_argument( "--linear_std_init", type=float, default=0.02)
+
 
     # POSITIONAL EMBEDDING VARIATIONS
     model_group.add_argument('--use_rotary_embeddings', default=False, action=argparse.BooleanOptionalAction)
@@ -130,6 +134,10 @@ def parse_args():
     model_group.add_argument('--use_abs_pos_embeddings', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument('--use_fire_embeddings', default=False, action=argparse.BooleanOptionalAction)
     model_group.add_argument('--shared_fire_embeddings', default=False, action=argparse.BooleanOptionalAction)
+
+    ## Positional Embedding Weight Initialization Options
+    model_group.add_argument( "--embedding_mean_init", type=float, default=0.0)
+    model_group.add_argument( "--embedding_std_init", type=float, default=0.02)
 
     # SOFTMAX VARIATIONS
     ## Selection of softmax variation for attention and output layers
