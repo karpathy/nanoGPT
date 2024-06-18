@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import List
 
 @dataclass
 class GPTConfig:
@@ -18,7 +19,12 @@ class GPTConfig:
 
     # MLP Options
     use_parallel_mlp: bool = False
-    use_swiglu: bool = False
+    mlp_variant: str = "mlp"
+
+    ## KAN Option
+    kan_poly_order: int = 3
+    kan_base_activation: str = "silu"
+    kan_middle_layers: List[int] = field(default_factory=lambda: [])
 
     # Shared parameters
     # MLP
@@ -87,6 +93,10 @@ class GPTConfig:
     rope_variant: str = "rope" # options: "shortrope", "rope"
     shortrope_length: int = 8 # number of embeddings to use in shortrope
 
+    ## Embedding Intialization Options
+    embedding_mean_init: float= 0.0
+    embedding_std_init: float= 0.02
+
     # Structuring Options, remember to compile the model
     use_post_ln: bool = True
 
@@ -102,3 +112,8 @@ class GPTConfig:
 
     # Linear Alternatives
     linear_variant: str = "linear"
+
+    ## Linear Initialization Options
+    linear_mean_init: float= 0.0
+    linear_std_init: float= 0.02
+
