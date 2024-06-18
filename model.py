@@ -23,11 +23,11 @@ from gpt_conf import GPTConfig
 import torch.utils.checkpoint as checkpoint
 
 # Variations
-from variations.softmax_variations import softmax_dictionary, Softermax, ConSmax, ConSmaxQuan, SaturatingConSmax, Strongermax, Polymax, SigSoftmax, ExpPolymax, Softplus, Squareplus
-from variations.norm_variations import norm_dictionary, LayerNorm, RMSNorm, pRMSNorm, kRMSNorm
+from variations.softmax_variations import softmax_dictionary
+from variations.norm_variations import norm_dictionary
 from variations.position_encoding_variations import RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions, FIRE
-from variations.activation_variations import SquaredReLU, activation_dictionary
-from variations.linear_variations import BitLinear1p58, BitLinear, BitLinearOptimized, linear_dictionary
+from variations.activation_variations import activation_dictionary
+from variations.linear_variations import linear_dictionary
 
 def create_shared_param_group(layer_type, config):
     shared_size = None
@@ -99,7 +99,6 @@ class CausalSelfAttention(nn.Module):
         self.kv_dim = (config.n_embd // config.n_head) * self.n_kv_group
         self.c_attn_k = nn.Linear(config.n_embd, self.kv_dim, bias=config.bias)
         self.c_attn_v = nn.Linear(config.n_embd, self.kv_dim, bias=config.bias)
-        # output projection
         self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
         # regularization
         self.attn_dropout = nn.Dropout(config.dropout)
@@ -167,7 +166,6 @@ class CausalSelfAttention(nn.Module):
 
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
-
         q = self.c_attn_q(x)
         k = self.c_attn_k(x)
         v = self.c_attn_v(x)
@@ -261,31 +259,35 @@ class MLP(nn.Module):
         # Select activation variant
         self.activation_variant = activation_dictionary[config.activation_variant]
 
-        # Whether to ues swiglu
-        self.use_swiglu = config.use_swiglu
+        # Select mlp variant
+        self.mlp_variant = config.mlp_variant
 
-        if self.use_swiglu:
-            self.c_fc_in1 = linear_dictionary[config.linear_variant](config.n_embd, 4 * config.n_embd, bias=config.bias)
-            self.c_fc_in2 = linear_dictionary[config.linear_variant](config.n_embd, 4 * config.n_embd, bias=config.bias)
-            self.c_fc_out = linear_dictionary[config.linear_variant](4 * config.n_embd, config.n_embd, bias=config.bias)
-        else:
-            self.c_fc = linear_dictionary[config.linear_variant](config.n_embd, 4 * config.n_embd, bias=config.bias)
-            self.c_proj = linear_dictionary[config.linear_variant](4 * config.n_embd, config.n_embd, bias=config.bias)
+        if self.mlp_variant == "kan":
+            self.kan = linear_dictionary["kan"](config.n_embd, config.n_embd, config=config)
+        if self.mlp_variant == "mlp":
+            self.c_fc = linear_dictionary[config.linear_variant](config.n_embd, 4 * config.n_embd, config=config, bias=config.bias)
+            self.c_proj = linear_dictionary[config.linear_variant](4 * config.n_embd, config.n_embd, config=config, bias=config.bias)
+        if self.mlp_variant == "swiglu":
+            self.c_fc_in1 = linear_dictionary[config.linear_variant](config.n_embd, 4 * config.n_embd, config=config)
+            self.c_fc_in2 = linear_dictionary[config.linear_variant](config.n_embd, 4 * config.n_embd, config=config)
+            self.c_fc_out = linear_dictionary[config.linear_variant](4 * config.n_embd, config.n_embd, config=config)
 
-        self.activation_variant = activation_dictionary[config.activation_variant]
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
-        if self.use_swiglu:
+        if self.mlp_variant == "kan":
+            x = self.kan(x)
+        elif self.mlp_variant == "mlp":
+            x = self.c_fc(x)
+            x = self.activation_variant(x)
+            x = self.c_proj(x)
+        elif self.mlp_variant == "swiglu":
             x_in1 = self.c_fc_in1(x)
             x_in1 = self.activation_variant(x_in1)
             x_in2 = self.c_fc_in2(x)
             x_out = x_in1 * x_in2
             x = self.c_fc_out(x_out)
-        else:
-            x = self.c_fc(x)
-            x = self.activation_variant(x)
-            x = self.c_proj(x)
+
         x = self.dropout(x)
         return x
 
@@ -358,11 +360,13 @@ class GPT(nn.Module):
 
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
-            wpe = nn.Embedding(config.block_size, config.n_embd),
             drop = nn.Dropout(config.dropout),
             h = nn.ModuleList([Block(config, mlp=shared_mlp_array[i], attn=shared_attn_array[i]) for i in range(config.n_layer)]),
             ln_f = self.norm_variant_output,
         ))
+
+        if self.config.use_abs_pos_embeddings:
+            self.transformer['wpe'] = nn.Embedding(config.block_size, config.n_embd)
 
         # Select softmax variant for output layer
         self.softmax_variant_output = config.softmax_variant_output
@@ -394,7 +398,7 @@ class GPT(nn.Module):
         params are actually used as weights in the final layer, so we include them.
         """
         n_params = sum(p.numel() for p in self.parameters())
-        if non_embedding:
+        if non_embedding and self.config.use_abs_pos_embeddings:
             n_params -= self.transformer.wpe.weight.numel()
         return n_params
 
@@ -409,11 +413,11 @@ class GPT(nn.Module):
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            torch.nn.init.normal_(module.weight, mean=self.config.linear_mean_init, std=self.config.linear_std_init)
             if module.bias is not None:
                 torch.nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            torch.nn.init.normal_(module.weight, mean=self.config.embedding_mean_init, std=self.config.embedding_std_init)
 
     def update_num_angles(self, num_angles):
         """Update the number of angles for rotary embeddings in all attention layers."""
