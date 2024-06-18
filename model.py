@@ -360,11 +360,13 @@ class GPT(nn.Module):
 
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
-            wpe = nn.Embedding(config.block_size, config.n_embd),
             drop = nn.Dropout(config.dropout),
             h = nn.ModuleList([Block(config, mlp=shared_mlp_array[i], attn=shared_attn_array[i]) for i in range(config.n_layer)]),
             ln_f = self.norm_variant_output,
         ))
+
+        if self.config.use_abs_pos_embeddings:
+            self.transformer['wpe'] = nn.Embedding(config.block_size, config.n_embd)
 
         # Select softmax variant for output layer
         self.softmax_variant_output = config.softmax_variant_output
@@ -396,7 +398,7 @@ class GPT(nn.Module):
         params are actually used as weights in the final layer, so we include them.
         """
         n_params = sum(p.numel() for p in self.parameters())
-        if non_embedding:
+        if non_embedding and self.config.use_abs_pos_embeddings:
             n_params -= self.transformer.wpe.weight.numel()
         return n_params
 
