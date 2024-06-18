@@ -265,8 +265,8 @@ class MLP(nn.Module):
         if self.mlp_variant == "kan":
             self.kan = linear_dictionary["kan"](config.n_embd, config.n_embd, config=config)
         if self.mlp_variant == "mlp":
-            self.c_fc = linear_dictionary[config.linear_variant](config.n_embd, 4 * config.n_embd, config=config)
-            self.c_proj = linear_dictionary[config.linear_variant](4 * config.n_embd, config.n_embd, config=config)
+            self.c_fc = linear_dictionary[config.linear_variant](config.n_embd, 4 * config.n_embd, config=config, bias=config.bias)
+            self.c_proj = linear_dictionary[config.linear_variant](4 * config.n_embd, config.n_embd, config=config, bias=config.bias)
         if self.mlp_variant == "swiglu":
             self.c_fc_in1 = linear_dictionary[config.linear_variant](config.n_embd, 4 * config.n_embd, config=config)
             self.c_fc_in2 = linear_dictionary[config.linear_variant](config.n_embd, 4 * config.n_embd, config=config)
