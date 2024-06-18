@@ -5,29 +5,10 @@ import torch.nn.functional as F
 from .activation_variations import *
 from functools import lru_cache
 
-class WrappedLinear(nn.Module):
-    def __init__(self, in_features, out_features, config=None):
-        super(WrappedLinear, self).__init__()
-
-        # Extract the bias setting from config if provided
-        bias = False
-        if config is not None:
-            bias = config.bias
-
-        # Initialize the wrapped nn.Linear module
-        self.linear = nn.Linear(in_features, out_features, bias=bias)
-
-        # Apply the custom weight initialization
-        self._init_weights(self.linear)
-
-    def forward(self, x):
-        return self.linear(x)
-
-    def _init_weights(self, module):
-        if isinstance(self, nn.Linear):
-            torch.nn.init.normal_(self.weight, mean=0.0, std=0.02)
-            if self.bias is not None:
-                torch.nn.init.zeros_(self.bias)
+class WrappedLinear(nn.Linear):
+    """ Adapts nn.Linear to add 'config' parameter for interface polymorphism"""
+    def __init__(self, in_features, out_features, config=None, bias=None):
+        super(WrappedLinear, self).__init__(in_features, out_features, bias)
 
 class BitLinear1p58(nn.Linear):
     """ BitLinear from Era of 1.58 LLMs Paper
