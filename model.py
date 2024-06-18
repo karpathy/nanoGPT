@@ -328,3 +328,21 @@ class GPT(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
 
         return idx
+
+class CodeGPT(nn.Module):
+    def __init__(self, vocab_size, embed_size, num_heads, num_layers, block_size):
+        super().__init__()
+        self.embed = nn.Embedding(vocab_size, embed_size)
+        self.blocks = nn.ModuleList([
+            nn.TransformerEncoderLayer(embed_size, num_heads) for _ in range(num_layers)
+        ])
+        self.ln = nn.LayerNorm(embed_size)
+        self.fc = nn.Linear(embed_size, vocab_size)
+        self.block_size = block_size
+
+    def forward(self, x):
+        x = self.embed(x)
+        for block in self.blocks:
+            x = block(x)
+        x = self.ln(x)
+        return self.fc(x)
