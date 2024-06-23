@@ -80,7 +80,7 @@ def parse_args():
     model_group.add_argument('--bias', default=False, action=argparse.BooleanOptionalAction, help="only used for layernorm variation option")
     model_group.add_argument("--prmsnorm_pct", default=0.0625, type=float, help="percentage (1 being 100 percent) of first entries used for partial rms" )
     model_group.add_argument("--krmsnorm_num", default=10, type=int, help="max number of first entries for partial rms" )
-    model_group.add_argument("--krmsnorm_quantize_type", type=str, default="int8", choices=["int8", "int16"])
+    model_group.add_argument("--krmsnorm_quantize_type", type=str, default="int8", choices=["int8", "int16", "none"])
     model_group.add_argument('--krmsnorm_enable_gain', default=True, action=argparse.BooleanOptionalAction, help="include gain in kRMSNorm")
     model_group.add_argument("--krmsnorm_selection_type", type=str, default="last", choices=["first", "last", "random"])
 

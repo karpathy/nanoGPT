@@ -50,15 +50,16 @@ class pRMSNorm(nn.Module):
         return x / prms * self.gain
 
 class kRMSNorm(nn.Module):
-    """First k elements RMS Normalization with optional int8/int16 quantization and configurable gain"""
+    """First k, Last k, or Random k elements RMS Normalization with optional int8/int16 quantization, no quantization (fp16), and configurable gain"""
 
     def __init__(self, config):
         super().__init__()
         ndim = config.n_embd
         self.gain = nn.Parameter(torch.ones(ndim)) if config.enable_gain else None
         self.k = config.krmsnorm_num
-        self.quantize_type = config.quantize_type  # 'int8' or 'int16'
+        self.quantize_type = config.quantize_type  # 'int8', 'int16', or 'none'
         self.enable_gain = config.enable_gain
+        self.selection_type = config.selection_type  # 'first', 'last', or 'random'
 
     def quantize(self, x, dtype):
         if dtype == 'int8':
@@ -71,6 +72,8 @@ class kRMSNorm(nn.Module):
             scale = (x.max() - x.min()) / (qmax - qmin)
             zero_point = qmin - x.min() / scale
             x_q = (x / scale + zero_point).clamp(qmin, qmax).round().to(torch.int16)
+        elif dtype == 'none':
+            x_q, scale, zero_point = x.half(), 1.0, 0.0
         else:
             raise ValueError("Unsupported quantization type")
         return x_q, scale, zero_point
@@ -78,6 +81,8 @@ class kRMSNorm(nn.Module):
     def dequantize(self, x_q, scale, zero_point, dtype):
         if dtype in ['int8', 'int16']:
             x = (x_q.to(torch.float32) - zero_point) * scale
+        elif dtype == 'none':
+            x = x_q.float()
         else:
             raise ValueError("Unsupported quantization type")
         return x
@@ -86,8 +91,16 @@ class kRMSNorm(nn.Module):
         # Calculate the number of elements to use for kRMS
         k = min(x.size(-1), self.k)
 
-        # Select the first k elements along the last dimension
-        x_part = x[..., :k]
+        # Select elements based on the selection type
+        if self.selection_type == 'first':
+            x_part = x[..., :k]
+        elif self.selection_type == 'last':
+            x_part = x[..., -k:]
+        elif self.selection_type == 'random':
+            indices = torch.randperm(x.size(-1))[:k]
+            x_part = x[..., indices]
+        else:
+            raise ValueError("Unsupported selection type")
 
         # Quantize x_part
         x_part_q, scale, zero_point = self.quantize(x_part, self.quantize_type)
@@ -106,6 +119,8 @@ class kRMSNorm(nn.Module):
             x = x * self.gain
 
         return x
+
+
 
 
 norm_dictionary = {
