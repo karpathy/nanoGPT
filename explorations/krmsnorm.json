@@ -1,5 +1,6 @@
 [
     {
+        "norm_variant_attn": ["krmsnorm"],
         "krmsnorm_quantize_type": ["int8", "int16", "none"],
         "krmsnorm_num": ["25", "50", "100", "256"],
         "krmsnorm_enable_gain": [true, false],
