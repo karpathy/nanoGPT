@@ -1,11 +1,10 @@
 import argparse
 import random
 import sys
-from tqdm import tqdm
+from rich.progress import Progress
 
 class RubiksCube:
     def __init__(self, condensed_output=False, allowed_moves=None, shuffle_moves=None):
-        # whether to print condensed form or cross format
         self.condensed = condensed_output
 
         self.faces = {
@@ -43,10 +42,7 @@ class RubiksCube:
             'Z': self.rotate_z_inv,
         }
 
-        # Limit shuffle to the allowed move list if not None
         self.shuffle_moves = {k: v for k, v in all_moves.items() if shuffle_moves is None or k in shuffle_moves}
-
-        # Limit to the allowed move list if not None
         self.moves = {k: v for k, v in all_moves.items() if allowed_moves is None or k in allowed_moves}
 
     def rotate_face_clockwise(self, face):
@@ -183,11 +179,12 @@ class RubiksCube:
         self.rotate_S_inv()
         self.rotate_B()
 
-    def shuffle(self, k):
+    def shuffle(self, k, progress, task):
         moves = list(self.shuffle_moves.keys())
-        for _ in tqdm(range(k), desc="Shuffling"):
+        for _ in range(k):
             move = random.choice(moves)
-            self.moves[move]()
+            self.shuffle_moves[move]()
+            progress.update(task, advance=1)
 
     def print_cube(self, output):
         def print_face(face):
@@ -217,6 +214,7 @@ class RubiksCube:
                 file.write(f"{face}\n")
             for move in self.moves:
                 file.write(f"{move}\n")
+            self.print_cube(file)
 
     def interactive_mode(self):
         while True:
@@ -232,34 +230,53 @@ class RubiksCube:
 def main():
     parser = argparse.ArgumentParser(description="Simulate a Rubik's Cube and perform basic operations.")
     parser.add_argument('-s', '--shuffle', type=int, default=0, help="Number of random moves to shuffle the cube before starting to print")
+    parser.add_argument('-t', '--trials', type=int, default=1, help="Number of sets of shuffle moves + regular moves to do")
     parser.add_argument('-m', '--moves', type=int, default=1, help="Number of moves to print to the stdout")
     parser.add_argument('-o', '--output', type=str, help="Optional output file to use instead of stdout")
     parser.add_argument('-c', '--condensed', action='store_true', help="Optional condensed form without spaces")
     parser.add_argument('-p', '--prefix', type=str, default="@", help="Prefix to place before each move type, default is '@'")
     parser.add_argument('--charlist', action='store_true', help="Print the character list to char_list.txt")
     parser.add_argument('-i', '--interactive', action='store_true', help="Interactive mode to enter moves manually")
-    parser.add_argument('-a', '--allowed_moves', type=str, nargs='*', help="List of allowed moves")
-    parser.add_argument('-S', '--shuffle_moves', type=str, nargs='*', help="List of allowed moves for the shuffle stage")
+    parser.add_argument('-a', '--allowed_moves', type=str, default=None, nargs='*', help="List of allowed moves")
+    parser.add_argument('-S', '--shuffle_moves', type=str, default=None, nargs='*', help="List of allowed moves for the shuffle stage")
     args = parser.parse_args()
 
+    output = None
     if args.output:
         output = open(args.output, 'w')
     else:
         output = sys.stdout
 
     cube = RubiksCube(condensed_output=args.condensed, allowed_moves=args.allowed_moves, shuffle_moves=args.shuffle_moves)
-    if args.shuffle > 0:
-        cube.shuffle(args.shuffle)
-    cube.print_cube(output)
 
-    if args.interactive:
-        cube.interactive_mode()
-    else:
-        for _ in tqdm(range(args.moves), desc="Applying moves"):
-            cube.random_move(output, args.prefix)
+    with Progress() as progress:
+        trial_task = progress.add_task("[green]Trials...", total=args.trials, visible=True if args.output else False)
+        shuffle_task = progress.add_task("[cyan]Shuffling...", total=1, visible=False)
+        move_task = progress.add_task("[cyan]Applying moves...", total=1, visible=False)
 
-    if args.charlist:
-        cube.print_char_list(args.prefix)
+        for i in range(args.trials):
+            progress.update(shuffle_task, total=args.shuffle, completed=0, visible=True if args.output else False)
+            progress.update(move_task, total=args.moves, completed=0, visible=True if args.output else False)
+
+            if args.shuffle > 0:
+                cube.shuffle(args.shuffle, progress, shuffle_task)
+
+            cube.print_cube(output)
+
+            if args.interactive:
+                cube.interactive_mode()
+            else:
+                for _ in range(args.moves):
+                    cube.random_move(output, args.prefix)
+                    progress.update(move_task, advance=1)
+
+            if args.charlist:
+                cube.print_char_list(args.prefix)
+
+            progress.update(trial_task, advance=1)
+            if i != (args.trials - 1):
+                progress.update(shuffle_task, visible=False)
+                progress.update(move_task, visible=False)
 
     if args.output:
         output.close()

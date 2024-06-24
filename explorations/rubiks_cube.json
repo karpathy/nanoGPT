@@ -1,0 +1,19 @@
+[
+  {
+    "max_iters": ["10000"],
+    "n_layer": ["6"],
+    "n_embd": ["384"],
+    "dataset": ["rubiks_cube"],
+    "softmax_variant_attn": ["softmax"],
+    "shared_mlp_size": ["1", "2", "3"],
+    "shared_mlp_sym": [true, false],
+    "shared_attn_size": ["1", "2", "3"],
+    "shared_attn_sym": [true, false],
+    "use_parallel_mlp": [true, false],
+    "use_abs_pos_embeddings": [true, false],
+    "use_rotary_embeddings": [true, false],
+    "use_fire_embeddings": [true, false],
+    "shared_fire_embeddings": [true, false],
+    "compile": [true]
+  }
+]
