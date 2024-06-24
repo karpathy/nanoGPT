@@ -749,6 +749,18 @@ class Trainer:
                 print(f"step {self.iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
                 self.log_metrics(losses, lr, running_mfu, self.iter_num)
 
+                if math.isnan(losses["val"]):
+                    checkpoint = {
+                        'model': self.raw_model.state_dict(),
+                        'optimizer': self.optimizer.state_dict(),
+                        'model_args': self.model_args,
+                        'iter_num': self.iter_num,
+                        'best_val_loss': self.best_val_loss,
+                        'nan_iter_num' : 0,
+                        'nan' : True,
+                        'config': vars(self.args),
+                    }
+                    torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
                 if losses['val'] < self.best_val_loss or self.args.always_save_checkpoint:
                     if losses['val'] < self.best_val_loss:
                         self.iter_num_best_val_loss = self.iter_num
