@@ -55,11 +55,11 @@ class kRMSNorm(nn.Module):
     def __init__(self, config):
         super().__init__()
         ndim = config.n_embd
-        self.gain = nn.Parameter(torch.ones(ndim)) if config.enable_gain else None
+        self.gain = nn.Parameter(torch.ones(ndim)) if config.krmsnorm_enable_gain else None
         self.k = config.krmsnorm_num
-        self.quantize_type = config.quantize_type  # 'int8', 'int16', or 'none'
-        self.enable_gain = config.enable_gain
-        self.selection_type = config.selection_type  # 'first', 'last', or 'random'
+        self.quantize_type = config.krmsnorm_quantize_type  # 'int8', 'int16', or 'none'
+        self.enable_gain = config.krmsnorm_enable_gain
+        self.selection_type = config.krmsnorm_selection_type  # 'first', 'last', or 'random'
 
     def quantize(self, x, dtype):
         if dtype == 'int8':
