@@ -11,6 +11,7 @@ import math
 import inspect
 import sys
 import re
+import numpy as np
 
 import torch
 import torch.nn as nn
@@ -82,7 +83,7 @@ class CausalSelfAttention(nn.Module):
 
     def __init__(self, config, fire_pos_enc=None):
         super().__init__()
-        assert config.n_embd_main % config.n_head == 0
+        assert config.n_embd % config.n_head == 0
         # key, query, value projections for all heads, but in a batch
         self.c_attn_q = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
 
@@ -329,7 +330,9 @@ class Block(nn.Module):
 
 class GPT(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, config, wte_path="initial_wte.npy"):
+        # def __init__(self, config, wte_path=None):
+        wte_path=None
         super().__init__()
         assert config.vocab_size is not None
         assert config.block_size is not None
@@ -344,28 +347,51 @@ class GPT(nn.Module):
         # Shared Parameters Attention
         shared_attn_array = create_shared_param_group("attn", config)
 
-        self.transformer = nn.ModuleDict(dict(
-            wte = nn.Embedding(config.vocab_size, config.n_embd),
-            wpe = nn.Embedding(config.block_size, config.n_embd),
-            drop = nn.Dropout(config.dropout),
-            h = nn.ModuleList([Block(config, mlp=shared_mlp_array[i], attn=shared_attn_array[i]) for i in range(config.n_layer)]),
-            ln_f = self.norm_variant_output,
-        ))
+        # Load pre-trained embeddings if a path is provided
+        initial_embeddings = np.load(wte_path)
+        initial_embeddings_tensor = torch.from_numpy(initial_embeddings).float()
+        if wte_path:
+            print("loading wte")
+
+            self.transformer = nn.ModuleDict(dict(
+                wte = nn.Embedding.from_pretrained(initial_embeddings_tensor, freeze=False),
+                wpe = nn.Embedding(config.block_size, config.n_embd),
+                drop = nn.Dropout(config.dropout),
+                h = nn.ModuleList([Block(config, mlp=shared_mlp_array[i], attn=shared_attn_array[i]) for i in range(config.n_layer)]),
+                ln_f = self.norm_variant_output,
+            ))
+        else:
+            print("main")
+            self.transformer = nn.ModuleDict(dict(
+                wte = nn.Embedding(config.vocab_size, config.n_embd_main),
+                wpe = nn.Embedding(config.block_size, config.n_embd),
+                drop = nn.Dropout(config.dropout),
+                h = nn.ModuleList([Block(config, mlp=shared_mlp_array[i], attn=shared_attn_array[i]) for i in range(config.n_layer)]),
+                ln_f = self.norm_variant_output,
+            ))
+
 
         # Add a new linear layer to scale n_embd to n_embd_main
         self.n_embd_main = config.n_embd_main
-        self.scale_linear = nn.Linear(config.n_embd, self.n_embd_main)
+        self.scale_matrix = nn.Parameter(torch.randn(config.n_embd_main, config.n_embd) * 0.02)
 
         # Select softmax variant for output layer
         self.softmax_variant_output = config.softmax_variant_output
         if self.softmax_variant_output != "softmax":
             self.softmax_layer_output = softmax_dictionary[config.softmax_variant_output](config)
 
-        self.lm_head = nn.Linear(self.n_embd_main, config.vocab_size, bias=False)
-        self.transformer.wte.weight = self.lm_head.weight  # https://paperswithcode.com/method/weight-tying
+        self.lm_head = nn.Linear(self.config.n_embd_main, config.vocab_size, bias=False)
 
         # Initialize all weights
         self.apply(self._init_weights)
+
+        with torch.no_grad():
+            self.lm_head.weight.copy_(initial_embeddings_tensor)
+            self.print_first_row('lm_head.weight')
+        self.transformer.wte.weight = self.lm_head.weight  # https://paperswithcode.com/method/weight-tying
+
+        # Freeze lm_head and wte
+        # self.freeze_layers(['lm_head', 'wte'])
         # Apply special scaled init to the residual projections, per GPT-2 paper
         for pn, p in self.named_parameters():
             if pn.endswith('c_proj.weight'):
@@ -391,8 +417,8 @@ class GPT(nn.Module):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
             if module.bias is not None:
                 torch.nn.init.zeros_(module.bias)
-        elif isinstance(module, nn.Embedding):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+        # elif isinstance(module, nn.Embedding):
+        #     torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
     def forward(self, idx, targets=None):
         device = idx.device
@@ -402,9 +428,15 @@ class GPT(nn.Module):
 
         # Forward the GPT model itself
         tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
+        # print("1", tok_emb.size())
+        tok_emb = torch.matmul(tok_emb, self.scale_matrix)
+        # print("2", tok_emb.size())
+
         x = None
         if self.config.use_abs_pos_embeddings:
             pos_emb = self.transformer.wpe(pos)  # position embeddings of shape (t, n_embd)
+            # print("3", pos_emb.size())
+            # print("4", tok_emb.size())
             x = self.transformer.drop(tok_emb + pos_emb)
         else:
             x = self.transformer.drop(tok_emb)
@@ -413,7 +445,8 @@ class GPT(nn.Module):
         x = self.transformer.ln_f(x)
 
         # Pass through the new linear layer
-        x = self.scale_linear(x)
+        x = torch.matmul(x, self.scale_matrix.t())
+        # print("5", x.size())
 
         if targets is not None:
             # If we are given some desired targets, also calculate the loss
@@ -568,6 +601,15 @@ class GPT(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
 
         return idx
+
+    def print_first_row(self, layer_name):
+        print(f"First row of {layer_name}:", next(p.data[0] for name, p in self.named_parameters() if layer_name in name))
+
+    def freeze_layers(self, layer_names):
+        for name, param in self.named_parameters():
+            if any(layer_name in name for layer_name in layer_names):
+                param.requires_grad = False
+                print(f"Freezing layer: {name}")
 
     @torch.no_grad()
     def generate_with_stop(self, idx, max_new_tokens, stop_string, decode, temperature=1.0, top_k=None):
