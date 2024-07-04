@@ -1,24 +1,26 @@
 import numpy as np
 import random
+import argparse
 
-# Define the mapping dictionaries
-letter_mapping = {
-    'H': (0.866, 0.5),
-    'M': (1.0, 0.0),
-    'L': (0.866, -0.5),
-    'y': (0.866, 0.5),
-    'n': (0.866, -0.5),
-    's': (0.866, 0.5),
-    'a': (1.0, 0.0),
-    'f': (0.866, -0.5),
-}
+def generate_letter_mapping(degrees):
+    radians = np.deg2rad(degrees)
+    return {
+        'H': (np.cos(radians), np.sin(radians)),
+        'M': (1.0, 0.0),
+        'L': (np.cos(radians), -np.sin(radians)),
+        'y': (np.cos(radians), np.sin(radians)),
+        'n': (np.cos(radians), -np.sin(radians)),
+        's': (np.cos(radians), np.sin(radians)),
+        'a': (1.0, 0.0),
+        'f': (np.cos(radians), -np.sin(radians)),
+    }
 
 # Define a function to generate random coordinates
 def random_coordinates(mean=0.0, stdev=0.02):
     return (random.gauss(mean, stdev), random.gauss(mean, stdev))
 
 # Define a function to map letters
-def map_letter(letter):
+def map_letter(letter, letter_mapping):
     if letter in letter_mapping:
         return letter_mapping[letter]
     elif letter == 'r':
@@ -26,6 +28,14 @@ def map_letter(letter):
     else:
         # For unspecified letters, return random coordinates
         return random_coordinates()
+
+# Argument parsing
+parser = argparse.ArgumentParser(description='Generate initial_wte.npy with specified degrees of separation.')
+parser.add_argument('--degrees', type=int, default=60, help='Degrees of separation between high and low values (default: 60)')
+args = parser.parse_args()
+
+# Generate the letter mapping based on the degrees
+letter_mapping = generate_letter_mapping(args.degrees)
 
 # # Input table
 # table = [
@@ -82,6 +92,8 @@ def map_letter(letter):
 #     ['z', 'H', 'L', 'y', 'n', 'n', 'y', 'L', 'n', 'n', 'n', 'n', 'a'],
 # ]
 table = [
+    ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+    ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
     ['L', 'H', 'y', 'y', 'n', 'n', 'n', 'H', 'y', 'n', 'n', 'f'],
     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
     ['L', 'L', 'y', 'n', 'n', 'y', 'L', 'n', 'n', 'n', 'n', 'r'],
@@ -108,11 +120,39 @@ table = [
     ['M', 'H', 'y', 'n', 'n', 'y', 'L', 'n', 'n', 'n', 'n', 'r'],
     ['H', 'L', 'y', 'n', 'n', 'y', 'L', 'n', 'n', 'n', 'n', 'a'],
 ]
-
-
+# table = [
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+#     ['r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
+# ]
 
 # Map the table
-mapped_table = [[item for letter in row for item in map_letter(letter)] for row in table]
+mapped_table = [[item for letter in row for item in map_letter(letter, letter_mapping)] for row in table]
+
 
 # Convert to numpy array
 wte = np.array(mapped_table)/1.0
