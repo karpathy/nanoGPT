@@ -1,4 +1,5 @@
 import torch
+import os
 from snac import SNAC
 import torchaudio
 import json
@@ -49,11 +50,6 @@ class SpeechTokenizer:
         codes = [torch.tensor(c) for c in codes_list]
         return codes
 
-    # def flatten_tensors(self, tensors, separator=4097):
-    #     """Simplified flattening of tensors into a flat list of integers."""
-    #     flattened = [separator] + [item for tensor in tensors for sublist in tensor.tolist() for item in sublist]
-    #     flattened.append(separator)
-    #     return flattened
     def flatten_tensors(self, tensors, separator=4097):
         """Flatten tensors into a flat list of integers with specific popping rules."""
         flattened = []
@@ -174,19 +170,38 @@ def decode_audio(model, input_path, output_path, input_format='json'):
     audio_hat = model.decode(codes)
     save_tensor_to_mp3(audio_hat, output_path)
 
+def process_directory(model, input_dir, output_dir):
+    """Process all MP3 files in a directory and create individual txt files for each."""
+    os.makedirs(output_dir, exist_ok=True)
+    for filename in os.listdir(input_dir):
+        if filename.endswith('.mp3'):
+            print(f"Processing {filename}")
+            input_path = os.path.join(input_dir, filename)
+            output_base = os.path.splitext(filename)[0]
+            json_output_path = os.path.join(output_dir, f"{output_base}.json")
+            text_output_path = os.path.join(output_dir, f"{output_base}.txt")
+            encode_audio(model, input_path, json_output_path, text_output_path)
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Encode and decode audio using SNAC")
     parser.add_argument('mode', choices=['encode', 'decode'], help="Mode: encode or decode")
-    parser.add_argument('input', help="Input file path (.mp3 for encode, .json or .txt for decode)")
-    parser.add_argument('output', help="Output file path (.json and .txt for encode, .mp3 for decode)")
+    parser.add_argument('input', help="Input file path or directory (for encode)")
+    parser.add_argument('output', help="Output file path or directory (for encode)")
     parser.add_argument('--input_format', choices=['json', 'text'], default='json', help="Input format for decoding (json or text)")
+    parser.add_argument('--directory', action='store_true', help="Process all MP3 files in the input directory")
     args = parser.parse_args()
 
+    model = SpeechTokenizer('cuda')
+
     if args.mode == 'encode':
-        encode_audio(SpeechTokenizer('cuda'), args.input, args.output + '.json', args.output + '.txt')
+        if args.directory:
+            process_directory(model, args.input, args.output)
+        else:
+            encode_audio(model, args.input, args.output + '.json', args.output + '.txt')
     elif args.mode == 'decode':
-        decode_audio(SpeechTokenizer('cuda'), args.input, args.output, input_format=args.input_format)
+        decode_audio(model, args.input, args.output, input_format=args.input_format)
 
 if __name__ == "__main__":
     main()
