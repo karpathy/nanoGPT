@@ -9,19 +9,27 @@
 
 # Run the Python script with the specified arguments
 
-# Add url with dataset here:
-url="https://huggingface.co/datasets/eastwind/tiny-sherlock-audio/tree/main"
+url="https://huggingface.co/datasets/eastwind/tiny-sherlock-audio"
+out_dir="input_mp3s"
+txt_dir="texts"
 
-wget -c -A '*.mp3' -r -l 1 -nd http://example.org/musics/
-# uncomment and fill in if url has json datasets
-# Note: the $'\n' syntax allows for special characters like \n
-# python3 ./utils/get_json_dataset.py \
-#   --url "${url}" \
-#   --include_keys "instruction" "response" \
-#   --value_prefix $'#U:\n' $'#B:\n'
+if [[ ! -d "${out_dir}" ]]; then
+  mkdir -p "${out_dir}"
+fi
 
-# uncomment and fill in if url has parquet datasets
-# python3 ./utils/get_parquet_dataset.py \
-#   --url "${url}" \
-#   --include_keys "instruction" "response" \
-#   --value_prefix $'#U:\n' $'#B:\n'
+for i in $(seq -f "%02g" 1 24); do
+  wget -nc -O "${out_dir}/tiny_sherlock_audio_${i}.mp3" "${url}/resolve/main/adventuresholmes_${i}_doyle_64kb.mp3?download=true"
+donej
+
+# Helps when utilizing on consumer GPUs
+python3 split_mp3s.py "${out_dir}" --max_size_mb 5
+
+# Append all files txt to the input.txt file
+python3 snac_converter.py encode "split_${out_dir}" "${txt_dir}" --directory
+
+# concatenate text files
+cat "${txt_dir}"/*.txt > mp3_input.txt
+
+# create train.bin and val.bin as well as meta.pkl
+python3 prepare.py -t mp3_input.txt --numeric_range --min_token 0 --max_token 4097
+
