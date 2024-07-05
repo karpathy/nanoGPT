@@ -37,6 +37,7 @@ def parse_args():
     parser.add_argument('--chart_type', type=str, default='heatmap', choices=['heatmap', 'barchart'], help="Type of chart to display: 'heatmap' or 'barchart'")
     parser.add_argument('--block_size', type=int, default=None, help="Block size for context length, default is model's block size")
     parser.add_argument('--sym_rot_num_angles', type=int, default=None, help="Number of angles for symmetrical rotary embedding")
+    parser.add_argument('--token_boundary', type=str, default=None, help="optional separator between emitted tokens")
 
     return parser.parse_args()
 
@@ -160,6 +161,10 @@ def main():
             stoi, itos = meta['stoi'], meta['itos']
             encode = lambda s: [stoi[c] for c in s]
             decode = lambda l: ''.join([itos[i] for i in l])
+        elif args.token_boundary:
+            stoi, itos = meta['stoi'], meta['itos']
+            encode = lambda s: [stoi[c] for c in s]
+            decode = lambda l: args.token_boundary.join([itos[i] for i in l])
         else:
             stoi, itos = meta['stoi'], meta['itos']
             encode = lambda s: [stoi[c] for c in s]
