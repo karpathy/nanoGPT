@@ -1,10 +1,16 @@
-import torch
-import os
-from snac import SNAC
-import torchaudio
-import json
+ # General Imports
+import argparse
 from collections import deque
+import json
+import os
+
+# Progress bars
 from tqdm import tqdm
+
+# ML Related
+from snac import SNAC
+import torch
+import torchaudio
 
 class SpeechTokenizer:
     def __init__(self, device='cpu') -> None:
@@ -183,7 +189,6 @@ def process_directory(model, input_dir, output_dir):
         encode_audio(model, input_path, json_output_path, text_output_path)
 
 def main():
-    import argparse
     parser = argparse.ArgumentParser(description="Encode and decode audio using SNAC")
     parser.add_argument('mode', choices=['encode', 'decode'], help="Mode: encode or decode")
     parser.add_argument('input', help="Input file path or directory (for encode)")
