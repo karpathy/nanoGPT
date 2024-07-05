@@ -4,6 +4,7 @@ from snac import SNAC
 import torchaudio
 import json
 from collections import deque
+from tqdm import tqdm
 
 class SpeechTokenizer:
     def __init__(self, device='cpu') -> None:
@@ -173,15 +174,13 @@ def decode_audio(model, input_path, output_path, input_format='json'):
 def process_directory(model, input_dir, output_dir):
     """Process all MP3 files in a directory and create individual txt files for each."""
     os.makedirs(output_dir, exist_ok=True)
-    for filename in os.listdir(input_dir):
-        if filename.endswith('.mp3'):
-            print(f"Processing {filename}")
-            input_path = os.path.join(input_dir, filename)
-            output_base = os.path.splitext(filename)[0]
-            json_output_path = os.path.join(output_dir, f"{output_base}.json")
-            text_output_path = os.path.join(output_dir, f"{output_base}.txt")
-            encode_audio(model, input_path, json_output_path, text_output_path)
-
+    mp3_files = [f for f in os.listdir(input_dir) if f.endswith('.mp3')]
+    for filename in tqdm(mp3_files, desc="Processing MP3 files"):
+        input_path = os.path.join(input_dir, filename)
+        output_base = os.path.splitext(filename)[0]
+        json_output_path = os.path.join(output_dir, f"{output_base}.json")
+        text_output_path = os.path.join(output_dir, f"{output_base}.txt")
+        encode_audio(model, input_path, json_output_path, text_output_path)
 
 def main():
     import argparse
