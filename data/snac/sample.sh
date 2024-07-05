@@ -1,7 +1,10 @@
 #!/bin/bash
 
-# Example of how to create output, assumes checkpoint createdd
+
 pushd ../../
+
+train.py --device cuda --dataset snac --shared_fire_embeddings --no-use_abs_pos_embedding --use_fire_embeddings --compile
+
 python3 sample.py --device=cuda --out_dir ./out --start "" --token_boundary $'\n' --num_samples 1 --sample_file ./data/snac/sample.txt
 
 # Remove frames which do not have 7 entries.
