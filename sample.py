@@ -204,7 +204,7 @@ def main():
                     print("[bold green]" + output_line)
                     print('---------------')
                     if args.sample_file:
-                        with open(args.sample_file, "a") as file:
+                        with open(args.sample_file, "w") as file:
                             file.write(output_line)
 
 
