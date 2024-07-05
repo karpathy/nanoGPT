@@ -6,6 +6,10 @@ import sentencepiece as spm
 import tempfile
 import tiktoken
 import sys
+import argparse
+import numpy as np
+import pickle
+import sys
 
 def get_key_from_meta(keyname):
     # Data loader
@@ -15,10 +19,33 @@ def get_key_from_meta(keyname):
             meta = pickle.load(f)
             if keyname in meta:
                 return meta[keyname]
+
+def tokenize_numeric_range(data, min_token, max_token):
+    """Tokenize data assuming one number per line within the specified range."""
+    tokens = []
+    encountered_tokens = set()
+    for line in data.strip().split('\n'):
+        try:
+            num = int(line)
+            if min_token <= num <= max_token:
+                tokens.append(num)
+                encountered_tokens.add(num)
             else:
-                sys.exit(f"Error: {keyname} key not found in {meta_path}")
-    else:
-        sys.exit(f"Error: File not found - {meta_path}")
+                print(f"Warning: Number {num} is outside the specified range and will be skipped.")
+        except ValueError:
+            print(f"Warning: Invalid number '{line}' will be skipped.")
+
+    # Create a complete range of tokens from min_token to max_token
+    all_tokens = list(range(max_token, -1, -1))
+
+    # Create stoi and itos dictionaries for the entire range
+    stoi = {str(num): i for i, num in enumerate(all_tokens)}
+    itos = {i: str(num) for i, num in enumerate(all_tokens)}
+
+    # Convert tokens to their indices
+    indexed_tokens = [stoi[str(token)] for token in tokens]
+
+    return indexed_tokens, stoi, itos, encountered_tokens
 
 def tokenize_custom_tokens_and_replace(data, tokens):
     """Tokenize data using custom tokens and replace found tokens with underscores."""
@@ -64,6 +91,13 @@ def tokenize_custom_tokens(data, tokens):
     coverage = covered_chars / len(data)
     return encoded_data, coverage, stoi, {i: token for i, token in enumerate(tokens)}
 
+def tokenize_lines_from_file(file_path):
+    """Tokenize each line from the file as a unique token, sort and ensure uniqueness."""
+    with open(file_path, 'r') as f:
+        tokens = {line.strip() for line in f if line.strip()}
+    tokens = sorted(tokens)
+    return tokens
+
 def train_sentencepiece_model(input_files, model_prefix, vocab_size):
     """Train a SentencePiece model directly with a single file or using concatenated input files."""
     num_threads = os.cpu_count()
@@ -105,22 +139,18 @@ def train_sentencepiece_model(input_files, model_prefix, vocab_size):
     if isinstance(input_files, list):
         os.remove(input_arg)
 
-
 def tokenize_sentencepiece(sp_model, data):
     """Tokenize data using the SentencePiece model."""
     return sp_model.encode_as_ids(data)
-
 
 def tokenize_tiktoken(enc, data):
     """Tokenize data using TikToken."""
     return enc.encode_ordinary(data)
 
-
 def encode_char_level(data, chars):
     """Encode data at character level."""
     stoi = {ch: i for i, ch in enumerate(chars)}
     return [stoi[ch] for ch in data], stoi, {i: ch for i, ch in enumerate(chars)}
-
 
 def main():
     parser = argparse.ArgumentParser(
@@ -136,7 +166,7 @@ def main():
     parser.add_argument(
         "--method",
         type=str,
-        choices=["sentencepiece", "tiktoken", "char", "custom", "replace"],
+        choices=["sentencepiece", "tiktoken", "char", "custom", "replace", "lines"],
         default="tiktoken",
         help="Tokenization method",
     )
@@ -196,7 +226,6 @@ def main():
         help="Output file for tokenized validation data",
     )
 
-
     # Options for using separate training and validation input files
     parser.add_argument(
         "-s",
@@ -214,10 +243,27 @@ def main():
     parser.add_argument(
         "-p", "--percentage_train", type=float, default=0.9, help="value between 0 and 1.0 for train percentage split"
     )
+    parser.add_argument(
+        "--numeric_range",
+        action="store_true",
+        help="Use numeric range tokenization method",
+    )
+    parser.add_argument(
+        "--min_token",
+        type=int,
+        default=0,
+        help="Minimum value for numeric tokens",
+    )
+    parser.add_argument(
+        "--max_token",
+        type=int,
+        default=65535,
+        help="Maximum value for numeric tokens",
+    )
 
     args = parser.parse_args()
 
-    # initalize train_ids, which are used for binarization
+    # Initialize train_ids, which are used for binarization
     train_ids = None
 
     if args.use_separate_files:
@@ -250,7 +296,36 @@ def main():
             train_data = data[: int(n * args.percentage_train)]
             val_data = data[int(n * args.percentage_train) :]
 
-    if args.method == "sentencepiece":
+
+    if args.numeric_range:
+        # Perform numeric range tokenization
+        train_ids, stoi, itos, train_encountered = tokenize_numeric_range(train_data, args.min_token, args.max_token)
+        if val_data is not None:
+            val_ids, _, _, val_encountered = tokenize_numeric_range(val_data, args.min_token, args.max_token)
+            encountered_tokens = train_encountered.union(val_encountered)
+        else:
+            encountered_tokens = train_encountered
+
+        vocab_size = len(stoi)
+        print(f"Vocab size: {vocab_size}")
+        print(f"Number of unique tokens encountered in data: {len(encountered_tokens)}")
+
+        # Create meta information
+        meta = {
+            "vocab_size": vocab_size,
+            "tokenizer": "numeric_range",
+            "min_token": args.min_token,
+            "max_token": args.max_token,
+            "stoi": stoi,
+            "itos": itos,
+            "encountered_tokens": sorted(encountered_tokens, reverse=True)
+        }
+
+        # Save meta information
+        with open("meta.pkl", "wb") as f:
+            pickle.dump(meta, f)
+
+    elif args.method == "sentencepiece":
         if args.spm_model_file and args.spm_vocab_file:
             # Load pre-trained SentencePiece model
             sp = spm.SentencePieceProcessor()
@@ -310,7 +385,7 @@ def main():
             pickle.dump(meta, f)
 
 
-    if args.method == "replace":
+    elif args.method == "replace":
         if args.tokens_file is None:
             raise ValueError("Tokens file must be provided for custom tokenization method.")
         with open(args.tokens_file, "r") as f:
@@ -348,9 +423,7 @@ def main():
         with open("meta.pkl", "wb") as f:
             pickle.dump(meta, f)
 
-    # Rest of the main function remains unchanged, includ
     elif args.method == "char":
-
         if args.reuse_chars:
             chars = get_key_from_meta('chars')
             train_ids, stoi, itos = encode_char_level(train_data, chars)
@@ -368,7 +441,6 @@ def main():
             print("All unique characters:", "".join(chars))
             print(f"Vocab size: {vocab_size}")
 
-
             train_ids, stoi, itos = encode_char_level(train_data, chars)
             if val_data != None:
                 val_ids, _, _ = encode_char_level(val_data, chars)
@@ -382,22 +454,42 @@ def main():
             print("Char method skipping tokenization and .bin file creation.")
             return
 
+    elif args.method == "lines":
+        if args.tokens_file is None:
+            raise ValueError("Tokens file must be provided for line tokenization method.")
+        tokens = tokenize_lines_from_file(args.tokens_file)
+        print(f"Unique sorted tokens from lines: {tokens}")
+
+        # Create mappings
+        stoi = {token: i for i, token in enumerate(tokens)}
+        itos = {i: token for i, token in enumerate(tokens)}
+
+        # Tokenize train and validation data
+        train_ids = [stoi[line.strip()] for line in train_data.splitlines() if line.strip()]
+        if val_data is not None:
+            val_ids = [stoi[line.strip()] for line in val_data.splitlines() if line.strip()]
+
+        # Save metadata including stoi and itos in a pickle file
+        meta = {"vocab_size": len(tokens), "stoi": stoi, "itos": itos}
+        with open("meta.pkl", "wb") as f:
+            pickle.dump(meta, f)
+
     # Print token counts and export to bin files
-    if train_ids == None:
+    if train_ids is None:
         sys.exit(f"train_ids none, exiting with error")
 
     print(f"train has {len(train_ids):,} tokens")
-    if val_data != None:
+    if val_data is not None:
         print(f"val has {len(val_ids):,} tokens")
-    if args.tiktoken_encoding == "cl100k_base":
-        np.array(train_ids, dtype=np.uint32).tofile(args.train_output)
-        if val_data != None:
-            np.array(val_ids, dtype=np.uint32).tofile(args.val_output)
+    if (args.tiktoken_encoding == "cl100k_base" and args.method == "tiktoken") or (args.numeric_range and args.max_token > 65535):
+        dtype = np.uint32
     else:
-        np.array(train_ids, dtype=np.uint16).tofile(args.train_output)
-        if val_data != None:
-            np.array(val_ids, dtype=np.uint16).tofile(args.val_output)
+        dtype = np.uint16
 
+    np.array(train_ids, dtype=dtype).tofile(args.train_output)
+    if val_data is not None:
+        np.array(val_ids, dtype=dtype).tofile(args.val_output)
 
 if __name__ == "__main__":
     main()
+
