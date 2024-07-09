@@ -1,8 +1,5 @@
 #!/bin/bash
 
-set +x
-
-
 download_dir="./downloaded_jsons"
 if [[ ! -d "$download_dir" ]]; then
   mkdir -p "$download_dir"
