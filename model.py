@@ -332,7 +332,7 @@ class GPT(nn.Module):
 
     def __init__(self, config, wte_path="initial_wte.npy"):
         # def __init__(self, config, wte_path=None):
-        wte_path=None
+        # wte_path=None
         super().__init__()
         assert config.vocab_size is not None
         assert config.block_size is not None
@@ -387,9 +387,10 @@ class GPT(nn.Module):
 
         with torch.no_grad():
             self.lm_head.weight.copy_(initial_embeddings_tensor)
-            self.print_first_row('lm_head.weight')
         self.transformer.wte.weight = self.lm_head.weight  # https://paperswithcode.com/method/weight-tying
 
+        print(self.lm_head.weight)
+        print(self.transformer.wte.weight)
         # Freeze lm_head and wte
         # self.freeze_layers(['lm_head', 'wte'])
         # Apply special scaled init to the residual projections, per GPT-2 paper
@@ -604,6 +605,11 @@ class GPT(nn.Module):
 
     def print_first_row(self, layer_name):
         print(f"First row of {layer_name}:", next(p.data[0] for name, p in self.named_parameters() if layer_name in name))
+
+    def export_embedding_table(self, file_path):
+        embedding_table = self.transformer.wte.weight.detach().cpu().numpy()
+        np.save(file_path, embedding_table)
+        print(f"Embedding table saved to {file_path}")
 
     def freeze_layers(self, layer_names):
         for name, param in self.named_parameters():
