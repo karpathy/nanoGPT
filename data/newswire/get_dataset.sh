@@ -1,26 +1,32 @@
 #!/bin/bash
 
-### Instructions:
-# 1. Replace "INSERT_URL_WITH_FILES" with the actual URL to the Parquet files.
-# 2. Modify the "include_keys" array to specify the keys you want to include in the output.
-# 3. (Optionally) Modify the "value_prefixes" array to set prefixes for each value, use "" for empty prefixes
-# 4. Set "--skip_empty" to true if you want to skip empty fields, or false if not needed.
-# 5. Set "--no_output_text" to true if you plan to process the intermediate json files in a custom manner.
+set +x
 
-# Run the Python script with the specified arguments
+download_dir="./downloaded_jsons"
+output_file="input.txt"
 
-# Add url with dataset here:
-url="https://huggingface.co/datasets/dell-research-harvard/newswire/tree/main"
+for (( i = 1878; i < 1977; i++ )); do
+  url="https://huggingface.co/datasets/dell-research-harvard/newswire/resolve/main/${i}_data_clean.json?download=true"
+  if  [ ! -f "${download_dir}/${i}.json" ]; then
+    wget -O "${download_dir}/${i}.json" -N "${url}" 
+  else
+    echo "${download_dir}/${i}.json already exists. Skipping download." 
+  fi
 
-# uncomment and fill in if url has json datasets
-# Note: the $'\n' syntax allows for special characters like \n
-python3 ./utils/get_json_dataset.py \
-  --url "${url}" \
-  --include_keys "article" "ca_topic" "year" \
-  --value_prefix $'#U:\n Here is an article, give the topic and year.' $'#B:\nTopic: ' $'\nYear: '
 
-# uncomment and fill in if url has parquet datasets
-# python3 ./utils/get_parquet_dataset.py \
-#   --url "${url}" \
-#   --include_keys "instruction" "response" \
-#   --value_prefix $'#U:\n' $'#B:\n'
+  article_prefix=$'\n#U: Here is an article, give me the topic and the year\n'
+  ca_topic_prefix=$'\n#B:\nThe topic is '
+  year_prefix=$'\nThe year is '
+
+  # Extract and prefix the "article", "ca_topic", and "year" sections and append to output file
+  jq -r --arg article_prefix "$article_prefix" --arg ca_topic_prefix "$ca_topic_prefix" --arg year_prefix "$year_prefix" '
+      .[] | 
+      {
+          article: ($article_prefix + .article),
+          ca_topic: ($ca_topic_prefix + .ca_topic),
+          year: ($year_prefix + (.dates[0] // ""))
+      } | 
+      to_entries[] | .value
+    ' "${download_dir}/${i}.json" >> "$output_file"
+
+done
