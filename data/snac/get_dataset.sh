@@ -19,7 +19,7 @@ fi
 
 for i in $(seq -f "%02g" 1 24); do
   wget -nc -O "${out_dir}/tiny_sherlock_audio_${i}.mp3" "${url}/resolve/main/adventuresholmes_${i}_doyle_64kb.mp3?download=true"
-donej
+done
 
 # Helps when utilizing on consumer GPUs
 python3 split_mp3s.py "${out_dir}" --max_size_mb 5
