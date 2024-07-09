@@ -1,0 +1,14 @@
+[
+    {
+        "max_iters": ["10000"],
+        "device": ["cuda"],
+        "dataset": ["spaces_and_newlines"],
+        "compile": [true],
+        "use_fire_embeddings": [true],
+        "shared_fire_embeddings": [true],
+        "decay_lr": [true],
+        "export_embedding": ["phoneme_shared_fire_unfrozen_final_really_30deg_cf_fix_less_agg1869.npy"],
+        "tensorboard_run_name": ["phoneme_sharedfire_unfrozen_really_30deg_cf_fix_less_agg1869"]
+    }
+]
+
