@@ -2,15 +2,20 @@
 
 set +x
 
+
 download_dir="./downloaded_jsons"
+if [[ ! -d "$download_dir" ]]; then
+  mkdir -p "$download_dir"
+fi
+
 output_file="input.txt"
 
-for (( i = 1878; i < 1977; i++ )); do
+for (( i = 1878; i < 1880; i++ )); do
   url="https://huggingface.co/datasets/dell-research-harvard/newswire/resolve/main/${i}_data_clean.json?download=true"
   if  [ ! -f "${download_dir}/${i}.json" ]; then
-    wget -O "${download_dir}/${i}.json" -N "${url}" 
+    wget -O "${download_dir}/${i}.json" -N "${url}"
   else
-    echo "${download_dir}/${i}.json already exists. Skipping download." 
+    echo "${download_dir}/${i}.json already exists. Skipping download."
   fi
 
 
@@ -20,12 +25,12 @@ for (( i = 1878; i < 1977; i++ )); do
 
   # Extract and prefix the "article", "ca_topic", and "year" sections and append to output file
   jq -r --arg article_prefix "$article_prefix" --arg ca_topic_prefix "$ca_topic_prefix" --arg year_prefix "$year_prefix" '
-      .[] | 
+      .[] |
       {
           article: ($article_prefix + .article),
           ca_topic: ($ca_topic_prefix + .ca_topic),
           year: ($year_prefix + (.dates[0] // ""))
-      } | 
+      } |
       to_entries[] | .value
     ' "${download_dir}/${i}.json" >> "$output_file"
 
