@@ -33,8 +33,20 @@ To mark new frames, we simply add a separation token between sequential outputs:
 Each of these numbers counts as a single token, and spaces are skipped for
 maximum context length capability.
 
-## Usage
+## Install Dependencies
 
+These scripts depend on ffmpeg and snac:
+
+```
+sudo apt install ffmpeg
+```
+
+```
+pip install snac
+```
+
+
+## Usage
 
 **Step 1.**
 
