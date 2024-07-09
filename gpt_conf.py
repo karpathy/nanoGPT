@@ -106,6 +106,9 @@ class GPTConfig:
     bias: bool = False # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
     prmsnorm_pct: float = 0.0625
     krmsnorm_num: float = 10
+    krmsnorm_quantize_type: str = 'int8'
+    krmsnorm_enable_gain: bool = True
+    krmsnorm_selection_type: str = 'last'
 
     # Activation Alternatives
     activation_variant: str = "gelu"

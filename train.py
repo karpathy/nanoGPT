@@ -80,6 +80,9 @@ def parse_args():
     model_group.add_argument('--bias', default=False, action=argparse.BooleanOptionalAction, help="only used for layernorm variation option")
     model_group.add_argument("--prmsnorm_pct", default=0.0625, type=float, help="percentage (1 being 100 percent) of first entries used for partial rms" )
     model_group.add_argument("--krmsnorm_num", default=10, type=int, help="max number of first entries for partial rms" )
+    model_group.add_argument("--krmsnorm_quantize_type", type=str, default="none", choices=["int8", "int16", "none"])
+    model_group.add_argument('--krmsnorm_enable_gain', default=True, action=argparse.BooleanOptionalAction, help="include gain in kRMSNorm")
+    model_group.add_argument("--krmsnorm_selection_type", type=str, default="last", choices=["first", "last", "random"])
 
     # ACTIVATION VARIATIONS
     model_group.add_argument(
@@ -746,6 +749,18 @@ class Trainer:
                 print(f"step {self.iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
                 self.log_metrics(losses, lr, running_mfu, self.iter_num)
 
+                if math.isnan(losses["val"]):
+                    checkpoint = {
+                        'model': self.raw_model.state_dict(),
+                        'optimizer': self.optimizer.state_dict(),
+                        'model_args': self.model_args,
+                        'iter_num': self.iter_num,
+                        'best_val_loss': self.best_val_loss,
+                        'nan_iter_num' : 0,
+                        'nan' : True,
+                        'config': vars(self.args),
+                    }
+                    torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
                 if losses['val'] < self.best_val_loss or self.args.always_save_checkpoint:
                     if losses['val'] < self.best_val_loss:
                         self.iter_num_best_val_loss = self.iter_num
