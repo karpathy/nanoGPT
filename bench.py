@@ -10,16 +10,16 @@ from model import GPTConfig, GPT
 
 # -----------------------------------------------------------------------------
 TK_kernel  = True  # expected MFU on H100 = 51%
-TK_kernel  = False # expected MFU on H100 = 36%
+# TK_kernel  = False # expected MFU on H100 = 36%
 
-batch_size = 16
+batch_size = 4
 block_size = 4096
 bias = False
 real_data = True
 seed = 1337
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
-dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32' or 'bfloat16' or 'float16'
-compile = True # use PyTorch 2.0 to compile the model to be faster
+dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' 
+compile = False # use PyTorch 2.0 to compile the model to be faster
 profile = False # use pytorch profiler, or just simple benchmarking?
 exec(open('configurator.py').read()) # overrides from command line or config file
 # -----------------------------------------------------------------------------
@@ -53,7 +53,9 @@ else:
 # model init
 gptconf = GPTConfig(
     block_size = block_size, # how far back does the model look? i.e. context size
-    n_layer = 12, n_head = 12, n_embd = 768, # size of the model
+    n_layer = 12, 
+    n_head = 12, 
+    n_embd = 768, # size of the model
     dropout = 0, # for determinism
     bias = bias,
     batch_size = batch_size,

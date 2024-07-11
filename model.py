@@ -18,6 +18,7 @@ from torch.nn import functional as F
 import sys
 sys.path.append('build/lib.linux-x86_64-3.10')
 import h100_fwd as tk
+from custom_model import CustomAttention
 
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
@@ -47,10 +48,6 @@ class CausalSelfAttention(nn.Module):
         self.n_embd = config.n_embd
         self.dropout = config.dropout
         
-        # B, H, N, D
-        self.y = torch.zeros(config.batch_size, config.n_head, config.block_size, config.n_embd // config.n_head, device='cuda', dtype=torch.bfloat16)
-        self.y = self.y.contiguous()
-        
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
         if not self.flash:
@@ -58,6 +55,11 @@ class CausalSelfAttention(nn.Module):
             # causal mask to ensure that attention is only applied to the left in the input sequence
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
+
+        if self.config.TK_kernel:
+            # B, H, N, D
+            self.y = torch.zeros(config.batch_size, config.n_head, config.block_size, config.n_embd // config.n_head, device='cuda', dtype=torch.bfloat16)
+            self.y = self.y.contiguous()
 
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
@@ -68,24 +70,34 @@ class CausalSelfAttention(nn.Module):
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2).contiguous() # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2).contiguous() # (B, nh, T, hs)
         
-        y = self.y
-
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
-            original_t = q.size(2)
-            if q.size(2) % 256 != 0:
-                pad = 256 - q.size(2) % 256
-                q = F.pad(q, (0, 0, 0, pad))
-                k = F.pad(k, (0, 0, 0, pad))
-                v = F.pad(v, (0, 0, 0, pad))
-            
             if self.config.TK_kernel:
+                y = self.y
+
+                # pad during inference
+                is_padding = False
+                if q.size(2) % 256 != 0:
+                    original_t = q.size(2)
+                    pad = 256 - (q.size(2) % 256)
+                    q = F.pad(q, (0, 0, 0, pad))
+                    k = F.pad(k, (0, 0, 0, pad))
+                    v = F.pad(v, (0, 0, 0, pad))
+                    is_padding = True
+                    y = torch.zeros_like(q)
+
+                # call tk kernel
                 tk.attention_forward_causal(q, k, v, y)
+                
+                # undo the padding
+                if is_padding: 
+                    y = y[:, :, :original_t, :]
             else:
                 # efficient attention using Flash Attention CUDA kernels
-                y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
+                y = torch.nn.functional.scaled_dot_product_attention(
+                    q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True
+                )
                 
-            y = y[:, :, :original_t, :]
         else:
             # manual implementation of attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
@@ -120,7 +132,10 @@ class Block(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
-        self.attn = CausalSelfAttention(config)
+        if config.TK_kernel and config.is_train: 
+            self.attn = CustomAttention(config, config.batch_size, config. n_head, config.block_size, config.n_embd)
+        else:
+            self.attn = CausalSelfAttention(config)
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
@@ -140,6 +155,7 @@ class GPTConfig:
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
     TK_kernel: bool = False # True: use the TK kernel, False: use standard flash attention
+    is_train: bool = False
 
 class GPT(nn.Module):
 
@@ -230,11 +246,11 @@ class GPT(nn.Module):
                 block.attn.bias = block.attn.bias[:,:,:block_size,:block_size]
 
     @classmethod
-    def from_pretrained(cls, model_type, override_args=None):
+    def from_pretrained(cls, model_type, override_args=None, TK_kernel=False, batch_size=None):
         assert model_type in {'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'}
         override_args = override_args or {} # default to empty dict
         # only dropout can be overridden see more notes below
-        assert all(k == 'dropout' for k in override_args)
+        # assert all(k == 'dropout' for k in override_args)
         from transformers import GPT2LMHeadModel
         print("loading weights from pretrained gpt: %s" % model_type)
 
@@ -255,6 +271,12 @@ class GPT(nn.Module):
             config_args['dropout'] = override_args['dropout']
         # create a from-scratch initialized minGPT model
         config = GPTConfig(**config_args)
+        if TK_kernel:  
+            config.TK_kernel = True
+            if batch_size: 
+                config.batch_size = batch_size
+        else:  
+            config.TK_kernel = False
         model = GPT(config)
         sd = model.state_dict()
         sd_keys = sd.keys()
@@ -283,7 +305,6 @@ class GPT(nn.Module):
                 assert sd_hf[k].shape == sd[k].shape
                 with torch.no_grad():
                     sd[k].copy_(sd_hf[k])
-
         return model
 
     def configure_optimizers(self, weight_decay, learning_rate, betas, device_type):
