@@ -42,13 +42,13 @@ Note that the code by default uses [PyTorch 2.0](https://pytorch.org/get-started
 
 We can train a full model using our kernels:
 ```bash
-python train/train.py train/config/train_shakespeare_char.py
+python train.py config/train_shakespeare_char.py
 ```
 
 To scale things up with an 8 GPU node:
 ```bash
 python data/openwebtext/prepare.py
-torchrun --standalone --nproc_per_node=8 train/train.py train/config/train_gpt2.py
+torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 ```
 
 ## Finetuning
