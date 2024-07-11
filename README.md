@@ -65,16 +65,11 @@ python train.py config/finetune_shakespeare.py
 
 This will load the config parameter overrides in `config/finetune_shakespeare.py`. Basically, we initialize from a GPT2 checkpoint with `init_from` and train as normal, except shorter and with a small learning rate. If you're running out of memory try decreasing the model size (they are `{'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'}`) or possibly decreasing the `block_size` (context length). The best checkpoint (lowest validation loss) will be in the `out_dir` directory, e.g. in `out-shakespeare` by default, per the config file. 
 
-You can then run the code in `sample.py --out_dir=out-shakespeare` to check your model.
-
 ## Inference with a pre-trained LM
 
-Use the script `sample.py` to sample either from pre-trained GPT-2 models released by OpenAI. For example, here is a way to sample from the largest available `gpt2-xl` model:
+Here is a script you can use to sample from the largest available `gpt2-medium` model with and without TK kernels. 
 ```bash
-python sample.py \
-    --init_from=gpt2-xl \
-    --start="What is the answer to life, the universe, and everything?" \
-    --num_samples=5 --max_new_tokens=100
+python inference.py
 ```
 
 ## Citations

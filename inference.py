@@ -3,6 +3,8 @@ import pickle
 from contextlib import nullcontext
 import torch
 import tiktoken
+import sys
+sys.path.append("../")
 from model import GPTConfig, GPT
 
 # -----------------------------------------------------------------------------
