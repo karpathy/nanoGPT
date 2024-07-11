@@ -5,7 +5,7 @@ import torch
 import tiktoken
 import sys
 sys.path.append("../")
-from model import GPTConfig, GPT
+from train.model import GPTConfig, GPT
 
 # -----------------------------------------------------------------------------
 init_from = 'gpt2-medium' # either 'resume' (from an out_dir) or a gpt2 variant (e.g. 'gpt2-xl')
@@ -19,7 +19,7 @@ seed = 1337
 device = 'cuda' 
 dtype = 'bfloat16'
 compile = False # use PyTorch 2.0 to compile the model to be faster
-exec(open('configurator.py').read()) # overrides from command line or config file
+exec(open('train/configurator.py').read()) # overrides from command line or config file
 # -----------------------------------------------------------------------------
 
 torch.manual_seed(seed)

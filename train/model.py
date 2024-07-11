@@ -18,7 +18,7 @@ from torch.nn import functional as F
 import sys
 sys.path.append('build/lib.linux-x86_64-3.10')
 import h100_fwd as tk
-from custom_model import CustomAttention
+from train.custom_model import CustomAttention
 
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """

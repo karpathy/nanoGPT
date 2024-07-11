@@ -6,7 +6,9 @@ from contextlib import nullcontext
 import numpy as np
 import time
 import torch
-from model import GPTConfig, GPT
+import sys
+sys.path.append("../")
+from train.model import GPTConfig, GPT
 
 # -----------------------------------------------------------------------------
 TK_kernel  = True  # expected MFU on H100 = 51%
@@ -21,7 +23,7 @@ device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' 
 compile = False # use PyTorch 2.0 to compile the model to be faster
 profile = False # use pytorch profiler, or just simple benchmarking?
-exec(open('configurator.py').read()) # overrides from command line or config file
+exec(open('train/configurator.py').read()) # overrides from command line or config file
 # -----------------------------------------------------------------------------
 
 torch.manual_seed(seed)
