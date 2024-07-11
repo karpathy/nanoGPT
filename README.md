@@ -33,27 +33,22 @@ Let's first benchmark the kernel to make sure that everything is set up correctl
 To benchmark the TK Forward Causal Attention, set `TK_kernel` = True in `bench.py` and run:
 
 ```bash
-python bench.py
+python scripts/bench.py
 ```
 
 Note that the code by default uses [PyTorch 2.0](https://pytorch.org/get-started/pytorch-2.0/). At the time of writing (Dec 29, 2022) this makes `torch.compile()` available in the nightly release. The improvement from the one line of code is noticeable, e.g. cutting down iteration time from ~250ms / iter to 135ms / iter. Nice work PyTorch team!
 
-## Training and inference
+## Training
 
 We can train a full model using our kernels:
 ```bash
-python train.py config/train_shakespeare_char.py
-```
-
-And run inference:
-```bash
-python sample.py --out_dir=out-shakespeare-char
+python train/train.py train/config/train_shakespeare_char.py
 ```
 
 To scale things up with an 8 GPU node:
 ```bash
 python data/openwebtext/prepare.py
-torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
+torchrun --standalone --nproc_per_node=8 train/train.py train/config/train_gpt2.py
 ```
 
 ## Finetuning
@@ -69,7 +64,7 @@ This will load the config parameter overrides in `config/finetune_shakespeare.py
 
 Here is a script you can use to sample from the largest available `gpt2-medium` model with and without TK kernels. 
 ```bash
-python inference.py
+python scripts/inference.py
 ```
 
 ## Citations

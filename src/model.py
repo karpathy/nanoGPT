@@ -18,7 +18,7 @@ from torch.nn import functional as F
 import sys
 sys.path.append('build/lib.linux-x86_64-3.10')
 import h100_fwd as tk
-from train.custom_model import CustomAttention
+from src.custom_model import CustomAttention
 
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
@@ -93,6 +93,7 @@ class CausalSelfAttention(nn.Module):
                 if is_padding: 
                     y = y[:, :, :original_t, :]
             else:
+                print("Running flash attention")
                 # efficient attention using Flash Attention CUDA kernels
                 y = torch.nn.functional.scaled_dot_product_attention(
                     q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True
