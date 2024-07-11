@@ -30,6 +30,8 @@ class AttentionFunction(Function):
         assert grad_output.shape[3] == 64, "TK train currently supports head dim 64 only"
         
         q, k, v, o, l_vec, grad_q, grad_k, grad_v, d_vec = ctx.saved_tensors
+
+        # print("Inside backwards tk")
         
         q = q.contiguous()
         k = k.contiguous()
@@ -52,13 +54,13 @@ class AttentionFunction(Function):
 
 
 class CustomAttention(nn.Module):
-    def __init__(self, config, b, h, n, d):
+    def __init__(self, config):
         super(CustomAttention, self).__init__()
-        self.b = b
-        self.h = h
-        self.n = n
-        self.d = d
-        self.scale = 1 / (d ** 0.5)
+        self.b = config.batch_size
+        self.h = config.n_head
+        self.n = config.block_size
+        self.d = config.n_embd
+        self.scale = 1 / (self.d ** 0.5)
         # key, query, value projections for all heads, but in a batch
         self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
         self.resid_dropout = nn.Dropout(config.dropout)
@@ -66,20 +68,23 @@ class CustomAttention(nn.Module):
         self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
 
         with torch.no_grad():
-            self.outputs = torch.empty((b, h, n, d // h), dtype=torch.bfloat16, device='cuda', requires_grad=False)
-            self.l_vec = torch.empty((b, h, n, 1), dtype=torch.bfloat16, device='cuda', requires_grad=False)
-            self.grad_q = torch.empty((b, h, n, d // h), dtype=torch.bfloat16, device='cuda', requires_grad=False)
-            self.grad_k = torch.empty((b, h, n, d // h), dtype=torch.bfloat16, device='cuda', requires_grad=False)
-            self.grad_v = torch.empty((b, h, n, d // h), dtype=torch.bfloat16, device='cuda', requires_grad=False)
-            self.d_vec = torch.empty((b, h, n, 1), dtype=torch.bfloat16, device='cuda', requires_grad=False)
+            self.outputs = torch.empty((self.b, self.h, self.n, self.d //self. h), dtype=torch.bfloat16, device='cuda', requires_grad=False)
+            self.l_vec = torch.empty((self.b, self.h, self.n, 1), dtype=torch.bfloat16, device='cuda', requires_grad=False)
+            self.grad_q = torch.empty((self.b, self.h, self.n, self.d // self.h), dtype=torch.bfloat16, device='cuda', requires_grad=False)
+            self.grad_k = torch.empty((self.b, self.h, self.n, self.d // self.h), dtype=torch.bfloat16, device='cuda', requires_grad=False)
+            self.grad_v = torch.empty((self.b, self.h, self.n, self.d // self.h), dtype=torch.bfloat16, device='cuda', requires_grad=False)
+            self.d_vec = torch.empty((self.b, self.h, self.n, 1), dtype=torch.bfloat16, device='cuda', requires_grad=False)
 
 
     def forward(self, x):
         B, T, C = x.size() 
+        
+        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         q, k, v  = self.c_attn(x).split(self.d, dim=2)
-        q = rearrange(q, 'b n (h d) -> b h n d', h=self.h).to(dtype=torch.bfloat16).contiguous()
-        k = rearrange(k, 'b n (h d) -> b h n d', h=self.h).to(dtype=torch.bfloat16).contiguous()
-        v = rearrange(v, 'b n (h d) -> b h n d', h=self.h).to(dtype=torch.bfloat16).contiguous()
+        k = k.view(B, T, self.h, C // self.h).transpose(1, 2).contiguous() # (B, nh, T, hs)
+        q = q.view(B, T, self.h, C // self.h).transpose(1, 2).contiguous() # (B, nh, T, hs)
+        v = v.view(B, T, self.h, C // self.h).transpose(1, 2).contiguous() # (B, nh, T, hs)
+        
 
         output = AttentionFunction.apply(q, k, v, self.outputs, self.l_vec, self.grad_q, self.grad_k, self.grad_v, self.d_vec)
         y = output.transpose(1, 2).contiguous().view(B, T, C) 

@@ -134,7 +134,7 @@ class Block(nn.Module):
         super().__init__()
         self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
         if config.TK_kernel and config.is_train: 
-            self.attn = CustomAttention(config, config.batch_size, config. n_head, config.block_size, config.n_embd)
+            self.attn = CustomAttention(config)
         else:
             self.attn = CausalSelfAttention(config)
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
