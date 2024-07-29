@@ -318,6 +318,11 @@ class Block(nn.Module):
         else:
             self.mlp = mlp
 
+        if config.moe:
+            # overriding the block's MLP FFN layer with composited MoE layer (router -> [experts])
+            #   easier to leverage identical forward pass
+            self.mlp = MoELayer(config)
+
     def forward(self, x):
         def custom_forward(*inputs):
             x = inputs[0]
@@ -368,7 +373,7 @@ class GPT(nn.Module):
             for i in range(config.n_layer):
                 if i % self.config.moe_layer_freq == 0:
                     # TODO: replace the 'mlp=' with an MoE Layer
-                    moduleList.append(Block(config, mlp=shared_mlp_array[i], attn=shared_attn_array[i]))
+                    moduleList.append(Block(config, mlp=MoELayer(config), attn=shared_attn_array[i]))
                 else:
                     moduleList.append(Block(config, mlp=shared_mlp_array[i], attn=shared_attn_array[i]))
 
