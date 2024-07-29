@@ -358,12 +358,33 @@ class GPT(nn.Module):
         # Shared Parameters Attention
         shared_attn_array = create_shared_param_group("attn", config)
 
-        self.transformer = nn.ModuleDict(dict(
-            wte = nn.Embedding(config.vocab_size, config.n_embd),
-            drop = nn.Dropout(config.dropout),
-            h = nn.ModuleList([Block(config, mlp=shared_mlp_array[i], attn=shared_attn_array[i]) for i in range(config.n_layer)]),
-            ln_f = self.norm_variant_output,
-        ))
+        # Alter FFNs for MoE architecture
+        if config.moe:
+            if not config.moe_layer_freq:
+                # default to every other layer
+                self.config.moe_layer_freq = 2
+            
+            moduleList = []
+            for i in range(config.n_layer):
+                if i % self.config.moe_layer_freq == 0:
+                    # TODO: replace the 'mlp=' with an MoE Layer
+                    moduleList.append(Block(config, mlp=shared_mlp_array[i], attn=shared_attn_array[i]))
+                else:
+                    moduleList.append(Block(config, mlp=shared_mlp_array[i], attn=shared_attn_array[i]))
+
+            self.transformer = nn.ModuleDict(dict(
+                wte = nn.Embedding(config.vocab_size, config.n_embd),
+                drop = nn.Dropout(config.dropout),
+                h = nn.ModuleList(moduleList),
+                ln_f = self.norm_variant_output,
+            ))
+        else:
+            self.transformer = nn.ModuleDict(dict(
+                wte = nn.Embedding(config.vocab_size, config.n_embd),
+                drop = nn.Dropout(config.dropout),
+                h = nn.ModuleList([Block(config, mlp=shared_mlp_array[i], attn=shared_attn_array[i]) for i in range(config.n_layer)]),
+                ln_f = self.norm_variant_output,
+            ))
 
         if self.config.use_abs_pos_embeddings:
             self.transformer['wpe'] = nn.Embedding(config.block_size, config.n_embd)
@@ -633,3 +654,73 @@ class GPT(nn.Module):
                 break
 
         return idx, generated_text
+
+
+
+class NoisyTopKGatingNetwork(nn.Module):
+    """ Noisy Top_k Gating network (router) NN for MoE layers """
+    def __init__(self, config):
+        super().__init__()
+        self.top_k = config.top_k
+        self.top_k_routelinear = nn.Linear(config.d_model, config.num_experts)
+        self.noise_linear = nn.Linear(config.d_model, config.num_experts)
+    
+    def forward(self, mh_output):
+        logits = self.top_k_routelinear(mh_output)
+
+        noise_logits = self.noise_linear(mh_output)
+
+        noise = torch.randn_like(logits)*F.softplus(noise_logits)
+        top_k_noisy_logits = noise_logits + noise
+        
+        top_k_logits, indices = logits.topk(self.top_k, dim=1)
+        zeros = torch.full_like(top_k_noisy_logits, float('-inf'))
+        sparse_logits = zeros.scatter(-1, indices, top_k_logits)
+        router_output = F.softmax(sparse_logits, dim=-1)
+
+        return router_output, indices
+
+
+class MoELayer(nn.Module):
+    """ Mixture of Experts layer to replace FFN (or every other FFN) """
+
+    def __init__(self, config):
+        super().__init__()
+        self.top_k = config.top_k
+        # TODO: implement expert capacity throttling
+        self.expert_capacity = config.expert_capacity
+        self.num_experts = config.num_experts
+        self.gate = NoisyTopKGatingNetwork(config)
+        self.experts = nn.ModuleList([MLP(config) for _ in range(config.num_experts)])
+
+    def forward(self, x):
+        # Assuming x has shape [batch_size, seq_len, n_embd]
+        batch_size, seq_len, _ = x.shape
+        gating_output, indices = self.router(x)
+        final_output = torch.zeros_like(x)
+
+        # Flatten the batch and sequence dimensions to treat each token independently
+        flat_x = x.view(-1, x.size(-1))
+        flat_gating_output = gating_output.view(-1, gating_output.size(-1))
+
+        # Process each expert in parallel
+        for i, expert in enumerate(self.experts):
+            # Create a mask for the inputs where the current expert is in top-k
+            expert_mask = (indices == i).any(dim=-1)
+            flat_mask = expert_mask.view(-1)
+
+            if flat_mask.any():
+                expert_input = flat_x[flat_mask]
+                expert_output = expert(expert_input)
+
+                # Extract and apply gating scores
+                gating_scores = flat_gating_output[flat_mask, i].unsqueeze(1)
+                weighted_output = expert_output * gating_scores
+
+                # Update final output additively by indexing and adding
+                final_output[expert_mask] += weighted_output.squeeze(1)
+
+        return final_output
+
+
+
