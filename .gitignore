@@ -11,3 +11,5 @@ csv_logs/
 # checkpoint directories
 out*/
 .aider*
+
+venv/*
