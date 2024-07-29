@@ -65,7 +65,7 @@ tiktoken==0.5.1
 tokenizers==0.14.1
 tqdm==4.66.1
 transformers==4.35.0
-typing_extensions==4.4.0
+typing_extensions==4.7.1
 tzdata==2023.3
 urllib3==1.26.13
 wandb==0.15.12
