@@ -318,7 +318,7 @@ class Block(nn.Module):
         else:
             self.mlp = mlp
 
-        if config.moe:
+        if config.use_moe:
             # overriding the block's MLP FFN layer with composited MoE layer (router -> [experts])
             #   easier to leverage identical forward pass
             self.mlp = MoELayer(config)
@@ -364,7 +364,7 @@ class GPT(nn.Module):
         shared_attn_array = create_shared_param_group("attn", config)
 
         # Alter FFNs for MoE architecture
-        if config.moe:
+        if config.use_moe:
             if not config.moe_layer_freq:
                 # default to every other layer
                 self.config.moe_layer_freq = 2
@@ -666,22 +666,49 @@ class NoisyTopKGatingNetwork(nn.Module):
     """ Noisy Top_k Gating network (router) NN for MoE layers """
     def __init__(self, config):
         super().__init__()
-        self.top_k = config.top_k
-        self.top_k_routelinear = nn.Linear(config.d_model, config.num_experts)
-        self.noise_linear = nn.Linear(config.d_model, config.num_experts)
+        self.top_k = config.moe_top_k
+        self.moe_router_scheme = config.moe_router_scheme
+        self.top_k_routelinear = nn.Linear(config.n_embd, config.n_experts)
+        # self.noise_linear = nn.Linear(config.n_embd, config.n_experts)
     
-    def forward(self, mh_output):
-        logits = self.top_k_routelinear(mh_output)
+    def softmaxGatingForward(self, x):
+        logits = self.top_k_routelinear(x)
 
-        noise_logits = self.noise_linear(mh_output)
-
-        noise = torch.randn_like(logits)*F.softplus(noise_logits)
-        top_k_noisy_logits = noise_logits + noise
+        top_k_logits, indices = logits.topk(self.top_k, dim=-1)
+        zeros = torch.full_like(logits, float('-inf')) 
         
+        sparse_logits = zeros.scatter(-1, indices, top_k_logits)
+        router_output= F.softmax(sparse_logits, dim=-1)
+
+        return router_output, indices
+
+    def noisyTopKForward(self, x):
+        logits = self.top_k_routelinear(x)
+
+        noise_logits = self.noise_linear(x)
+        noise = torch.randn_like(logits)*F.softplus(noise_logits)
+        
+        top_k_noisy_logits = noise_logits + noise
         top_k_logits, indices = logits.topk(self.top_k, dim=1)
+        
         zeros = torch.full_like(top_k_noisy_logits, float('-inf'))
         sparse_logits = zeros.scatter(-1, indices, top_k_logits)
+        
         router_output = F.softmax(sparse_logits, dim=-1)
+
+        return router_output, indices
+
+
+    def forward(self, mh_output):
+        # print(f"mh_output shape: {mh_output.shape}")
+
+        # TODO : uncomment once support for multiple router schemes 
+        if self.moe_router_scheme == 'softmax':
+            return self.softmaxGatingForward(mh_output)
+        elif self.moe_router_scheme == 'noisy_top_k':
+            return self.noisyTopKForward(mh_output)
+        else:
+            print(f"ERROR: unknown MoE router scheme {self.gating_scheme} found")
 
         return router_output, indices
 
@@ -691,28 +718,35 @@ class MoELayer(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.top_k = config.top_k
+        self.top_k = config.moe_top_k
         # TODO: implement expert capacity throttling
-        self.expert_capacity = config.expert_capacity
-        self.num_experts = config.num_experts
-        self.gate = NoisyTopKGatingNetwork(config)
-        self.experts = nn.ModuleList([MLP(config) for _ in range(config.num_experts)])
+        # self.expert_capacity = config.expert_capacity
+        self.num_experts = config.n_experts
+        self.router = NoisyTopKGatingNetwork(config)
+        self.experts = nn.ModuleList([MLP(config) for _ in range(config.n_experts)])
 
     def forward(self, x):
         # Assuming x has shape [batch_size, seq_len, n_embd]
         batch_size, seq_len, _ = x.shape
         gating_output, indices = self.router(x)
+        # print(f"gating_output.shape: {gating_output.shape}")
+        # print(f"indices 1 count: {indices}")
         final_output = torch.zeros_like(x)
 
         # Flatten the batch and sequence dimensions to treat each token independently
         flat_x = x.view(-1, x.size(-1))
+        # print(f"x.shape() = {x.shape}")
+        # print(f"flat_x = {flat_x.shape}")
         flat_gating_output = gating_output.view(-1, gating_output.size(-1))
+        # print(f"flat_gating_output.shape = {flat_gating_output.shape}")
 
         # Process each expert in parallel
         for i, expert in enumerate(self.experts):
             # Create a mask for the inputs where the current expert is in top-k
             expert_mask = (indices == i).any(dim=-1)
             flat_mask = expert_mask.view(-1)
+            # print(f"expert_mask shape = {expert_mask.shape}")
+            # print(f"flat_mask shape = {flat_mask.shape}")
 
             if flat_mask.any():
                 expert_input = flat_x[flat_mask]
@@ -724,7 +758,7 @@ class MoELayer(nn.Module):
 
                 # Update final output additively by indexing and adding
                 final_output[expert_mask] += weighted_output.squeeze(1)
-
+        # print(f"final_output.shape = {final_output.shape}\n")
         return final_output
 
 

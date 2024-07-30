@@ -61,6 +61,8 @@ def parse_args():
     model_group.add_argument('--use_moe', default=False,  action=argparse.BooleanOptionalAction, help="option for Mixture of Experts (MoE) architecture")
     model_group.add_argument('--moe_layer_freq', default=2, type=int, help="set frequency for replacing FFNs with MoE layers")
     model_group.add_argument('--n_experts', default=8, type=int, help="set number of experts per MoE layer")
+    model_group.add_argument('--moe_top_k', default=2, type=int)
+    model_group.add_argument('--moe_router_scheme', default="softmax", type=str, help="option to set routing scheme for MoE layer, defaults to softmax")
 
     ## MLP Options
     model_group.add_argument('--use_parallel_mlp', default=False, action=argparse.BooleanOptionalAction)
