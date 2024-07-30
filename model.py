@@ -710,8 +710,6 @@ class NoisyTopKGatingNetwork(nn.Module):
         else:
             print(f"ERROR: unknown MoE router scheme {self.gating_scheme} found")
 
-        return router_output, indices
-
 
 class MoELayer(nn.Module):
     """ Mixture of Experts layer to replace FFN (or every other FFN) """
