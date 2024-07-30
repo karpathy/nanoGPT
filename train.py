@@ -75,14 +75,15 @@ def parse_args():
     model_group.add_argument('--shared_attn_sym', default=False, action=argparse.BooleanOptionalAction, help="symmetrical attention sharing")
 
     # NORM VARIATIONS
-    model_group.add_argument("--norm_variant_attn", type=str, default="rmsnorm", choices=["krmsnorm", "prmsnorm", "rmsnorm", "layernorm"])
-    model_group.add_argument("--norm_variant_output", type=str, default="rmsnorm", choices=["krmsnorm", "prmsnorm", "rmsnorm", "layernorm"])
+    model_group.add_argument("--norm_variant_attn", type=str, default="rmsnorm", choices=["krmsnorm", "prmsnorm", "rmsnorm", "layernorm", "krmsnorm_recompute"])
+    model_group.add_argument("--norm_variant_output", type=str, default="rmsnorm", choices=["krmsnorm", "prmsnorm", "rmsnorm", "layernorm", "krmsnorm_recompute"])
     model_group.add_argument('--bias', default=False, action=argparse.BooleanOptionalAction, help="only used for layernorm variation option")
     model_group.add_argument("--prmsnorm_pct", default=0.0625, type=float, help="percentage (1 being 100 percent) of first entries used for partial rms" )
     model_group.add_argument("--krmsnorm_num", default=10, type=int, help="max number of first entries for partial rms" )
     model_group.add_argument("--krmsnorm_quantize_type", type=str, default="none", choices=["int8", "int16", "none"])
     model_group.add_argument('--krmsnorm_enable_gain', default=True, action=argparse.BooleanOptionalAction, help="include gain in kRMSNorm")
     model_group.add_argument("--krmsnorm_selection_type", type=str, default="last", choices=["first", "last", "random"])
+    model_group.add_argument("--krmsnorm_recompute_percentage", type=str, default=0.05, help="percentage needed within the total RMS to not trigger recompute")
 
     # ACTIVATION VARIATIONS
     model_group.add_argument(
