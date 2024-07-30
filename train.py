@@ -389,6 +389,8 @@ class Trainer:
             print("GPT CONF:: ")
             print(gptconf)
             self.model = GPT(gptconf)
+            print("MODEL: ")
+            print(self.model)
             self.iter_num = 0 # for starting from scratch
             self.best_val_loss = 1e9 # really big number
         elif self.args.init_from == 'resume':

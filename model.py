@@ -30,6 +30,9 @@ from variations.activation_variations import activation_dictionary
 from variations.linear_variations import linear_dictionary
 
 def create_shared_param_group(layer_type, config):
+
+    # explore MoE layers being reflected symmetrically
+
     shared_size = None
     shared_sym = None # if true, output array is symmetrical
     layer_block = None
@@ -372,7 +375,6 @@ class GPT(nn.Module):
             moduleList = []
             for i in range(config.n_layer):
                 if i % self.config.moe_layer_freq == 0:
-                    # TODO: replace the 'mlp=' with an MoE Layer
                     moduleList.append(Block(config, mlp=MoELayer(config), attn=shared_attn_array[i]))
                 else:
                     moduleList.append(Block(config, mlp=shared_mlp_array[i], attn=shared_attn_array[i]))
@@ -702,7 +704,6 @@ class NoisyTopKGatingNetwork(nn.Module):
     def forward(self, mh_output):
         # print(f"mh_output shape: {mh_output.shape}")
 
-        # TODO : uncomment once support for multiple router schemes 
         if self.moe_router_scheme == 'softmax':
             return self.softmaxGatingForward(mh_output)
         elif self.moe_router_scheme == 'noisy_top_k':
