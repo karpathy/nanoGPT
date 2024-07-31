@@ -1,6 +1,21 @@
 import torch
 import torch.nn as nn
+from torch.nn import functional as F
 import math
+
+from quantization.quantize import dequantize, quantize_dictionary
+
+class QuantizedEmbedding(nn.Embedding):
+    def __init__(self, embd_size, embd_dim, config):
+        super().__init__(embd_size, embd_dim)
+        self.quantization_bits = config.quantization_embedding_bits
+        self.embedding_method = config.quantization_embedding_method
+
+    def forward(self, x):
+        zero_point, weight_norm, quantized_weight = quantize_dictionary[self.embedding_method](self.weight, self.quantization_bits)
+        weight = dequantize(zero_point, weight_norm, quantized_weight, self.embedding_method)
+        out = F.embedding(x, weight)
+        return out
 
 class RotaryEmbedding(nn.Module):
     def __init__(self, config):

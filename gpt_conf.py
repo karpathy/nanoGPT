@@ -120,3 +120,7 @@ class GPTConfig:
     linear_mean_init: float= 0.0
     linear_std_init: float= 0.02
 
+    quantize_wte: bool = False
+    quantize_wpe: bool = False
+    quantization_embedding_method: str = "affine_quant"
+    quantization_embedding_bits: int = 8

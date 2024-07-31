@@ -126,6 +126,11 @@ def parse_args():
     model_group.add_argument( "--linear_mean_init", type=float, default=0.0)
     model_group.add_argument( "--linear_std_init", type=float, default=0.02)
 
+    # Quantization Options
+    model_group.add_argument("--quantize_wte", default=None, action=argparse.BooleanOptionalAction, help="Whether the word embedding is quantized")
+    model_group.add_argument("--quantize_wpe", default=None, action=argparse.BooleanOptionalAction, help="Whether the word position embedding is quantized")
+    model_group.add_argument("--quantization_embedding_method", type=str, default="affine_quant", choices=["linear_quant", "affine_quant", "stochastic_quant"], help="function used for embedding quantization")
+    model_group.add_argument("--quantization_embedding_bits", type=int, default=8, help="number of bits for embedding quantization")
 
     # POSITIONAL EMBEDDING VARIATIONS
     model_group.add_argument('--use_rotary_embeddings', default=False, action=argparse.BooleanOptionalAction)
