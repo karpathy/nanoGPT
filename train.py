@@ -271,6 +271,10 @@ def parse_args():
     logging_group.add_argument('--wandb_project', type=str, default='out-test')
     logging_group.add_argument('--wandb_run_name', type=str, default='logs-test')
 
+    ### Create model from json config file & save config file to json
+    logging_group.add_argument('--load_config_json', type=str, help="Option to load model parameters from existing json file")
+    logging_group.add_argument('--save_config_json', type=str, help="Option to save model parameters as new config json file")
+
     # Visualization args
     logging_group.add_argument('--statistic', choices=[
     'input_mean', 'input_median', 'input_stdev', 'input_max', 'input_min',
@@ -284,6 +288,20 @@ def parse_args():
      default='', help='Select input or output statistic to display in boxplot')
 
     args = parser.parse_args()
+
+    if args.load_config_json is not None:
+        with open(args.load_config_json, 'r') as config_file:
+            config = json.load(config_file)
+        
+        # Update the args namespace with values from the JSON file
+        for key, value in config.items():
+            setattr(args, key, value)
+
+    # Save all params to provided json if flag is present
+    if args.save_config_json is not None:
+        with open(args.save_config_json, 'w') as json_file:
+            json.dump(vars(args), json_file)
+
     return args, model_group, training_group, logging_group
 
 def initialize_statistics(num_layers, num_heads):
