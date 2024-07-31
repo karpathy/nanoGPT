@@ -141,8 +141,8 @@ class GPTConfig:
         except TypeError as e:
             print(f"Error: Invalid data in JSON file. {str(e)}")
             return None
-        
-    def saveconf(self, filename: str):
+    
+    def to_json(self, filename: str):
         """
         Function to save a GPTConfig object as json to be used for later model creation
         
