@@ -60,6 +60,9 @@ class kRMSNorm(nn.Module):
         self.quantize_type = config.krmsnorm_quantize_type  # 'int8', 'int16', or 'none'
         self.enable_gain = config.krmsnorm_enable_gain
         self.selection_type = config.krmsnorm_selection_type  # 'first', 'last', or 'random'
+        self.recompute_percentage = config.krmsnorm_recompute_percentage
+        self.num_recomputes = 0
+        self.recomputes = []
 
     def quantize(self, x, dtype):
         if dtype == 'int8':
@@ -112,64 +115,27 @@ class kRMSNorm(nn.Module):
         krms = self.dequantize(krms, scale, zero_point, self.quantize_type)
 
         # Apply normalization
-        x = x / krms
-
-        # Apply gain if enabled
-        if self.enable_gain:
-            x = x * self.gain
-
-        return x
-
-class kRMSNormWithRecompute(nn.Module):
-    """First k, Last k, or Random k elements RMS Normalization with configurable recompute and gain"""
-
-    def __init__(self, config):
-        super().__init__()
-        ndim = config.n_embd
-        self.gain = nn.Parameter(torch.ones(ndim)) if config.krmsnorm_enable_gain else None
-        self.k = config.krmsnorm_num
-        self.enable_gain = config.krmsnorm_enable_gain
-        self.selection_type = config.krmsnorm_selection_type  # 'first', 'last', or 'random'
-        self.recompute_percentage = config.krmsnorm_recompute_percentage
-        self.num_recomputes = 0
-
-    def forward(self, x):
-        # Calculate the number of elements to use for kRMS
-        k = min(x.size(-1), self.k)
-
-        # Select elements based on the selection type
-        if self.selection_type == 'first':
-            x_part = x[..., :k]
-        elif self.selection_type == 'last':
-            x_part = x[..., -k:]
-        elif self.selection_type == 'random':
-            indices = torch.randperm(x.size(-1))[:k]
-            x_part = x[..., indices]
+        if self.recompute_percentage != None:
+            rms = x.norm(2, dim=-1, keepdim=True) / math.sqrt(x.size(-1))
+            if krms > rms*(1-self.recompute_percentage) and krms < rms*(1+self.recompute_percentage):
+                x = x / krms
+                self.recomputes.append(False)
+            else:
+                x = x / rms
+                self.num_recomputes += 1
+                self.recomputes.append(True)
         else:
-            raise ValueError("Unsupported selection type")
-
-        # Calculate kRMS on quantized values
-        krms = x_part.norm(2, dim=-1, keepdim=True) / math.sqrt(k)
-        rms = x.norm(2, dim=-1, keepdim=True) / math.sqrt(x.size(-1))
-
-        # Apply normalization
-        if krms > rms*(1-self.recompute_percentage) and krms < rms*(1+self.recompute_percentage):
             x = x / krms
-        else:
-            x = x / rms
-            self.num_recomputes += 1
 
         # Apply gain if enabled
         if self.enable_gain:
             x = x * self.gain
 
         return x
-
 
 norm_dictionary = {
     "layernorm": LayerNorm,
     "rmsnorm": RMSNorm,
     "prmsnorm": pRMSNorm,
     "krmsnorm": kRMSNorm,
-    "krmsnorm_recompute": kRMSNormWithRecompute
 }
