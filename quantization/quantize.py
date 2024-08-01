@@ -1,16 +1,13 @@
 import torch
 from torch import nn
 
-def linear_quantize(tensor, bits):
-    input_max = tensor.max()
-    input_min = tensor.min()
-    bit_max = (1 << (bits - 1)) - 1
-    bit_min = -bit_max - 1
-
-    scale = (bit_max - bit_min)/(input_max - input_min)
-    # y = (y2 - y1)/(x2 - x1) * (x -x2) + y2
-    return input_max, 1 / scale, (torch.round((scale * (tensor - input_max)) + bit_max))
-
+def set_dtype(bits):
+    if bits > 16:
+        return torch.int32
+    if bits > 8:
+        return torch.int16
+    else:
+        return torch.int8
 
 def affine_quantize(tensor, bits):
     """
@@ -24,15 +21,9 @@ def affine_quantize(tensor, bits):
     max = tensor.max()
     min = tensor.min()
     scale = (max - min) / ((1 << bits) - 1)
-    zero_point = -torch.round(min * scale) + bit_min
+    zero_point = -torch.round(min / scale) + bit_min
     xi_array = torch.round(tensor / scale) + zero_point
-    if bits > 16:
-        dtype = torch.int32
-    if bits > 8:
-        dtype = torch.int16
-    else:
-        dtype = torch.int8
-    return zero_point, scale, torch.clamp(xi_array, min=bit_min, max=bit_max).to(dtype=dtype)
+    return zero_point, scale, torch.clamp(xi_array, min=bit_min, max=bit_max).to(dtype=set_dtype(bits))
 
 def stochastic_quantize(tensor, bits):
     """
@@ -76,12 +67,12 @@ def stochastic_quantize(tensor, bits):
     xi_array = xi_array.to(dtype=torch.int32)
 
     # combines the sign and the quantized magnitude to get the final quantized tensor with the same sign as the original tensor
-    sign_xi_array = (sign_array * xi_array).to(dtype=torch.int8)
+    sign_xi_array = (sign_array * xi_array).to(dtype=set_dtype(bits))
     norm = norm / s
 
     return 0, norm, sign_xi_array
 
-def dequantize(zero_point, scale, tensor, quantization_method, bits=8):
+def dequantize(zero_point, scale, tensor):
     """
     Dequantize the quantizated tensor
     :param zero_point: zero point of tensor
@@ -89,9 +80,6 @@ def dequantize(zero_point, scale, tensor, quantization_method, bits=8):
     :param tensor: quantized tensor
     :return: Dequantized weights
     """
-    if quantization_method == "linear_quantize":
-        bit_max = (1 << (bits - 1)) - 1
-        return (tensor - bit_max) * scale + zero_point
     return (tensor - zero_point) * scale
 
 class FakeLinearQuantizationFunction(torch.autograd.Function):
@@ -114,7 +102,7 @@ class FakeLinearQuantizationFunction(torch.autograd.Function):
         # Dequantize the quantized values using the dequantize function.
         # Return the dequantized tensor, which approximates the input tensor but includes the quantization error.
         zero_point, norm, quantized_weight = quantize_dictionary[quantization_method](input, bits)
-        return dequantize(zero_point, norm, quantized_weight, quantization_method, bits)
+        return dequantize(zero_point, norm, quantized_weight)
 
     @staticmethod
     def backward(ctx, grad_output):
@@ -125,8 +113,7 @@ class FakeLinearQuantizationFunction(torch.autograd.Function):
 
 quantize_dictionary = {
     "affine_quant": affine_quantize,
-    "stochastic_quant": stochastic_quantize,
-    "linear_quant": linear_quantize
+    "stochastic_quant": stochastic_quantize
 }
 
 _fake_quantize = FakeLinearQuantizationFunction.apply

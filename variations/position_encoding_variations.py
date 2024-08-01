@@ -13,7 +13,7 @@ class QuantizedEmbedding(nn.Embedding):
 
     def forward(self, x):
         zero_point, weight_norm, quantized_weight = quantize_dictionary[self.embedding_method](self.weight, self.quantization_bits)
-        weight = dequantize(zero_point, weight_norm, quantized_weight, self.embedding_method)
+        weight = dequantize(zero_point, weight_norm, quantized_weight)
         out = F.embedding(x, weight)
         return out
 
