@@ -95,7 +95,11 @@ class CausalSelfAttention(nn.Module):
         super().__init__()
         assert config.n_embd % config.n_head == 0
         # key, query, value projections for all heads, but in a batch
-        self.c_attn_q = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        # if q variant is specified, takes precedence over linear_variant_attn
+        if config.linear_variant_q:
+            self.c_attn_q = linear_dictionary[config.linear_variant_q](config.n_embd, config.n_embd, config=config, bias=config.bias)
+        else:
+            self.c_attn_q = linear_dictionary[config.linear_variant_attn](config.n_embd, config.n_embd, config=config, bias=config.bias)
 
         self.n_head = config.n_head
         if config.n_kv_group == None:
@@ -105,9 +109,21 @@ class CausalSelfAttention(nn.Module):
             self.n_kv_group = config.n_kv_group
 
         self.kv_dim = (config.n_embd // config.n_head) * self.n_kv_group
-        self.c_attn_k = nn.Linear(config.n_embd, self.kv_dim, bias=config.bias)
-        self.c_attn_v = nn.Linear(config.n_embd, self.kv_dim, bias=config.bias)
-        self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        # if k variant is specified, takes precedence over linear_variant_attn
+        if config.linear_variant_k:
+            self.c_attn_k = linear_dictionary[config.linear_variant_k](config.n_embd, self.kv_dim, config=config, bias=config.bias)
+        else:
+            self.c_attn_k = linear_dictionary[config.linear_variant_attn](config.n_embd, self.kv_dim, config=config, bias=config.bias)
+        # if v variant is specified, takes precedence over linear_variant_attn
+        if config.linear_variant_v:
+            self.c_attn_v = linear_dictionary[config.linear_variant_v](config.n_embd, self.kv_dim, config=config, bias=config.bias)
+        else:
+            self.c_attn_v = linear_dictionary[config.linear_variant_attn](config.n_embd, self.kv_dim, config=config, bias=config.bias)
+        if config.linear_variant_attn_proj:
+            self.c_proj = linear_dictionary[config.linear_variant_attn_proj](config.n_embd, config.n_embd, config=config, bias=config.bias)
+        else:
+            self.c_proj = linear_dictionary[config.linear_variant_attn](config.n_embd, config.n_embd, config=config, bias=config.bias)
+
         # regularization
         self.attn_dropout = nn.Dropout(config.dropout)
         self.resid_dropout = nn.Dropout(config.dropout)
@@ -261,9 +277,6 @@ class MLP(nn.Module):
     def __init__(self, config):
         super().__init__()
 
-        # Select linear variant
-        self.linear_variant = linear_dictionary[config.linear_variant]
-
         # Select activation variant
         self.activation_variant = activation_dictionary[config.activation_variant]
 
@@ -273,12 +286,25 @@ class MLP(nn.Module):
         if self.mlp_variant == "kan":
             self.kan = linear_dictionary["kan"](config.n_embd, config.n_embd, config=config)
         if self.mlp_variant == "mlp":
-            self.c_fc = linear_dictionary[config.linear_variant](config.n_embd, 4 * config.n_embd, config=config, bias=config.bias)
-            self.c_proj = linear_dictionary[config.linear_variant](4 * config.n_embd, config.n_embd, config=config, bias=config.bias)
+            if config.linear_variant_mlp_up:
+                self.c_fc = linear_dictionary[config.linear_variant_mlp_up](config.n_embd, 4 * config.n_embd, config=config, bias=config.bias)
+            else:
+                self.c_fc = linear_dictionary[config.linear_variant_mlp](config.n_embd, 4 * config.n_embd, config=config, bias=config.bias)
+            if config.linear_variant_mlp_down:
+                self.c_proj = linear_dictionary[config.linear_variant_mlp_down](4 * config.n_embd, config.n_embd, config=config, bias=config.bias)
+            else:
+                self.c_proj = linear_dictionary[config.linear_variant_mlp](4 * config.n_embd, config.n_embd, config=config, bias=config.bias)
         if self.mlp_variant == "swiglu":
-            self.c_fc_in1 = linear_dictionary[config.linear_variant](config.n_embd, 4 * config.n_embd, config=config)
-            self.c_fc_in2 = linear_dictionary[config.linear_variant](config.n_embd, 4 * config.n_embd, config=config)
-            self.c_fc_out = linear_dictionary[config.linear_variant](4 * config.n_embd, config.n_embd, config=config)
+            if config.linear_variant_mlp_up:
+                self.c_fc_in1 = linear_dictionary[config.linear_variant_mlp_up](config.n_embd, 4 * config.n_embd, config=config)
+                self.c_fc_in2 = linear_dictionary[config.linear_variant_mlp_up](config.n_embd, 4 * config.n_embd, config=config)
+            else:
+                self.c_fc_in1 = linear_dictionary[config.linear_variant_mlp](config.n_embd, 4 * config.n_embd, config=config)
+                self.c_fc_in2 = linear_dictionary[config.linear_variant_mlp](config.n_embd, 4 * config.n_embd, config=config)
+            if config.linear_variant_mlp_down:
+                self.c_fc_out = linear_dictionary[config.linear_variant_mlp_down](4 * config.n_embd, config.n_embd, config=config)
+            else:
+                self.c_fc_out = linear_dictionary[config.linear_variant_mlp](4 * config.n_embd, config.n_embd, config=config)
 
         self.dropout = nn.Dropout(config.dropout)
 

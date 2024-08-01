@@ -117,7 +117,7 @@ def parse_args():
 
     # LINEAR VARIATIONS
     model_group.add_argument(
-        "--linear_variant",
+        "--linear_variant_attn",
         type=str,
         default="linear",
         choices=[
@@ -126,7 +126,105 @@ def parse_args():
             "bitlinear_1p58",
             "bitlinear_optimized",
             "kan",
+            "quantized_linear"
         ],
+    )
+    model_group.add_argument(
+        "--linear_variant_q",
+        type=str,
+        default=None,
+        choices=[
+            "linear",
+            "bitlinear",
+            "bitlinear_1p58",
+            "bitlinear_optimized",
+            "kan",
+            "quantized_linear"
+        ],
+        help="sets the linear variant for c_attn_q (takes precedence over linear_variant_attn)"
+    )
+    model_group.add_argument(
+        "--linear_variant_k",
+        type=str,
+        default=None,
+        choices=[
+            "linear",
+            "bitlinear",
+            "bitlinear_1p58",
+            "bitlinear_optimized",
+            "kan",
+            "quantized_linear"
+        ],
+        help="sets the linear variant for c_attn_k (takes precedence over linear_variant_attn)"
+    )
+    model_group.add_argument(
+        "--linear_variant_v",
+        type=str,
+        default=None,
+        choices=[
+            "linear",
+            "bitlinear",
+            "bitlinear_1p58",
+            "bitlinear_optimized",
+            "kan",
+            "quantized_linear"
+        ],
+        help="sets the linear variant for c_attn_v (takes precedence over linear_variant_attn)"
+    )
+    model_group.add_argument(
+        "--linear_variant_attn_proj",
+        type=str,
+        default=None,
+        choices=[
+            "linear",
+            "bitlinear",
+            "bitlinear_1p58",
+            "bitlinear_optimized",
+            "kan",
+            "quantized_linear"
+        ],
+        help="sets the linear variant for c_proj (takes precedence over linear_variant_attn)"
+    )
+    model_group.add_argument(
+        "--linear_variant_mlp",
+        type=str,
+        default="linear",
+        choices=[
+            "linear",
+            "bitlinear",
+            "bitlinear_1p58",
+            "bitlinear_optimized",
+            "kan",
+            "quantized_linear"
+        ],
+    )
+    model_group.add_argument(
+        "--linear_variant_mlp_up",
+        type=str,
+        default=None,
+        choices=[
+            "linear",
+            "bitlinear",
+            "bitlinear_1p58",
+            "bitlinear_optimized",
+            "kan",
+            "quantized_linear"
+        ],
+        help="sets the linear variant for c_fc (takes precedence over linear_variant_mlp)"
+    )
+    model_group.add_argument(
+        "--linear_variant_mlp_down",
+        type=str,
+        default=None,
+        choices=[
+            "linear",
+            "bitlinear",
+            "bitlinear_1p58",
+            "bitlinear_optimized",
+            "kan",
+            "quantized_linear"
+        ],
+        help="sets the linear variant for c_proj (takes precedence over linear_variant_mlp)"
     )
     ## Linear Weight Initialization Options
     model_group.add_argument( "--linear_mean_init", type=float, default=0.0)
@@ -139,6 +237,8 @@ def parse_args():
     model_group.add_argument("--quantization_wte_bits", type=int, default=8, help="number of bits for word embedding quantization")
     model_group.add_argument("--quantization_wpe_method", type=str, default="affine_quant", choices=["affine_quant", "stochastic_quant"], help="function used for position embedding quantization")
     model_group.add_argument("--quantization_wpe_bits", type=int, default=8, help="number of bits for position embedding quantization")
+    model_group.add_argument("--quantization_linear_method", type=str, default="affine_quant", choices=["affine_quant", "stochastic_quant"], help="function used for linear quantization")
+    model_group.add_argument("--quantization_linear_bits", type=int, default=8, help="number of bits for linear quantization")
 
     # POSITIONAL EMBEDDING VARIATIONS
     model_group.add_argument('--use_rotary_embeddings', default=False, action=argparse.BooleanOptionalAction)
