@@ -117,9 +117,6 @@ class BitLinear1p58(nn.Linear):
         quant_input = x + (self.activation_quant(x, self.input_bits) - x).detach()
         quant_weight = self.weight + (self.weight_quant(self.weight, self.weight_bits) - self.weight).detach()
 
-        print(quant_input)
-        print(quant_weight)
-
         out = nn.functional.linear(quant_input, quant_weight)
         if not self.bias is None:
             out += self.bias.view(1, -1).expand_as(out)
