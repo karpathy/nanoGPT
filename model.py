@@ -28,6 +28,7 @@ from variations.norm_variations import norm_dictionary
 from variations.position_encoding_variations import RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions, FIRE
 from variations.activation_variations import activation_dictionary
 from variations.linear_variations import linear_dictionary
+from variations.router_variations import router_dictionary
 
 def create_shared_param_group(layer_type, config):
 
@@ -663,55 +664,6 @@ class GPT(nn.Module):
         return idx, generated_text
 
 
-
-class NoisyTopKGatingNetwork(nn.Module):
-    """ Noisy Top_k Gating network (router) NN for MoE layers """
-    def __init__(self, config):
-        super().__init__()
-        self.top_k = config.moe_top_k
-        self.moe_router_scheme = config.moe_router_scheme
-        self.top_k_routelinear = nn.Linear(config.n_embd, config.n_experts)
-        # self.noise_linear = nn.Linear(config.n_embd, config.n_experts)
-    
-    def softmaxGatingForward(self, x):
-        logits = self.top_k_routelinear(x)
-
-        top_k_logits, indices = logits.topk(self.top_k, dim=-1)
-        zeros = torch.full_like(logits, float('-inf')) 
-        
-        sparse_logits = zeros.scatter(-1, indices, top_k_logits)
-        router_output= F.softmax(sparse_logits, dim=-1)
-
-        return router_output, indices
-
-    def noisyTopKForward(self, x):
-        logits = self.top_k_routelinear(x)
-
-        noise_logits = self.noise_linear(x)
-        noise = torch.randn_like(logits)*F.softplus(noise_logits)
-        
-        top_k_noisy_logits = noise_logits + noise
-        top_k_logits, indices = logits.topk(self.top_k, dim=1)
-        
-        zeros = torch.full_like(top_k_noisy_logits, float('-inf'))
-        sparse_logits = zeros.scatter(-1, indices, top_k_logits)
-        
-        router_output = F.softmax(sparse_logits, dim=-1)
-
-        return router_output, indices
-
-
-    def forward(self, mh_output):
-        # print(f"mh_output shape: {mh_output.shape}")
-
-        if self.moe_router_scheme == 'softmax':
-            return self.softmaxGatingForward(mh_output)
-        elif self.moe_router_scheme == 'noisy_top_k':
-            return self.noisyTopKForward(mh_output)
-        else:
-            print(f"ERROR: unknown MoE router scheme {self.gating_scheme} found")
-
-
 class MoELayer(nn.Module):
     """ Mixture of Experts layer to replace FFN (or every other FFN) """
 
@@ -721,7 +673,7 @@ class MoELayer(nn.Module):
         # TODO: implement expert capacity throttling
         # self.expert_capacity = config.expert_capacity
         self.num_experts = config.n_experts
-        self.router = NoisyTopKGatingNetwork(config)
+        self.router = router_dictionary[config.moe_router_scheme](config)
         self.experts = nn.ModuleList([MLP(config) for _ in range(config.n_experts)])
 
     def forward(self, x):
