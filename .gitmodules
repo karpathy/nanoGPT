@@ -1,3 +1,6 @@
 [submodule "modules/llama.cpp"]
 	path = modules/llama.cpp
 	url = https://github.com/ggerganov/llama.cpp
+[submodule "~submit/nanoGPT/data/template"]
+	path = ~submit/nanoGPT/data/template
+	url = https://github.com/ggerganov/whisper.cpp.git
