@@ -42,7 +42,7 @@ for entry in data['transcription']:
 
     # Do the snac encoder
     temp_wav_path = "temp.wav"
-    preprocess_audio_to_24khz(args.input, temp_wav_path)
+    preprocess_audio_to_24khz(temp_path, temp_wav_path)
     audio_snac = load_mp3_as_tensor(temp_wav_path)
     print(f"loaded tensor:{audio_snac}")
     audio_snac = audio_snac.to(snac_model.device)
