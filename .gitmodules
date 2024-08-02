@@ -4,7 +4,3 @@
 [submodule "data/template/whisper.cpp"]
 	path = data/template/whisper.cpp
 	url = https://github.com/ggerganov/whisper.cpp.git
-[submodule "~submit/nanoGPT/data/template"]
-    path = ~submit/nanoGPT/data/template
-    url = https://github.com/username/template-repo.git
-
