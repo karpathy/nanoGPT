@@ -1,5 +1,4 @@
 import torch
-from torch import nn
 
 def set_dtype(bits):
     if bits > 16:
@@ -82,38 +81,7 @@ def dequantize(zero_point, scale, tensor):
     """
     return (tensor - zero_point) * scale
 
-class FakeLinearQuantizationFunction(torch.autograd.Function):
-    """Simulates error caused by quantization. Uses Straight-Through Estimator for Back prop
-    Source: https://github.com/Alexstrasza98/Transformer-Quantization/blob/main
-    Source License: MIT
-    """
-
-    @staticmethod
-    def forward(ctx, input, bits=7, quantization_method="affine_quant"):
-        """
-        Forward pass
-        :param ctx: Context object to store information for the backward pass (not used in this case)
-        :param input: The input tensor to be quantized
-        :param bits: The number of bits for quantization (default is 7)
-        :return: Dequantized tensor
-        """
-        # steps:
-        # Quantize the input tensor using the quantize function.
-        # Dequantize the quantized values using the dequantize function.
-        # Return the dequantized tensor, which approximates the input tensor but includes the quantization error.
-        zero_point, norm, quantized_weight = quantize_dictionary[quantization_method](input, bits)
-        return dequantize(zero_point, norm, quantized_weight)
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        # Straight-Through Estimator (STE): passes grad_output through as the gradient with respect to the input
-        # gradient is approximated by simply passing the gradient from the output directly to the input, 
-        # ignoring the quantization operation
-        return grad_output, None, None
-
 quantize_dictionary = {
     "affine_quant": affine_quantize,
     "stochastic_quant": stochastic_quantize
 }
-
-_fake_quantize = FakeLinearQuantizationFunction.apply

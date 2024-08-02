@@ -6,13 +6,13 @@ import math
 from quantization.quantize import dequantize, quantize_dictionary
 
 class QuantizedEmbedding(nn.Embedding):
-    def __init__(self, embd_size, embd_dim, config):
+    def __init__(self, embd_size, embd_dim, quantization_method, quantization_bits):
         super().__init__(embd_size, embd_dim)
-        self.quantization_bits = config.quantization_embedding_bits
-        self.embedding_method = config.quantization_embedding_method
+        self.quantization_method = quantization_method
+        self.quantization_bits = quantization_bits
 
     def forward(self, x):
-        zero_point, weight_norm, quantized_weight = quantize_dictionary[self.embedding_method](self.weight, self.quantization_bits)
+        zero_point, weight_norm, quantized_weight = quantize_dictionary[self.quantization_method](self.weight, self.quantization_bits)
         weight = dequantize(zero_point, weight_norm, quantized_weight)
         out = F.embedding(x, weight)
         return out

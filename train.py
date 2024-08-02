@@ -129,8 +129,10 @@ def parse_args():
     # Quantization Options
     model_group.add_argument("--quantize_wte", default=None, action=argparse.BooleanOptionalAction, help="Whether the word embedding is quantized")
     model_group.add_argument("--quantize_wpe", default=None, action=argparse.BooleanOptionalAction, help="Whether the word position embedding is quantized")
-    model_group.add_argument("--quantization_embedding_method", type=str, default="affine_quant", choices=["affine_quant", "stochastic_quant"], help="function used for embedding quantization")
-    model_group.add_argument("--quantization_embedding_bits", type=int, default=8, help="number of bits for embedding quantization")
+    model_group.add_argument("--quantization_wte_method", type=str, default="affine_quant", choices=["affine_quant", "stochastic_quant"], help="function used for word embedding quantization")
+    model_group.add_argument("--quantization_wte_bits", type=int, default=8, help="number of bits for word embedding quantization")
+    model_group.add_argument("--quantization_wpe_method", type=str, default="affine_quant", choices=["affine_quant", "stochastic_quant"], help="function used for position embedding quantization")
+    model_group.add_argument("--quantization_wpe_bits", type=int, default=8, help="number of bits for position embedding quantization")
 
     # POSITIONAL EMBEDDING VARIATIONS
     model_group.add_argument('--use_rotary_embeddings', default=False, action=argparse.BooleanOptionalAction)
