@@ -251,6 +251,7 @@ def parse_args():
     model_group.add_argument("--quantization_linear_mlp_up_bits", type=int, default=None, help="number of bits for mlp_up quantization")
     model_group.add_argument("--quantization_linear_mlp_down_method", type=str, default=None, choices=["affine_quant", "stochastic_quant"], help="function used for mlp_down quantization")
     model_group.add_argument("--quantization_linear_mlp_down_bits", type=int, default=None, help="number of bits for mlp_down quantization")
+    model_group.add_argument("--quantization_warmup_iters", type=int, default=100)
 
     # POSITIONAL EMBEDDING VARIATIONS
     model_group.add_argument('--use_rotary_embeddings', default=False, action=argparse.BooleanOptionalAction)

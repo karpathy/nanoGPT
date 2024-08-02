@@ -17,7 +17,7 @@ class QuantizedLinear(nn.Linear):
     Source License: MIT
     """
 
-    def __init__(self, in_features, out_features, config=None, method="affine_quant", bits=8, bias=True, warmup_iters=0):
+    def __init__(self, in_features, out_features, config=None, method="affine_quant", bits=8, bias=True):
         super().__init__(in_features, out_features, bias)
 
         self.weight_bits = bits
@@ -26,7 +26,7 @@ class QuantizedLinear(nn.Linear):
         if self.weight_bits < 1:
             raise ValueError(f"weight_bits={self.weight_bits} must be higher than 0 ")
 
-        self.warmup_step = warmup_iters
+        self.warmup_step = config.quantization_warmup_iters
         self.accumulation_bits = 32
 
         # Placeholder for quantized weights during training

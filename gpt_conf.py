@@ -160,6 +160,7 @@ class GPTConfig:
     quantization_linear_mlp_up_bits: int = None
     quantization_linear_mlp_down_method: str = None
     quantization_linear_mlp_down_bits: int = None
+    quantization_warmup_iters: int = 100
 
     @classmethod
     def from_json(cls, filename: str):
