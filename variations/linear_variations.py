@@ -8,7 +8,7 @@ from quantization.quantize import _fake_quantize, quantize_dictionary, dequantiz
 
 class WrappedLinear(nn.Linear):
     """ Adapts nn.Linear to add 'config' parameter for interface polymorphism"""
-    def __init__(self, in_features, out_features, config=None, bias=None):
+    def __init__(self, in_features, out_features, config=None, method=None, bits=None, bias=None):
         super(WrappedLinear, self).__init__(in_features, out_features, bias)
 
 class QuantizedLinear(nn.Linear):
@@ -17,21 +17,21 @@ class QuantizedLinear(nn.Linear):
     Source License: MIT
     """
 
-    def __init__(self, in_features, out_features, config, bias=True, warmup_step=0):
+    def __init__(self, in_features, out_features, config=None, method="affine_quant", bits=8, bias=True):
         super().__init__(in_features, out_features, bias)
 
-        self.config = config
-        self.weight_bits = config.quantization_linear_bits
+        self.weight_bits = bits
+        self.quant_method = method
 
         if self.weight_bits < 1:
             raise ValueError(f"weight_bits={self.weight_bits} must be higher than 0 ")
 
-        self.warmup_step = warmup_step
+        self.warmup_step = config.warmup_iters
         self.accumulation_bits = 32
 
         # Placeholder for quantized weights during training
         self._fake_quantized_weight = None
-        if config.bias == True:
+        if bias == True:
             self.register_buffer("quantized_bias", None)
             self.register_buffer("bias_norm", None)
             self.register_buffer("bias_zero_point", torch.tensor([0]))
@@ -47,7 +47,7 @@ class QuantizedLinear(nn.Linear):
         assert self.training, "Should be called only during training"
 
         # Applies the fake quantization to the weights
-        self._fake_quantized_weight = _fake_quantize(self.weight, self.weight_bits, self.config.quantization_linear_method)
+        self._fake_quantized_weight = _fake_quantize(self.weight, self.weight_bits, self.quant_method)
         # Uses the quantized weights to compute the output using F.linear
         out = F.linear(input, self._fake_quantized_weight, self.bias)
 
@@ -74,10 +74,10 @@ class QuantizedLinear(nn.Linear):
 
     def _eval(self):
         """Sets the model for inference by quantizing the model"""
-        self.weight_zero_point[0], self.weight_norm, self.quantized_weight = quantize_dictionary[self.config.quantization_linear_method](self.weight, self.weight_bits)
+        self.weight_zero_point[0], self.weight_norm, self.quantized_weight = quantize_dictionary[self.quant_method](self.weight, self.weight_bits)
 
         if self.bias is not None:
-            self.bias_zero_point[0], self.bias_norm, self.quantized_bias = quantize_dictionary[self.config.quantization_linear_method](self.bias, self.accumulation_bits)
+            self.bias_zero_point[0], self.bias_norm, self.quantized_bias = quantize_dictionary[self.quant_method](self.bias, self.accumulation_bits)
 
     def forward(self, input):
         """Passes the input through the model during training and inference"""
@@ -101,7 +101,7 @@ class BitLinear1p58(nn.Linear):
     Paper Link: https://arxiv.org/abs/2402.17764
     """
 
-    def __init__(self, in_features, out_features, config=None, bias=True, num_groups=1):
+    def __init__(self, in_features, out_features, config=None, method=None, bits=None, bias=True, num_groups=1):
         super().__init__(in_features, out_features, bias)
 
         """
@@ -145,7 +145,7 @@ class BitLinear(nn.Linear):
     Source License: Apache Version 2.0
     """
 
-    def __init__(self, in_features, out_features, config=None, bias=True, num_groups=1):
+    def __init__(self, in_features, out_features, config=None, method=None, bits=None, bias=True, num_groups=1):
         super(BitLinear, self).__init__(in_features, out_features, bias)
         self.num_groups = num_groups
         self.eps = 1e-5
@@ -216,7 +216,7 @@ class BitLinearOptimized(nn.Linear):
     Source License: Apache Version 2.0
     """
 
-    def __init__(self, in_features, out_features, config=None, bias=True, num_groups=1):
+    def __init__(self, in_features, out_features, config=None, method=None, bits=None, bias=True, num_groups=1):
         super(BitLinearOptimized, self).__init__(in_features, out_features, bias)
         self.num_groups = num_groups
         self.eps = 1e-5
@@ -313,7 +313,7 @@ class KAL_Net(nn.Module):
     Source License: MIT
     arxiv paper: https://arxiv.org/abs/2404.19756
     """
-    def __init__(self, kan_in_features, kan_out_features, config=None, bias=True):
+    def __init__(self, kan_in_features, kan_out_features, config=None, method=None, bits=None, bias=True):
         super(KAL_Net, self).__init__()  # Initialize the parent nn.Module class
 
         if config is None:

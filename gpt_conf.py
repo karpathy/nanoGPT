@@ -148,6 +148,18 @@ class GPTConfig:
     ## Linear Quantizations
     quantization_linear_method: str = "affine_quant"
     quantization_linear_bits: int = 8
+    quantization_linear_q_method: str = None
+    quantization_linear_q_bits: int = None
+    quantization_linear_k_method: str = None
+    quantization_linear_k_bits: int = None
+    quantization_linear_v_method: str = None
+    quantization_linear_v_bits: int = None
+    quantization_linear_proj_method: str = None
+    quantization_linear_proj_bits: int = None
+    quantization_linear_mlp_up_method: str = None
+    quantization_linear_mlp_up_bits: int = None
+    quantization_linear_mlp_down_method: str = None
+    quantization_linear_mlp_down_bits: int = None
 
     @classmethod
     def from_json(cls, filename: str):
