@@ -109,6 +109,7 @@ class GPTConfig:
     krmsnorm_quantize_type: str = 'int8'
     krmsnorm_enable_gain: bool = True
     krmsnorm_selection_type: str = 'last'
+    krmsnorm_recompute_percentage: float = 0.05
 
     # Activation Alternatives
     activation_variant: str = "gelu"
