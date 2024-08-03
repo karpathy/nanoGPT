@@ -61,8 +61,7 @@ class kRMSNorm(nn.Module):
         self.enable_gain = config.krmsnorm_enable_gain
         self.selection_type = config.krmsnorm_selection_type  # 'first', 'last', or 'random'
         self.recompute_percentage = config.krmsnorm_recompute_percentage
-        self.num_recomputes = 0
-        self.recomputes = []
+        self.recomputed = False
 
     def quantize(self, x, dtype):
         if dtype == 'int8':
@@ -119,11 +118,10 @@ class kRMSNorm(nn.Module):
             rms = x.norm(2, dim=-1, keepdim=True) / math.sqrt(x.size(-1))
             if krms > rms*(1-self.recompute_percentage) and krms < rms*(1+self.recompute_percentage):
                 x = x / krms
-                self.recomputes.append(False)
+                self.recomputed = False
             else:
                 x = x / rms
-                self.num_recomputes += 1
-                self.recomputes.append(True)
+                self.recomputed = True
         else:
             x = x / krms
 
