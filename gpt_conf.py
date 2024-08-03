@@ -1,5 +1,6 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict, fields
 from typing import List
+import json
 
 @dataclass
 class GPTConfig:
@@ -120,4 +121,41 @@ class GPTConfig:
     ## Linear Initialization Options
     linear_mean_init: float= 0.0
     linear_std_init: float= 0.02
+
+    @classmethod
+    def from_json(cls, filename: str):
+        try:
+            with open(filename, 'r') as json_file:
+                config_dict = json.load(json_file)
+            
+            # Get all field names of the dataclass
+            field_names = {f.name for f in fields(cls)}
+            
+            # Filter the loaded dict to only include valid fields
+            filtered_dict = {k: v for k, v in config_dict.items() if k in field_names}
+            
+            # Create and return a new instance
+            return cls(**filtered_dict)
+        except FileNotFoundError:
+            print(f"Error: File '{filename}' not found.")
+            return None
+        except json.JSONDecodeError:
+            print(f"Error: File '{filename}' is not a valid JSON file.")
+            return None
+        except TypeError as e:
+            print(f"Error: Invalid data in JSON file. {str(e)}")
+            return None
+    
+    def to_json(self, filename: str):
+        """
+        Function to save a GPTConfig object as json to be used for later model creation
+        
+        input: 
+        - fout: string = filename of saved config file
+        
+        """
+        conf_dict = asdict(self)
+
+        with open(filename, 'w') as json_file:
+            json.dump(conf_dict, json_file)
 
