@@ -1,8 +1,7 @@
 import sys
 import os
 
-sys.path.append('build/lib.linux-x86_64-3.10')
-import h100_train as tk_train
+import h100 as tk_train
 
 from collections import defaultdict
 import torch
@@ -22,7 +21,7 @@ class AttentionFunction(Function):
         grad_k.zero_()
         grad_v.zero_()
 
-        tk_train.attention_train_forward_causal(q, k, v, outputs, l_vec)
+        tk_train.attention_forward(q, k, v, outputs, l_vec, True)
         ctx.save_for_backward(q, k, v, outputs, l_vec, grad_q, grad_k, grad_v, d_vec)
         return outputs
 
@@ -30,8 +29,6 @@ class AttentionFunction(Function):
         assert grad_output.shape[3] == 64, "TK train currently supports head dim 64 only"
         
         q, k, v, o, l_vec, grad_q, grad_k, grad_v, d_vec = ctx.saved_tensors
-
-        # print("Inside backwards tk")
         
         q = q.contiguous()
         k = k.contiguous()
@@ -43,11 +40,11 @@ class AttentionFunction(Function):
         grad_v = grad_v.contiguous()
         d_vec = d_vec.contiguous()
         
-        tk_train.attention_train_backward_causal(
+        tk_train.attention_backward(
             q, k, v, o, 
             l_vec, d_vec, 
             grad_output.contiguous(), 
-            grad_q, grad_k, grad_v
+            grad_q, grad_k, grad_v, True
         )
 
         return grad_q, grad_k, grad_v, None, None, None, None, None, None
@@ -69,11 +66,12 @@ class CustomAttention(nn.Module):
 
         with torch.no_grad():
             self.outputs = torch.empty((self.b, self.h, self.n, self.d //self. h), dtype=torch.bfloat16, device='cuda', requires_grad=False)
-            self.l_vec = torch.empty((self.b, self.h, self.n, 1), dtype=torch.bfloat16, device='cuda', requires_grad=False)
-            self.grad_q = torch.empty((self.b, self.h, self.n, self.d // self.h), dtype=torch.bfloat16, device='cuda', requires_grad=False)
-            self.grad_k = torch.empty((self.b, self.h, self.n, self.d // self.h), dtype=torch.bfloat16, device='cuda', requires_grad=False)
-            self.grad_v = torch.empty((self.b, self.h, self.n, self.d // self.h), dtype=torch.bfloat16, device='cuda', requires_grad=False)
-            self.d_vec = torch.empty((self.b, self.h, self.n, 1), dtype=torch.bfloat16, device='cuda', requires_grad=False)
+            
+            self.l_vec   = torch.empty((self.b, self.h, self.n, 1), dtype=torch.float32, device='cuda', requires_grad=False)
+            self.grad_q  = torch.empty((self.b, self.h, self.n, self.d // self.h), dtype=torch.float32, device='cuda', requires_grad=False)
+            self.grad_k  = torch.empty((self.b, self.h, self.n, self.d // self.h), dtype=torch.float32, device='cuda', requires_grad=False)
+            self.grad_v  = torch.empty((self.b, self.h, self.n, self.d // self.h), dtype=torch.float32, device='cuda', requires_grad=False)
+            self.d_vec   = torch.empty((self.b, self.h, self.n, 1), dtype=torch.float32, device='cuda', requires_grad=False)
 
 
     def forward(self, x):

@@ -15,9 +15,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-import sys
-sys.path.append('build/lib.linux-x86_64-3.10')
-import h100_fwd as tk
+import h100 as tk
 from src.custom_model import CustomAttention
 
 class LayerNorm(nn.Module):
@@ -60,6 +58,10 @@ class CausalSelfAttention(nn.Module):
             # B, H, N, D
             self.y = torch.zeros(config.batch_size, config.n_head, config.block_size, config.n_embd // config.n_head, device='cuda', dtype=torch.bfloat16)
             self.y = self.y.contiguous()
+            
+            # B, H, N, 1
+            self.l_vec = torch.zeros(config.batch_size, config.n_head, config.block_size, 1, device='cuda', dtype=torch.float32)
+            self.l_vec = self.l_vec.contiguous()
 
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
@@ -73,27 +75,29 @@ class CausalSelfAttention(nn.Module):
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
             if self.config.TK_kernel:
-                y = self.y
+                y     = self.y
+                l_vec = self.l_vec
 
                 # pad during inference
                 is_padding = False
-                if q.size(2) % 256 != 0:
+                if q.size(2) % 768 != 0:
                     original_t = q.size(2)
-                    pad = 256 - (q.size(2) % 256)
+                    pad = 768 - (q.size(2) % 768)
                     q = F.pad(q, (0, 0, 0, pad))
                     k = F.pad(k, (0, 0, 0, pad))
                     v = F.pad(v, (0, 0, 0, pad))
                     is_padding = True
-                    y = torch.zeros_like(q)
+                    
+                    y     = torch.zeros_like(q)
+                    l_vec = torch.zeros((y.size(0), y.size(1), y.size(2), 1), device='cuda', dtype=torch.float32)
 
                 # call tk kernel
-                tk.attention_forward_causal(q, k, v, y)
+                tk.attention_forward(q, k, v, y, l_vec, True)
                 
                 # undo the padding
                 if is_padding: 
                     y = y[:, :, :original_t, :]
             else:
-                print("Running flash attention")
                 # efficient attention using Flash Attention CUDA kernels
                 y = torch.nn.functional.scaled_dot_product_attention(
                     q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True
