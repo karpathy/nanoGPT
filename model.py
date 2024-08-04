@@ -322,11 +322,6 @@ class Block(nn.Module):
         else:
             self.mlp = mlp
 
-        if config.use_moe:
-            # overriding the block's MLP FFN layer with composited MoE layer (router -> [experts])
-            #   easier to leverage identical forward pass
-            self.mlp = MoELayer(config)
-
     def forward(self, x):
         def custom_forward(*inputs):
             x = inputs[0]
