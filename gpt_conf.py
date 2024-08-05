@@ -138,6 +138,33 @@ class GPTConfig:
     quantization_wpe_method: str = "affine_quant"
     quantization_wpe_bits: int = 8
 
+    ## Activation Quantizations
+    activations_quant_method: str = "affine_quant"
+    quantize_attn: bool = False
+    quantize_attn_bits: int = 8
+    quantize_attn_input: bool = False
+    quantize_attn_input_bits: int = None
+    quantize_qk_mult_inputs: bool = False
+    quantize_qk_mult_inputs_bits: int = None
+    quantize_softmax_input: bool = False
+    quantize_softmax_input_bits: int = None
+    quantize_pv_mult_inputs: bool = False
+    quantize_pv_mult_inputs_bits: int = None
+    quantize_pv_mult_output: bool = False
+    quantize_pv_mult_output_bits: int = None
+    quantize_attn_output: bool = False
+    quantize_attn_output_bits: int = None
+    quantize_mlp: bool = False
+    quantize_mlp_bits: int = 8
+    quantize_mlp_input: bool = False
+    quantize_mlp_input_bits: int = None
+    quantize_activation_input: bool = False
+    quantize_activation_input_bits: int = None
+    quantize_activation_output: bool = False
+    quantize_activation_output_bits: int = None
+    quantize_mlp_output: bool = False
+    quantize_mlp_output_bits: int = None
+
     @classmethod
     def from_json(cls, filename: str):
         try:
