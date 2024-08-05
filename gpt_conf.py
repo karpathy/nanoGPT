@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field, asdict, fields
 from typing import List
 import json
-
 @dataclass
 class GPTConfig:
     block_size: int = 1024
