@@ -23,8 +23,8 @@ class SpeechTokenizer:
             codes = self.model.encode(audio)
 
         # Print the shape, length, and dimensions of the immediate tensors
-        for i, code in enumerate(codes):
-            print(f"Tensor {i} - Shape: {code.shape}, Length: {code.numel()}, Dimensions: {code.dim()}")
+        # for i, code in enumerate(codes):
+        #     print(f"Tensor {i} - Shape: {code.shape}, Length: {code.numel()}, Dimensions: {code.dim()}")
 
         with torch.no_grad():
             if 'cuda' in self.device:
