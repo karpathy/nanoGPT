@@ -1,4 +1,5 @@
 import argparse
+import sys
 import tempfile
 import json
 import os
@@ -51,6 +52,7 @@ args = parser.parse_args()
 snac_model = SpeechTokenizer('cuda')
 
 audio = AudioSegment.from_mp3(args.input)
+audio_duration = len(audio)  # Duration of the audio in milliseconds
 
 with open(args.whisper, 'r') as file:
     data = json.load(file)
@@ -65,6 +67,11 @@ for entry in data['transcription']:
     if begin == end:
         print(f"Skipping entry with equal 'from' and 'to' values: {entry}")
         continue
+
+    # Check if the end time exceeds the audio duration
+    if end > audio_duration:
+        print(f"Skipping entry with end time {end} exceeding audio duration {audio_duration}: {entry}")
+        sys.exit()
 
     audio_section = audio[begin:end]
     temp_path = save_audio_temp(audio_section)
