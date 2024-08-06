@@ -8,16 +8,43 @@ from snac_converter import SpeechTokenizer, preprocess_audio_to_24khz, load_mp3_
 def save_audio_temp(audio_segment, format="mp3"):
     """Save the specific audio segment temporarily"""
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f".{format}")
-    temp_file.close()
-
-    # Export audio segment to this temp file
     audio_segment.export(temp_file.name, format=format)
-
     return temp_file.name
+
+def append_to_json_file(file_path, data):
+    """Append data to a JSON file incrementally"""
+    if os.path.exists(file_path):
+        with open(file_path, 'r+') as file:
+            existing_data = json.load(file)
+            existing_data.append(data)
+            file.seek(0)
+            json.dump(existing_data, file, indent=4)
+    else:
+        with open(file_path, 'w') as file:
+            json.dump([data], file, indent=4)
+
+def flatten_tensors(tensors):
+    """Flatten the tensors using the specified pattern"""
+    flattened = []
+    separator_token = 4097
+    i = 0
+
+    while i < len(tensors[0][0]):
+        if i < len(tensors[0][0]):
+            flattened.append(tensors[0][0][i].item())
+        if 2 * i + 1 < len(tensors[1][0]):
+            flattened.extend([tensors[1][0][2 * i].item(), tensors[1][0][2 * i + 1].item()])
+        if 4 * i + 3 < len(tensors[2][0]):
+            flattened.extend([tensors[2][0][4 * i].item(), tensors[2][0][4 * i + 1].item(), tensors[2][0][4 * i + 2].item(), tensors[2][0][4 * i + 3].item()])
+        flattened.append(separator_token)
+        i += 1
+
+    return flattened
 
 parser = argparse.ArgumentParser(description="Encode and decode audio using SNAC")
 parser.add_argument('input', help="Input file path or directory (for encode)")
 parser.add_argument('whisper', help="Input file path or directory for whisper outputs")
+parser.add_argument('output', help="Output file path for the new JSON")
 
 args = parser.parse_args()
 
@@ -30,26 +57,51 @@ with open(args.whisper, 'r') as file:
 
 for entry in data['transcription']:
     print(f"From: {entry['timestamps']['from']} to: {entry['timestamps']['to']}, word: {entry['text']}")
-    # Using pydub to extract segments of audio wanted
+
     begin = entry['offsets']['from']
     end = entry['offsets']['to']
-    # Temporarily solution when word.start == word.end
-    # if (word.start == word.end):
-    #     end += 1
+
+    # Skip entries where 'from' and 'to' are equal
+    if begin == end:
+        print(f"Skipping entry with equal 'from' and 'to' values: {entry}")
+        continue
+
     audio_section = audio[begin:end]
-    # Save the audio segment to a temp file
     temp_path = save_audio_temp(audio_section)
 
-    # Do the snac encoder
     temp_wav_path = "temp.wav"
     preprocess_audio_to_24khz(temp_path, temp_wav_path)
-    audio_snac = load_mp3_as_tensor(temp_wav_path)
-    print(f"loaded tensor:{audio_snac}")
-    audio_snac = audio_snac.to(snac_model.device)
-    print(f"Tensor moved to device: {audio_snac}")
-    # audio_snac = load_mp3_as_tensor(temp_wav_path).to(snac_model.device)
-    print(os.path.exists(temp_wav_path))
-    print(temp_wav_path)
-    codes = snac_model.encode(audio_snac)
-    code_list = [c.tolist() for c in codes]
-    print(codes)
+
+    try:
+        # Load and process the audio segment
+        audio_snac = load_mp3_as_tensor(temp_wav_path)
+        audio_snac = audio_snac.to(snac_model.device)
+        codes = snac_model.encode(audio_snac)
+        code_list = [c.tolist() for c in codes]
+
+        # Flatten the tensors using the specified pattern
+        sequential_snac_tokens = flatten_tensors(codes)
+
+        # Collect results
+        result = {
+            "snac_tokens": code_list,
+            "sequential_snac_tokens": sequential_snac_tokens,
+            "text": entry['text'],
+            "from": entry['timestamps']['from'],
+            "to": entry['timestamps']['to']
+        }
+
+        # Append result to JSON file
+        append_to_json_file(args.output, result)
+
+    except Exception as e:
+        print(f"Error processing segment from {entry['timestamps']['from']} to {entry['timestamps']['to']}: {e}")
+    finally:
+        # Ensure temporary files are deleted
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        if os.path.exists(temp_wav_path):
+            os.remove(temp_wav_path)
+
+print(f"Results saved to {args.output}")
+
