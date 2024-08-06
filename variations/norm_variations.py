@@ -60,6 +60,9 @@ class kRMSNorm(nn.Module):
         self.quantize_type = config.krmsnorm_quantize_type  # 'int8', 'int16', or 'none'
         self.enable_gain = config.krmsnorm_enable_gain
         self.selection_type = config.krmsnorm_selection_type  # 'first', 'last', or 'random'
+        self.recompute_percentage = config.krmsnorm_recompute_percentage
+        self.num_recomputes = 0
+        self.recomputes = []
 
     def quantize(self, x, dtype):
         if dtype == 'int8':
@@ -112,16 +115,23 @@ class kRMSNorm(nn.Module):
         krms = self.dequantize(krms, scale, zero_point, self.quantize_type)
 
         # Apply normalization
-        x = x / krms
+        if self.recompute_percentage != None:
+            rms = x.norm(2, dim=-1, keepdim=True) / math.sqrt(x.size(-1))
+            if krms > rms*(1-self.recompute_percentage) and krms < rms*(1+self.recompute_percentage):
+                x = x / krms
+                self.recomputes.append(False)
+            else:
+                x = x / rms
+                self.num_recomputes += 1
+                self.recomputes.append(True)
+        else:
+            x = x / krms
 
         # Apply gain if enabled
         if self.enable_gain:
             x = x * self.gain
 
         return x
-
-
-
 
 norm_dictionary = {
     "layernorm": LayerNorm,
