@@ -24,6 +24,10 @@ fi
 
 pushd "$script_dir/template/whisper.cpp" > /dev/null
 
+# Tempfix remove problematic lines
+sed -i 's/.*MK_CFLAGS   += -march=rv64gcv.*//' Makefile
+sed -i 's/.*MK_CXXFLAGS += -march=rv64gcv.*//' Makefile
+
 # Download one of the Whisper models and convert to ggml format
 bash ./models/download-ggml-model.sh base.en
 
