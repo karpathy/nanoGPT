@@ -8,6 +8,10 @@ csv_logs/
 *.bin
 *.txt
 
+# audio file extensions
+*.wav
+*.mp3
+
 # checkpoint directories
 out*/
 .aider*
