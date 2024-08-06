@@ -25,7 +25,7 @@ import torch.utils.checkpoint as checkpoint
 # Variations
 from variations.softmax_variations import softmax_dictionary
 from variations.norm_variations import norm_dictionary
-from variations.position_encoding_variations import RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions, FIRE
+from variations.position_encoding_variations import QuantizedEmbedding, RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions, FIRE
 from variations.activation_variations import activation_dictionary
 from variations.linear_variations import linear_dictionary
 
@@ -358,15 +358,24 @@ class GPT(nn.Module):
         # Shared Parameters Attention
         shared_attn_array = create_shared_param_group("attn", config)
 
+        if config.quantize_wte:
+            word_embd = QuantizedEmbedding(config.vocab_size, config.n_embd, config.quantization_wte_method, config.quantization_wte_bits)
+        else:
+            word_embd = nn.Embedding(config.vocab_size, config.n_embd)
+
         self.transformer = nn.ModuleDict(dict(
-            wte = nn.Embedding(config.vocab_size, config.n_embd),
+            wte = word_embd,
             drop = nn.Dropout(config.dropout),
             h = nn.ModuleList([Block(config, mlp=shared_mlp_array[i], attn=shared_attn_array[i]) for i in range(config.n_layer)]),
             ln_f = self.norm_variant_output,
         ))
 
         if self.config.use_abs_pos_embeddings:
-            self.transformer['wpe'] = nn.Embedding(config.block_size, config.n_embd)
+            if config.quantize_wpe:
+                pos_embd = QuantizedEmbedding(config.block_size, config.n_embd, config.quantization_wpe_method, config.quantization_wpe_bits)
+            else:
+                pos_embd = nn.Embedding(config.block_size, config.n_embd)
+            self.transformer['wpe'] = pos_embd
 
         # Select softmax variant for output layer
         self.softmax_variant_output = config.softmax_variant_output
@@ -406,7 +415,12 @@ class GPT(nn.Module):
         # Function to increase block size dynamically
         if new_block_size > self.config.block_size:
             self.config.block_size = new_block_size
-            self.transformer.wpe = nn.Embedding(new_block_size, self.config.n_embd)
+            if self.config.use_abs_pos_embeddings:
+                if self.config.quantize_wpe:
+                    pos_embd = QuantizedEmbedding(new_block_size, self.config.n_embd, self.config.quantization_wpe_method, self.config.quantization_wpe_bits)
+                else:
+                    pos_embd = nn.Embedding(new_block_size, self.config.n_embd)
+                self.transformer.wpe = pos_embd
             for block in self.transformer.h:
                 if hasattr(block.attn, 'bias'):
                     block.attn.bias = torch.tril(torch.ones(new_block_size, new_block_size)).view(1, 1, new_block_size, new_block_size)
@@ -470,7 +484,8 @@ class GPT(nn.Module):
         # but want to use a smaller block size for some smaller, simpler model
         assert block_size <= self.config.block_size
         self.config.block_size = block_size
-        self.transformer.wpe.weight = nn.Parameter(self.transformer.wpe.weight[:block_size])
+        if self.config.use_abs_pos_embeddings:
+            self.transformer.wpe.weight = nn.Parameter(self.transformer.wpe.weight[:block_size])
         for block in self.transformer.h:
             if hasattr(block.attn, 'bias'):
                 block.attn.bias = block.attn.bias[:,:,:block_size,:block_size]

@@ -122,6 +122,16 @@ class GPTConfig:
     linear_mean_init: float= 0.0
     linear_std_init: float= 0.02
 
+    # Quantizations
+    
+    ## Embedding Quantizations
+    quantize_wte: bool = False
+    quantize_wpe: bool = False
+    quantization_wte_method: str = "affine_quant"
+    quantization_wte_bits: int = 8
+    quantization_wpe_method: str = "affine_quant"
+    quantization_wpe_bits: int = 8
+
     @classmethod
     def from_json(cls, filename: str):
         try:
