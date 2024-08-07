@@ -13,6 +13,12 @@ class GPTConfig:
     dropout: float = 0.0
     window_size: int = 128
     gate: bool = False
+    use_moe: bool = False
+    moe_layer_freq: int = 2
+    n_experts: int = 8
+    moe_top_k: int = 2
+    moe_router_scheme: str = "softmax"
+
 
     # Training options
     ## Gradient Checkpointing - More memory efficient (can do long contexts), but is slower

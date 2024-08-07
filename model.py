@@ -28,8 +28,12 @@ from variations.norm_variations import norm_dictionary
 from variations.position_encoding_variations import QuantizedEmbedding, RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions, FIRE
 from variations.activation_variations import activation_dictionary
 from variations.linear_variations import linear_dictionary
+from variations.router_variations import router_dictionary
 
 def create_shared_param_group(layer_type, config):
+
+    # explore MoE layers being reflected symmetrically
+
     shared_size = None
     shared_sym = None # if true, output array is symmetrical
     layer_block = None
@@ -54,7 +58,11 @@ def create_shared_param_group(layer_type, config):
         # Create new layer block every "shared_size"
         if i % shared_size == 0:
             if layer_type == "mlp":
-                layer_block = MLP(config)
+                if config.use_moe and i % config.moe_layer_freq == 0:
+                    # this iter is an moe layer iter
+                    layer_block = MoELayer(config)
+                else:
+                    layer_block = MLP(config)
             elif layer_type == "attn":
                 layer_block = CausalSelfAttention(config, fire_pos_enc=fire_pos_enc)
             else:
@@ -648,3 +656,55 @@ class GPT(nn.Module):
                 break
 
         return idx, generated_text
+
+
+class MoELayer(nn.Module):
+    """ Mixture of Experts layer to replace FFN (or every other FFN) """
+
+    def __init__(self, config):
+        super().__init__()
+        self.top_k = config.moe_top_k
+        # TODO: implement expert capacity throttling
+        # self.expert_capacity = config.expert_capacity
+        self.num_experts = config.n_experts
+        self.router = router_dictionary[config.moe_router_scheme](config)
+        self.experts = nn.ModuleList([MLP(config) for _ in range(config.n_experts)])
+
+    def forward(self, x):
+        # Assuming x has shape [batch_size, seq_len, n_embd]
+        batch_size, seq_len, _ = x.shape
+        gating_output, indices = self.router(x)
+        # print(f"gating_output.shape: {gating_output.shape}")
+        # print(f"indices 1 count: {indices}")
+        final_output = torch.zeros_like(x)
+
+        # Flatten the batch and sequence dimensions to treat each token independently
+        flat_x = x.view(-1, x.size(-1))
+        # print(f"x.shape() = {x.shape}")
+        # print(f"flat_x = {flat_x.shape}")
+        flat_gating_output = gating_output.view(-1, gating_output.size(-1))
+        # print(f"flat_gating_output.shape = {flat_gating_output.shape}")
+
+        # Process each expert in parallel
+        for i, expert in enumerate(self.experts):
+            # Create a mask for the inputs where the current expert is in top-k
+            expert_mask = (indices == i).any(dim=-1)
+            flat_mask = expert_mask.view(-1)
+            # print(f"expert_mask shape = {expert_mask.shape}")
+            # print(f"flat_mask shape = {flat_mask.shape}")
+
+            if flat_mask.any():
+                expert_input = flat_x[flat_mask]
+                expert_output = expert(expert_input)
+
+                # Extract and apply gating scores
+                gating_scores = flat_gating_output[flat_mask, i].unsqueeze(1)
+                weighted_output = expert_output * gating_scores
+
+                # Update final output additively by indexing and adding
+                final_output[expert_mask] += weighted_output.squeeze(1)
+        # print(f"final_output.shape = {final_output.shape}\n")
+        return final_output
+
+
+
