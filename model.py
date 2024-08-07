@@ -99,25 +99,19 @@ class CausalSelfAttention(nn.Module):
         super().__init__()
         assert config.n_embd % config.n_head == 0
 
-        self.quantization_linear_q_method = set_variant(config.quantization_linear_q_method, config.quantization_linear_method)
-        self.quantization_linear_q_bits = set_variant(config.quantization_linear_q_bits, config.quantization_linear_bits)
-        self.quantization_linear_k_method = set_variant(config.quantization_linear_k_method, config.quantization_linear_method)
-        self.quantization_linear_k_bits = set_variant(config.quantization_linear_k_bits, config.quantization_linear_bits)
-        self.quantization_linear_v_method = set_variant(config.quantization_linear_v_method, config.quantization_linear_method)
-        self.quantization_linear_v_bits = set_variant(config.quantization_linear_v_bits, config.quantization_linear_bits)
-        self.quantization_linear_proj_method = set_variant(config.quantization_linear_proj_method, config.quantization_linear_method)
-        self.quantization_linear_proj_bits = set_variant(config.quantization_linear_proj_bits, config.quantization_linear_bits)
-        self.quantization_linear_mlp_up_method = set_variant(config.quantization_linear_mlp_up_method, config.quantization_linear_method)
-        self.quantization_linear_mlp_up_bits = set_variant(config.quantization_linear_mlp_up_bits, config.quantization_linear_bits)
-        self.quantization_linear_mlp_down_method = set_variant(config.quantization_linear_mlp_down_method, config.quantization_linear_method)
-        self.quantization_linear_mlp_down_bits = set_variant(config.quantization_linear_mlp_down_bits, config.quantization_linear_bits)
+        self.quantization_attn_dict = {}
+        for arg, val in vars(config).items():
+            if arg.startswith("quantize_") and "linear_attn" in arg and arg.endswith("_bits"):
+                self.quantization_attn_dict[arg] = set_variant(val, config.quantize_linear_bits)
+            elif arg.startswith("quantize_") and "linear_attn" in arg and arg.endswith("_method"):
+                self.quantization_attn_dict[arg] = set_variant(val, config.quantize_linear_method)
         self.linear_variant_q = linear_dictionary[set_variant(config.linear_variant_q, config.linear_variant_attn)]
         self.linear_variant_k = linear_dictionary[set_variant(config.linear_variant_k, config.linear_variant_attn)]
         self.linear_variant_v = linear_dictionary[set_variant(config.linear_variant_v, config.linear_variant_attn)]
         self.linear_variant_attn_proj = linear_dictionary[set_variant(config.linear_variant_attn_proj, config.linear_variant_attn)]
 
         # key, query, value projections for all heads, but in a batch
-        self.c_attn_q = self.linear_variant_q(config.n_embd, config.n_embd, config, self.quantization_linear_q_method, self.quantization_linear_q_bits, bias=config.bias)
+        self.c_attn_q = self.linear_variant_q(config.n_embd, config.n_embd, config, self.quantization_attn_dict["quantize_linear_attn_q_method"], self.quantization_attn_dict["quantize_linear_attn_q_bits"], bias=config.bias)
 
         self.n_head = config.n_head
         if config.n_kv_group == None:
@@ -127,9 +121,9 @@ class CausalSelfAttention(nn.Module):
             self.n_kv_group = config.n_kv_group
 
         self.kv_dim = (config.n_embd // config.n_head) * self.n_kv_group
-        self.c_attn_k = self.linear_variant_k(config.n_embd, self.kv_dim, config, self.quantization_linear_k_method, self.quantization_linear_k_bits, bias=config.bias)
-        self.c_attn_v = self.linear_variant_v(config.n_embd, self.kv_dim, config, self.quantization_linear_v_method, self.quantization_linear_v_bits, bias=config.bias)
-        self.c_proj = self.linear_variant_attn_proj(config.n_embd, config.n_embd, config, self.quantization_linear_proj_method, self.quantization_linear_proj_bits, bias=config.bias)
+        self.c_attn_k = self.linear_variant_k(config.n_embd, self.kv_dim, config, self.quantization_attn_dict["quantize_linear_attn_k_method"], self.quantization_attn_dict["quantize_linear_attn_k_bits"], bias=config.bias)
+        self.c_attn_v = self.linear_variant_v(config.n_embd, self.kv_dim, config, self.quantization_attn_dict["quantize_linear_attn_v_method"], self.quantization_attn_dict["quantize_linear_attn_v_bits"], bias=config.bias)
+        self.c_proj = self.linear_variant_attn_proj(config.n_embd, config.n_embd, config, self.quantization_attn_dict["quantize_linear_attn_proj_method"], self.quantization_attn_dict["quantize_linear_attn_proj_bits"], bias=config.bias)
 
         # regularization
         self.attn_dropout = nn.Dropout(config.dropout)
@@ -284,10 +278,12 @@ class MLP(nn.Module):
     def __init__(self, config):
         super().__init__()
 
-        self.quantization_linear_mlp_up_method = set_variant(config.quantization_linear_mlp_up_method, config.quantization_linear_method)
-        self.quantization_linear_mlp_up_bits = set_variant(config.quantization_linear_mlp_up_bits, config.quantization_linear_bits)
-        self.quantization_linear_mlp_down_method = set_variant(config.quantization_linear_mlp_down_method, config.quantization_linear_method)
-        self.quantization_linear_mlp_down_bits = set_variant(config.quantization_linear_mlp_down_bits, config.quantization_linear_bits)
+        self.quantization_mlp_dict = {}
+        for arg, val in vars(config).items():
+            if arg.startswith("quantize_") and "linear_mlp" in arg and arg.endswith("_bits"):
+                self.quantization_mlp_dict[arg] = set_variant(val, config.quantize_linear_bits)
+            elif arg.startswith("quantize_") and "linear_mlp" in arg and arg.endswith("_method"):
+                self.quantization_mlp_dict[arg] = set_variant(val, config.quantize_linear_method)
         self.linear_variant_mlp_up = linear_dictionary[set_variant(config.linear_variant_mlp_up, config.linear_variant_mlp)]
         self.linear_variant_mlp_down = linear_dictionary[set_variant(config.linear_variant_mlp_down, config.linear_variant_mlp)]
 
@@ -300,12 +296,12 @@ class MLP(nn.Module):
         if self.mlp_variant == "kan":
             self.kan = linear_dictionary["kan"](config.n_embd, config.n_embd, config=config)
         if self.mlp_variant == "mlp":
-            self.c_fc = self.linear_variant_mlp_up(config.n_embd, 4 * config.n_embd, config, self.quantization_linear_mlp_up_method, self.quantization_linear_mlp_up_bits, bias=config.bias)
-            self.c_proj = self.linear_variant_mlp_down(4 * config.n_embd, config.n_embd, config, self.quantization_linear_mlp_down_method, self.quantization_linear_mlp_down_bits, bias=config.bias)
+            self.c_fc = self.linear_variant_mlp_up(config.n_embd, 4 * config.n_embd, config, self.quantization_mlp_dict["quantize_linear_mlp_up_method"], self.quantization_mlp_dict["quantize_linear_mlp_up_bits"], bias=config.bias)
+            self.c_proj = self.linear_variant_mlp_down(4 * config.n_embd, config.n_embd, config, self.quantization_mlp_dict["quantize_linear_mlp_down_method"], self.quantization_mlp_dict["quantize_linear_mlp_down_bits"], bias=config.bias)
         if self.mlp_variant == "swiglu":
-            self.c_fc_in1 = self.linear_variant_mlp_up(config.n_embd, 4 * config.n_embd, config, self.quantization_linear_mlp_up_method, self.quantization_linear_mlp_up_bits)
-            self.c_fc_in2 = self.linear_variant_mlp_up(config.n_embd, 4 * config.n_embd, config, self.quantization_linear_mlp_up_method, self.quantization_linear_mlp_up_bits)
-            self.c_fc_out = self.linear_variant_mlp_down(4 * config.n_embd, config.n_embd, config, self.quantization_linear_mlp_down_method, self.quantization_linear_mlp_down_bits)
+            self.c_fc_in1 = self.linear_variant_mlp_up(config.n_embd, 4 * config.n_embd, config, self.quantization_mlp_dict["quantize_linear_mlp_up_method"], self.quantization_mlp_dict["quantize_linear_mlp_up_bits"])
+            self.c_fc_in2 = self.linear_variant_mlp_up(config.n_embd, 4 * config.n_embd, config, self.quantization_mlp_dict["quantize_linear_mlp_up_method"], self.quantization_mlp_dict["quantize_linear_mlp_up_bits"])
+            self.c_fc_out = self.linear_variant_mlp_down(4 * config.n_embd, config.n_embd, config, self.quantization_mlp_dict["quantize_linear_mlp_down_method"], self.quantization_mlp_dict["quantize_linear_mlp_down_bits"])
 
         self.dropout = nn.Dropout(config.dropout)
 
@@ -394,7 +390,7 @@ class GPT(nn.Module):
         shared_attn_array = create_shared_param_group("attn", config)
 
         if config.quantize_wte:
-            word_embd = QuantizedEmbedding(config.vocab_size, config.n_embd, config.quantization_wte_method, config.quantization_wte_bits)
+            word_embd = QuantizedEmbedding(config.vocab_size, config.n_embd, config.quantize_wte_method, config.quantize_wte_bits)
         else:
             word_embd = nn.Embedding(config.vocab_size, config.n_embd)
 
@@ -407,7 +403,7 @@ class GPT(nn.Module):
 
         if self.config.use_abs_pos_embeddings:
             if config.quantize_wpe:
-                pos_embd = QuantizedEmbedding(config.block_size, config.n_embd, config.quantization_wpe_method, config.quantization_wpe_bits)
+                pos_embd = QuantizedEmbedding(config.block_size, config.n_embd, config.quantize_wpe_method, config.quantize_wpe_bits)
             else:
                 pos_embd = nn.Embedding(config.block_size, config.n_embd)
             self.transformer['wpe'] = pos_embd
@@ -452,7 +448,7 @@ class GPT(nn.Module):
             self.config.block_size = new_block_size
             if self.config.use_abs_pos_embeddings:
                 if self.config.quantize_wpe:
-                    pos_embd = QuantizedEmbedding(new_block_size, self.config.n_embd, self.config.quantization_wpe_method, self.config.quantization_wpe_bits)
+                    pos_embd = QuantizedEmbedding(new_block_size, self.config.n_embd, self.config.quantize_wpe_method, self.config.quantize_wpe_bits)
                 else:
                     pos_embd = nn.Embedding(new_block_size, self.config.n_embd)
                 self.transformer.wpe = pos_embd
