@@ -58,7 +58,11 @@ def create_shared_param_group(layer_type, config):
         # Create new layer block every "shared_size"
         if i % shared_size == 0:
             if layer_type == "mlp":
-                layer_block = MLP(config)
+                if config.use_moe and i % config.moe_layer_freq == 0:
+                    # this iter is an moe layer iter
+                    layer_block = MoELayer(config)
+                else:
+                    layer_block = MLP(config)
             elif layer_type == "attn":
                 layer_block = CausalSelfAttention(config, fire_pos_enc=fire_pos_enc)
             else:
@@ -362,32 +366,12 @@ class GPT(nn.Module):
         # Shared Parameters Attention
         shared_attn_array = create_shared_param_group("attn", config)
 
-        # Alter FFNs for MoE architecture
-        if config.use_moe:
-            if not config.moe_layer_freq:
-                # default to every other layer
-                self.config.moe_layer_freq = 2
-            
-            moduleList = []
-            for i in range(config.n_layer):
-                if i % self.config.moe_layer_freq == 0:
-                    moduleList.append(Block(config, mlp=MoELayer(config), attn=shared_attn_array[i]))
-                else:
-                    moduleList.append(Block(config, mlp=shared_mlp_array[i], attn=shared_attn_array[i]))
-
-            self.transformer = nn.ModuleDict(dict(
-                wte = nn.Embedding(config.vocab_size, config.n_embd),
-                drop = nn.Dropout(config.dropout),
-                h = nn.ModuleList(moduleList),
-                ln_f = self.norm_variant_output,
-            ))
-        else:
-            self.transformer = nn.ModuleDict(dict(
-                wte = nn.Embedding(config.vocab_size, config.n_embd),
-                drop = nn.Dropout(config.dropout),
-                h = nn.ModuleList([Block(config, mlp=shared_mlp_array[i], attn=shared_attn_array[i]) for i in range(config.n_layer)]),
-                ln_f = self.norm_variant_output,
-            ))
+        self.transformer = nn.ModuleDict(dict(
+            wte = nn.Embedding(config.vocab_size, config.n_embd),
+            drop = nn.Dropout(config.dropout),
+            h = nn.ModuleList([Block(config, mlp=shared_mlp_array[i], attn=shared_attn_array[i]) for i in range(config.n_layer)]),
+            ln_f = self.norm_variant_output,
+        ))
 
         if self.config.use_abs_pos_embeddings:
             self.transformer['wpe'] = nn.Embedding(config.block_size, config.n_embd)
