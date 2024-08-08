@@ -441,7 +441,7 @@ class GPT(nn.Module):
         shared_attn_array = create_shared_param_group("attn", config)
 
         if config.quantize_wte:
-            word_embd = QuantizedEmbedding(config.vocab_size, config.n_embd, config.quantization_wte_method, config.quantization_wte_bits)
+            word_embd = QuantizedEmbedding(config.vocab_size, config.n_embd, config.quantize_wte_method, config.quantize_wte_bits)
         else:
             word_embd = nn.Embedding(config.vocab_size, config.n_embd)
 
@@ -454,7 +454,7 @@ class GPT(nn.Module):
 
         if self.config.use_abs_pos_embeddings:
             if config.quantize_wpe:
-                pos_embd = QuantizedEmbedding(config.block_size, config.n_embd, config.quantization_wpe_method, config.quantization_wpe_bits)
+                pos_embd = QuantizedEmbedding(config.block_size, config.n_embd, config.quantize_wpe_method, config.quantize_wpe_bits)
             else:
                 pos_embd = nn.Embedding(config.block_size, config.n_embd)
             self.transformer['wpe'] = pos_embd
@@ -499,7 +499,7 @@ class GPT(nn.Module):
             self.config.block_size = new_block_size
             if self.config.use_abs_pos_embeddings:
                 if self.config.quantize_wpe:
-                    pos_embd = QuantizedEmbedding(new_block_size, self.config.n_embd, self.config.quantization_wpe_method, self.config.quantization_wpe_bits)
+                    pos_embd = QuantizedEmbedding(new_block_size, self.config.n_embd, self.config.quantize_wpe_method, self.config.quantize_wpe_bits)
                 else:
                     pos_embd = nn.Embedding(new_block_size, self.config.n_embd)
                 self.transformer.wpe = pos_embd

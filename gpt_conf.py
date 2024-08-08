@@ -132,10 +132,10 @@ class GPTConfig:
     ## Embedding Quantizations
     quantize_wte: bool = False
     quantize_wpe: bool = False
-    quantization_wte_method: str = "affine_quant"
-    quantization_wte_bits: int = 8
-    quantization_wpe_method: str = "affine_quant"
-    quantization_wpe_bits: int = 8
+    quantize_wte_method: str = "affine_quant"
+    quantize_wte_bits: int = 8
+    quantize_wpe_method: str = "affine_quant"
+    quantize_wpe_bits: int = 8
 
     ## Activation Quantizations
     activations_quant_method: str = "affine_quant"
