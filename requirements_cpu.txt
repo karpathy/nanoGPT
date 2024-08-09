@@ -76,3 +76,4 @@ rich==13.5.3
 plotly==5.22.0
 seaborn==0.13.2
 kaleido==0.2.1
+torchinfo==1.8.0
