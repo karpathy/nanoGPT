@@ -7,6 +7,20 @@ def set_dtype(bits):
         return torch.int16
     else:
         return torch.int8
+    
+def symmetric_quantize(tensor, bits):
+    """
+    Symmetric quantization function
+    :param tensor: Tensor to be quantized
+    :param bits: Number of bits of quantization
+    :return: zero point, scale, quantized tensor
+    """
+    bit_max = (1 << (bits - 1)) - 1
+    bit_min = -bit_max - 1
+    abs_max = tensor.abs().max()
+    scale = abs_max / bit_max
+    xi_array = torch.round(tensor / scale)
+    return 0, scale, torch.clamp(xi_array, min=bit_min, max=bit_max).to(dtype=set_dtype(bits))
 
 def symmetric_quantize(tensor, bits):
     """
@@ -24,7 +38,7 @@ def symmetric_quantize(tensor, bits):
 
 def affine_quantize(tensor, bits):
     """
-    Quantization function
+    Affine (asymmetric) quantization function
     :param tensor: Tensor to be quantized
     :param bits: Number of bits of quantization
     :return: zero point, scale, quantized tensor
@@ -40,7 +54,7 @@ def affine_quantize(tensor, bits):
 
 def stochastic_quantize(tensor, bits):
     """
-    Quantization function
+    Stochastic quantization function
     :param tensor: Tensor to be quantized
     :param bits: Number of bits of quantization
     :return: zero point, scale, quantized tensor

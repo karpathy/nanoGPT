@@ -91,12 +91,12 @@ def create_shared_param_group(layer_type, config):
     return shared_group
 
 def set_variant(variant, default_variant):
+    # If variant is false or None, then set to provided default value
     if not variant:
         return default_variant
     return variant
 
 class CausalSelfAttention(nn.Module):
-
     def __init__(self, config, fire_pos_enc=None):
         super().__init__()
         assert config.n_embd % config.n_head == 0
@@ -104,16 +104,24 @@ class CausalSelfAttention(nn.Module):
         self.quantization_attn_dict = {}
         self.quantization_attn_dict["activations_quant_method"] = config.activations_quant_method
         for arg, val in vars(config).items():
-            # If a specific attn activation argument isn't set, set its value to the general attn activation setting
-            # If the setting is number of bits, default set to the value of config.quantize_attn_act_bits
+            # Set each attention Activation precision and method
             if arg.startswith("quantize_") and "attn_act" in arg and arg.endswith("_bits"):
                 self.quantization_attn_dict[arg] = set_variant(val, config.quantize_attn_act_bits)
-            # If the setting is an activation bool, default set to the value of config.quantize_attn_act
             elif arg.startswith("quantize_") and "attn_act" in arg:
                 self.quantization_attn_dict[arg] = set_variant(val, config.quantize_attn_act)
+            # Set each attention Linear precision and method
+            elif arg.startswith("quantize_") and "linear_attn" in arg and arg.endswith("_bits"):
+                self.quantization_attn_dict[arg] = set_variant(val, config.quantize_linear_bits)
+            elif arg.startswith("quantize_") and "linear_attn" in arg and arg.endswith("_method"):
+                self.quantization_attn_dict[arg] = set_variant(val, config.quantize_linear_method)
+        
+        self.linear_variant_q = linear_dictionary[set_variant(config.linear_variant_q, config.linear_variant_attn)]
+        self.linear_variant_k = linear_dictionary[set_variant(config.linear_variant_k, config.linear_variant_attn)]
+        self.linear_variant_v = linear_dictionary[set_variant(config.linear_variant_v, config.linear_variant_attn)]
+        self.linear_variant_attn_proj = linear_dictionary[set_variant(config.linear_variant_attn_proj, config.linear_variant_attn)]
 
         # key, query, value projections for all heads, but in a batch
-        self.c_attn_q = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.c_attn_q = self.linear_variant_q(config.n_embd, config.n_embd, config, self.quantization_attn_dict["quantize_linear_attn_q_method"], self.quantization_attn_dict["quantize_linear_attn_q_bits"], bias=config.bias)
 
         self.n_head = config.n_head
         if config.n_kv_group == None:
@@ -123,9 +131,10 @@ class CausalSelfAttention(nn.Module):
             self.n_kv_group = config.n_kv_group
 
         self.kv_dim = (config.n_embd // config.n_head) * self.n_kv_group
-        self.c_attn_k = nn.Linear(config.n_embd, self.kv_dim, bias=config.bias)
-        self.c_attn_v = nn.Linear(config.n_embd, self.kv_dim, bias=config.bias)
-        self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.c_attn_k = self.linear_variant_k(config.n_embd, self.kv_dim, config, self.quantization_attn_dict["quantize_linear_attn_k_method"], self.quantization_attn_dict["quantize_linear_attn_k_bits"], bias=config.bias)
+        self.c_attn_v = self.linear_variant_v(config.n_embd, self.kv_dim, config, self.quantization_attn_dict["quantize_linear_attn_v_method"], self.quantization_attn_dict["quantize_linear_attn_v_bits"], bias=config.bias)
+        self.c_proj = self.linear_variant_attn_proj(config.n_embd, config.n_embd, config, self.quantization_attn_dict["quantize_linear_attn_proj_method"], self.quantization_attn_dict["quantize_linear_attn_proj_bits"], bias=config.bias)
+
         # regularization
         self.attn_dropout = nn.Dropout(config.dropout)
         self.resid_dropout = nn.Dropout(config.dropout)
@@ -244,7 +253,7 @@ class CausalSelfAttention(nn.Module):
             # efficient attention using Flash Attention CUDA kernels
             y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
         else:
-            if self.quantization_attn_dict["quantize_attn_act_qk_mult_input"]:
+            if self.quantization_attn_dict["quantize_areturn default_variantttn_act_qk_mult_input"]:
                 q = _fake_quantize(q, self.quantization_attn_dict["quantize_attn_act_qk_mult_input_bits"], self.quantization_attn_dict["activations_quant_method"])
                 k = _fake_quantize(k, self.quantization_attn_dict["quantize_attn_act_qk_mult_input_bits"], self.quantization_attn_dict["activations_quant_method"])
 
@@ -308,36 +317,45 @@ class CausalSelfAttention(nn.Module):
 class MLP(nn.Module):
     def __init__(self, config):
         super().__init__()
-
-        self.quantization_mlp_dict = {}
-        self.quantization_mlp_dict["activations_quant_method"] = config.activations_quant_method
-        for arg, val in vars(config).items():
-            # If a specific mlp activation argument isn't set, set its value to the general mlp activation setting
-            # If the setting is number of bits, default set to the value of config.quantize_mlp_act_bits
-            if arg.startswith("quantize_") and "mlp_act" in arg and arg.endswith("_bits"):
-                self.quantization_mlp_dict[arg] = set_variant(val, config.quantize_mlp_act_bits)
-            # If the setting is an activation bool, default set to the value of config.quantize_mlp_act
-            elif arg.startswith("quantize_") and "mlp_act" in arg:
-                self.quantization_mlp_dict[arg] = set_variant(val, config.quantize_mlp_act)
-
-        # Select linear variant
-        self.linear_variant = linear_dictionary[config.linear_variant]
-
-        # Select activation variant
-        self.activation_variant = activation_dictionary[config.activation_variant]
-
-        # Select mlp variant
+       
+        # Select "mlp variant"
         self.mlp_variant = config.mlp_variant
 
+        # If "MLP Variant" is KAN, then we skip MLP specific items
         if self.mlp_variant == "kan":
             self.kan = linear_dictionary["kan"](config.n_embd, config.n_embd, config=config)
-        if self.mlp_variant == "mlp":
-            self.c_fc = linear_dictionary[config.linear_variant](config.n_embd, 4 * config.n_embd, config=config, bias=config.bias)
-            self.c_proj = linear_dictionary[config.linear_variant](4 * config.n_embd, config.n_embd, config=config, bias=config.bias)
-        if self.mlp_variant == "swiglu":
-            self.c_fc_in1 = linear_dictionary[config.linear_variant](config.n_embd, 4 * config.n_embd, config=config)
-            self.c_fc_in2 = linear_dictionary[config.linear_variant](config.n_embd, 4 * config.n_embd, config=config)
-            self.c_fc_out = linear_dictionary[config.linear_variant](4 * config.n_embd, config.n_embd, config=config)
+        else:
+            # Select activation variant
+            self.activation_variant = activation_dictionary[config.activation_variant]
+
+            # Sets the class of linear for MLP
+            self.linear_variant_mlp_up = linear_dictionary[set_variant(config.linear_variant_mlp_up, config.linear_variant_mlp)]
+            self.linear_variant_mlp_down = linear_dictionary[set_variant(config.linear_variant_mlp_down, config.linear_variant_mlp)]
+            
+            self.quantization_mlp_dict = {}
+            self.quantization_mlp_dict["activations_quant_method"] = config.activations_quant_method
+        
+            # Set quantization parameters for MLP
+            for arg, val in vars(config).items():
+                # Set MLP Activation precision and quantization method
+                if arg.startswith("quantize_") and "mlp_act" in arg and arg.endswith("_bits"):
+                    self.quantization_mlp_dict[arg] = set_variant(val, config.quantize_mlp_act_bits)
+                elif arg.startswith("quantize_") and "mlp_act" in arg:
+                    self.quantization_mlp_dict[arg] = set_variant(val, config.quantize_mlp_act)
+                # Set MLP Linear Weight precision and quantization method
+                elif arg.startswith("quantize_") and "linear_mlp" in arg and arg.endswith("_bits"):
+                    self.quantization_mlp_dict[arg] = set_variant(val, config.quantize_linear_bits)
+                elif arg.startswith("quantize_") and "linear_mlp" in arg and arg.endswith("_method"):
+                    self.quantization_mlp_dict[arg] = set_variant(val, config.quantize_linear_method)
+            
+            # Instantiate Linear Layers
+            if self.mlp_variant == "mlp":
+                self.c_fc = self.linear_variant_mlp_up(config.n_embd, 4 * config.n_embd, config, self.quantization_mlp_dict["quantize_linear_mlp_up_method"], self.quantization_mlp_dict["quantize_linear_mlp_up_bits"], bias=config.bias)
+                self.c_proj = self.linear_variant_mlp_down(4 * config.n_embd, config.n_embd, config, self.quantization_mlp_dict["quantize_linear_mlp_down_method"], self.quantization_mlp_dict["quantize_linear_mlp_down_bits"], bias=config.bias)
+            elif self.mlp_variant == "swiglu":
+                self.c_fc_in1 = self.linear_variant_mlp_up(config.n_embd, 4 * config.n_embd, config, self.quantization_mlp_dict["quantize_linear_mlp_up_method"], self.quantization_mlp_dict["quantize_linear_mlp_up_bits"])
+                self.c_fc_in2 = self.linear_variant_mlp_up(config.n_embd, 4 * config.n_embd, config, self.quantization_mlp_dict["quantize_linear_mlp_up_method"], self.quantization_mlp_dict["quantize_linear_mlp_up_bits"])
+                self.c_fc_out = self.linear_variant_mlp_down(4 * config.n_embd, config.n_embd, config, self.quantization_mlp_dict["quantize_linear_mlp_down_method"], self.quantization_mlp_dict["quantize_linear_mlp_down_bits"])
 
         self.dropout = nn.Dropout(config.dropout)
 
@@ -347,6 +365,7 @@ class MLP(nn.Module):
 
         if self.mlp_variant == "kan":
             x = self.kan(x)
+        
         elif self.mlp_variant == "mlp":
             x = self.c_fc(x)
 
@@ -359,6 +378,7 @@ class MLP(nn.Module):
                 x = _fake_quantize(x, self.quantization_mlp_dict["quantize_mlp_act_activation_output_bits"], self.quantization_mlp_dict["activations_quant_method"])
 
             x = self.c_proj(x)
+         
         elif self.mlp_variant == "swiglu":
             x_in1 = self.c_fc_in1(x)
 
@@ -375,8 +395,10 @@ class MLP(nn.Module):
             x = self.c_fc_out(x_out)
 
         x = self.dropout(x)
+        
         if self.quantization_mlp_dict["quantize_mlp_act_output"]:
             x = _fake_quantize(x, self.quantization_mlp_dict["quantize_mlp_act_output_bits"], self.quantization_mlp_dict["activations_quant_method"])
+        
         return x
 
 

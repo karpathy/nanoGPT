@@ -18,7 +18,6 @@ class GPTConfig:
     moe_top_k: int = 2
     moe_router_scheme: str = "softmax"
 
-
     # Training options
     ## Gradient Checkpointing - More memory efficient (can do long contexts), but is slower
     use_gradient_checkpointing: bool = False
@@ -121,7 +120,14 @@ class GPTConfig:
     activation_variant: str = "gelu"
 
     # Linear Alternatives
-    linear_variant: str = "linear"
+    linear_variant_attn: str = "linear"
+    linear_variant_mlp: str = "linear"
+    linear_variant_q: str = None
+    linear_variant_k: str = None
+    linear_variant_v: str = None
+    linear_variant_attn_proj: str = None
+    linear_variant_mlp_up: str = None
+    linear_variant_mlp_down: str = None
 
     ## Linear Initialization Options
     linear_mean_init: float= 0.0
@@ -163,6 +169,23 @@ class GPTConfig:
     quantize_mlp_act_activation_output_bits: int = None
     quantize_mlp_act_output: bool = False
     quantize_mlp_act_output_bits: int = None
+
+    ## Linear Quantizations
+    quantize_linear_method: str = "affine_quant"
+    quantize_linear_bits: int = 8
+    quantize_linear_attn_q_method: str = None
+    quantize_linear_attn_q_bits: int = None
+    quantize_linear_attn_k_method: str = None
+    quantize_linear_attn_k_bits: int = None
+    quantize_linear_attn_v_method: str = None
+    quantize_linear_attn_v_bits: int = None
+    quantize_linear_attn_proj_method: str = None
+    quantize_linear_attn_proj_bits: int = None
+    quantize_linear_mlp_up_method: str = None
+    quantize_linear_mlp_up_bits: int = None
+    quantize_linear_mlp_down_method: str = None
+    quantize_linear_mlp_down_bits: int = None
+    quantization_warmup_iters: int = 100
 
     @classmethod
     def from_json(cls, filename: str):
