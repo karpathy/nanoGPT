@@ -301,7 +301,7 @@ def parse_args():
      default='', help='Select input or output statistic to display in boxplot')
 
     # Model Parameter Distribution
-    logging.group.add_argument('--print_block_summary', default=False, action=argparse.BooleanOptionalAction)
+    logging_group.add_argument('--print_block_summary', default=False, action=argparse.BooleanOptionalAction)
 
     args = parser.parse_args()
 
