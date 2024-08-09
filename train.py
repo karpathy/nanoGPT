@@ -9,6 +9,8 @@ import shutil
 import sys
 import time
 
+from torchinfo import summary
+
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.graph_objects as go
@@ -298,12 +300,15 @@ def parse_args():
     logging_group.add_argument('--box_plot_statistic', choices=['input', 'output', 'all'],
      default='', help='Select input or output statistic to display in boxplot')
 
+    # Model Parameter Distribution
+    logging.group.add_argument('--print_block_summary', default=False, action=argparse.BooleanOptionalAction)
+
     args = parser.parse_args()
 
     if args.load_config_json is not None:
         with open(args.load_config_json, 'r') as config_file:
             config = json.load(config_file)
-        
+
         # Update the args namespace with values from the JSON file
         for key, value in config.items():
             setattr(args, key, value)
@@ -462,6 +467,14 @@ class Trainer:
             self.model_args['block_size'] = self.args.block_size
 
         self.model.to(self.device)
+
+        # Print the model summary
+        summary(self.model)
+
+        if self.args.print_block_summary:
+            for idx, block in enumerate(self.model.transformer.h):
+                print(f"Summary for Block {idx + 1}:")
+                summary(block)
 
         # Optimizer
         self.scaler = torch.cuda.amp.GradScaler(enabled=(self.args.dtype == 'float16'))
