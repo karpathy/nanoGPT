@@ -7,10 +7,24 @@ def set_dtype(bits):
         return torch.int16
     else:
         return torch.int8
+    
+def symmetric_quantize(tensor, bits):
+    """
+    Symmetric quantization function
+    :param tensor: Tensor to be quantized
+    :param bits: Number of bits of quantization
+    :return: zero point, scale, quantized tensor
+    """
+    bit_max = (1 << (bits - 1)) - 1
+    bit_min = -bit_max - 1
+    abs_max = tensor.abs().max()
+    scale = abs_max / bit_max
+    xi_array = torch.round(tensor / scale)
+    return 0, scale, torch.clamp(xi_array, min=bit_min, max=bit_max).to(dtype=set_dtype(bits))
 
 def affine_quantize(tensor, bits):
     """
-    Quantization function
+    Affine (asymmetric) quantization function
     :param tensor: Tensor to be quantized
     :param bits: Number of bits of quantization
     :return: zero point, scale, quantized tensor
@@ -26,7 +40,7 @@ def affine_quantize(tensor, bits):
 
 def stochastic_quantize(tensor, bits):
     """
-    Quantization function
+    Stochastic quantization function
     :param tensor: Tensor to be quantized
     :param bits: Number of bits of quantization
     :return: zero point, scale, quantized tensor
@@ -81,7 +95,39 @@ def dequantize(zero_point, scale, tensor):
     """
     return (tensor - zero_point) * scale
 
+class FakeLinearQuantizationFunction(torch.autograd.Function):
+    """Simulates error caused by quantization. Uses Straight-Through Estimator for Back prop
+    Source: https://github.com/Alexstrasza98/Transformer-Quantization/blob/main
+    Source License: MIT
+    """
+
+    @staticmethod
+    def forward(ctx, input, bits=7, quantization_method="affine_quant"):
+        """
+        Forward pass
+        :param ctx: Context object to store information for the backward pass (not used in this case)
+        :param input: The input tensor to be quantized
+        :param bits: The number of bits for quantization (default is 7)
+        :return: Dequantized tensor
+        """
+        # steps:
+        # Quantize the input tensor using the quantize function.
+        # Dequantize the quantized values using the dequantize function.
+        # Return the dequantized tensor, which approximates the input tensor but includes the quantization error.
+        zero_point, norm, quantized_weight = quantize_dictionary[quantization_method](input, bits)
+        return dequantize(zero_point, norm, quantized_weight)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        # Straight-Through Estimator (STE): passes grad_output through as the gradient with respect to the input
+        # gradient is approximated by simply passing the gradient from the output directly to the input, 
+        # ignoring the quantization operation
+        return grad_output, None, None
+
 quantize_dictionary = {
+    "symmetric_quant": symmetric_quantize,
     "affine_quant": affine_quantize,
     "stochastic_quant": stochastic_quantize
 }
+
+_fake_quantize = FakeLinearQuantizationFunction.apply

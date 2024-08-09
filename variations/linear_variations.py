@@ -4,11 +4,95 @@ import math
 import torch.nn.functional as F
 from .activation_variations import *
 from functools import lru_cache
+from quantization.quantize import _fake_quantize, quantize_dictionary, dequantize
 
 class WrappedLinear(nn.Linear):
     """ Adapts nn.Linear to add 'config' parameter for interface polymorphism"""
-    def __init__(self, in_features, out_features, config=None, bias=None):
+    def __init__(self, in_features, out_features, config=None, method=None, bits=None, bias=None):
         super(WrappedLinear, self).__init__(in_features, out_features, bias)
+
+class QuantizedLinear(nn.Linear):
+    """Linear layer with quantization aware training capability
+    Source: https://github.com/Alexstrasza98/Transformer-Quantization/blob/main
+    Source License: MIT
+    """
+
+    def __init__(self, in_features, out_features, config=None, method="affine_quant", bits=8, bias=True):
+        super().__init__(in_features, out_features, bias)
+
+        self.weight_bits = bits
+        self.quant_method = method
+
+        if self.weight_bits < 1:
+            raise ValueError(f"weight_bits={self.weight_bits} must be higher than 0 ")
+
+        self.warmup_step = config.quantization_warmup_iters
+        self.accumulation_bits = 32
+
+        # Placeholder for quantized weights during training
+        self._fake_quantized_weight = None
+        if bias == True:
+            self.register_buffer("quantized_bias", None)
+            self.register_buffer("bias_norm", None)
+            self.register_buffer("bias_zero_point", torch.tensor([0]))
+
+        self.register_buffer("_step", torch.zeros(1))
+
+        self.register_buffer("quantized_weight", None)
+        self.register_buffer("weight_norm", None)
+        self.register_buffer("weight_zero_point", torch.tensor([0]))
+
+    def training_quantized_forward(self, input):
+        """Fake quantizes weights. Function should only be used while training"""
+        assert self.training, "Should be called only during training"
+
+        # Applies the fake quantization to the weights
+        self._fake_quantized_weight = _fake_quantize(self.weight, self.weight_bits, self.quant_method)
+        # Uses the quantized weights to compute the output using F.linear
+        out = F.linear(input, self._fake_quantized_weight, self.bias)
+
+        return out
+
+    def inference_quantized_forward(self, input):
+        """Simulate quantized inference. Function should be called only during inference"""
+        assert not self.training, "Should be called only during inference"
+
+        # Compute the dequantized weight
+        weight = dequantize(self.weight_zero_point[0], self.weight_norm, self.quantized_weight)
+
+        # Compute the dequantized bias
+        if self.bias is not None:
+            bias = dequantize(self.bias_zero_point[0], self.bias_norm, self.quantized_bias)
+
+        # Uses the dequantized weights and bias to compute the output using F.linear
+        if self.bias:
+            out = F.linear(input, weight, bias)
+        else:
+            out = F.linear(input, weight)
+
+        return out
+
+    def _eval(self):
+        """Sets the model for inference by quantizing the model"""
+        self.weight_zero_point[0], self.weight_norm, self.quantized_weight = quantize_dictionary[self.quant_method](self.weight, self.weight_bits)
+
+        if self.bias is not None:
+            self.bias_zero_point[0], self.bias_norm, self.quantized_bias = quantize_dictionary[self.quant_method](self.bias, self.accumulation_bits)
+
+    def forward(self, input):
+        """Passes the input through the model during training and inference"""
+        if self.training:
+            if self._step > self.warmup_step:
+                out = self.training_quantized_forward(input)
+            else:
+                out = super().forward(input)
+            self._step += 1
+        else:
+            # Prepares the model for inference by quantizing weights and bias
+            self._eval()
+            # Uses quantized weights and bias to compute the output
+            out = self.inference_quantized_forward(input)
+        return out
 
 class BitLinear1p58(nn.Linear):
     """ BitLinear from Era of 1.58 LLMs Paper
@@ -17,7 +101,7 @@ class BitLinear1p58(nn.Linear):
     Paper Link: https://arxiv.org/abs/2402.17764
     """
 
-    def __init__(self, in_features, out_features, config=None, bias=True, num_groups=1):
+    def __init__(self, in_features, out_features, config=None, method=None, bits=None, bias=True, num_groups=1):
         super().__init__(in_features, out_features, bias)
 
         """
@@ -61,7 +145,7 @@ class BitLinear(nn.Linear):
     Source License: Apache Version 2.0
     """
 
-    def __init__(self, in_features, out_features, config=None, bias=True, num_groups=1):
+    def __init__(self, in_features, out_features, config=None, method=None, bits=None, bias=True, num_groups=1):
         super(BitLinear, self).__init__(in_features, out_features, bias)
         self.num_groups = num_groups
         self.eps = 1e-5
@@ -132,7 +216,7 @@ class BitLinearOptimized(nn.Linear):
     Source License: Apache Version 2.0
     """
 
-    def __init__(self, in_features, out_features, config=None, bias=True, num_groups=1):
+    def __init__(self, in_features, out_features, config=None, method=None, bits=None, bias=True, num_groups=1):
         super(BitLinearOptimized, self).__init__(in_features, out_features, bias)
         self.num_groups = num_groups
         self.eps = 1e-5
@@ -229,7 +313,7 @@ class KAL_Net(nn.Module):
     Source License: MIT
     arxiv paper: https://arxiv.org/abs/2404.19756
     """
-    def __init__(self, kan_in_features, kan_out_features, config=None, bias=True):
+    def __init__(self, kan_in_features, kan_out_features, config=None, method=None, bits=None, bias=True):
         super(KAL_Net, self).__init__()  # Initialize the parent nn.Module class
 
         if config is None:
@@ -316,4 +400,5 @@ linear_dictionary = {
     "bitlinear_optimized": BitLinearOptimized,
     "bitlinear_1p58": BitLinear1p58,
     "kan": KAL_Net,
+    "quantized_linear": QuantizedLinear
 }
