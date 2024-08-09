@@ -140,7 +140,7 @@ def parse_args():
     model_group.add_argument("--quantize_wte_bits", type=int, default=8, help="number of bits for word embedding quantization")
 
     ## WPE
-    model_group.add_argument("--quantize_wpe", default=None, action=argpchoices=["symmetric_quant", "affine_quant", "stochastic_quant"]arse.BooleanOptionalAction, help="Whether the word position embedding is quantized")
+    model_group.add_argument("--quantize_wpe", default=None, action=argparse.BooleanOptionalAction, help="Whether the word position embedding is quantized")
     model_group.add_argument("--quantize_wpe_method", type=str, default="affine_quant", choices=quant_methods, help="function used for position embedding quantization")
     model_group.add_argument("--quantize_wpe_bits", type=int, default=8, help="number of bits for position embedding quantization")
 
