@@ -116,140 +116,40 @@ def parse_args():
     )
 
     # LINEAR VARIATIONS
-    model_group.add_argument(
-        "--linear_variant_attn",
-        type=str,
-        default="linear",
-        choices=[
-            "linear",
-            "bitlinear",
-            "bitlinear_1p58",
-            "bitlinear_optimized",
-            "kan",
-            "quantized_linear"
-        ],
-    )
-    model_group.add_argument(
-        "--linear_variant_q",
-        type=str,
-        default=None,
-        choices=[
-            "linear",
-            "bitlinear",
-            "bitlinear_1p58",
-            "bitlinear_optimized",
-            "kan",
-            "quantized_linear"
-        ],
-        help="sets the linear variant for c_attn_q in attention (takes precedence over linear_variant_attn)"
-    )
-    model_group.add_argument(
-        "--linear_variant_k",
-        type=str,
-        default=None,
-        choices=[
-            "linear",
-            "bitlinear",
-            "bitlinear_1p58",
-            "bitlinear_optimized",
-            "kan",
-            "quantized_linear"
-        ],
-        help="sets the linear variant for c_attn_k in attention (takes precedence over linear_variant_attn)"
-    )
-    model_group.add_argument(
-        "--linear_variant_v",
-        type=str,
-        default=None,
-        choices=[
-            "linear",
-            "bitlinear",
-            "bitlinear_1p58",
-            "bitlinear_optimized",
-            "kan",
-            "quantized_linear"
-        ],
-        help="sets the linear variant for c_attn_v in attention (takes precedence over linear_variant_attn)"
-    )
-    model_group.add_argument(
-        "--linear_variant_attn_proj",
-        type=str,
-        default=None,
-        choices=[
-            "linear",
-            "bitlinear",
-            "bitlinear_1p58",
-            "bitlinear_optimized",
-            "kan",
-            "quantized_linear"
-        ],
-        help="sets the linear variant for c_proj in attention (takes precedence over linear_variant_attn)"
-    )
-    model_group.add_argument(
-        "--linear_variant_mlp",
-        type=str,
-        default="linear",
-        choices=[
-            "linear",
-            "bitlinear",
-            "bitlinear_1p58",
-            "bitlinear_optimized",
-            "kan",
-            "quantized_linear"
-        ],
-    )
-    model_group.add_argument(
-        "--linear_variant_mlp_up",
-        type=str,
-        default=None,
-        choices=[
-            "linear",
-            "bitlinear",
-            "bitlinear_1p58",
-            "bitlinear_optimized",
-            "kan",
-            "quantized_linear"
-        ],
-        help="sets the linear variant for c_fc in mlp (takes precedence over linear_variant_mlp)"
-    )
-    model_group.add_argument(
-        "--linear_variant_mlp_down",
-        type=str,
-        default=None,
-        choices=[
-            "linear",
-            "bitlinear",
-            "bitlinear_1p58",
-            "bitlinear_optimized",
-            "kan",
-            "quantized_linear"
-        ],
-        help="sets the linear variant for c_proj in mlp (takes precedence over linear_variant_mlp)"
-    )
+    linear_variants = ["linear", "bitlinear", "bitlinear_1p58", "bitlinear_optimized", "kan","quantized_linear"]
+    model_group.add_argument("--linear_variant_attn", type=str, default="linear", choices=linear_variants)
+    model_group.add_argument("--linear_variant_q", type=str, default=None, choices=linear_variants, help="sets the linear variant for c_attn_q in attention (takes precedence over linear_variant_attn)")
+    model_group.add_argument("--linear_variant_k", type=str, default=None, choices=linear_variants, help="sets the linear variant for c_attn_k in attention (takes precedence over linear_variant_attn)")
+    model_group.add_argument("--linear_variant_v", type=str, default=None, choices=linear_variants, help="sets the linear variant for c_attn_v in attention (takes precedence over linear_variant_attn)")
+    model_group.add_argument("--linear_variant_attn_proj", type=str, default=None, choices=linear_variants, help="sets the linear variant for c_proj in attention (takes precedence over linear_variant_attn)")
+    model_group.add_argument("--linear_variant_mlp", type=str, default="linear", choices=linear_variants)
+    model_group.add_argument("--linear_variant_mlp_up", type=str, default=None, choices=linear_variants, help="sets the linear variant for c_fc in mlp (takes precedence over linear_variant_mlp)")
+    model_group.add_argument("--linear_variant_mlp_down", type=str, default=None, choices=linear_variants, help="sets the linear variant for c_proj in mlp (takes precedence over linear_variant_mlp)")
     ## Linear Weight Initialization Options
     model_group.add_argument( "--linear_mean_init", type=float, default=0.0)
     model_group.add_argument( "--linear_std_init", type=float, default=0.02)
 
     # Quantization Options
+    quant_methods = ["symmetric_quant", "affine_quant", "stochastic_quant"]
     model_group.add_argument("--quantize_wte", default=None, action=argparse.BooleanOptionalAction, help="Whether the word embedding is quantized")
     model_group.add_argument("--quantize_wpe", default=None, action=argparse.BooleanOptionalAction, help="Whether the word position embedding is quantized")
-    model_group.add_argument("--quantize_wte_method", type=str, default="affine_quant", choices=["symmetric_quant", "affine_quant", "stochastic_quant"], help="function used for word embedding quantization")
+    model_group.add_argument("--quantize_wte_method", type=str, default="affine_quant", choices=quant_methods, help="function used for word embedding quantization")
     model_group.add_argument("--quantize_wte_bits", type=int, default=8, help="number of bits for word embedding quantization")
-    model_group.add_argument("--quantize_wpe_method", type=str, default="affine_quant", choices=["symmetric_quant", "affine_quant", "stochastic_quant"], help="function used for position embedding quantization")
+    model_group.add_argument("--quantize_wpe_method", type=str, default="affine_quant", choices=quant_methods, help="function used for position embedding quantization")
     model_group.add_argument("--quantize_wpe_bits", type=int, default=8, help="number of bits for position embedding quantization")
-    model_group.add_argument("--quantize_linear_method", type=str, default="affine_quant", choices=["symmetric_quant", "affine_quant", "stochastic_quant"], help="function used for linear quantization")
+    model_group.add_argument("--quantize_linear_method", type=str, default="affine_quant", choices=quant_methods, help="function used for linear quantization")
     model_group.add_argument("--quantize_linear_bits", type=int, default=8, help="number of bits for linear quantization")
-    model_group.add_argument("--quantize_linear_attn_q_method", type=str, default=None, choices=["symmetric_quant", "affine_quant", "stochastic_quant"], help="function used for c_attn_q quantization")
+    model_group.add_argument("--quantize_linear_attn_q_method", type=str, default=None, choices=quant_methods, help="function used for c_attn_q quantization")
     model_group.add_argument("--quantize_linear_attn_q_bits", type=int, default=None, help="number of bits for c_attn_q quantization")
-    model_group.add_argument("--quantize_linear_attn_k_method", type=str, default=None, choices=["symmetric_quant", "affine_quant", "stochastic_quant"], help="function used for c_attn_k quantization")
+    model_group.add_argument("--quantize_linear_attn_k_method", type=str, default=None, choices=quant_methods, help="function used for c_attn_k quantization")
     model_group.add_argument("--quantize_linear_attn_k_bits", type=int, default=None, help="number of bits for c_attn_k quantization")
-    model_group.add_argument("--quantize_linear_attn_v_method", type=str, default=None, choices=["symmetric_quant", "affine_quant", "stochastic_quant"], help="function used for c_attn_v quantization")
+    model_group.add_argument("--quantize_linear_attn_v_method", type=str, default=None, choices=quant_methods, help="function used for c_attn_v quantization")
     model_group.add_argument("--quantize_linear_attn_v_bits", type=int, default=None, help="number of bits for c_attn_v quantization")
-    model_group.add_argument("--quantize_linear_attn_proj_method", type=str, default=None, choices=["symmetric_quant", "affine_quant", "stochastic_quant"], help="function used for c_proj in attention quantization")
+    model_group.add_argument("--quantize_linear_attn_proj_method", type=str, default=None, choices=quant_methods, help="function used for c_proj in attention quantization")
     model_group.add_argument("--quantize_linear_attn_proj_bits", type=int, default=None, help="number of bits for c_proj in attention quantization")
-    model_group.add_argument("--quantize_linear_mlp_up_method", type=str, default=None, choices=["symmetric_quant", "affine_quant", "stochastic_quant"], help="function used for mlp_up quantization")
+    model_group.add_argument("--quantize_linear_mlp_up_method", type=str, default=None, choices=quant_methods, help="function used for mlp_up quantization")
     model_group.add_argument("--quantize_linear_mlp_up_bits", type=int, default=None, help="number of bits for mlp_up quantization")
-    model_group.add_argument("--quantize_linear_mlp_down_method", type=str, default=None, choices=["symmetric_quant", "affine_quant", "stochastic_quant"], help="function used for mlp_down quantization")
+    model_group.add_argument("--quantize_linear_mlp_down_method", type=str, default=None, choices=quant_methods, help="function used for mlp_down quantization")
     model_group.add_argument("--quantize_linear_mlp_down_bits", type=int, default=None, help="number of bits for mlp_down quantization")
     model_group.add_argument("--quantization_warmup_iters", type=int, default=100)
 
