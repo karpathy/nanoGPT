@@ -143,12 +143,12 @@ class GPTConfig:
     quantize_attn_act_bits: int = 8
     quantize_attn_act_input: bool = False
     quantize_attn_act_input_bits: int = None
-    quantize_attn_act_qk_mult_inputs: bool = False
-    quantize_attn_act_qk_mult_inputs_bits: int = None
+    quantize_attn_act_qk_mult_input: bool = False
+    quantize_attn_act_qk_mult_input_bits: int = None
     quantize_attn_act_softmax_input: bool = False
     quantize_attn_act_softmax_input_bits: int = None
-    quantize_attn_act_pv_mult_inputs: bool = False
-    quantize_attn_act_pv_mult_inputs_bits: int = None
+    quantize_attn_act_pv_mult_input: bool = False
+    quantize_attn_act_pv_mult_input_bits: int = None
     quantize_attn_act_pv_mult_output: bool = False
     quantize_attn_act_pv_mult_output_bits: int = None
     quantize_attn_act_output: bool = False

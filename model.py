@@ -104,8 +104,11 @@ class CausalSelfAttention(nn.Module):
         self.quantization_attn_dict = {}
         self.quantization_attn_dict["activations_quant_method"] = config.activations_quant_method
         for arg, val in vars(config).items():
+            # If a specific attn activation argument isn't set, set its value to the general attn activation setting
+            # If the setting is number of bits, default set to the value of config.quantize_attn_act_bits
             if arg.startswith("quantize_") and "attn_act" in arg and arg.endswith("_bits"):
                 self.quantization_attn_dict[arg] = set_variant(val, config.quantize_attn_act_bits)
+            # If the setting is an activation bool, default set to the value of config.quantize_attn_act
             elif arg.startswith("quantize_") and "attn_act" in arg:
                 self.quantization_attn_dict[arg] = set_variant(val, config.quantize_attn_act)
 
@@ -241,9 +244,9 @@ class CausalSelfAttention(nn.Module):
             # efficient attention using Flash Attention CUDA kernels
             y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
         else:
-            if self.quantization_attn_dict["quantize_attn_act_qk_mult_inputs"]:
-                q = _fake_quantize(q, self.quantization_attn_dict["quantize_attn_act_qk_mult_inputs_bits"], self.quantization_attn_dict["activations_quant_method"])
-                k = _fake_quantize(k, self.quantization_attn_dict["quantize_attn_act_qk_mult_inputs_bits"], self.quantization_attn_dict["activations_quant_method"])
+            if self.quantization_attn_dict["quantize_attn_act_qk_mult_input"]:
+                q = _fake_quantize(q, self.quantization_attn_dict["quantize_attn_act_qk_mult_input_bits"], self.quantization_attn_dict["activations_quant_method"])
+                k = _fake_quantize(k, self.quantization_attn_dict["quantize_attn_act_qk_mult_input_bits"], self.quantization_attn_dict["activations_quant_method"])
 
             att = None
             # manual implementation of attention
@@ -278,9 +281,9 @@ class CausalSelfAttention(nn.Module):
 
             att = self.attn_dropout(att)
 
-            if self.quantization_attn_dict["quantize_attn_act_pv_mult_inputs"]:
-                att = _fake_quantize(att, self.quantization_attn_dict["quantize_attn_act_pv_mult_inputs_bits"], self.quantization_attn_dict["activations_quant_method"])
-                v = _fake_quantize(v, self.quantization_attn_dict["quantize_attn_act_pv_mult_inputs_bits"], self.quantization_attn_dict["activations_quant_method"])
+            if self.quantization_attn_dict["quantize_attn_act_pv_mult_input"]:
+                att = _fake_quantize(att, self.quantization_attn_dict["quantize_attn_act_pv_mult_input_bits"], self.quantization_attn_dict["activations_quant_method"])
+                v = _fake_quantize(v, self.quantization_attn_dict["quantize_attn_act_pv_mult_input_bits"], self.quantization_attn_dict["activations_quant_method"])
 
             if self.n_head != self.n_kv_group:
                 v_repeated = v.repeat_interleave(self.n_head // self.n_kv_group, dim=1)
@@ -309,8 +312,11 @@ class MLP(nn.Module):
         self.quantization_mlp_dict = {}
         self.quantization_mlp_dict["activations_quant_method"] = config.activations_quant_method
         for arg, val in vars(config).items():
+            # If a specific mlp activation argument isn't set, set its value to the general mlp activation setting
+            # If the setting is number of bits, default set to the value of config.quantize_mlp_act_bits
             if arg.startswith("quantize_") and "mlp_act" in arg and arg.endswith("_bits"):
                 self.quantization_mlp_dict[arg] = set_variant(val, config.quantize_mlp_act_bits)
+            # If the setting is an activation bool, default set to the value of config.quantize_mlp_act
             elif arg.startswith("quantize_") and "mlp_act" in arg:
                 self.quantization_mlp_dict[arg] = set_variant(val, config.quantize_mlp_act)
 
