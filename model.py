@@ -111,6 +111,7 @@ class CausalSelfAttention(nn.Module):
             # Set each attention Activation precision and method
             if arg.startswith("quantize_") and "attn_act" in arg and arg.endswith("_bits"):
                 self.quantization_attn_dict[arg] = set_variant(val, config.quantize_attn_act_bits)
+            # If the setting is an activation bool, default set to the value of config.quantize_attn_act
             elif arg.startswith("quantize_") and "attn_act" in arg:
                 self.quantization_attn_dict[arg] = set_variant(val, config.quantize_attn_act)
                 if arg != "quantize_attn_act" and self.quantization_attn_dict[arg]:
