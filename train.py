@@ -129,28 +129,90 @@ def parse_args():
     model_group.add_argument( "--linear_mean_init", type=float, default=0.0)
     model_group.add_argument( "--linear_std_init", type=float, default=0.02)
 
-    # Quantization Options
+    # Quatization
+    
+    ## Quantization Method Options
     quant_methods = ["symmetric_quant", "affine_quant", "stochastic_quant"]
+
+    ## WTE
     model_group.add_argument("--quantize_wte", default=None, action=argparse.BooleanOptionalAction, help="Whether the word embedding is quantized")
-    model_group.add_argument("--quantize_wpe", default=None, action=argparse.BooleanOptionalAction, help="Whether the word position embedding is quantized")
     model_group.add_argument("--quantize_wte_method", type=str, default="affine_quant", choices=quant_methods, help="function used for word embedding quantization")
     model_group.add_argument("--quantize_wte_bits", type=int, default=8, help="number of bits for word embedding quantization")
+
+    ## WPE
+    model_group.add_argument("--quantize_wpe", default=None, action=argparse.BooleanOptionalAction, help="Whether the word position embedding is quantized")
     model_group.add_argument("--quantize_wpe_method", type=str, default="affine_quant", choices=quant_methods, help="function used for position embedding quantization")
     model_group.add_argument("--quantize_wpe_bits", type=int, default=8, help="number of bits for position embedding quantization")
+
+    ## Activations
+    model_group.add_argument("--activations_quant_method", type=str, default="affine_quant", choices=quant_methods, help="function used for quantization of activations")
+
+    ### Attention Activations
+    model_group.add_argument("--quantize_attn_act", action=argparse.BooleanOptionalAction, default=False, help="quantize all input/output activations in attn")
+
+    #### Whether to do Attention Activation quantization at the Arrow
+    model_group.add_argument("--quantize_attn_act_input", action=argparse.BooleanOptionalAction, default=False, help="quantize input activation to attention")
+    # TODO add separate Q and K separate fake-quants for this activation
+    model_group.add_argument("--quantize_attn_act_qk_mult_input", action=argparse.BooleanOptionalAction, default=False, help="quantize input activation to qk mult")
+    model_group.add_argument("--quantize_attn_act_softmax_input", action=argparse.BooleanOptionalAction, default=False, help="quantize input activation to softmax")
+    model_group.add_argument("--quantize_attn_act_pv_mult_input", action=argparse.BooleanOptionalAction, default=False, help="quantize input activation to pv mult")
+    # TODO add separate P and V separate fake-quants for this activation
+    model_group.add_argument("--quantize_attn_act_pv_mult_output", action=argparse.BooleanOptionalAction, default=False, help="quantize output activation of pv_mult")
+    model_group.add_argument("--quantize_attn_act_output", action=argparse.BooleanOptionalAction, default=False, help="quantize output activation of attention")
+
+    ### Default Precisions for Attention Activations 
+    model_group.add_argument("--quantize_attn_act_bits", type=int, default=8, help="number of bits for attn quantization")
+       
+    ### Overrides for granular Attention Activatinos
+    model_group.add_argument("--quantize_attn_act_input_bits", type=int, default=None, help="number of bits for attention input quantization")
+    model_group.add_argument("--quantize_attn_act_qk_mult_input_bits", type=int, default=None, help="number of bits for qk mult input quantization")
+    model_group.add_argument("--quantize_attn_act_softmax_input_bits", type=int, default=None, help="number of bits for softmax input quantization")
+    model_group.add_argument("--quantize_attn_act_pv_mult_input_bits", type=int, default=None, help="number of bits for pv mult input quantization")    
+    model_group.add_argument("--quantize_attn_act_pv_mult_output_bits", type=int, default=None, help="number of bits for pv mult output quantization")
+    model_group.add_argument("--quantize_attn_act_output_bits", type=int, default=None, help="number of bits for attention output quantization")
+
+    ### Whether to use MLP Activations
+    model_group.add_argument("--quantize_mlp_act", action=argparse.BooleanOptionalAction, default=False, help="quantize all input/output activations in mlp")
+    model_group.add_argument("--quantize_mlp_act_input", action=argparse.BooleanOptionalAction, default=False, help="quantize input activation to mlp")
+    model_group.add_argument("--quantize_mlp_act_activation_input", action=argparse.BooleanOptionalAction, default=False, help="quantize input activation to activation function")
+    model_group.add_argument("--quantize_mlp_act_activation_output", action=argparse.BooleanOptionalAction, default=False, help="quantize output activation of activation function")
+    model_group.add_argument("--quantize_mlp_act_output", action=argparse.BooleanOptionalAction, default=False, help="quantize output activation of mlp")
+    
+    ### Default Precisions for MLP Activations 
+    model_group.add_argument("--quantize_mlp_act_bits", type=int, default=8, help="number of bits for mlp quantization")
+    
+    ### Overrides for granular MLP Activatinos
+    model_group.add_argument("--quantize_mlp_act_input_bits", type=int, default=None, help="number of bits for mlp input quantization")
+    model_group.add_argument("--quantize_mlp_act_activation_input_bits", type=int, default=None, help="number of bits for activation function input quantization")
+    model_group.add_argument("--quantize_mlp_act_activation_output_bits", type=int, default=None, help="number of bits for activation function output quantization")
+    model_group.add_argument("--quantize_mlp_act_output_bits", type=int, default=None, help="number of bits for mlp output quantization")
+    
+    ## Linear Attn Weight Quantization Precision and Method 
+    
+    ### Default methods and precisions
     model_group.add_argument("--quantize_linear_method", type=str, default="affine_quant", choices=quant_methods, help="function used for linear quantization")
     model_group.add_argument("--quantize_linear_bits", type=int, default=8, help="number of bits for linear quantization")
+   
+    #### Overrides for granular Methods and Precisions
     model_group.add_argument("--quantize_linear_attn_q_method", type=str, default=None, choices=quant_methods, help="function used for c_attn_q quantization")
     model_group.add_argument("--quantize_linear_attn_q_bits", type=int, default=None, help="number of bits for c_attn_q quantization")
+    
     model_group.add_argument("--quantize_linear_attn_k_method", type=str, default=None, choices=quant_methods, help="function used for c_attn_k quantization")
     model_group.add_argument("--quantize_linear_attn_k_bits", type=int, default=None, help="number of bits for c_attn_k quantization")
+    
     model_group.add_argument("--quantize_linear_attn_v_method", type=str, default=None, choices=quant_methods, help="function used for c_attn_v quantization")
     model_group.add_argument("--quantize_linear_attn_v_bits", type=int, default=None, help="number of bits for c_attn_v quantization")
+    
     model_group.add_argument("--quantize_linear_attn_proj_method", type=str, default=None, choices=quant_methods, help="function used for c_proj in attention quantization")
     model_group.add_argument("--quantize_linear_attn_proj_bits", type=int, default=None, help="number of bits for c_proj in attention quantization")
+
+    #### Overrides for Linear MLP Weight Quantization Precision and Method 
     model_group.add_argument("--quantize_linear_mlp_up_method", type=str, default=None, choices=quant_methods, help="function used for mlp_up quantization")
     model_group.add_argument("--quantize_linear_mlp_up_bits", type=int, default=None, help="number of bits for mlp_up quantization")
     model_group.add_argument("--quantize_linear_mlp_down_method", type=str, default=None, choices=quant_methods, help="function used for mlp_down quantization")
     model_group.add_argument("--quantize_linear_mlp_down_bits", type=int, default=None, help="number of bits for mlp_down quantization")
+    
+    ## Quantized Linear Warmup Iterations -- how many to first use regular linear, before switching to quantized
     model_group.add_argument("--quantization_warmup_iters", type=int, default=100)
 
     # POSITIONAL EMBEDDING VARIATIONS

@@ -22,6 +22,20 @@ def symmetric_quantize(tensor, bits):
     xi_array = torch.round(tensor / scale)
     return 0, scale, torch.clamp(xi_array, min=bit_min, max=bit_max).to(dtype=set_dtype(bits))
 
+def symmetric_quantize(tensor, bits):
+    """
+    Symmetric quantization function
+    :param tensor: Tensor to be quantized
+    :param bits: Number of bits of quantization
+    :return: zero point, scale, quantized tensor
+    """
+    bit_max = (1 << (bits - 1)) - 1
+    bit_min = -bit_max - 1
+    abs_max = tensor.abs().max()
+    scale = abs_max / bit_max
+    xi_array = torch.round(tensor / scale)
+    return 0, scale, torch.clamp(xi_array, min=bit_min, max=bit_max).to(dtype=set_dtype(bits))
+
 def affine_quantize(tensor, bits):
     """
     Affine (asymmetric) quantization function
