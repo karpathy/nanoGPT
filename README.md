@@ -75,7 +75,7 @@ If you are compatible with cu11.8, then use the following:
 ```bash
 python3 -m pip install --upgrade pip
 python3 -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-python3 -m pip install numpy transformers datasets tiktoken wandb tqdm tensorboard rich
+python3 -m pip install numpy transformers datasets tiktoken wandb tqdm tensorboard rich torchinfo
 ```
 
 If unsure, visit the pytorch page and subtitute the appropriate line for the `torch` installation line above: https://pytorch.org/get-started/locally/
