@@ -354,7 +354,7 @@ class Trainer:
     def __init__(self, args, model_group, training_group, logging_group):
         self.args = args
         self.model_group = model_group
-        self.training_group = training_group 
+        self.training_group = training_group
         self.logging_group = logging_group
 
         # typically make the decay iters equal to max_iters
