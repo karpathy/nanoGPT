@@ -18,34 +18,50 @@ class QuantizedEmbedding(nn.Embedding):
         return out
 
 class RotaryEmbedding(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        self.dim = config.n_embd
+    """ Implementation of standard Rotary Position Embeddings (RoPE).
 
-        # Register frequencies directly as buffers
-        self.register_buffer('freq_left', (10000 ** (torch.arange(0, self.dim//2).float() / self.dim//2)))
-        self.register_buffer('freq_right',(10000 ** (torch.arange(0, self.dim//2).float() / self.dim//2)))
+    This implementation follows the standard approach for applying RoPE,
+    which applies a rotational transformation to each pair of elements in a vector.
+    """
+    def __init__(self, config=None, size=None):
+        super().__init__()
+        self.dim = size
+        assert self.dim % 2 == 0, "Target length dim must be even for rotary embeddings"
+        self.first_pass = True
+        self.inv_freq = None
+
+    def _generate_inv_freq(self, device):
+        """Generate inverse frequencies for RoPE."""
+        half_dim = self.dim // 2
+        inv_freq = 1.0 / (10000 ** (torch.arange(0, half_dim, device=device).float() / half_dim))
+        return inv_freq
 
     def forward(self, x):
+        if self.first_pass:
+            self.inv_freq = self._generate_inv_freq(x.device)
+            self.first_pass = False
+
         seq_len = x.shape[-2]
         device = x.device
 
-        t = torch.arange(seq_len, device=device)
+        # Create position indices
+        pos_indices = torch.arange(seq_len, device=device).type_as(self.inv_freq)
 
-        # Get separate frequencies for left and right
-        freqs_left = torch.einsum('i,j->ij', t, self.freq_left)
-        freqs_right = torch.einsum('i,j->ij', t, self.freq_right)
+        # Compute the sinusoidal angles
+        angles = torch.einsum('i,d->id', pos_indices, self.inv_freq)
+        sin_angles = angles.sin()
+        cos_angles = angles.cos()
 
-        # Apply frequencies
-        x_left, x_right = x[..., :self.dim//2], x[..., self.dim//2:]
-        x_left = x_left * freqs_left.cos() - x_right * freqs_left.sin()
-        x_right = x_left * freqs_right.sin() + x_right * freqs_right.cos()
+        # Apply RoPE
+        x_even, x_odd = x[..., ::2], x[..., 1::2]
+        x_rotated_even = x_even * cos_angles - x_odd * sin_angles
+        x_rotated_odd = x_even * sin_angles + x_odd * cos_angles
 
-        # Combine the left and right parts back
-        x = torch.cat([x_left, x_right], dim=-1)
+        # Reassemble rotated components
+        x_combined = torch.empty_like(x, device=device)
+        x_combined[..., ::2], x_combined[..., 1::2] = x_rotated_even, x_rotated_odd
 
-        return x
-
+        return x_combined
 
 class SymmetricalOverlapAngularPositions(nn.Module):
     """ SOAP is a fresh and 'clean' implementation of Rotary Embeddings.

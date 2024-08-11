@@ -159,14 +159,14 @@ class CausalSelfAttention(nn.Module):
         if config.use_rotary_embeddings:
             # TODO update variant name after completing rope and shortrope updates
             # TODO Add shortrope to symmetrical rope
-            if config.rope_variant == "rope":
+            if config.rope_variant == "soap":
                 self.sym_rot_num_angles = config.sym_rot_num_angles
                 self.rotary_emb_q = SymmetricalOverlapAngularPositions(config, size=config.n_embd, num_angles=self.sym_rot_num_angles)
                 self.rotary_emb_k = SymmetricalOverlapAngularPositions(config, size=self.kv_dim, num_angles=self.sym_rot_num_angles)
-            # TODO update rope and shortrope to accomodate new GQA additions
-            # if config.rope_variant == "rope":
-            #     self.rotary_emb_q = RotaryEmbedding(config, size=config.n_embd)
-            #     self.rotary_emb_k = RotaryEmbedding(config, size=config.n_embd // config.n_head * config.n_kv_group)
+            elif config.rope_variant == "rope":
+                # TODO update rope and shortrope to accomodate new GQA additions
+                self.rotary_emb_q = RotaryEmbedding(config, size=config.n_embd)
+                self.rotary_emb_k = RotaryEmbedding(config, size=self.kv_dim)
             # if config.rope_variant == "shortrope":
             #     self.rotary_emb_q = RotaryEmbedding(config, size=config.n_embd)
             #     self.rotary_emb_k = RotaryEmbedding(config, size=config.n_embd // config.n_head * config.n_kv_group)

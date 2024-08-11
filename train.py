@@ -220,7 +220,7 @@ def parse_args():
     # POSITIONAL EMBEDDING VARIATIONS
     model_group.add_argument('--use_rotary_embeddings', default=False, action=argparse.BooleanOptionalAction)
     model_group.add_argument('--sym_rot_num_angles', type=int, default=512, help="number of angles to use for symmetric rope variant")
-    model_group.add_argument("--rope_variant", type=str, default="rope", choices=["shortrope", "rope"])
+    model_group.add_argument("--rope_variant", type=str, default="rope", choices=["shortrope", "rope", "soap"])
     model_group.add_argument("--shortrope_length", type=int, default="16", help="number of embeddings to use with rope, must be <= length, and be even")
     model_group.add_argument('--use_abs_pos_embeddings', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument('--use_fire_embeddings', default=False, action=argparse.BooleanOptionalAction)
