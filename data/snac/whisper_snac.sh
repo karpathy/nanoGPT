@@ -19,6 +19,16 @@ if [ ! -d "$whisper_cpp_dir" ]; then
     exit 1
 fi
 
+# Check if whisper.cpp is compiled
+function check_file_exists {
+    if [[ ! -f "$1" ]]; then
+        echo "whisper.cpp is not compiled, please run the whisper_install.sh."
+        exit 1
+    fi
+}
+
+check_file_exists ${whisper_cpp_dir}/main
+
 # Download the audio dataset for whisper.cpp to process
 url="https://huggingface.co/datasets/eastwind/tiny-sherlock-audio"
 out_dir="input_mp3s"
@@ -31,7 +41,22 @@ for i in $(seq -f "%02g" 1 24); do
     wget -nc -O "${out_dir}/tiny_sherlock_audio_${i}.mp3" "${url}/resolve/main/adventuresholmes_${i}_doyle_64kb.mp3?download=true"
 done
 
-pushd "$script_dir/input_mp3s"
+python3 split_mp3s.py "${out_dir}" --max_size_mb 5
+
+pushd "$script_dir/split_${out_dir}"
+
+# Using the whisper.cpp to get the section of words to the audio and save the output in ~/snac
+output_dir="input_words"
+
+if [[ ! -d "${output_dir}" ]]; then
+    mkdir -p "${output_dir}"
+fi
+
+result_dir="output_jsons"
+
+if [[ ! -d "${result_dir}" ]]; then
+    mkdir -p "${result_dir}"
+fi
 
 # Loop through all .mp3 files in the current directory
 for mp3_file in *.mp3; do
@@ -51,30 +76,22 @@ for mp3_file in *.mp3; do
     ffmpeg -i "$mp3_file" -ar 16000 -y "$wav_file"
 
     echo "Converted $mp3_file to $wav_file"
-done
 
-echo "All conversions are done."
-
-popd
-
-##TODO
-# Using the whisper.cpp to get the section of words to the audio and save the output in ~/snac
-output_dir="input_words"
-
-if [[ ! -d "${output_dir}" ]]; then
-    mkdir -p "${output_dir}"
-fi
-
-# Loop through all the .wav files in the input directory
-for input_audio in ${out_dir}/*.wav; do
-    # Extract the base name of the file to use it for the output file
-    out_name=$(basename "${input_audio%.wav}")
+    out_name=$(basename "${wav_file%.wav}")
     out_path="${output_dir}/${out_name}"
 
     # Run the whisper.cpp
-    ../template/whisper.cpp/main -m ../template/whisper.cpp/models/ggml-base.en.bin -f "${input_audio}" -ml 1 -oj -of "${out_path}"
+    ../../template/whisper.cpp/main -m ../../template/whisper.cpp/models/ggml-base.en.bin -f "${wav_file}" -ml 1 -oj -of "${out_path}"
+
+    # Run the sample_whisper_snac.py to get the json output
+    result_name=${out_name}.json
+    result_path="${result_dir}/${result_name}"
+
+    python3 ../sample_whisper_snac.py "${wav_file}" "${out_path}.json" "${result_path}"
+
+    echo "Finished running $wav_file and saved results to ${result_path}"
 done
 
-echo "Finished running whisper.cpp"
+echo "All conversions are done."
 
 popd
