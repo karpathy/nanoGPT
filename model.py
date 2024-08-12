@@ -551,6 +551,13 @@ class GPT(nn.Module):
                 block.attn.rotary_emb_q.update_num_angles(num_angles, device)
                 block.attn.rotary_emb_k.update_num_angles(num_angles, device)
 
+    def update_rope_length(self, rope_length):
+        """Update the number of angles for rotary embeddings in all attention layers."""
+        for block in self.transformer.h:
+            if hasattr(block.attn, 'rotary_emb_q') and hasattr(block.attn, 'rotary_emb_k'):
+                block.attn.rotary_emb_q.update_rope_length(rope_length)
+                block.attn.rotary_emb_k.update_rope_length(rope_length)
+
 
     def forward(self, idx, targets=None):
         device = idx.device
