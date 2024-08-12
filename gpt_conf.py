@@ -187,33 +187,6 @@ class GPTConfig:
     quantize_linear_mlp_down_bits: int = None
     quantization_warmup_iters: int = 100
 
-    ## Activation Quantizations
-    activations_quant_method: str = "affine_quant"
-    quantize_attn_act: bool = False
-    quantize_attn_act_bits: int = 8
-    quantize_attn_act_input: bool = False
-    quantize_attn_act_input_bits: int = None
-    quantize_attn_act_qk_mult_input: bool = False
-    quantize_attn_act_qk_mult_input_bits: int = None
-    quantize_attn_act_softmax_input: bool = False
-    quantize_attn_act_softmax_input_bits: int = None
-    quantize_attn_act_pv_mult_input: bool = False
-    quantize_attn_act_pv_mult_input_bits: int = None
-    quantize_attn_act_pv_mult_output: bool = False
-    quantize_attn_act_pv_mult_output_bits: int = None
-    quantize_attn_act_output: bool = False
-    quantize_attn_act_output_bits: int = None
-    quantize_mlp_act: bool = False
-    quantize_mlp_act_bits: int = 8
-    quantize_mlp_act_input: bool = False
-    quantize_mlp_act_input_bits: int = None
-    quantize_mlp_act_activation_input: bool = False
-    quantize_mlp_act_activation_input_bits: int = None
-    quantize_mlp_act_activation_output: bool = False
-    quantize_mlp_act_activation_output_bits: int = None
-    quantize_mlp_act_output: bool = False
-    quantize_mlp_act_output_bits: int = None
-
     @classmethod
     def from_json(cls, filename: str):
         try:
