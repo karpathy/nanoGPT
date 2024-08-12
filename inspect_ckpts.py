@@ -57,8 +57,6 @@ def get_best_val_loss_and_iter_num(target_file, args, max_retries=5, retry_inter
 
                 return best_val_loss, iter_num, training_nan, training_nan_iter
             except RuntimeError as e:
-                print(f"Error loading {target_file}: {e}")
-                print(f"Retrying in {retry_interval} seconds... ({attempts + 1}/{max_retries})")
                 attempts += 1
                 time.sleep(retry_interval)
 
