@@ -1,0 +1,19 @@
+[
+    {
+        "max_iters": ["5000"],
+        "n_layer": ["6"],
+        "n_kv_group": ["6"],
+        "n_head": ["6"],
+        "n_embd": ["384"],
+        "block_size":["256"],
+        "device": ["cuda"],
+        "dtype": ["float16"],
+        "dataset": ["shakespeare_char"],
+        "use_rotary_embeddings": [true, false],
+        "rope_variant": ["soap", "rope"],
+        "use_abs_pos_embeddings": [false],
+        "use_fire_embeddings": [false],
+        "compile": [true],
+    }
+]
+

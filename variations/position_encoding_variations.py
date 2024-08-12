@@ -27,14 +27,37 @@ class RotaryEmbedding(nn.Module):
         super().__init__()
         self.dim = size
         assert self.dim % 2 == 0, "Target length dim must be even for rotary embeddings"
-        self.first_pass = True
         self.inv_freq = None
+        self.start_index = 0
+        self.first_pass = True
+
+        self.rope_length = self.dim
+        # If rope lenth is set, then trim to rope length
+        if config.rope_length:
+            assert config.rope_length % 2 == 0, "Rotary length must be even"
+            assert config.rope_length <= self.dim, "Rotary length less than or equal to dim"
+            self.rope_length = config.rope_length
+
+    def reset_start_index(self):
+        """Reset start index to zero."""
+        self.start_index = 0
+
+    def increment_start_index(self):
+        """Reset start index to zero."""
+        self.start_index += 1
 
     def _generate_inv_freq(self, device):
         """Generate inverse frequencies for RoPE."""
-        half_dim = self.dim // 2
+        half_dim = self.rope_length // 2
         inv_freq = 1.0 / (10000 ** (torch.arange(0, half_dim, device=device).float() / half_dim))
         return inv_freq
+
+    def update_rope_length(self, rope_length):
+        """Update the number of embeddings to do rotations over"""
+        if self.rope_length != rope_length:
+            assert rope_length % 2 == 0, "New rotary length must be even"
+            assert rope_length <= self.dim, "New rotary length must less than or equal to embedding dim"
+            self.rope_length = rope_length
 
     def forward(self, x):
         if self.first_pass:
@@ -45,7 +68,7 @@ class RotaryEmbedding(nn.Module):
         device = x.device
 
         # Create position indices
-        pos_indices = torch.arange(seq_len, device=device).type_as(self.inv_freq)
+        pos_indices = torch.arange(self.start_index, self.start_index + seq_len, device=x.device).type_as(self.inv_freq)
 
         # Compute the sinusoidal angles
         angles = torch.einsum('i,d->id', pos_indices, self.inv_freq)
@@ -53,13 +76,17 @@ class RotaryEmbedding(nn.Module):
         cos_angles = angles.cos()
 
         # Apply RoPE
-        x_even, x_odd = x[..., ::2], x[..., 1::2]
+        x_even, x_odd = x[..., :self.rope_length:2], x[..., 1:self.rope_length:2]
         x_rotated_even = x_even * cos_angles - x_odd * sin_angles
         x_rotated_odd = x_even * sin_angles + x_odd * cos_angles
 
         # Reassemble rotated components
         x_combined = torch.empty_like(x, device=device)
-        x_combined[..., ::2], x_combined[..., 1::2] = x_rotated_even, x_rotated_odd
+        x_combined[..., :self.rope_length:2], x_combined[..., 1:self.rope_length:2] = x_rotated_even, x_rotated_odd
+
+        # Keep the rest of the elements unchanged
+        if self.rope_length < self.dim:
+            x_combined[..., self.rope_length:] = x[..., self.rope_length:]
 
         return x_combined
 
@@ -82,10 +109,10 @@ class SymmetricalOverlapAngularPositions(nn.Module):
         assert self.dim % 2 == 0, "Target length dim must be even for rotary embeddings"
 
         self.num_angles = num_angles
-        if self.rope_length != None:
+        if config.rope_length != None:
+            assert config.rope_length % 2 == 0, "Rotary length must be even"
+            assert config.rope_length <= self.dim, "Rotary length less than or equal to dim"
             self.rope_length = config.rope_length
-            assert self.rope_length % 2 == 0, "Shortrope length must be even"
-            assert self.rope_length <= self.dim, "Shortrope length less than or equal to dim"
         else:
             self.rope_length = self.dim
             assert self.rope_length % 2 == 0, "Embedding dim length must be even for rotary position embeddings"
@@ -103,8 +130,10 @@ class SymmetricalOverlapAngularPositions(nn.Module):
             self.angles = self._generate_angles(num_angles, device)
 
     def update_rope_length(self, rope_length):
-        """Update the number of angles and regenerate angles tensor if needed."""
+        """Update the number of embeddings to do rotations over"""
         if self.rope_length != rope_length:
+            assert rope_length % 2 == 0, "New rotary length must be even"
+            assert rope_length <= self.dim, "New rotary length must less than or equal to embedding dim"
             self.rope_length = rope_length
 
     def forward(self, x):
