@@ -368,6 +368,25 @@ class SigSoftmax(nn.Module):
 
         return numerator / denominator
 
+class ReLUMax(nn.Module):
+    def __init__(self, config, dim=-1):
+        super().__init__()
+        self.dim = dim
+        self.relumax = nn.ReLU()
+        self.relumax_divisor = config.relumax_divisor
+        self.div_by_seq_len = config.div_by_seq_len
+
+    def forward(self, x):
+
+        result = self.relumax(x) / self.relumax_divisor
+
+        # divide by sequence length
+        if self.div_by_seq_len:
+            seq_len = x.shape[self.dim]
+            result = result / seq_len
+
+        return result
+
 class Softplus(nn.Module):
     """ Softmax variant based on arxiv 1805.10829 with added handles for base """
     def __init__(self, config, dim=-1):
@@ -422,6 +441,7 @@ softmax_dictionary = {
     "softermax": Softermax,
     "strongermax": Strongermax,
     "sigsoftmax": SigSoftmax,
+    "relumax": ReLUMax,
     "softplus": Softplus,
     "squareplus": Squareplus,
 }

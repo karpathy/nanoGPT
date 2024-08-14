@@ -92,12 +92,7 @@ def parse_args():
     model_group.add_argument("--krmsnorm_selection_type", type=str, default="last", choices=["first", "last", "random"])
     model_group.add_argument("--krmsnorm_recompute_percentage", type=float, default=None, help="percentage needed within the total RMS to not trigger recompute")
 
-    # ACTIVATION VARIATIONS
-    model_group.add_argument(
-        "--activation_variant",
-        type=str,
-        default="gelu",
-        choices=[
+    activation_variations = [
             "celu",
             "elu",
             "gelu",
@@ -114,8 +109,10 @@ def parse_args():
             "softsign",
             "squared_relu",
             "tanh",
-        ],
-    )
+        ]
+
+    # ACTIVATION VARIATIONS
+    model_group.add_argument( "--activation_variant", type=str, default="gelu", choices=activation_variations,)
 
     # LINEAR VARIATIONS
     linear_variants = ["linear", "bitlinear", "bitlinear_1p58", "bitlinear_optimized", "kan","quantized_linear"]
@@ -132,7 +129,7 @@ def parse_args():
     model_group.add_argument( "--linear_std_init", type=float, default=0.02)
 
     # Quatization
-    
+
     ## Quantization Method Options
     quant_methods = ["symmetric_quant", "affine_quant", "stochastic_quant"]
 
@@ -162,14 +159,14 @@ def parse_args():
     model_group.add_argument("--quantize_attn_act_pv_mult_output", action=argparse.BooleanOptionalAction, default=False, help="quantize output activation of pv_mult")
     model_group.add_argument("--quantize_attn_act_output", action=argparse.BooleanOptionalAction, default=False, help="quantize output activation of attention")
 
-    ### Default Precisions for Attention Activations 
+    ### Default Precisions for Attention Activations
     model_group.add_argument("--quantize_attn_act_bits", type=int, default=8, help="number of bits for attn quantization")
-       
+
     ### Overrides for granular Attention Activatinos
     model_group.add_argument("--quantize_attn_act_input_bits", type=int, default=None, help="number of bits for attention input quantization")
     model_group.add_argument("--quantize_attn_act_qk_mult_input_bits", type=int, default=None, help="number of bits for qk mult input quantization")
     model_group.add_argument("--quantize_attn_act_softmax_input_bits", type=int, default=None, help="number of bits for softmax input quantization")
-    model_group.add_argument("--quantize_attn_act_pv_mult_input_bits", type=int, default=None, help="number of bits for pv mult input quantization")    
+    model_group.add_argument("--quantize_attn_act_pv_mult_input_bits", type=int, default=None, help="number of bits for pv mult input quantization")
     model_group.add_argument("--quantize_attn_act_pv_mult_output_bits", type=int, default=None, help="number of bits for pv mult output quantization")
     model_group.add_argument("--quantize_attn_act_output_bits", type=int, default=None, help="number of bits for attention output quantization")
 
@@ -179,41 +176,41 @@ def parse_args():
     model_group.add_argument("--quantize_mlp_act_activation_input", action=argparse.BooleanOptionalAction, default=False, help="quantize input activation to activation function")
     model_group.add_argument("--quantize_mlp_act_activation_output", action=argparse.BooleanOptionalAction, default=False, help="quantize output activation of activation function")
     model_group.add_argument("--quantize_mlp_act_output", action=argparse.BooleanOptionalAction, default=False, help="quantize output activation of mlp")
-    
-    ### Default Precisions for MLP Activations 
+
+    ### Default Precisions for MLP Activations
     model_group.add_argument("--quantize_mlp_act_bits", type=int, default=8, help="number of bits for mlp quantization")
-    
+
     ### Overrides for granular MLP Activatinos
     model_group.add_argument("--quantize_mlp_act_input_bits", type=int, default=None, help="number of bits for mlp input quantization")
     model_group.add_argument("--quantize_mlp_act_activation_input_bits", type=int, default=None, help="number of bits for activation function input quantization")
     model_group.add_argument("--quantize_mlp_act_activation_output_bits", type=int, default=None, help="number of bits for activation function output quantization")
     model_group.add_argument("--quantize_mlp_act_output_bits", type=int, default=None, help="number of bits for mlp output quantization")
-    
-    ## Linear Attn Weight Quantization Precision and Method 
-    
+
+    ## Linear Attn Weight Quantization Precision and Method
+
     ### Default methods and precisions
     model_group.add_argument("--quantize_linear_method", type=str, default="affine_quant", choices=quant_methods, help="function used for linear quantization")
     model_group.add_argument("--quantize_linear_bits", type=int, default=8, help="number of bits for linear quantization")
-   
+
     #### Overrides for granular Methods and Precisions
     model_group.add_argument("--quantize_linear_attn_q_method", type=str, default=None, choices=quant_methods, help="function used for c_attn_q quantization")
     model_group.add_argument("--quantize_linear_attn_q_bits", type=int, default=None, help="number of bits for c_attn_q quantization")
-    
+
     model_group.add_argument("--quantize_linear_attn_k_method", type=str, default=None, choices=quant_methods, help="function used for c_attn_k quantization")
     model_group.add_argument("--quantize_linear_attn_k_bits", type=int, default=None, help="number of bits for c_attn_k quantization")
-    
+
     model_group.add_argument("--quantize_linear_attn_v_method", type=str, default=None, choices=quant_methods, help="function used for c_attn_v quantization")
     model_group.add_argument("--quantize_linear_attn_v_bits", type=int, default=None, help="number of bits for c_attn_v quantization")
-    
+
     model_group.add_argument("--quantize_linear_attn_proj_method", type=str, default=None, choices=quant_methods, help="function used for c_proj in attention quantization")
     model_group.add_argument("--quantize_linear_attn_proj_bits", type=int, default=None, help="number of bits for c_proj in attention quantization")
 
-    #### Overrides for Linear MLP Weight Quantization Precision and Method 
+    #### Overrides for Linear MLP Weight Quantization Precision and Method
     model_group.add_argument("--quantize_linear_mlp_up_method", type=str, default=None, choices=quant_methods, help="function used for mlp_up quantization")
     model_group.add_argument("--quantize_linear_mlp_up_bits", type=int, default=None, help="number of bits for mlp_up quantization")
     model_group.add_argument("--quantize_linear_mlp_down_method", type=str, default=None, choices=quant_methods, help="function used for mlp_down quantization")
     model_group.add_argument("--quantize_linear_mlp_down_bits", type=int, default=None, help="number of bits for mlp_down quantization")
-    
+
     ## Quantized Linear Warmup Iterations -- how many to first use regular linear, before switching to quantized
     model_group.add_argument("--quantization_warmup_iters", type=int, default=100)
 
@@ -231,39 +228,27 @@ def parse_args():
     model_group.add_argument( "--embedding_std_init", type=float, default=0.02)
 
     # SOFTMAX VARIATIONS
+
+    softmax_variations = [
+        "saturatingconsmax",
+        "consmax",
+        "consmax_quan",
+        "polymax",
+        "relumax",
+        "vpolymax",
+        "exppolymax",
+        "strongermax",
+        "softermax",
+        "sigsoftmax",
+        "softmax",
+        "softplus",
+        "squareplus",
+        "exppolymax",
+        ]
+
     ## Selection of softmax variation for attention and output layers
-    model_group.add_argument("--softmax_variant_attn", type=str,
-                             default="softmax", choices=[
-                                                         "saturatingconsmax",
-                                                         "consmax",
-                                                         "consmax_quan",
-                                                         "polymax",
-                                                         "vpolymax",
-                                                         "exppolymax",
-                                                         "strongermax",
-                                                         "softermax",
-                                                         "sigsoftmax",
-                                                         "softmax",
-                                                         "softplus",
-                                                         "squareplus",
-                                                         "exppolymax",
-                                                         ])
-    model_group.add_argument("--softmax_variant_output", type=str,
-                             default="softmax", choices=[
-                                                         "saturatingconsmax",
-                                                         "consmax",
-                                                         "consmax_quan",
-                                                         "polymax",
-                                                         "vpolymax",
-                                                         "exppolymax",
-                                                         "strongermax",
-                                                         "softermax",
-                                                         "sigsoftmax",
-                                                         "softmax",
-                                                         "softplus",
-                                                         "squareplus",
-                                                         "exppolymax",
-                                                         ])
+    model_group.add_argument("--softmax_variant_attn", type=str, default="softmax", choices=softmax_variations)
+    model_group.add_argument("--softmax_variant_output", type=str, default="softmax", choices=softmax_variations)
 
     ## Custom Softmax Variation Options
     ### ConSmax and SaturatingConSmax Options
@@ -282,6 +267,9 @@ def parse_args():
     model_group.add_argument("--polymax_y_intercept", type=float, default=1.0)
     model_group.add_argument("--polymax_power", type=float, default=2.0)
     model_group.add_argument("--polymax_divisor", type=float, default=1000.0)
+
+    ### ReLUMax Options
+    model_group.add_argument("--relumax_divisor", type=float, default=256.0)
 
     ### SigSoftmax Options
     model_group.add_argument('--sigsoftmax_use_euler_base', default=True, action=argparse.BooleanOptionalAction)
