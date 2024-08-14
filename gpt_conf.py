@@ -169,6 +169,7 @@ class GPTConfig:
     quantize_mlp_act_activation_output_bits: int = None
     quantize_mlp_act_output: bool = False
     quantize_mlp_act_output_bits: int = None
+    update_activations: bool = False
 
     ## Linear Quantizations
     quantize_linear_method: str = "affine_quant"
