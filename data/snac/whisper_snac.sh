@@ -41,7 +41,7 @@ for i in $(seq -f "%02g" 1 24); do
     wget -nc -O "${out_dir}/tiny_sherlock_audio_${i}.mp3" "${url}/resolve/main/adventuresholmes_${i}_doyle_64kb.mp3?download=true" || true
 done
 
-# python3 split_mp3s.py "${out_dir}" --max_size_mb 5
+python3 split_mp3s.py "${out_dir}" --max_size_mb 5
 
 # Using the whisper.cpp to get the section of words to the audio and save the output in ~/snac
 whisper_json_dir="whisper_json_dir"
@@ -68,16 +68,11 @@ for mp3_file in ../split_input_mp3s/*.mp3; do
     echo "$base_name"
     echo "$wav_file"
 
-    # Define the output .wav file name
-    # wav_file="${base_name}.wav"
-
     # Convert .mp3 to .wav using ffmpeg
     # TODO: is this the right hz?
     ffmpeg -i "$mp3_file" -ar 16000 -y "$wav_file"
 
-    # echo "Converted ${mp3_file} to ${wav_file}"
-
-    # out_path="${output_dir}/${base_name}"
+    echo "Converted ${mp3_file} to ${wav_file}"
 
     # Run the whisper.cpp
     "${script_dir}/../template/whisper.cpp/main" -m "${script_dir}/../template/whisper.cpp/models/ggml-base.en.bin" -f "${wav_file}" -ml 1 -oj -of "${base_name}"
@@ -88,7 +83,7 @@ for mp3_file in ../split_input_mp3s/*.mp3; do
 
     python3 ../sample_whisper_snac.py "${mp3_file}" "${base_name}.json" "${result_path}"
 
-    echo "Finished running ${wav_file }and saved results to ${result_path}"
+    echo "Finished running ${wav_file} and saved results to ${result_path}"
 done
 
 popd
