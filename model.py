@@ -25,7 +25,7 @@ import torch.utils.checkpoint as checkpoint
 # Variations
 from variations.softmax_variations import softmax_dictionary
 from variations.norm_variations import norm_dictionary
-from variations.position_encoding_variations import QuantizedEmbedding, RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions, FIRE
+from variations.position_encoding_variations import QuantizedEmbedding, RotaryEmbedding, SymmetricalOverlapAngularPositions, FIRE
 from variations.activation_variations import activation_dictionary
 from variations.linear_variations import linear_dictionary
 from variations.router_variations import router_dictionary
@@ -157,19 +157,14 @@ class CausalSelfAttention(nn.Module):
         self.rotary_emb_q = None
         self.rotary_emb_k = None
         if config.use_rotary_embeddings:
-            # TODO update variant name after completing rope and shortrope updates
-            # TODO Add shortrope to symmetrical rope
-            if config.rope_variant == "rope":
+            # Note: size is the size of the head dimension
+            if config.rope_variant == "soap":
                 self.sym_rot_num_angles = config.sym_rot_num_angles
-                self.rotary_emb_q = SymmetricalOverlapAngularPositions(config, size=config.n_embd, num_angles=self.sym_rot_num_angles)
-                self.rotary_emb_k = SymmetricalOverlapAngularPositions(config, size=self.kv_dim, num_angles=self.sym_rot_num_angles)
-            # TODO update rope and shortrope to accomodate new GQA additions
-            # if config.rope_variant == "rope":
-            #     self.rotary_emb_q = RotaryEmbedding(config, size=config.n_embd)
-            #     self.rotary_emb_k = RotaryEmbedding(config, size=config.n_embd // config.n_head * config.n_kv_group)
-            # if config.rope_variant == "shortrope":
-            #     self.rotary_emb_q = RotaryEmbedding(config, size=config.n_embd)
-            #     self.rotary_emb_k = RotaryEmbedding(config, size=config.n_embd // config.n_head * config.n_kv_group)
+                self.rotary_emb_q = SymmetricalOverlapAngularPositions(config, size=config.n_embd // self.n_head, num_angles=self.sym_rot_num_angles)
+                self.rotary_emb_k = SymmetricalOverlapAngularPositions(config, size=config.n_embd // self.n_head, num_angles=self.sym_rot_num_angles)
+            elif config.rope_variant == "rope":
+                self.rotary_emb_q = RotaryEmbedding(config, size=config.n_embd // self.n_head)
+                self.rotary_emb_k = RotaryEmbedding(config, size=config.n_embd // self.n_head)
 
         # Softmax Variant Selection
         self.softmax_variant_attn = config.softmax_variant_attn
@@ -215,10 +210,6 @@ class CausalSelfAttention(nn.Module):
         k = self.c_attn_k(x)
         v = self.c_attn_v(x)
 
-        if self.rotary_emb_q is not None:
-            q = self.rotary_emb_q(q)
-            k = self.rotary_emb_k(k)
-
         if self.window_size is not None:
             window_mask = torch.ones((1, 1, T, T), device=x.device)
             window_mask = torch.triu(window_mask, diagonal=-self.window_size)
@@ -246,6 +237,11 @@ class CausalSelfAttention(nn.Module):
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, n_h, T, hs)
         k = k.view(B, T, self.n_kv_group, C // self.n_head).transpose(1, 2) # (B, n_kv, T, hs)
         v = v.view(B, T, self.n_kv_group, C // self.n_head).transpose(1, 2) # (B, n_kv, T, hs)
+
+        # rotate q and k before evaluating with the heads
+        if (self.rotary_emb_q is not None) and (self.rotary_emb_k is not None):
+            q = self.rotary_emb_q(q)
+            k = self.rotary_emb_k(k)
 
         y = None
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
@@ -550,6 +546,13 @@ class GPT(nn.Module):
             if hasattr(block.attn, 'rotary_emb_q') and hasattr(block.attn, 'rotary_emb_k'):
                 block.attn.rotary_emb_q.update_num_angles(num_angles, device)
                 block.attn.rotary_emb_k.update_num_angles(num_angles, device)
+
+    def update_rope_length(self, rope_length):
+        """Update the number of angles for rotary embeddings in all attention layers."""
+        for block in self.transformer.h:
+            if hasattr(block.attn, 'rotary_emb_q') and hasattr(block.attn, 'rotary_emb_k'):
+                block.attn.rotary_emb_q.update_rope_length(rope_length)
+                block.attn.rotary_emb_k.update_rope_length(rope_length)
 
 
     def forward(self, idx, targets=None):

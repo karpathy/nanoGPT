@@ -96,7 +96,7 @@ class GPTConfig:
     use_rotary_embeddings: bool = False
     sym_rot_num_angles: int = 512
     rope_variant: str = "rope" # options: "shortrope", "rope"
-    shortrope_length: int = 8 # number of embeddings to use in shortrope
+    rope_length: int = 8 # number of embeddings to use in shortrope
 
     ## Embedding Intialization Options
     embedding_mean_init: float= 0.0

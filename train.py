@@ -220,8 +220,8 @@ def parse_args():
     # POSITIONAL EMBEDDING VARIATIONS
     model_group.add_argument('--use_rotary_embeddings', default=False, action=argparse.BooleanOptionalAction)
     model_group.add_argument('--sym_rot_num_angles', type=int, default=512, help="number of angles to use for symmetric rope variant")
-    model_group.add_argument("--rope_variant", type=str, default="rope", choices=["shortrope", "rope"])
-    model_group.add_argument("--shortrope_length", type=int, default="16", help="number of embeddings to use with rope, must be <= length, and be even")
+    model_group.add_argument("--rope_variant", type=str, default="rope", choices=["rope", "soap"])
+    model_group.add_argument("--rope_length", type=int, default=None, help="Defaults to all embeddings (if set to None), else must be even.")
     model_group.add_argument('--use_abs_pos_embeddings', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument('--use_fire_embeddings', default=False, action=argparse.BooleanOptionalAction)
     model_group.add_argument('--shared_fire_embeddings', default=False, action=argparse.BooleanOptionalAction)
@@ -507,6 +507,8 @@ class Trainer:
             self.load_data()
             gptconf = GPTConfig(**self.model_args)
             self.model = GPT(gptconf)
+            ## TODO: Add means here to udpate the resume for: block size (finetune for longer context), rotary type, rope length, softmax type, etc.
+            ## TODO: Add ability here to swap WTE factors.
             state_dict = checkpoint['model']
             for k,v in list(state_dict.items()):
                 if k.startswith('_orig_mod.'):

@@ -1,0 +1,34 @@
+[
+    {
+        "max_iters": ["5000"],
+        "n_layer": ["6"],
+        "n_kv_group": ["6"],
+        "n_head": ["6"],
+        "n_embd": ["384"],
+        "eval_interval": ["50"],
+        "block_size":["256"],
+        "device": ["cuda"],
+        "dtype": ["float16"],
+        "dataset": ["shakespeare_char"],
+        "use_rotary_embeddings": [true],
+        "use_abs_pos_embeddings": [false],
+        "use_fire_embeddings": [false],
+        "compile": [true],
+        "seed": {
+          "range": {
+            "start": 1337,
+            "end": 1537,
+            "step": 100
+          }
+        },
+        "rope_variant": ["soap", "rope"],
+        "rope_length": {
+          "range": {
+            "start": 2,
+            "end": 64,
+            "step": 2
+          }
+        }
+    }
+]
+

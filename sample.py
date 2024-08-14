@@ -37,6 +37,7 @@ def parse_args():
     parser.add_argument('--chart_type', type=str, default='heatmap', choices=['heatmap', 'barchart'], help="Type of chart to display: 'heatmap' or 'barchart'")
     parser.add_argument('--block_size', type=int, default=None, help="Block size for context length, default is model's block size")
     parser.add_argument('--sym_rot_num_angles', type=int, default=None, help="Number of angles for symmetrical rotary embedding")
+    parser.add_argument('--rope_length', type=int, default=None, help="Number of embeddings to rotate (must be an even number <= total embedding size)")
     parser.add_argument('--token_boundary', type=str, default=None, help="optional separator between emitted tokens")
 
     return parser.parse_args()
@@ -125,11 +126,17 @@ def main():
     if args.compile:
         model = torch.compile(model)
 
+    # Inference with different block size (note: for this one cannot use abs pos embeddings)
     if args.block_size:
         model.update_block_size(args.block_size)
 
+    # Inference with different number of angles
     if args.sym_rot_num_angles:
         model.update_num_angles(args.sym_rot_num_angles)
+
+    # Inference with different Rope Length
+    if args.rope_length:
+        model.update_rope_length(args.rope_length)
 
     load_meta = False
     meta_path = None
