@@ -190,7 +190,7 @@ def parse_args():
     model_group.add_argument("--quantize_mlp_act_output_bits", type=int, default=None, help="number of bits for mlp output quantization")
 
     ### Whether activations should be saved
-    model_group.add_argument("--update_activations", action=argparse.BooleanOptionalAction, default=False, help="whether the activations should be saved as a buffer and updated through training")
+    model_group.add_argument("--store_activations", action=argparse.BooleanOptionalAction, default=False, help="whether the activations should be saved as a buffer and updated through training")
     
     ## Linear Attn Weight Quantization Precision and Method 
     
