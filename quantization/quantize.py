@@ -110,11 +110,11 @@ def dequantize(zero_point, scale, tensor):
     return (tensor - zero_point) * scale
 
 def fake_quantize_act(obj, activation, tensor, num_bits, quant_method):
-    act, scale, zero_point = quantize_dictionary[quant_method](tensor, num_bits)
+    zero_point, scale, act = quantize_dictionary[quant_method](tensor, num_bits)
     setattr(obj, activation, act)
     setattr(obj, f"{activation}_scale", scale)
     setattr(obj, f"{activation}_zero_point", zero_point)
-    return dequantize(act, scale, zero_point)
+    return dequantize(zero_point, scale, act)
 
 class FakeLinearQuantizationFunction(torch.autograd.Function):
     """Simulates error caused by quantization. Uses Straight-Through Estimator for Back prop

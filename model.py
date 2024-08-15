@@ -111,7 +111,6 @@ class CausalSelfAttention(nn.Module):
                 self.quantization_attn_dict[arg] = set_variant(val, config.quantize_attn_act)
                 if config.store_activations and arg != "quantize_attn_act" and self.quantization_attn_dict[arg]:
                     arg_str = arg.split("quantize_")[1]
-                    self.quantization_activations = {}
                     if arg_str == "attn_act_qk_mult_input":
                         self.register_buffer(f"{arg_str}_q", None)
                         self.register_buffer(f"{arg_str}_q_scale", None)
