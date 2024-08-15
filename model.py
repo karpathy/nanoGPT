@@ -96,6 +96,12 @@ def set_variant(variant, default_variant):
         return default_variant
     return variant
 
+def create_activation_buffers(obj, arg):
+    arg_str = arg.split("quantize_")[1]
+    obj.register_buffer(arg_str, None)
+    obj.register_buffer(f"{arg_str}_scale", None)
+    obj.register_buffer(f"{arg_str}_zero_point", None)
+
 class CausalSelfAttention(nn.Module):
     def __init__(self, config, fire_pos_enc=None):
         super().__init__()
@@ -110,10 +116,7 @@ class CausalSelfAttention(nn.Module):
             elif arg.startswith("quantize_") and "attn_act" in arg:
                 self.quantization_attn_dict[arg] = set_variant(val, config.quantize_attn_act)
                 if config.store_activations and arg != "quantize_attn_act" and self.quantization_attn_dict[arg]:
-                    arg_str = arg.split("quantize_")[1]
-                    self.register_buffer(arg_str, None)
-                    self.register_buffer(f"{arg_str}_scale", None)
-                    self.register_buffer(f"{arg_str}_zero_point", None)
+                    create_activation_buffers(self, arg)
             # Set each attention Linear precision and method
             elif arg.startswith("quantize_") and "linear_attn" in arg and arg.endswith("_bits"):
                 self.quantization_attn_dict[arg] = set_variant(val, config.quantize_linear_bits)
@@ -366,10 +369,7 @@ class MLP(nn.Module):
                 elif arg.startswith("quantize_") and "mlp_act" in arg:
                     self.quantization_mlp_dict[arg] = set_variant(val, config.quantize_mlp_act)
                     if config.store_activations and arg != "quantize_mlp_act" and self.quantization_mlp_dict[arg]:
-                        arg_str = arg.split("quantize_")[1]
-                        self.register_buffer(arg_str, None)
-                        self.register_buffer(f"{arg_str}_scale", None)
-                        self.register_buffer(f"{arg_str}_zero_point", None)
+                        create_activation_buffers(self, arg)
                 # Set MLP Linear Weight precision and quantization method
                 elif arg.startswith("quantize_") and "linear_mlp" in arg and arg.endswith("_bits"):
                     self.quantization_mlp_dict[arg] = set_variant(val, config.quantize_linear_bits)
