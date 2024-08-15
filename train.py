@@ -19,7 +19,7 @@ import torch
 from torch.distributed import destroy_process_group, init_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
-from statistics_util.statistic_plots import initialize_statistics, create_box_plot, plot_statistics, create_statistics
+from statistics_util.statistic_plots import initialize_statistics, plot_statistics, create_statistics
 
 from model import GPT, GPTConfig
 
@@ -755,7 +755,7 @@ class Trainer:
                         torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
                 if self.args.patience is not None and num_steps_with_worse_loss >= self.args.patience:
                     print(f"Early Stopping: loss has not decreased in {self.args.patience + 1} steps")
-                    plot_statistics(self.args, graph_y_labels)
+                    plot_statistics(self.args, self.stats, graph_y_labels)
                     break
                 if losses['val'] > self.best_val_loss:
                     num_steps_with_worse_loss += 1
@@ -821,7 +821,7 @@ class Trainer:
 
             # End of training actions
             if self.iter_num > self.args.max_iters:
-                plot_statistics(self.args, graph_y_labels)
+                plot_statistics(self.args, self.stats, graph_y_labels)
                 if self.args.only_save_checkpoint_at_end:
                     checkpoint = {
                         'model': self.raw_model.state_dict(),
