@@ -811,9 +811,7 @@ class Trainer:
                 self.log_metrics_non_validation(lossf, running_mfu, self.iter_num)
 
 
-
-            if self.args.softmax_variant_attn in ['consmax', 'polymax', 'strongermax']:
-                create_statistics(self, graph_y_labels)
+            create_statistics(self, graph_y_labels)
 
 
             self.iter_num += 1
