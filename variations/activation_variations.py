@@ -17,6 +17,7 @@ activation_dictionary = {
     "softsign": nn.Softsign(),
     "softplus": nn.Softplus(),
     "sigmoid": nn.Sigmoid(),
+    "relu": nn.ReLU(),
     "rrelu": nn.RReLU(),
     "leaky_relu": nn.LeakyReLU(),
     "elu": nn.ELU(),
