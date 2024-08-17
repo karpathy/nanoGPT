@@ -349,6 +349,11 @@ def parse_args():
     logging_group.add_argument('--timestamp', default='', type=str)
     logging_group.add_argument('--save_nan_checkpoint', default=False, action=argparse.BooleanOptionalAction)
 
+    # Module And Parameter Logging and Plots of Summary Statistics
+    model_group.add_argument('--softmax_io_logging', default=False, action=argparse.BooleanOptionalAction, help="logs inputs and outputs of supported softmaxes")
+    model_group.add_argument('--consmax_beta_gamma_logging', default=False, action=argparse.BooleanOptionalAction, help="logs beta and gamma")
+    logging_group.add_argument('--plot_statistics', default=False, action=argparse.BooleanOptionalAction, help="logs beta and gamma")
+
     # CSV logging
     logging_group.add_argument('--csv_log', default=True, action=argparse.BooleanOptionalAction)
     logging_group.add_argument('--csv_dir', default='csv_logs', type=str)
@@ -753,7 +758,6 @@ class Trainer:
                         torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
                 if self.args.patience is not None and num_steps_with_worse_loss >= self.args.patience:
                     print(f"Early Stopping: loss has not decreased in {self.args.patience + 1} steps")
-                    plot_statistics(self.args, self.stats, graph_y_labels)
                     break
                 if losses['val'] > self.best_val_loss:
                     num_steps_with_worse_loss += 1
@@ -817,7 +821,6 @@ class Trainer:
 
             # End of training actions
             if self.iter_num > self.args.max_iters:
-                plot_statistics(self.args, self.stats, graph_y_labels)
                 if self.args.only_save_checkpoint_at_end:
                     checkpoint = {
                         'model': self.raw_model.state_dict(),
@@ -832,6 +835,9 @@ class Trainer:
                     print(f"saving checkpoint to {self.args.out_dir}")
                     torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
                 break
+
+        if self.args.plot_statistics:
+            plot_statistics(self.args, self.stats, graph_y_labels)
 
         if self.args.tensorboard_log:
             self.writer.flush()
