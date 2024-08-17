@@ -155,11 +155,11 @@ def parse_args():
 
     #### Whether to do Attention Activation quantization at the Arrow
     model_group.add_argument("--quantize_attn_act_input", action=argparse.BooleanOptionalAction, default=False, help="quantize input activation to attention")
-    # TODO add separate Q and K separate fake-quants for this activation
-    model_group.add_argument("--quantize_attn_act_qk_mult_input", action=argparse.BooleanOptionalAction, default=False, help="quantize input activation to qk mult")
+    model_group.add_argument("--quantize_attn_act_qk_mult_q_input", action=argparse.BooleanOptionalAction, default=False, help="quantize query input activation to qk mult")
+    model_group.add_argument("--quantize_attn_act_qk_mult_k_input", action=argparse.BooleanOptionalAction, default=False, help="quantize key input activation to qk mult")
     model_group.add_argument("--quantize_attn_act_softmax_input", action=argparse.BooleanOptionalAction, default=False, help="quantize input activation to softmax")
-    model_group.add_argument("--quantize_attn_act_pv_mult_input", action=argparse.BooleanOptionalAction, default=False, help="quantize input activation to pv mult")
-    # TODO add separate P and V separate fake-quants for this activation
+    model_group.add_argument("--quantize_attn_act_pv_mult_p_input", action=argparse.BooleanOptionalAction, default=False, help="quantize softmax input activation to pv mult")
+    model_group.add_argument("--quantize_attn_act_pv_mult_v_input", action=argparse.BooleanOptionalAction, default=False, help="quantize value input activation to pv mult")
     model_group.add_argument("--quantize_attn_act_pv_mult_output", action=argparse.BooleanOptionalAction, default=False, help="quantize output activation of pv_mult")
     model_group.add_argument("--quantize_attn_act_output", action=argparse.BooleanOptionalAction, default=False, help="quantize output activation of attention")
 
@@ -168,9 +168,11 @@ def parse_args():
        
     ### Overrides for granular Attention Activatinos
     model_group.add_argument("--quantize_attn_act_input_bits", type=int, default=None, help="number of bits for attention input quantization")
-    model_group.add_argument("--quantize_attn_act_qk_mult_input_bits", type=int, default=None, help="number of bits for qk mult input quantization")
+    model_group.add_argument("--quantize_attn_act_qk_mult_q_input_bits", type=int, default=None, help="number of bits for qk mult query input quantization")
+    model_group.add_argument("--quantize_attn_act_qk_mult_k_input_bits", type=int, default=None, help="number of bits for qk mult key input quantization")
     model_group.add_argument("--quantize_attn_act_softmax_input_bits", type=int, default=None, help="number of bits for softmax input quantization")
-    model_group.add_argument("--quantize_attn_act_pv_mult_input_bits", type=int, default=None, help="number of bits for pv mult input quantization")    
+    model_group.add_argument("--quantize_attn_act_pv_mult_p_input_bits", type=int, default=None, help="number of bits for pv mult softmax input quantization")
+    model_group.add_argument("--quantize_attn_act_pv_mult_v_input_bits", type=int, default=None, help="number of bits for pv mult value input quantization")
     model_group.add_argument("--quantize_attn_act_pv_mult_output_bits", type=int, default=None, help="number of bits for pv mult output quantization")
     model_group.add_argument("--quantize_attn_act_output_bits", type=int, default=None, help="number of bits for attention output quantization")
 
