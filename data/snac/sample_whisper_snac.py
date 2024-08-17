@@ -104,13 +104,13 @@ with Progress() as progress:
             print(f"[red]Exiting [/red]")
             sys.exit()
 
-        audio_section = audio[begin:end]
-        temp_path = save_audio_temp(audio_section)
-
-        temp_wav_path = "temp.wav"
-        preprocess_audio_to_24khz(temp_path, temp_wav_path)
-
         try:
+            audio_section = audio[begin:end]
+            temp_path = save_audio_temp(audio_section)
+
+            temp_wav_path = "temp.wav"
+            preprocess_audio_to_24khz(temp_path, temp_wav_path)
+
             # Load and process the audio segment
             audio_snac = load_mp3_as_tensor(temp_wav_path)
             audio_snac = audio_snac.to(snac_model.device)

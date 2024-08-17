@@ -152,12 +152,16 @@ class GPTConfig:
     quantize_attn_act_bits: int = 8
     quantize_attn_act_input: bool = False
     quantize_attn_act_input_bits: int = None
-    quantize_attn_act_qk_mult_input: bool = False
-    quantize_attn_act_qk_mult_input_bits: int = None
+    quantize_attn_act_qk_mult_q_input: bool = False
+    quantize_attn_act_qk_mult_q_input_bits: int = None
+    quantize_attn_act_qk_mult_k_input: bool = False
+    quantize_attn_act_qk_mult_k_input_bits: int = None
     quantize_attn_act_softmax_input: bool = False
     quantize_attn_act_softmax_input_bits: int = None
-    quantize_attn_act_pv_mult_input: bool = False
-    quantize_attn_act_pv_mult_input_bits: int = None
+    quantize_attn_act_pv_mult_p_input: bool = False
+    quantize_attn_act_pv_mult_p_input_bits: int = None
+    quantize_attn_act_pv_mult_v_input: bool = False
+    quantize_attn_act_pv_mult_v_input_bits: int = None
     quantize_attn_act_pv_mult_output: bool = False
     quantize_attn_act_pv_mult_output_bits: int = None
     quantize_attn_act_output: bool = False
@@ -172,6 +176,7 @@ class GPTConfig:
     quantize_mlp_act_activation_output_bits: int = None
     quantize_mlp_act_output: bool = False
     quantize_mlp_act_output_bits: int = None
+    store_activations: bool = False
 
     ## Linear Quantizations
     quantize_linear_method: str = "affine_quant"
