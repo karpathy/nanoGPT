@@ -298,9 +298,13 @@ class GPT(nn.Module):
         flops_per_iter = flops_per_fwdbwd * fwdbwd_per_iter
         # express our flops throughput as ratio of A100 bfloat16 peak flops
         flops_achieved = flops_per_iter * (1.0/dt) # per second
-        flops_promised = 312e12 # A100 GPU bfloat16 peak flops is 312 TFLOPS
+        
+        if "H100" in torch.cuda.get_device_name():
+            flops_promised = 989.5e12
+        elif "MI300X" in torch.cuda.get_device_name():
+            flops_promised = 1300e12
         mfu = flops_achieved / flops_promised
-        return mfu
+        return mfu, flops_achieved
 
     @torch.no_grad()
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
