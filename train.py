@@ -9,8 +9,7 @@ import shutil
 import sys
 import time
 
-from torchinfo import summary
-
+from model_info_util.model_info import print_summary, print_module_structure, print_model_blocks
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.graph_objects as go
@@ -370,19 +369,13 @@ def parse_args():
     logging_group.add_argument('--save_config_json', type=str, help="Option to save model parameters as new config json file")
 
     # Visualization args
-    logging_group.add_argument('--statistic', choices=[
-    'input_mean', 'input_median', 'input_stdev', 'input_max', 'input_min',
-    'output_mean', 'output_median', 'output_stdev', 'output_max', 'output_min', 'all_stats', 'input_all','output_all'
-     ], default='input_mean', help='Select one or all statistics to display, e.g., --statistic input_min, or --statistic all_stats')
-    logging_group.add_argument('--graph_type', choices=[
-    "heatmap", "plot", "boxplot", "all"
-     ], default='no_graph', help='Select one of the graph types to display, e.g., --graph_type heatmap, or --graph_type plot')
+    logging_group.add_argument('--statistic', choices=[ 'input_mean', 'input_median', 'input_stdev', 'input_max', 'input_min', 'output_mean', 'output_median', 'output_stdev', 'output_max', 'output_min', 'all_stats', 'input_all','output_all' ], default='input_mean', help='Select one or all statistics to display, e.g., --statistic input_min, or --statistic all_stats')
+    logging_group.add_argument('--graph_type', choices=[ "heatmap", "plot", "boxplot", "all" ], default='no_graph', help='Select one of the graph types to display, e.g., --graph_type heatmap, or --graph_type plot')
     logging_group.add_argument('--box_plot_interval', default=1000, type=int, help='Instead of using mean/median/stdev statistics, create box plot of all input/output values at certain intervals of iteration')
-    logging_group.add_argument('--box_plot_statistic', choices=['input', 'output', 'all'],
-     default='', help='Select input or output statistic to display in boxplot')
+    logging_group.add_argument('--box_plot_statistic', choices=['input', 'output', 'all'], default='', help='Select input or output statistic to display in boxplot')
 
     # Model Parameter Distribution
-    logging_group.add_argument('--print_block_summary', default=False, action=argparse.BooleanOptionalAction)
+    logging_group.add_argument('--print_model_info', default=True, action=argparse.BooleanOptionalAction)
 
     args = parser.parse_args()
 
@@ -523,12 +516,10 @@ class Trainer:
         self.model.to(self.device)
 
         # Print the model summary
-        summary(self.model)
-
-        if self.args.print_block_summary:
-            for idx, block in enumerate(self.model.transformer.h):
-                print(f"Summary for Block {idx + 1}:")
-                summary(block)
+        if self.args.print_model_info:
+            print_summary(self.model)
+            print_model_blocks(self.model)
+            print_module_structure(self.model)
 
         # Optimizer
         self.scaler = torch.cuda.amp.GradScaler(enabled=(self.args.dtype == 'float16'))
