@@ -10,6 +10,7 @@ wandb_run_name='gpt2-124M'
 # 60 batch size * 1024 block size * 8 GPUs = 491,520
 batch_size = 60
 block_size = 1024
+# @karapathy divides this by DDP world size so it becomes grad accum = 1
 gradient_accumulation_steps = 8
 
 # this makes total number of tokens be 300B
@@ -24,4 +25,5 @@ log_interval = 10
 # weight decay
 weight_decay = 1e-1
 
-compile = False
+compile = True
+compile_mode = "max-autotune"
