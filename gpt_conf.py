@@ -18,6 +18,11 @@ class GPTConfig:
     moe_top_k: int = 2
     moe_router_scheme: str = "softmax"
 
+    # Logging options
+    softmax_io_logging: bool = False
+    consmax_beta_gamma_logging: bool = False
+    plot_statistics: bool = False
+
     # Training options
     ## Gradient Checkpointing - More memory efficient (can do long contexts), but is slower
     use_gradient_checkpointing: bool = False
