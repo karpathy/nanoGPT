@@ -1,0 +1,28 @@
+[
+  {
+    "max_iters": ["30000"],
+    "n_layer": ["12"],
+    "n_kv_group": ["8"],
+    "n_head": ["8"],
+    "n_embd": ["1024"],
+    "weight_decay": ["0.1"],
+    "beta1": ["0.9"],
+    "beta2": ["0.95"],
+    "decay_lr": [true],
+    "lr_decay_iters": ["30000"],
+    "learning_rate": ["6e-4"],
+    "min_lr": ["6e-5"],
+    "block_size":["256"],
+    "device": ["cuda"],
+    "dtype": ["float16"],
+    "dataset": ["wikitext103"],
+    "compile": [false],
+    "use_abs_pos_embeddings": [true],
+    "use_gradient_checkpointing": [true],
+    "softplus_divisor": ["256"],
+    "relumax_divisor": ["256"],
+    "polymax_divisor": ["256"],
+    "exppolymax_divisor": ["256"],
+    "softmax_variant_attn": ["relumax", "softplus", "polymax", "exppolymax", "softmax"]
+  }
+]

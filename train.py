@@ -92,12 +92,7 @@ def parse_args():
     model_group.add_argument("--krmsnorm_selection_type", type=str, default="last", choices=["first", "last", "random"])
     model_group.add_argument("--krmsnorm_recompute_percentage", type=float, default=None, help="percentage needed within the total RMS to not trigger recompute")
 
-    # ACTIVATION VARIATIONS
-    model_group.add_argument(
-        "--activation_variant",
-        type=str,
-        default="gelu",
-        choices=[
+    activation_variations = [
             "celu",
             "elu",
             "gelu",
@@ -114,8 +109,10 @@ def parse_args():
             "softsign",
             "squared_relu",
             "tanh",
-        ],
-    )
+        ]
+
+    # ACTIVATION VARIATIONS
+    model_group.add_argument( "--activation_variant", type=str, default="gelu", choices=activation_variations,)
 
     # LINEAR VARIATIONS
     linear_variants = ["linear", "bitlinear", "bitlinear_1p58", "bitlinear_optimized", "kan","quantized_linear"]
@@ -236,39 +233,27 @@ def parse_args():
     model_group.add_argument( "--embedding_std_init", type=float, default=0.02)
 
     # SOFTMAX VARIATIONS
+
+    softmax_variations = [
+        "saturatingconsmax",
+        "consmax",
+        "consmax_quan",
+        "polymax",
+        "relumax",
+        "vpolymax",
+        "exppolymax",
+        "strongermax",
+        "softermax",
+        "sigsoftmax",
+        "softmax",
+        "softplus",
+        "squareplus",
+        "exppolymax",
+        ]
+
     ## Selection of softmax variation for attention and output layers
-    model_group.add_argument("--softmax_variant_attn", type=str,
-                             default="softmax", choices=[
-                                                         "saturatingconsmax",
-                                                         "consmax",
-                                                         "consmax_quan",
-                                                         "polymax",
-                                                         "vpolymax",
-                                                         "exppolymax",
-                                                         "strongermax",
-                                                         "softermax",
-                                                         "sigsoftmax",
-                                                         "softmax",
-                                                         "softplus",
-                                                         "squareplus",
-                                                         "exppolymax",
-                                                         ])
-    model_group.add_argument("--softmax_variant_output", type=str,
-                             default="softmax", choices=[
-                                                         "saturatingconsmax",
-                                                         "consmax",
-                                                         "consmax_quan",
-                                                         "polymax",
-                                                         "vpolymax",
-                                                         "exppolymax",
-                                                         "strongermax",
-                                                         "softermax",
-                                                         "sigsoftmax",
-                                                         "softmax",
-                                                         "softplus",
-                                                         "squareplus",
-                                                         "exppolymax",
-                                                         ])
+    model_group.add_argument("--softmax_variant_attn", type=str, default="softmax", choices=softmax_variations)
+    model_group.add_argument("--softmax_variant_output", type=str, default="softmax", choices=softmax_variations)
 
     ## Custom Softmax Variation Options
     ### ConSmax and SaturatingConSmax Options
@@ -287,6 +272,9 @@ def parse_args():
     model_group.add_argument("--polymax_y_intercept", type=float, default=1.0)
     model_group.add_argument("--polymax_power", type=float, default=2.0)
     model_group.add_argument("--polymax_divisor", type=float, default=1000.0)
+
+    ### ReLUMax Options
+    model_group.add_argument("--relumax_divisor", type=float, default=256.0)
 
     ### SigSoftmax Options
     model_group.add_argument('--sigsoftmax_use_euler_base', default=True, action=argparse.BooleanOptionalAction)

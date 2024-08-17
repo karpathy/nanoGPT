@@ -89,10 +89,13 @@ class GPTConfig:
     exppolymax_divisor: float = 1.0
 
     ## Softplus options
-    softplus_divisor: float = 100.0
+    softplus_divisor: float = 256.0
+
+    ## Softplus options
+    relumax_divisor: float = 256.0
 
     ## Squareplus options
-    squareplus_divisor: float = 100.0
+    squareplus_divisor: float = 256.0
 
     # Positional Embeddings Variations
     use_abs_pos_embeddings: bool = True # Note: one can use this AND rotary embeddings
