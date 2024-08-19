@@ -67,32 +67,10 @@ class ConSmaxV2(nn.Module):
             self.inputs = []
             self.outputs = []
 
-        # Learnable Factors vs Directly Learnable Parameters
-        if config.consmax_learnable_factors:
-            if config.consmax_per_head:
-                # per head learnable factors
-                self.beta_factor = nn.Parameter(torch.ones(self.n_head, 1))
-                self.gamma_factor = nn.Parameter(torch.ones(self.n_head, 1))
-            else:
-                # if not using per head
-                self.beta_factor = nn.Parameter(torch.ones(torch.ones(1)))
-                self.gamma_factor = nn.Parameters(torch.ones(torch.ones(1)))
-        else:
-            if config.consmax_per_head:
-                # per head learnable factors
-                self.beta_factor = torch.ones(self.n_head,1)
-                self.gamma_factor = torch.ones(self.n_head,1)
-            else:
-                # if not using per head
-                self.beta_factor = torch.ones(torch.ones(1))
-                self.gamma_factor = torch.ones(torch.ones(1))
-
-        if config.consmax_learnable_init:
-            self.beta_init = nn.Parameter(torch.Tensor([config.consmax_initial_beta]))
-            self.gamma_init = nn.Parameter(torch.Tensor([config.consmax_initial_gamma]))
-        else:
-            self.beta_init = config.consmax_initial_beta
-            self.gamma_init = config.consmax_initial_gamma
+        self.beta_init = config.consmax_initial_beta
+        self.gamma_init = config.consmax_initial_gamma
+        self.beta_factor = nn.Parameter(torch.ones(self.n_head, 1, 1))
+        self.gamma_factor = nn.Parameter(torch.ones(self.n_head, 1, 1))
 
         # Set beta and gamma as fields for backwards compatibility
         self.beta = self.beta_init * self.beta_factor
@@ -105,8 +83,8 @@ class ConSmaxV2(nn.Module):
             self.consmax_base = config.consmax_base
 
     def forward(self, x):
-        self.beta = self.beta_init * self.beta_factor
-        self.gamma = self.beta_init * self.gamma_factor
+        self.beta = self.beta_factor * self.beta_init
+        self.gamma = self.gamma_factor * self.gamma_init
 
         x_adj = x - self.beta
         e_x = torch.pow(self.consmax_base, x_adj)

@@ -237,6 +237,7 @@ def parse_args():
     softmax_variations = [
         "saturatingconsmax",
         "consmax",
+        "consmax_v2",
         "consmax_quan",
         "polymax",
         "relumax",
@@ -261,6 +262,9 @@ def parse_args():
     model_group.add_argument("--consmax_initial_gamma", type=float, default=100.0)
     model_group.add_argument('--consmax_use_euler_base', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument("--consmax_base", type=float, default=2.0)
+
+    ### Special Options for ConSmaxV2
+    model_group.add_argument("--consmax_per_head", default=True, action=argparse.BooleanOptionalAction)
 
     ### Special Options for SaturatingConSmax
     model_group.add_argument("--consmax_saturation", type=float, default=11.0, help="point where we transition from consmax to linear saturatingconsmax, defaults to 11 to approximate e^x sat for fp16")

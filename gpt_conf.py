@@ -54,10 +54,13 @@ class GPTConfig:
     ## ConSmax Options
     consmax_initial_beta: float = 2.0 # beta adjustment
     consmax_initial_gamma: float = 100.0 # denominator adjustment
-    consmax_use_euler_base: bool = True # use 'e' as base for ConSmax, default
     consmax_base: float = 2.0 # base to utilize for ConSmax
+    consmax_use_euler_base: bool = True # use 'e' as base for ConSmax, default
 
-    ## SaturatingConSmax special options (otherwise same as ConSmax)
+    ## ConSmaxV2 Special Options
+    consmax_per_head: bool = True # different beta gamma per head
+
+    ## SaturatingConSmax Special options (otherwise same as ConSmax)
     consmax_saturation: float = 11.0 # for SaturatingConSmax saturation point
     consmax_learnable_beta: bool = True
     consmax_learnable_gamma: bool = True
