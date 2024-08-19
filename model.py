@@ -99,7 +99,11 @@ def set_variant(variant, default_variant):
 class CausalSelfAttention(nn.Module):
     def __init__(self, config, fire_pos_enc=None):
         super().__init__()
-        assert config.n_embd % config.n_head == 0
+        if (config.n_kv_group == None):
+            config.n_kv_group = config.n_head
+        else:
+            assert config.n_embd % config.n_kv_group == 0
+        
 
         self.quantization_attn_dict = {}
         self.quantization_attn_dict["activations_quant_method"] = config.activations_quant_method
@@ -456,9 +460,6 @@ class GPT(nn.Module):
 
         self.config = config
 
-        # Initialize and set ouptut normalization (e.g. rmsnorm)
-        self.norm_variant_output = norm_dictionary[config.norm_variant_output](config)
-
         # Shared Parameters MLP
         shared_mlp_array = create_shared_param_group("mlp", config)
         # Shared Parameters Attention
@@ -473,7 +474,7 @@ class GPT(nn.Module):
             wte = word_embd,
             drop = nn.Dropout(config.dropout),
             h = nn.ModuleList([Block(config, mlp=shared_mlp_array[i], attn=shared_attn_array[i]) for i in range(config.n_layer)]),
-            ln_f = self.norm_variant_output,
+            ln_f = norm_dictionary[config.norm_variant_output](config),
         ))
 
         if self.config.use_abs_pos_embeddings:
@@ -605,59 +606,88 @@ class GPT(nn.Module):
 
     @classmethod
     def from_pretrained(cls, model_type, override_args=None):
-        assert model_type in {'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'}
+        # assert model_type in {'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'}
         override_args = override_args or {} # default to empty dict
         # only dropout can be overridden see more notes below
         assert all(k == 'dropout' for k in override_args)
-        from transformers import GPT2LMHeadModel
-        print("loading weights from pretrained gpt: %s" % model_type)
+        from transformers import GPT2LMHeadModel, AutoModelForCausalLM
+        print(f"loading weights from pretrained gpt: {model_type}")
 
-        # n_layer, n_head and n_embd are determined from model_type
-        config_args = {
-            'gpt2':         dict(n_layer=12, n_head=12, n_embd=768),  # 124M params
-            'gpt2-medium':  dict(n_layer=24, n_head=16, n_embd=1024), # 350M params
-            'gpt2-large':   dict(n_layer=36, n_head=20, n_embd=1280), # 774M params
-            'gpt2-xl':      dict(n_layer=48, n_head=25, n_embd=1600), # 1558M params
-        }[model_type]
-        print("forcing vocab_size=50257, block_size=1024, bias=True")
-        config_args['vocab_size'] = 50257 # always 50257 for GPT model checkpoints
-        config_args['block_size'] = 1024 # always 1024 for GPT model checkpoints
-        config_args['bias'] = True # always True for GPT model checkpoints
-        config_args['window_size'] = 128 # always None for GPT model checkpoints
-        # we can override the dropout rate, if desired
-        if 'dropout' in override_args:
-            print(f"overriding dropout rate to {override_args['dropout']}")
-            config_args['dropout'] = override_args['dropout']
-        # create a from-scratch initialized minGPT model
-        config = GPTConfig(**config_args)
-        model = GPT(config)
+        if "gpt" in model_type:
+            # n_layer, n_head and n_embd are determined from model_type
+            config_args = {
+                'gpt2':         dict(n_layer=12, n_head=12, n_embd=768),  # 124M params
+                'gpt2-medium':  dict(n_layer=24, n_head=16, n_embd=1024), # 350M params
+                'gpt2-large':   dict(n_layer=36, n_head=20, n_embd=1280), # 774M params
+                'gpt2-xl':      dict(n_layer=48, n_head=25, n_embd=1600), # 1558M params
+            }[model_type]
+            print("forcing vocab_size=50257, block_size=1024, bias=True")
+            config_args['vocab_size'] = 50257 # always 50257 for GPT model checkpoints
+            config_args['block_size'] = 1024 # always 1024 for GPT model checkpoints
+            config_args['bias'] = True # always True for GPT model checkpoints
+            config_args['window_size'] = 128 # always None for GPT model checkpoints
+            # we can override the dropout rate, if desired
+            if 'dropout' in override_args:
+                print(f"overriding dropout rate to {override_args['dropout']}")
+                config_args['dropout'] = override_args['dropout']
+            # create a from-scratch initialized minGPT model
+            # TODO: pass more cmd line flags like "softmax" variant into this from_pretrained 
+            config = GPTConfig(**config_args)
+
+            # overriding our custom GPTConf presets of "rmsnorm" to "layernorm" for compatibility
+            config.norm_variant_attn = "layernorm"
+            config.norm_variant_output = "layernorm"
+
+            model = GPT(config)
+            model_hf = GPT2LMHeadModel.from_pretrained(model_type)
+        else:
+            print("attempting to get Mistral-7B-v03 from HF")
+            model_hf = AutoModelForCausalLM.from_pretrained("mistralai/Mistral-7B-v0.3", device_map="auto")
+
+
         sd = model.state_dict()
         sd_keys = sd.keys()
         sd_keys = [k for k in sd_keys if not k.endswith('.attn.bias')] # discard this mask / buffer, not a param
 
         # init a huggingface/transformers model
-        model_hf = GPT2LMHeadModel.from_pretrained(model_type)
+        # model_hf = GPT2LMHeadModel.from_pretrained(model_type)
         sd_hf = model_hf.state_dict()
+
+        with open("mistral_sd.txt", 'w') as f:
+            for key in sd_hf.keys():
+                print(f"Key: {key}", file=f)
+
+        exit()
 
         # copy while ensuring all of the parameters are aligned and match in names and shapes
         sd_keys_hf = sd_hf.keys()
         sd_keys_hf = [k for k in sd_keys_hf if not k.endswith('.attn.masked_bias')] # ignore these, just a buffer
         sd_keys_hf = [k for k in sd_keys_hf if not k.endswith('.attn.bias')] # same, just the mask (buffer)
-        transposed = ['attn.c_attn.weight', 'attn.c_proj.weight', 'mlp.c_fc.weight', 'mlp.c_proj.weight']
+        transposed = ['attn.c_proj.weight', 'mlp.c_fc.weight', 'mlp.c_proj.weight']
         # basically the openai checkpoints use a "Conv1D" module, but we only want to use a vanilla Linear
         # this means that we have to transpose these weights when we import them
-        assert len(sd_keys_hf) == len(sd_keys), f"mismatched keys: {len(sd_keys_hf)} != {len(sd_keys)}"
-        for k in sd_keys_hf:
-            if any(k.endswith(w) for w in transposed):
+        # NOTE: the assert below will fail because we split out the c_attn linears!
+        # assert len(sd_keys_hf) == len(sd_keys), f"mismatched keys: {len(sd_keys_hf)} != {len(sd_keys)}"
+        for key in sd_keys_hf:
+            if any(key.endswith(w) for w in transposed):
                 # special treatment for the Conv1D weights we need to transpose
-                assert sd_hf[k].shape[::-1] == sd[k].shape
+                assert sd_hf[key].shape[::-1] == sd[key].shape
                 with torch.no_grad():
-                    sd[k].copy_(sd_hf[k].t())
+                    sd[key].copy_(sd_hf[key].t())
+            elif key.endswith('attn.c_attn.weight') or key.endswith('attn.c_attn.bias'):
+                # split into c_attn_q/k/v
+                q, k, v  = sd_hf[key].split(config.n_embd, dim=-1)
+                q_key_str = key.replace("c_attn", "c_attn_q")
+                k_key_str = key.replace("c_attn", "c_attn_k")
+                v_key_str = key.replace("c_attn", "c_attn_v")
+                sd[q_key_str] = q
+                sd[k_key_str] = k
+                sd[v_key_str] = v
             else:
                 # vanilla copy over the other parameters
-                assert sd_hf[k].shape == sd[k].shape
+                assert sd_hf[key].shape == sd[key].shape
                 with torch.no_grad():
-                    sd[k].copy_(sd_hf[k])
+                    sd[key].copy_(sd_hf[key])
 
         return model
 

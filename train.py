@@ -42,8 +42,10 @@ def parse_args():
     training_group.add_argument('--always_save_checkpoint', default=False, action=argparse.BooleanOptionalAction)
     training_group.add_argument('--patience', default=None, type=int, help="if set, will stop training if the number of evaluations since val loss was seen to decrease exceeds 'patience' setting.")
     training_group.add_argument('--init_from', default='scratch', choices=['scratch', 'prev_run', 'resume', 'gpt2*'], type=str)
+    training_group.add_argument('--gpt2_type', default='gpt2', type=str)
     training_group.add_argument('--prev_run_ckpt', default='', type=str)
     training_group.add_argument('--csv_ckpt_dir', default='', type=str)
+    training_group.add_argument('--resume_gpt_model', default=False, action=argparse.BooleanOptionalAction)
 
     # Data args
     training_group.add_argument('--dataset', default='shakespeare_char', type=str)
@@ -54,7 +56,7 @@ def parse_args():
     model_group.add_argument('--block_size', default=256, type=int)
     model_group.add_argument('--n_layer', default=6, type=int)
     model_group.add_argument('--n_head', default=6, type=int)
-    model_group.add_argument('--n_kv_group', default=6, type=int)
+    model_group.add_argument('--n_kv_group', default=None, type=int)
     model_group.add_argument('--n_embd', default=384, type=int)
     model_group.add_argument('--dropout', default=0.2, type=float)
     model_group.add_argument('--use_post_ln', default=False, action=argparse.BooleanOptionalAction)
@@ -518,8 +520,10 @@ class Trainer:
             self.best_val_loss = checkpoint['best_val_loss']
         elif self.args.init_from.startswith('gpt2'):
             override_args = dict(dropout=self.args.dropout)
-            self.model = GPT.from_pretrained(self.args.init_from, override_args)
-            for k in ['n_layer', 'n_head', 'n_kv_group', 'n_embd', 'block_size', 'bias', 'vocab_size', 'window_size', 'gate']:
+            self.iter_num = 0 # for starting from scratch
+            self.best_val_loss = 1e9 # really big number
+            self.model = GPT.from_pretrained(self.args.gpt2_type, override_args)
+            for k in ['n_layer', 'n_head', 'n_kv_group', 'n_embd', 'block_size', 'bias', 'vocab_size']:
                 self.model_args[k] = getattr(self.model.config, k)
             self.load_data()
         elif self.args.init_from == 'prev_run':
