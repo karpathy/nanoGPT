@@ -613,51 +613,40 @@ class GPT(nn.Module):
         from transformers import GPT2LMHeadModel, AutoModelForCausalLM
         print(f"loading weights from pretrained gpt: {model_type}")
 
-        if "gpt" in model_type:
-            # n_layer, n_head and n_embd are determined from model_type
-            config_args = {
-                'gpt2':         dict(n_layer=12, n_head=12, n_embd=768),  # 124M params
-                'gpt2-medium':  dict(n_layer=24, n_head=16, n_embd=1024), # 350M params
-                'gpt2-large':   dict(n_layer=36, n_head=20, n_embd=1280), # 774M params
-                'gpt2-xl':      dict(n_layer=48, n_head=25, n_embd=1600), # 1558M params
-            }[model_type]
-            print("forcing vocab_size=50257, block_size=1024, bias=True")
-            config_args['vocab_size'] = 50257 # always 50257 for GPT model checkpoints
-            config_args['block_size'] = 1024 # always 1024 for GPT model checkpoints
-            config_args['bias'] = True # always True for GPT model checkpoints
-            config_args['window_size'] = 128 # always None for GPT model checkpoints
-            # we can override the dropout rate, if desired
-            if 'dropout' in override_args:
-                print(f"overriding dropout rate to {override_args['dropout']}")
-                config_args['dropout'] = override_args['dropout']
-            # create a from-scratch initialized minGPT model
-            # TODO: pass more cmd line flags like "softmax" variant into this from_pretrained 
-            config = GPTConfig(**config_args)
+        # n_layer, n_head and n_embd are determined from model_type
+        config_args = {
+            'gpt2':         dict(n_layer=12, n_head=12, n_embd=768),  # 124M params
+            'gpt2-medium':  dict(n_layer=24, n_head=16, n_embd=1024), # 350M params
+            'gpt2-large':   dict(n_layer=36, n_head=20, n_embd=1280), # 774M params
+            'gpt2-xl':      dict(n_layer=48, n_head=25, n_embd=1600), # 1558M params
+        }[model_type]
+        print("forcing vocab_size=50257, block_size=1024, bias=True")
+        config_args['vocab_size'] = 50257 # always 50257 for GPT model checkpoints
+        config_args['block_size'] = 1024 # always 1024 for GPT model checkpoints
+        config_args['bias'] = True # always True for GPT model checkpoints
+        config_args['window_size'] = 128 # always None for GPT model checkpoints
+        # we can override the dropout rate, if desired
+        if 'dropout' in override_args:
+            print(f"overriding dropout rate to {override_args['dropout']}")
+            config_args['dropout'] = override_args['dropout']
+        # create a from-scratch initialized minGPT model
+        # TODO: pass more cmd line flags like "softmax" variant into this from_pretrained 
+        config = GPTConfig(**config_args)
 
-            # overriding our custom GPTConf presets of "rmsnorm" to "layernorm" for compatibility
-            config.norm_variant_attn = "layernorm"
-            config.norm_variant_output = "layernorm"
+        # overriding our custom GPTConf presets of "rmsnorm" to "layernorm" for compatibility
+        config.norm_variant_attn = "layernorm"
+        config.norm_variant_output = "layernorm"
 
-            model = GPT(config)
-            model_hf = GPT2LMHeadModel.from_pretrained(model_type)
-        else:
-            print("attempting to get Mistral-7B-v03 from HF")
-            model_hf = AutoModelForCausalLM.from_pretrained("mistralai/Mistral-7B-v0.3", device_map="auto")
-
+        model = GPT(config)
+        model_hf = GPT2LMHeadModel.from_pretrained(model_type)
 
         sd = model.state_dict()
         sd_keys = sd.keys()
         sd_keys = [k for k in sd_keys if not k.endswith('.attn.bias')] # discard this mask / buffer, not a param
 
         # init a huggingface/transformers model
-        # model_hf = GPT2LMHeadModel.from_pretrained(model_type)
+        model_hf = GPT2LMHeadModel.from_pretrained(model_type)
         sd_hf = model_hf.state_dict()
-
-        with open("mistral_sd.txt", 'w') as f:
-            for key in sd_hf.keys():
-                print(f"Key: {key}", file=f)
-
-        exit()
 
         # copy while ensuring all of the parameters are aligned and match in names and shapes
         sd_keys_hf = sd_hf.keys()
