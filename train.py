@@ -45,7 +45,6 @@ def parse_args():
     training_group.add_argument('--gpt2_type', default='gpt2', type=str)
     training_group.add_argument('--prev_run_ckpt', default='', type=str)
     training_group.add_argument('--csv_ckpt_dir', default='', type=str)
-    training_group.add_argument('--resume_gpt_model', default=False, action=argparse.BooleanOptionalAction)
 
     # Data args
     training_group.add_argument('--dataset', default='shakespeare_char', type=str)
