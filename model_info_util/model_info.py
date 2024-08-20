@@ -1,3 +1,4 @@
+import torch
 from torchinfo import summary
 from rich import print
 from rich.console import Console
@@ -5,21 +6,6 @@ from rich.text import Text
 import io
 
 console = Console()
-
-def colorize_summary(summary_str):
-    # Split the summary into lines
-    lines = summary_str.splitlines()
-    colored_lines = []
-
-    for line in lines:
-        if "Trainable params" in line or "Non-trainable params" in line:
-            colored_lines.append(f"[bold green]{line}[/bold green]")
-        elif "Total params" in line:
-            colored_lines.append(f"[bold red]{line}[/bold red]")
-        else:
-            colored_lines.append(f"[yellow]{line}[/yellow]")
-
-    return "\n".join(colored_lines)
 
 def print_summary(model):
     block_header = Text(f"High Level Parameters:", style="bold underline purple")
@@ -40,3 +26,13 @@ def print_module_structure(module):
         console.print(f'{name}: {submodule}', style="yellow")
     console.print("-" * 50, style="dim")
 
+def print_model_tree(model, indent="", print_params=False):
+    for name, module in model.named_children():
+        print(indent + name + ": " + str(module.__class__.__name__))
+        if isinstance(module, torch.nn.Module):
+            # Print parameters for the next level only
+            if print_params:
+                for param_name, _ in module.named_parameters():
+                    print(indent + "  " + param_name)
+            else:  # Recursively print submodules without parameters
+                print_model_tree(module, indent + "  ")

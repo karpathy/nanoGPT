@@ -9,7 +9,7 @@ import shutil
 import sys
 import time
 
-from model_info_util.model_info import print_summary, print_module_structure, print_model_blocks
+from model_info_util.model_info import print_summary, print_module_structure, print_model_blocks, print_model_tree
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.graph_objects as go
@@ -518,6 +518,7 @@ class Trainer:
             print_summary(self.model)
             print_model_blocks(self.model)
             print_module_structure(self.model)
+            print_model_tree(self.model, print_params=True)
 
         # Optimizer
         self.scaler = torch.cuda.amp.GradScaler(enabled=(self.args.dtype == 'float16'))
