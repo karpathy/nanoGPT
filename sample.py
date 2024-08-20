@@ -15,12 +15,13 @@ from torch.nn import functional as F
 from collections import OrderedDict
 
 from model import GPT, GPTConfig
+from model_info_util.model_info import print_summary, print_module_structure, print_model_blocks
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Inference from trained models")
-    parser.add_argument("--device", type=str, required=True, help="Device to run inference (e.g., 'cpu', 'cuda', 'cuda:0', 'cuda:1')")
-    parser.add_argument("--out_dir", type=str, required=True, help="Directory to load checkpoint from")
+    parser.add_argument("--device", type=str, default="cuda", help="Device to run inference (e.g., 'cpu', 'cuda', 'cuda:0', 'cuda:1')")
+    parser.add_argument("--out_dir", type=str, default="out", help="Directory to load checkpoint from")
     parser.add_argument("--quantization_data_file", type=str, default=None, help="File name to export the quantized weights/activations, scale factor, and zero point")
     parser.add_argument("--init_from", type=str, default="resume", help="Either 'resume' (from an out_dir) or a GPT-2 variant (e.g., 'gpt2-xl')")
     parser.add_argument("--start", type=str, default="\n", help="Start text for generation. Can specify a file using 'FILE:prompt.txt'")
@@ -41,6 +42,7 @@ def parse_args():
     parser.add_argument('--sym_rot_num_angles', type=int, default=None, help="Number of angles for symmetrical rotary embedding")
     parser.add_argument('--rope_length', type=int, default=None, help="Number of embeddings to rotate (must be an even number <= total embedding size)")
     parser.add_argument('--token_boundary', type=str, default=None, help="optional separator between emitted tokens")
+    parser.add_argument('--print_model_info', default=True, action=argparse.BooleanOptionalAction, help="print info about model before infernece")
 
     return parser.parse_args()
 
@@ -139,6 +141,13 @@ def main():
 
     model.eval()
     model.to(args.device)
+
+    # Print the model summary
+    if args.print_model_info:
+        print_summary(model)
+        print_model_blocks(model)
+        print_module_structure(model)
+
     if args.compile:
         model = torch.compile(model)
 
