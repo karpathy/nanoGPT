@@ -344,7 +344,8 @@ def parse_args():
     # Module And Parameter Logging and Plots of Summary Statistics
     model_group.add_argument('--softmax_io_logging', default=False, action=argparse.BooleanOptionalAction, help="logs inputs and outputs of supported softmaxes")
     model_group.add_argument('--consmax_beta_gamma_logging', default=False, action=argparse.BooleanOptionalAction, help="logs beta and gamma")
-    logging_group.add_argument('--plot_statistics', default=False, action=argparse.BooleanOptionalAction, help="logs beta and gamma")
+    logging_group.add_argument('--create_statistics', default=False, action=argparse.BooleanOptionalAction)
+    logging_group.add_argument('--plot_statistics', default=False, action=argparse.BooleanOptionalAction)
 
     # CSV logging
     logging_group.add_argument('--csv_log', default=True, action=argparse.BooleanOptionalAction)
@@ -805,7 +806,8 @@ class Trainer:
                 self.log_metrics_non_validation(lossf, running_mfu, self.iter_num)
 
 
-            create_statistics(self, graph_y_labels)
+            if self.args.create_statistics:
+                create_statistics(self, graph_y_labels)
 
 
             self.iter_num += 1
