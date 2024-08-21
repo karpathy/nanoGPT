@@ -56,6 +56,6 @@ gpt_model.tokenizer.save_pretrained("gpt2-custom")
 # model = AutoModelForCausalLM.from_pretrained("gpt2-custom")
 # tokenizer = AutoTokenizer.from_pretrained("gpt2-custom")
 
-generator = pipeline("text-generation", model=gpt_model.pretrained_model)
+generator = pipeline("text-generation", model=gpt_model.pretrained_model, tokenizer=gpt_model.tokenizer)
 output = generator("Once upon a time", max_length=50, num_return_sequences=1)
 print(output)
