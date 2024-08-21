@@ -664,10 +664,22 @@ class Trainer:
             writer.writerow(args)
 
 
-    def log_gamma_beta(self, gamma, beta, iter_num, layer_num):
+    def log_gamma_beta(self, gamma, beta, iter_num, layer_num, head_num=None):
         if self.args.tensorboard_log:
-            self.writer.add_scalar( "gamma_" + str(layer_num), gamma, iter_num)
-            self.writer.add_scalar( "beta_" + str(layer_num), beta, iter_num)
+            if head_num:
+                self.writer.add_scalars(
+                        "gammas",
+                        {"gamma_L" + str(layer_num) + "_H" + head_num: gamma},
+                        iter_num
+                        )
+                self.writer.add_scalars(
+                        "betas",
+                        {"beta_L" + str(layer_num) + "_H" + head_num: beta},
+                        iter_num
+                        )
+            else:
+                self.writer.add_scalar( "gamma_L" + str(layer_num), gamma, iter_num)
+                self.writer.add_scalar( "beta_L" + str(layer_num), beta, iter_num)
 
         if self.args.wandb_log and self.master_process:
             import wandb

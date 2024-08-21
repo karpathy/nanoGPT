@@ -156,7 +156,8 @@ def plot_statistics(args, stats, graph_y_labels):
             create_box_plot(args.out_dir, plot_data, graph_y_labels, timestamp, data_type, stat_type)
 
 def create_statistics(self, graph_y_labels):
-    if self.args.softmax_variant_attn in ['consmax', 'polymax', 'strongermax']:
+    if self.args.softmax_variant_attn in ['consmax', 'consmax_v2', 'polymax', 'strongermax']:
+
         betas = []
         gammas = []
         i_sum_vals = []
@@ -266,7 +267,24 @@ def create_statistics(self, graph_y_labels):
                 betas.append(beta[0].item()) # are there more than just beta 0?
                 # print("betas",beta,) # are there more than just beta 0?
 
-                self.log_gamma_beta(gamma, beta, self.iter_num, layer)
+                self.log_gamma_beta(gamma, beta, self.iter_num, layer, head_num=None)
+            elif self.args.softmax_variant_attn == 'consmax_v2':
+                gamma_location = f"transformer.h[{layer}].attn.softmax_layer_attn.gamma_factor"
+                beta_location = f"transformer.h[{layer}].attn.softmax_layer_attn.beta_factor"
+
+                gamma = eval(f"self.model.{gamma_location}")
+                beta = eval(f"self.model.{beta_location}")
+                for h in range(0, int(self.args.n_head)):
+                    # log gamma and beta points
+                    g = gamma[h].item()
+                    b = beta[h].item()
+                    # print(gamma[h].item())
+                    # print(beta[h].item())
+
+                    gammas.append(g)
+                    betas.append(b)
+
+                    self.log_gamma_beta(g, b, self.iter_num, layer, head_num=str(h))
 
         if self.args.box_plot_statistic and (self.iter_num % self.args.box_plot_interval == 0) and self.iter_num != 0:
             timestamp = time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())
@@ -298,28 +316,5 @@ def create_statistics(self, graph_y_labels):
                             prefix="outputs")
         if self.args.softmax_variant_attn == 'consmax':
             self.write_to_csv(self.iter_num, *betas, *gammas, prefix="beta_gamma")
-
-        """
-        if self.iter_num % 50 == 0:
-            inputs = []
-            outputs = []
-
-            for layer in range (self.args.n_layer):
-                inputs_location = f"transformer.h[{layer}].attn.softmax_layer.inputs"
-                outputs_location = f"transformer.h[{layer}].attn.softmax_layer.outputs"
-
-                gamma = eval(f"self.model.{gamma_location}")
-                gammas.append(gamma[0].item()) # are there more than just gamma 0?
-                # print("gammas",gamma) # are there more than just gamma 0?
-
-                beta = eval(f"self.model.{beta_location}")
-                betas.append(beta[0].item()) # are there more than just beta 0?
-                # print("betas",beta,) # are there more than just beta 0?
-
-                self.log_gamma_beta(gamma, beta, self.iter_num, layer)
-
-
+        elif self.args.softmax_variant_attn == 'consmax_v2':
             self.write_to_csv(self.iter_num, *betas, *gammas, prefix="beta_gamma")
-
-
-        """
