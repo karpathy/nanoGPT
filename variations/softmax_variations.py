@@ -171,6 +171,9 @@ class Strongermax(nn.Module):
         self.div_by_seq_len = config.div_by_seq_len
         self.overflow_recompute = config.strongermax_overflow_recompute
 
+        if self.overflow_recompute:
+            assert(self.xmax_guess is not None, "for overflow recompute, xmax_guess must be set") # ensure x_intercept is strictly left of the y-axis
+
         # Input and Output Logging
         self.softmax_io_logging = config.softmax_io_logging
         print(self.softmax_io_logging)
@@ -187,7 +190,6 @@ class Strongermax(nn.Module):
             max_x = x.max(dim=self.dim, keepdim=True).values
             if self.overflow_recompute:
                 if (torch.max(x - self.xmax_guess)) > (self.xmax_guess  + 88):
-                    print("popcorn")
                     x_adj = x - max_x
                 else:
                     x_adj = x - self.xmax_guess
