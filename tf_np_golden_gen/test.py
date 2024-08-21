@@ -4,7 +4,7 @@ import pickle
 import torch
 
 class LayerNorm:
-    def __init__(self, ndim, bias=True):
+    def __init__(self, ndim, bias=False):
         self.weight = np.ones((ndim,))
         self.bias = np.zeros((ndim,)) if bias else None
 
@@ -125,19 +125,50 @@ class Transformer:
         return x, new_cache
 
     def load_weights(self, weights):
-        self.wte = weights['wte']
-        self.wpe = weights['wpe']
+        # Load the embedding weights
+        self.wte = weights['transformer.wte.weight']
+        self.wpe = weights['transformer.wpe.weight']
 
+        # Load the weights for each block
         for i, block in enumerate(self.blocks):
-            block.load_weights(weights['blocks'][i])
+            block_weights = {
+                'ln_1': {
+                    'weight': weights[f'transformer.h.{i}.ln_1.weight']
+                },
+                'attn': {
+                    'c_attn_q': weights[f'transformer.h.{i}.attn.c_attn_q.weight'],
+                    'c_attn_k': weights[f'transformer.h.{i}.attn.c_attn_k.weight'],
+                    'c_attn_v': weights[f'transformer.h.{i}.attn.c_attn_v.weight'],
+                    'c_proj': weights[f'transformer.h.{i}.attn.c_proj.weight']
+                },
+                'ln_2': {
+                    'weight': weights[f'transformer.h.{i}.ln_2.weight']
+                },
+                'mlp': {
+                    'c_fc': weights[f'transformer.h.{i}.mlp.c_fc.weight'],
+                    'c_proj': weights[f'transformer.h.{i}.mlp.c_proj.weight']
+                }
+            }
+            block.load_weights(block_weights)
 
-        self.ln_f.load_weights(weights['ln_f'])
-        self.lm_head = self.wte  # Ensure weight tying
+        # Load the final layer normalization weights
+        self.ln_f.load_weights({'weight': weights['transformer.ln_f.gain']})
+
+        # Tie the lm_head weights to the wte
+        self.lm_head = self.wte
 
 def load_model_weights(file_path):
     with open(file_path, 'rb') as f:
         weights = pickle.load(f)
+
+    # Print all the keys in the weights file
+    print("Keys in the loaded weights file:")
+    for key in weights.keys():
+        print(key)
+
     return weights
+
+
 
 def summarization_stage(model, idx):
     logits, cache = model.forward(idx)
@@ -166,6 +197,37 @@ def main():
     model = Transformer(args.vocab_size, args.n_layer, args.n_head, args.n_embd, args.block_size)
 
     # Load weights
+    weights = load_model_weights(args.weights_path)
+    model.load_weights(weights)
+
+    # Sample input: just a sequence of zeros
+    idx = np.zeros((1, 1), dtype=int)
+
+    # Summarization stage
+    next_token, cache = summarization_stage(model, idx)
+    idx = np.concatenate((idx, next_token[:, None]), axis=1)
+
+    # Generation stage
+    generated_sequence = generation_stage(model, idx, args.max_new_tokens, cache, args.block_size)
+    print("Generated sequence:", generated_sequence)
+
+if __name__ == "__main__":
+    main()
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--n_layer', type=int, default=12)
+    parser.add_argument('--n_head', type=int, default=12)
+    parser.add_argument('--n_embd', type=int, default=768)
+    parser.add_argument('--block_size', type=int, default=1024)
+    parser.add_argument('--vocab_size', type=int, default=50304)
+    parser.add_argument('--max_new_tokens', type=int, default=50)
+    parser.add_argument('--weights_path', type=str, required=True)
+    args = parser.parse_args()
+
+    model = Transformer(args.vocab_size, args.n_layer, args.n_head, args.n_embd, args.block_size)
+
+    # Load weights and print the keys
     weights = load_model_weights(args.weights_path)
     model.load_weights(weights)
 
