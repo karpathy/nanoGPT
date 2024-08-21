@@ -155,29 +155,47 @@ class ConSmaxQuan(nn.Module):
             e_x = torch.exp(x)
             return e_x/dequantize(quantize(self.gamma,scale_gamma), scale_gamma)
 
-# Like softermax, but parameterized to permit exploration of bases greater than 2
+# Like softermax, but parameterized to permit exploration
 class Strongermax(nn.Module):
     """ Softmax with ability to increase to 'stronger' bases """
     def __init__(self, config, dim=-1):
         super().__init__()
         self.dim = dim
+
+        # Strongermax Params
         self.strength = config.strongermax_strength
         self.subtract_max = config.strongermax_use_xmax
+        self.xmax_guess = config.strongermax_xmax_guess
         self.sum_to_1 = config.strongermax_sum_to_1
         self.divisor = config.strongermax_divisor
+        self.div_by_seq_len = config.div_by_seq_len
+        self.overflow_recompute = config.strongermax_overflow_recompute
+
         # Input and Output Logging
         self.softmax_io_logging = config.softmax_io_logging
         print(self.softmax_io_logging)
         if self.softmax_io_logging:
             self.inputs = []
             self.outputs = []
-        self.div_by_seq_len = config.div_by_seq_len
 
     def forward(self, x):
         x_adj = None
+
         if self.subtract_max:
+            # Guessing correctly instead of subtracting real max can save a pass
+            # else we use real xmax
             max_x = x.max(dim=self.dim, keepdim=True).values
-            x_adj = x - max_x
+            if self.overflow_recompute:
+                if (torch.max(x - self.xmax_guess)) > (self.xmax_guess  + 88):
+                    print("popcorn")
+                    x_adj = x - max_x
+                else:
+                    x_adj = x - self.xmax_guess
+            else:
+                if self.xmax_guess:
+                    x_adj = x - self.xmax_guess
+                else:
+                    x_adj = x - max_x
         else:
             x_adj = x
 

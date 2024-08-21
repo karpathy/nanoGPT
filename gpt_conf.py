@@ -80,9 +80,11 @@ class GPTConfig:
 
     ## Strongermax options
     strongermax_strength: float = 2.0 # Softermax with option of 'stronger' (larger integer) bases
-    strongermax_sum_to_1: bool = False # Softermax with option of 'stronger' (larger integer) bases
-    strongermax_divisor: float = 1.0 # Softermax with option of 'stronger' (larger integer) bases
-    strongermax_use_xmax: bool = True # Softermax with option of 'stronger' (larger integer) bases
+    strongermax_sum_to_1: bool = False
+    strongermax_divisor: float = 1.0
+    strongermax_use_xmax: bool = True
+    strongermax_xmax_guess: float = 1.0
+    strongermax_overflow_recompute: bool = True
 
     ## ExpPolymax options
     exppolymax_use_euler_base: bool = True
