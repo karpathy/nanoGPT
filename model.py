@@ -643,38 +643,13 @@ class GPT(nn.Module):
                 block.attn.bias = block.attn.bias[:,:,:block_size,:block_size]
 
     @classmethod
-    def from_pretrained(cls, model_type, override_args=None):
+    def from_pretrained(cls, config, model_type):
         # assert model_type in {'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'}
-        override_args = override_args or {} # default to empty dict
-        # only dropout can be overridden see more notes below
-        assert all(k == 'dropout' for k in override_args)
-        from transformers import GPT2LMHeadModel, AutoModelForCausalLM
+        from transformers import GPT2LMHeadModel
+        
         print(f"loading weights from pretrained gpt: {model_type}")
-
-        # n_layer, n_head and n_embd are determined from model_type
-        config_args = {
-            'gpt2':         dict(n_layer=12, n_head=12, n_embd=768),  # 124M params
-            'gpt2-medium':  dict(n_layer=24, n_head=16, n_embd=1024), # 350M params
-            'gpt2-large':   dict(n_layer=36, n_head=20, n_embd=1280), # 774M params
-            'gpt2-xl':      dict(n_layer=48, n_head=25, n_embd=1600), # 1558M params
-        }[model_type]
-        print("forcing vocab_size=50257, block_size=1024, bias=True")
-        config_args['vocab_size'] = 50257 # always 50257 for GPT model checkpoints
-        config_args['block_size'] = 1024 # always 1024 for GPT model checkpoints
-        config_args['bias'] = True # always True for GPT model checkpoints
-        config_args['window_size'] = 128 # always None for GPT model checkpoints
-        # we can override the dropout rate, if desired
-        if 'dropout' in override_args:
-            print(f"overriding dropout rate to {override_args['dropout']}")
-            config_args['dropout'] = override_args['dropout']
+        
         # create a from-scratch initialized minGPT model
-        # TODO: pass more cmd line flags like "softmax" variant into this from_pretrained 
-        config = GPTConfig(**config_args)
-
-        # overriding our custom GPTConf presets of "rmsnorm" to "layernorm" for compatibility
-        config.norm_variant_attn = "layernorm"
-        config.norm_variant_output = "layernorm"
-
         model = GPT(config)
         model_hf = GPT2LMHeadModel.from_pretrained(model_type)
 
