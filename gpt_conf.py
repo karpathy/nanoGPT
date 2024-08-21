@@ -84,7 +84,7 @@ class GPTConfig:
     strongermax_divisor: float = 1.0
     strongermax_use_xmax: bool = True
     strongermax_xmax_guess: float = 1.0
-    strongermax_overflow_recompute: bool = True
+    strongermax_overflow_recompute: bool = False
 
     ## ExpPolymax options
     exppolymax_use_euler_base: bool = True

@@ -290,7 +290,7 @@ def parse_args():
     model_group.add_argument("--strongermax_divisor", type=float, default=1.0)
     model_group.add_argument('--strongermax_use_xmax', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument('--strongermax_xmax_guess', type=float, default=None)
-    model_group.add_argument('--strongermax_overflow_recompute', default=True, action=argparse.BooleanOptionalAction)
+    model_group.add_argument('--strongermax_overflow_recompute', default=False, action=argparse.BooleanOptionalAction)
 
     ### ExpPolymax Options
     model_group.add_argument('--exppolymax_use_euler_base', default=True, action=argparse.BooleanOptionalAction)
