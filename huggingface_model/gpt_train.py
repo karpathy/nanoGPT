@@ -1,8 +1,6 @@
-from transformers import Trainer, TrainingArguments, AutoModelForCausalLM, AutoTokenizer
+from transformers import Trainer, TrainingArguments
 from datasets import load_dataset
 import gpt_model
-from transformers import pipeline
-from torch.utils.data import DataLoader
 
 # Load the Wikitext dataset
 dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
@@ -52,10 +50,3 @@ trainer.train()
 
 gpt_model.pretrained_model.save_pretrained("gpt2-custom")
 gpt_model.tokenizer.save_pretrained("gpt2-custom")
-
-# model = AutoModelForCausalLM.from_pretrained("gpt2-custom")
-# tokenizer = AutoTokenizer.from_pretrained("gpt2-custom")
-
-generator = pipeline("text-generation", model=gpt_model.pretrained_model, tokenizer=gpt_model.tokenizer)
-output = generator("Once upon a time", max_length=50, num_return_sequences=1)
-print(output)
