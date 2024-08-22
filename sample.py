@@ -15,6 +15,7 @@ from torch.nn import functional as F
 from collections import OrderedDict
 
 from model import GPT, GPTConfig
+from variations.model_variations import model_variation_dictionary
 
 
 def parse_args():
@@ -135,7 +136,12 @@ def main():
 
         model.load_state_dict(state_dict, strict=False)
     else:
-        model = GPT.from_pretrained(args.init_from, dict(dropout=0.0))
+        # need to create a completely "default" GPTConfig and overwrite using model_variations
+        gptconf = GPTConfig()
+        variation_dict = model_variation_dictionary[args.init_from]
+        for k in variation_dict:
+            gptconf[k] = variation_dict[k]
+        model = GPT.from_pretrained(gptconf, model_type=args.init_from)
 
     model.eval()
     model.to(args.device)
