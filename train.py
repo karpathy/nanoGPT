@@ -14,14 +14,20 @@ from torchinfo import summary
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.graph_objects as go
-from rich import print
 import torch
 from torch.distributed import destroy_process_group, init_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
-from statistics_util.statistic_plots import initialize_statistics, plot_statistics, create_statistics
+from statistics_util.statistic_plots import (
+    initialize_statistics,
+    plot_statistics,
+    create_statistics,
+)
 
 from model import GPT, GPTConfig
+
+# Inference related imports
+import tiktoken
 
 def parse_args():
 
@@ -472,7 +478,7 @@ class Trainer:
             ckpt_path = os.path.join(self.args.out_dir, 'ckpt.pt')
             checkpoint = torch.load(ckpt_path, map_location=self.device)
             checkpoint_model_args = checkpoint['model_args']
-            for k in ['n_layer', 'n_head', 'n_kv_group', 'n_embd', 'block_size', 'bias', 'vocab_size', 'window_size', 'gate']:
+            for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
                 self.model_args[k] = checkpoint_model_args[k]
             self.load_data()
             gptconf = GPTConfig(**self.model_args)
