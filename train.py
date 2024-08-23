@@ -495,8 +495,7 @@ class Trainer:
                     state_dict[k[len('_orig_mod.'):]] = state_dict.pop(k)
             self.model.load_state_dict(state_dict)
             self.best_val_loss = checkpoint['best_val_loss']
-
-            exit()
+            
         elif self.args.init_from.startswith('gpt2'):
 
             assert self.args.init_from in model_variation_dictionary
@@ -515,8 +514,6 @@ class Trainer:
 
             self.model = GPT.from_pretrained(gptconf, model_type=self.args.gpt2_type)
             self.load_data()
-
-            exit()
 
         if self.args.block_size < self.model.config.block_size:
             self.model.crop_block_size(self.args.block_size)
