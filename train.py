@@ -47,6 +47,8 @@ def parse_args():
 
     # Sample args
     training_group.add_argument('--max_sample_tokens', default=None, type=int, help="If set, maximum number of tokens to sample and print after each validation loss")
+    training_group.add_argument('--sample_each_eval', default=False, action=argparse.BooleanOptionalAction, help="Produce sample even if the validation loss did not improve. Allows for testing what overtraining looks like.")
+    training_group.add_argument('--sample_start_tokens', default='\n', type=str)
 
     # Checkpoint args
     training_group.add_argument('--only_save_checkpoint_at_end', default=False, action=argparse.BooleanOptionalAction)
@@ -587,9 +589,8 @@ class Trainer:
         else:
             raise FileNotFoundError(f"Meta file not found at {meta_path}")
 
-    def sample_and_print(self, max_sample_tokens):
-        print("\nSampling after validation loss:")
-        start_ids = torch.tensor(self.encode("\n"), dtype=torch.long, device=self.device)[None, ...]
+    def sample_and_print(self, max_sample_tokens, start_tokens="\n"):
+        start_ids = torch.tensor(self.encode(start_tokens), dtype=torch.long, device=self.device)[None, ...]
         x = start_ids
         with torch.no_grad():
             for _ in range(max_sample_tokens):
@@ -601,6 +602,7 @@ class Trainer:
                 x = torch.cat((x, next_id), dim=1)
 
         sampled_text = self.decode(x[0].tolist())
+        print(f"Start tokens:\n{start_tokens}\n")
         print(f"Sampled text:\n{sampled_text}\n")
 
     def get_vocab_size_from_meta(self):
@@ -800,9 +802,13 @@ class Trainer:
                         print(f"saving checkpoint to {self.args.out_dir}")
                         # Save checkpoint
                         torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
-                        # Sample if set
-                        if self.args.max_sample_tokens:
-                            self.sample_and_print(self.args.max_sample_tokens)
+                    # Try new checkpoint if better val loss
+                    if self.args.max_sample_tokens:
+                        self.sample_and_print(self.args.max_sample_tokens, start_tokens=self.args.sample_start_tokens)
+                elif self.args.sample_each_eval:
+                    # Try model inference (e.g. exploring inference from overfitting)
+                    if self.args.max_sample_tokens:
+                        self.sample_and_print(self.args.max_sample_tokens, start_tokens=self.args.sample_start_tokens)
 
                 if self.args.patience is not None and num_steps_with_worse_loss >= self.args.patience:
                     print(f"Early Stopping: loss has not decreased in {self.args.patience + 1} steps")
@@ -886,7 +892,7 @@ class Trainer:
                     torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
                     # Sample if set
                     if self.args.max_sample_tokens:
-                        self.sample_and_print(self.args.max_sample_tokens)
+                        self.sample_and_print(self.args.max_sample_tokens, start_tokens=self.args.sample_start_tokens)
                 break
 
         if self.args.tensorboard_log:
