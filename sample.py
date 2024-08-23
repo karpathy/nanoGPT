@@ -94,11 +94,20 @@ def save_args(args, out_dir):
         json.dump(vars(args), f, indent=4)
 
 
+#TODO: Rename to reflect general purpose
 def save_quantized_data(state_dict, out_file):
     to_save = OrderedDict()
     for k, v in list(state_dict.items()):
-        if "mlp_act" in k or "attn_act" in k or k.endswith("quantized_bias") or k.endswith("bias_norm") or k.endswith("zero_point") or k.endswith("quantized_weight") or k.endswith("weight_norm"):
-            to_save[k] = v.cpu().numpy()
+        # if "mlp_act" in k or "attn_act" in k or k.endswith("quantized_bias") or k.endswith("bias_norm") or k.endswith("zero_point") or k.endswith("quantized_weight") or k.endswith("weight_norm"):
+        to_save[k] = v.cpu().numpy()
+
+    with open(f"{out_file}.pkl", 'wb') as f:
+        pickle.dump(to_save, f)
+
+def save_data(state_dict, out_file):
+    to_save = OrderedDict()
+    for k, v in list(state_dict.items()):
+        to_save[k] = v.cpu().numpy()
 
     with open(f"{out_file}.pkl", 'wb') as f:
         pickle.dump(to_save, f)
