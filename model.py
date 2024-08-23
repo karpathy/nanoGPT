@@ -678,7 +678,7 @@ class GPT(nn.Module):
                     sd[key].copy_(sd_hf[key].t())
             elif key.endswith('attn.c_attn.weight') or key.endswith('attn.c_attn.bias'):
                 # split into c_attn_q/k/v
-                q, k, v  = sd_hf[key].split(config.n_embd, dim=-1)
+                q, k, v  = sd_hf[key].t().split(config.n_embd, dim=0)
                 q_key_str = key.replace("c_attn", "c_attn_q")
                 k_key_str = key.replace("c_attn", "c_attn_k")
                 v_key_str = key.replace("c_attn", "c_attn_v")

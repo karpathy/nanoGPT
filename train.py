@@ -495,23 +495,20 @@ class Trainer:
                     state_dict[k[len('_orig_mod.'):]] = state_dict.pop(k)
             self.model.load_state_dict(state_dict)
             self.best_val_loss = checkpoint['best_val_loss']
-            
+
         elif self.args.init_from.startswith('gpt2'):
 
-            assert self.args.init_from in model_variation_dictionary
-
-            # FIXME: delete the override args
-            # override_args = dict(dropout=self.args.dropout)
+            assert self.args.gpt2_type in model_variation_dictionary
 
             self.iter_num = 0 # for starting from scratch
             self.best_val_loss = 1e9 # really big number
 
-            gptconf = GPTConfig(**self.model_args)
-            variation_dict = model_variation_dictionary[self.args.init_from]
+            variation_dict = model_variation_dictionary[self.args.gpt2_type]
             # NOTE: the hierarchy of parameters goes: 1)variation_dict >> 2)cmd-line args >> 3)GPTConfig defaults
             for k in variation_dict:
-                gptconf[k] = variation_dict[k]
+                self.model_args[k] = variation_dict[k]
 
+            gptconf = GPTConfig(**self.model_args)
             self.model = GPT.from_pretrained(gptconf, model_type=self.args.gpt2_type)
             self.load_data()
 
