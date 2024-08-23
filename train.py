@@ -20,6 +20,7 @@ from torch.distributed import destroy_process_group, init_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 from statistics_util.statistic_plots import initialize_statistics, plot_statistics, create_statistics
+from variations.model_variations import model_variation_dictionary
 
 from model import GPT, GPTConfig
 
@@ -290,7 +291,7 @@ def parse_args():
 
     ### ExpPolymax Options
     model_group.add_argument('--exppolymax_use_euler_base', default=True, action=argparse.BooleanOptionalAction)
-    model_group.add_argument("--exppolymax_base", type=float, default="4")
+    model_group.add_argument("--exppolymax_base", type=float, default=4.0)
     model_group.add_argument("--exppolymax_y_intercept", type=float, default=1.0)
     model_group.add_argument("--exppolymax_power", type=float, default=2.0)
     model_group.add_argument("--exppolymax_divisor", type=float, default=1000.0)
@@ -464,48 +465,52 @@ class Trainer:
             self.model = GPT(gptconf)
             self.iter_num = 0 # for starting from scratch
             self.best_val_loss = 1e9 # really big number
-        elif self.args.init_from == 'resume':
-            ckpt_path = os.path.join(self.args.out_dir, 'ckpt.pt')
-            checkpoint = torch.load(ckpt_path, map_location=self.device)
+        elif self.args.init_from == 'resume' or self.args.init_from == 'prev_run':
+            if self.args.init_from == 'resume':
+                ckpt_path = os.path.join(self.args.out_dir, 'ckpt.pt')
+                checkpoint = torch.load(ckpt_path, map_location=self.device)
+                self.iter_num = checkpoint['iter_num']
+            else:
+                ckpt_path = os.path.join(self.args.prev_run_ckpt, 'ckpt.pt')
+                checkpoint = torch.load(ckpt_path, map_location=self.device)
+                self.iter_num = 0
+
+            # we should enforce that during resume training, the identical model args are used
             checkpoint_model_args = checkpoint['model_args']
-            for k in ['n_layer', 'n_head', 'n_kv_group', 'n_embd', 'block_size', 'bias', 'vocab_size', 'window_size', 'gate']:
-                self.model_args[k] = checkpoint_model_args[k]
+            self.model_args = checkpoint_model_args
+
+            # support for changing select params from resume (eg. for finetuning) based on cmd-line args entered (checks if diff than defaults)
+            altered_model_args = {action.dest: getattr(self.args, action.dest) for action in self.model_group._group_actions if action.default != getattr(self.args, action.dest)}
+            for k in altered_model_args:
+                self.model_args[k] = altered_model_args[k]
+
             self.load_data()
             gptconf = GPTConfig(**self.model_args)
             self.model = GPT(gptconf)
-            ## TODO: Add means here to udpate the resume for: block size (finetune for longer context), rotary type, rope length, softmax type, etc.
+
             ## TODO: Add ability here to swap WTE factors.
             state_dict = checkpoint['model']
             for k,v in list(state_dict.items()):
                 if k.startswith('_orig_mod.'):
                     state_dict[k[len('_orig_mod.'):]] = state_dict.pop(k)
             self.model.load_state_dict(state_dict)
-            self.iter_num = checkpoint['iter_num']
             self.best_val_loss = checkpoint['best_val_loss']
+
         elif self.args.init_from.startswith('gpt2'):
-            override_args = dict(dropout=self.args.dropout)
+
+            assert self.args.gpt2_type in model_variation_dictionary
+
             self.iter_num = 0 # for starting from scratch
             self.best_val_loss = 1e9 # really big number
-            self.model = GPT.from_pretrained(self.args.gpt2_type, override_args)
-            for k in ['n_layer', 'n_head', 'n_kv_group', 'n_embd', 'block_size', 'bias', 'vocab_size']:
-                self.model_args[k] = getattr(self.model.config, k)
-            self.load_data()
-        elif self.args.init_from == 'prev_run':
-            ckpt_path = os.path.join(self.args.prev_run_ckpt, 'ckpt.pt')
-            checkpoint = torch.load(ckpt_path, map_location=self.device)
-            checkpoint_model_args = checkpoint['model_args']
-            for k in ['n_layer', 'n_head', 'n_kv_group', 'n_embd', 'block_size', 'bias', 'vocab_size', 'window_size', 'gate']:
-                self.model_args[k] = checkpoint_model_args[k]
-            self.load_data()
+
+            variation_dict = model_variation_dictionary[self.args.gpt2_type]
+            # NOTE: the hierarchy of parameters goes: 1)variation_dict >> 2)cmd-line args >> 3)GPTConfig defaults
+            for k in variation_dict:
+                self.model_args[k] = variation_dict[k]
+
             gptconf = GPTConfig(**self.model_args)
-            self.model = GPT(gptconf)
-            state_dict = checkpoint['model']
-            for k,v in list(state_dict.items()):
-                if k.startswith('_orig_mod.'):
-                    state_dict[k[len('_orig_mod.'):]] = state_dict.pop(k)
-            self.model.load_state_dict(state_dict)
-            self.iter_num = 0
-            self.best_val_loss = checkpoint['best_val_loss']
+            self.model = GPT.from_pretrained(gptconf, model_type=self.args.gpt2_type)
+            self.load_data()
 
         if self.args.block_size < self.model.config.block_size:
             self.model.crop_block_size(self.args.block_size)
