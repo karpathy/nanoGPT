@@ -13,17 +13,24 @@ from model_info_util.model_info import print_summary, print_module_structure, pr
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.graph_objects as go
-from rich import print
 import torch
 from torch.distributed import destroy_process_group, init_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
-from statistics_util.statistic_plots import initialize_statistics, plot_statistics, create_statistics
+from statistics_util.statistic_plots import (
+    initialize_statistics,
+    plot_statistics,
+    create_statistics,
+)
 from variations.model_variations import model_variation_dictionary
 
 from model import GPT, GPTConfig
 
+# Inference related imports
+import tiktoken
+
 def parse_args():
+
     parser = argparse.ArgumentParser()
 
     # argparse groups
@@ -37,6 +44,11 @@ def parse_args():
     training_group.add_argument('--log_interval', default=10, type=int)
     training_group.add_argument('--eval_iters', default=200, type=int)
     training_group.add_argument('--eval_only', default=False, action=argparse.BooleanOptionalAction)
+
+    # Sample args
+    training_group.add_argument('--max_sample_tokens', default=None, type=int, help="If set, maximum number of tokens to sample and print after each validation loss")
+    training_group.add_argument('--sample_each_eval', default=False, action=argparse.BooleanOptionalAction, help="Produce sample even if the validation loss did not improve. Allows for testing what overtraining looks like.")
+    training_group.add_argument('--sample_start_tokens', default='\n', type=str)
 
     # Checkpoint args
     training_group.add_argument('--only_save_checkpoint_at_end', default=False, action=argparse.BooleanOptionalAction)
@@ -562,6 +574,45 @@ class Trainer:
             import wandb
             self.args.csv_name = wandb_run_name
             wandb.init(project=self.args.wandb_project, name=self.args.wandb_run_name, config=self.args)
+        self.load_tokenizer()
+
+    def load_tokenizer(self):
+        meta_path = os.path.join('data', self.args.dataset, 'meta.pkl')
+        if os.path.exists(meta_path):
+            with open(meta_path, 'rb') as f:
+                meta = pickle.load(f)
+            if 'tokenizer' in meta and meta['tokenizer'] == 'tiktoken':
+                enc = tiktoken.get_encoding(meta['tiktoken_encoding'])
+                print(f"Using tiktoken encoding: {meta['tiktoken_encoding']}")
+                self.encode = lambda s: enc.encode(s, allowed_special={""})
+                self.decode = lambda l: enc.decode(l)
+            elif 'tokenizer' in meta and meta['tokenizer'] == 'sentencepiece':
+                self.separator_token = "▁"
+                self.stoi, self.itos = meta['stoi'], meta['itos']
+                self.encode = lambda s: [self.stoi[c] for c in s]
+                self.decode = lambda l: ''.join([self.itos[i] for i in l])
+            else:
+                self.stoi, self.itos = meta['stoi'], meta['itos']
+                self.encode = lambda s: [self.stoi[c] for c in s]
+                self.decode = lambda l: ''.join([self.itos[i] for i in l])
+        else:
+            raise FileNotFoundError(f"Meta file not found at {meta_path}")
+
+    def sample_and_print(self, max_sample_tokens, start_tokens="\n"):
+        start_ids = torch.tensor(self.encode(start_tokens), dtype=torch.long, device=self.device)[None, ...]
+        x = start_ids
+        with torch.no_grad():
+            for _ in range(max_sample_tokens):
+                x_cond = x if x.size(1) <= self.args.block_size else x[:, -self.args.block_size:]
+                logits, _ = self.model(x_cond)
+                logits = logits[:, -1, :]
+                probs = torch.softmax(logits, dim=-1)
+                next_id = torch.multinomial(probs, num_samples=1)
+                x = torch.cat((x, next_id), dim=1)
+
+        sampled_text = self.decode(x[0].tolist())
+        print(f"Start tokens:\n{start_tokens}\n")
+        print(f"Sampled text:\n{sampled_text}\n")
 
     def get_vocab_size_from_meta(self):
         # Data loader
@@ -772,6 +823,14 @@ class Trainer:
                         print(f"saving checkpoint to {self.args.out_dir}")
                         # Save checkpoint
                         torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
+                    # Try new checkpoint if better val loss
+                    if self.args.max_sample_tokens:
+                        self.sample_and_print(self.args.max_sample_tokens, start_tokens=self.args.sample_start_tokens)
+                elif self.args.sample_each_eval:
+                    # Try model inference (e.g. exploring inference from overfitting)
+                    if self.args.max_sample_tokens:
+                        self.sample_and_print(self.args.max_sample_tokens, start_tokens=self.args.sample_start_tokens)
+
                 if self.args.patience is not None and num_steps_with_worse_loss >= self.args.patience:
                     print(f"Early Stopping: loss has not decreased in {self.args.patience + 1} steps")
                     break
@@ -851,6 +910,9 @@ class Trainer:
                     }
                     print(f"saving checkpoint to {self.args.out_dir}")
                     torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
+                    # Sample if set
+                    if self.args.max_sample_tokens:
+                        self.sample_and_print(self.args.max_sample_tokens, start_tokens=self.args.sample_start_tokens)
                 break
 
         if self.args.plot_statistics:
