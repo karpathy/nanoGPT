@@ -12,8 +12,8 @@ from rich.table import Table
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run experiments based on a json configuration file.")
-    parser.add_argument("--config", type=str, required=True, help="Path to the configuration JSON file.")
-    parser.add_argument("--output_dir", type=str, default="out", help="Directory to place the set of output checkpoints.")
+    parser.add_argument('-c', "--config", type=str, required=True, help="Path to the configuration JSON file.")
+    parser.add_argument('-o', "--output_dir", type=str, default="out", help="Directory to place the set of output checkpoints.")
     parser.add_argument("--csv_ckpt_dir", type=str, default="", help="Directory to place the set of csv checkpoints in csv_logs.")
     parser.add_argument("--prefix", type=str, default='', help="Optional prefix for tensorboard_run_name and out_dir.")
     parser.add_argument("--add_names", action="store_true", help="Include names of values of the configuration parameters in addition to values (may cause too long a file name).")

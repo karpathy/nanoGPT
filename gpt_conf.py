@@ -18,6 +18,11 @@ class GPTConfig:
     moe_top_k: int = 2
     moe_router_scheme: str = "softmax"
 
+    # Logging options
+    softmax_io_logging: bool = False
+    consmax_beta_gamma_logging: bool = False
+    plot_statistics: bool = False
+
     # Training options
     ## Gradient Checkpointing - More memory efficient (can do long contexts), but is slower
     use_gradient_checkpointing: bool = False
@@ -49,10 +54,13 @@ class GPTConfig:
     ## ConSmax Options
     consmax_initial_beta: float = 2.0 # beta adjustment
     consmax_initial_gamma: float = 100.0 # denominator adjustment
-    consmax_use_euler_base: bool = True # use 'e' as base for ConSmax, default
     consmax_base: float = 2.0 # base to utilize for ConSmax
+    consmax_use_euler_base: bool = True # use 'e' as base for ConSmax, default
 
-    ## SaturatingConSmax special options (otherwise same as ConSmax)
+    ## ConSmaxV2 Special Options
+    consmax_per_head: bool = True # different beta gamma per head
+
+    ## SaturatingConSmax Special options (otherwise same as ConSmax)
     consmax_saturation: float = 11.0 # for SaturatingConSmax saturation point
     consmax_learnable_beta: bool = True
     consmax_learnable_gamma: bool = True
@@ -72,9 +80,11 @@ class GPTConfig:
 
     ## Strongermax options
     strongermax_strength: float = 2.0 # Softermax with option of 'stronger' (larger integer) bases
-    strongermax_sum_to_1: bool = False # Softermax with option of 'stronger' (larger integer) bases
-    strongermax_divisor: float = 1.0 # Softermax with option of 'stronger' (larger integer) bases
-    strongermax_use_xmax: bool = True # Softermax with option of 'stronger' (larger integer) bases
+    strongermax_sum_to_1: bool = False
+    strongermax_divisor: float = 1.0
+    strongermax_use_xmax: bool = True
+    strongermax_xmax_guess: float = 1.0
+    strongermax_overflow_recompute: bool = False
 
     ## ExpPolymax options
     exppolymax_use_euler_base: bool = True
@@ -137,7 +147,7 @@ class GPTConfig:
     linear_std_init: float= 0.02
 
     # Quantizations
-    
+
     ## Embedding Quantizations
     quantize_wte: bool = False
     quantize_wpe: bool = False
@@ -200,13 +210,13 @@ class GPTConfig:
         try:
             with open(filename, 'r') as json_file:
                 config_dict = json.load(json_file)
-            
+
             # Get all field names of the dataclass
             field_names = {f.name for f in fields(cls)}
-            
+
             # Filter the loaded dict to only include valid fields
             filtered_dict = {k: v for k, v in config_dict.items() if k in field_names}
-            
+
             # Create and return a new instance
             return cls(**filtered_dict)
         except FileNotFoundError:
@@ -218,14 +228,14 @@ class GPTConfig:
         except TypeError as e:
             print(f"Error: Invalid data in JSON file. {str(e)}")
             return None
-    
+
     def to_json(self, filename: str):
         """
         Function to save a GPTConfig object as json to be used for later model creation
-        
-        input: 
+
+        input:
         - fout: string = filename of saved config file
-        
+
         """
         conf_dict = asdict(self)
 

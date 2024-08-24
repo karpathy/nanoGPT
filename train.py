@@ -9,8 +9,7 @@ import shutil
 import sys
 import time
 
-from torchinfo import summary
-
+from model_info_util.model_info import print_summary, print_module_structure, print_model_blocks, print_model_tree
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.graph_objects as go
@@ -193,9 +192,9 @@ def parse_args():
 
     ### Whether activations should be saved
     model_group.add_argument("--store_activations", action=argparse.BooleanOptionalAction, default=False, help="whether the activations should be saved as a buffer and updated through training")
-    
-    ## Linear Attn Weight Quantization Precision and Method 
-    
+
+    ## Linear Attn Weight Quantization Precision and Method
+
     ### Default methods and precisions
     model_group.add_argument("--quantize_linear_method", type=str, default="affine_quant", choices=quant_methods, help="function used for linear quantization")
     model_group.add_argument("--quantize_linear_bits", type=int, default=8, help="number of bits for linear quantization")
@@ -240,6 +239,7 @@ def parse_args():
     softmax_variations = [
         "saturatingconsmax",
         "consmax",
+        "consmax_v2",
         "consmax_quan",
         "polymax",
         "relumax",
@@ -265,6 +265,9 @@ def parse_args():
     model_group.add_argument('--consmax_use_euler_base', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument("--consmax_base", type=float, default=2.0)
 
+    ### Special Options for ConSmaxV2
+    model_group.add_argument("--consmax_per_head", default=True, action=argparse.BooleanOptionalAction)
+
     ### Special Options for SaturatingConSmax
     model_group.add_argument("--consmax_saturation", type=float, default=11.0, help="point where we transition from consmax to linear saturatingconsmax, defaults to 11 to approximate e^x sat for fp16")
     model_group.add_argument('--consmax_learnable_beta', default=True, action=argparse.BooleanOptionalAction)
@@ -288,6 +291,8 @@ def parse_args():
     model_group.add_argument('--strongermax_sum_to_1', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument("--strongermax_divisor", type=float, default=1.0)
     model_group.add_argument('--strongermax_use_xmax', default=True, action=argparse.BooleanOptionalAction)
+    model_group.add_argument('--strongermax_xmax_guess', type=float, default=None)
+    model_group.add_argument('--strongermax_overflow_recompute', default=False, action=argparse.BooleanOptionalAction)
 
     ### ExpPolymax Options
     model_group.add_argument('--exppolymax_use_euler_base', default=True, action=argparse.BooleanOptionalAction)
@@ -340,6 +345,12 @@ def parse_args():
     logging_group.add_argument('--timestamp', default='', type=str)
     logging_group.add_argument('--save_nan_checkpoint', default=False, action=argparse.BooleanOptionalAction)
 
+    # Module And Parameter Logging and Plots of Summary Statistics
+    model_group.add_argument('--softmax_io_logging', default=False, action=argparse.BooleanOptionalAction, help="logs inputs and outputs of supported softmaxes")
+    model_group.add_argument('--consmax_beta_gamma_logging', default=False, action=argparse.BooleanOptionalAction, help="logs beta and gamma")
+    logging_group.add_argument('--create_statistics', default=False, action=argparse.BooleanOptionalAction)
+    logging_group.add_argument('--plot_statistics', default=False, action=argparse.BooleanOptionalAction)
+
     # CSV logging
     logging_group.add_argument('--csv_log', default=True, action=argparse.BooleanOptionalAction)
     logging_group.add_argument('--csv_dir', default='csv_logs', type=str)
@@ -360,19 +371,13 @@ def parse_args():
     logging_group.add_argument('--save_config_json', type=str, help="Option to save model parameters as new config json file")
 
     # Visualization args
-    logging_group.add_argument('--statistic', choices=[
-    'input_mean', 'input_median', 'input_stdev', 'input_max', 'input_min',
-    'output_mean', 'output_median', 'output_stdev', 'output_max', 'output_min', 'all_stats', 'input_all','output_all'
-     ], default='input_mean', help='Select one or all statistics to display, e.g., --statistic input_min, or --statistic all_stats')
-    logging_group.add_argument('--graph_type', choices=[
-    "heatmap", "plot", "boxplot", "all"
-     ], default='no_graph', help='Select one of the graph types to display, e.g., --graph_type heatmap, or --graph_type plot')
+    logging_group.add_argument('--statistic', choices=[ 'input_mean', 'input_median', 'input_stdev', 'input_max', 'input_min', 'output_mean', 'output_median', 'output_stdev', 'output_max', 'output_min', 'all_stats', 'input_all','output_all' ], default='input_mean', help='Select one or all statistics to display, e.g., --statistic input_min, or --statistic all_stats')
+    logging_group.add_argument('--graph_type', choices=[ "heatmap", "plot", "boxplot", "all" ], default='no_graph', help='Select one of the graph types to display, e.g., --graph_type heatmap, or --graph_type plot')
     logging_group.add_argument('--box_plot_interval', default=1000, type=int, help='Instead of using mean/median/stdev statistics, create box plot of all input/output values at certain intervals of iteration')
-    logging_group.add_argument('--box_plot_statistic', choices=['input', 'output', 'all'],
-     default='', help='Select input or output statistic to display in boxplot')
+    logging_group.add_argument('--box_plot_statistic', choices=['input', 'output', 'all'], default='', help='Select input or output statistic to display in boxplot')
 
     # Model Parameter Distribution
-    logging_group.add_argument('--print_block_summary', default=False, action=argparse.BooleanOptionalAction)
+    logging_group.add_argument('--print_model_info', default=True, action=argparse.BooleanOptionalAction)
 
     args = parser.parse_args()
 
@@ -519,12 +524,11 @@ class Trainer:
         self.model.to(self.device)
 
         # Print the model summary
-        summary(self.model)
-
-        if self.args.print_block_summary:
-            for idx, block in enumerate(self.model.transformer.h):
-                print(f"Summary for Block {idx + 1}:")
-                summary(block)
+        if self.args.print_model_info:
+            print_summary(self.model)
+            print_model_blocks(self.model)
+            print_module_structure(self.model)
+            print_model_tree(self.model, print_params=True)
 
         # Optimizer
         self.scaler = torch.cuda.amp.GradScaler(enabled=(self.args.dtype == 'float16'))
@@ -670,10 +674,22 @@ class Trainer:
             writer.writerow(args)
 
 
-    def log_gamma_beta(self, gamma, beta, iter_num, layer_num):
+    def log_gamma_beta(self, gamma, beta, iter_num, layer_num, head_num=None):
         if self.args.tensorboard_log:
-            self.writer.add_scalar( "gamma_" + str(layer_num), gamma, iter_num)
-            self.writer.add_scalar( "beta_" + str(layer_num), beta, iter_num)
+            if head_num:
+                self.writer.add_scalars(
+                        "gammas",
+                        {"gamma_L" + str(layer_num) + "_H" + head_num: gamma},
+                        iter_num
+                        )
+                self.writer.add_scalars(
+                        "betas",
+                        {"beta_L" + str(layer_num) + "_H" + head_num: beta},
+                        iter_num
+                        )
+            else:
+                self.writer.add_scalar( "gamma_L" + str(layer_num), gamma, iter_num)
+                self.writer.add_scalar( "beta_L" + str(layer_num), beta, iter_num)
 
         if self.args.wandb_log and self.master_process:
             import wandb
@@ -758,7 +774,6 @@ class Trainer:
                         torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
                 if self.args.patience is not None and num_steps_with_worse_loss >= self.args.patience:
                     print(f"Early Stopping: loss has not decreased in {self.args.patience + 1} steps")
-                    plot_statistics(self.args, self.stats, graph_y_labels)
                     break
                 if losses['val'] > self.best_val_loss:
                     num_steps_with_worse_loss += 1
@@ -814,7 +829,8 @@ class Trainer:
                 self.log_metrics_non_validation(lossf, running_mfu, self.iter_num)
 
 
-            create_statistics(self, graph_y_labels)
+            if self.args.create_statistics:
+                create_statistics(self, graph_y_labels)
 
 
             self.iter_num += 1
@@ -822,7 +838,6 @@ class Trainer:
 
             # End of training actions
             if self.iter_num > self.args.max_iters:
-                plot_statistics(self.args, self.stats, graph_y_labels)
                 if self.args.only_save_checkpoint_at_end:
                     checkpoint = {
                         'model': self.raw_model.state_dict(),
@@ -837,6 +852,9 @@ class Trainer:
                     print(f"saving checkpoint to {self.args.out_dir}")
                     torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
                 break
+
+        if self.args.plot_statistics:
+            plot_statistics(self.args, self.stats, graph_y_labels)
 
         if self.args.tensorboard_log:
             self.writer.flush()
