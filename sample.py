@@ -104,15 +104,6 @@ def save_quantized_data(state_dict, out_file):
     with open(f"{out_file}.pkl", 'wb') as f:
         pickle.dump(to_save, f)
 
-def save_data(state_dict, out_file):
-    to_save = OrderedDict()
-    for k, v in list(state_dict.items()):
-        to_save[k] = v.cpu().numpy()
-
-    with open(f"{out_file}.pkl", 'wb') as f:
-        pickle.dump(to_save, f)
-
-
 def main():
     args = parse_args()
 
