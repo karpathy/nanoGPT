@@ -1,0 +1,28 @@
+[
+  {
+    "max_iters": ["3500"],
+    "n_layer": ["12"],
+    "n_head": ["6"],
+    "n_embd": ["384"],
+    "block_size":["256"],
+    "device": ["cuda"],
+    "dtype": ["bfloat16"],
+    "dataset": ["shakespeare_char"],
+    "use_gradient_checkpointing": [true],
+    "use_rotary_embeddings": [false],
+    "use_abs_pos_embeddings": [true],
+    "compile": [false],
+    "softmax_variant_attn": ["consmax_v2"],
+    "consmax_initial_beta": ["2.5"],
+    "consmax_initial_gamma": ["100.0"],
+    "softmax_io_logging": [true],
+    "create_statistics": [true],
+    "plot_statistics": [true],
+    "consmax_per_head": {
+      "conditions": [["softmax_variant_attn", "consmax_v2"]],
+      "options": [true, false]
+    },
+    "use_post_ln": [true, false]
+  }
+]
+
