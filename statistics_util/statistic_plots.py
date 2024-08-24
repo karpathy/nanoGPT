@@ -193,32 +193,31 @@ def create_statistics(self, graph_y_labels):
                 flattened = i_head.view(-1)
 
                 ## Calculate statistics
-                # i_means.append(torch.nanmean(flattened).item())
-                # i_medians.append(torch.nanmedian(flattened).item())
+                i_means.append(torch.nanmean(flattened).item())
+                i_medians.append(torch.nanmedian(flattened).item())
 
                 # Standard deviation, ignoring NaNs
                 mask = ~torch.isnan(i_head)
-                # i_stdevs.append(torch.std(i_head[mask]).item())
-                # i_sum_vals.append(torch.sum(i_head[mask]).item())
+                i_stdevs.append(torch.std(i_head[mask]).item())
+                i_sum_vals.append(torch.sum(i_head[mask]).item())
 
                 if self.iter_num % self.args.box_plot_interval == 0 and (self.args.box_plot_statistic == "all" or self.args.box_plot_statistic == "input"):
                     box_plot_input_data.append(i_head[mask].detach().numpy())
 
                 # Max, temporarily replacing NaNs with -inf for calculation
                 i_max_values.append(torch.max(torch.where(torch.isnan(i_head), torch.tensor(float('-inf')), i_head)).item())
-                # i_min_values.append(torch.min(torch.where(torch.isnan(i_head), torch.tensor(float('inf')), i_head)).item())
+                i_min_values.append(torch.min(torch.where(torch.isnan(i_head), torch.tensor(float('inf')), i_head)).item())
                 # Denominator computation for i_head
-                # exp_flattened = torch.exp(i_head[mask])
-                # sum = torch.sum(exp_flattened)
-                # denominator.append(sum.item())
+                exp_flattened = torch.exp(i_head[mask])
+                sum = torch.sum(exp_flattened)
+                denominator.append(sum.item())
 
-                # # Append statistic to the input list of each head in each layer
-                # self.stats['mean'][layer][i].append(torch.nanmean(flattened).item())
-                # self.stats['median'][layer][i].append(torch.nanmedian(flattened).item())
-                # self.stats['stdev'][layer][i].append(torch.std(i_head[mask]).item())
+                ## Append statistic to the input list of each head in each layer
+                self.stats['mean'][layer][i].append(torch.nanmean(flattened).item())
+                self.stats['median'][layer][i].append(torch.nanmedian(flattened).item())
+                self.stats['stdev'][layer][i].append(torch.std(i_head[mask]).item())
                 self.stats['max'][layer][i].append(torch.max(torch.where(torch.isnan(i_head), torch.tensor(float('-inf')), i_head)).item())
-                # self.stats['min'][layer][i].append(torch.min(torch.where(torch.isnan(i_head), torch.tensor(float('inf')), i_head)).item())
-
+                self.stats['min'][layer][i].append(torch.min(torch.where(torch.isnan(i_head), torch.tensor(float('inf')), i_head)).item())
 
 
             outputs_location = f"transformer.h[{layer}].attn.softmax_layer_attn.outputs"
@@ -233,26 +232,26 @@ def create_statistics(self, graph_y_labels):
 
                 # Step 4: Calculate statistics
                 ## Calculate statistics
-                # o_means.append(torch.nanmean(flattened).item())
-                # o_medians.append(torch.nanmedian(flattened).item())
+                o_means.append(torch.nanmean(flattened).item())
+                o_medians.append(torch.nanmedian(flattened).item())
                 # Standard deviation, ignoring NaNs
                 mask = ~torch.isnan(o_head)
-                # o_stdevs.append(torch.std(o_head[mask]).item())
-                # o_sum_vals.append(torch.sum(o_head[mask]).item())
+                o_stdevs.append(torch.std(o_head[mask]).item())
+                o_sum_vals.append(torch.sum(o_head[mask]).item())
 
                 if self.iter_num % self.args.box_plot_interval == 0 and (self.args.box_plot_statistic == "all" or self.args.box_plot_statistic == "output"):
                     box_plot_output_data.append(o_head[mask].detach().numpy())
 
                 # Max, temporarily replacing NaNs with -inf for calculation
-                # o_max_values.append(torch.max(torch.where(torch.isnan(o_head), torch.tensor(float('-inf')), o_head)).item())
-                # o_min_values.append(torch.min(torch.where(torch.isnan(o_head), torch.tensor(float('inf')), o_head)).item())
+                o_max_values.append(torch.max(torch.where(torch.isnan(o_head), torch.tensor(float('-inf')), o_head)).item())
+                o_min_values.append(torch.min(torch.where(torch.isnan(o_head), torch.tensor(float('inf')), o_head)).item())
 
                 # Append statistic to the output list of each head in each layer
-                # self.stats['o_mean'][layer][i].append(torch.nanmean(flattened).item())
-                # self.stats['o_median'][layer][i].append(torch.nanmedian(flattened).item())
-                # self.stats['o_stdev'][layer][i].append(torch.std(o_head[mask]).item())
-                # self.stats['o_max'][layer][i].append(torch.max(torch.where(torch.isnan(o_head), torch.tensor(float('-inf')), o_head)).item())
-                # self.stats['o_min'][layer][i].append(torch.min(torch.where(torch.isnan(o_head), torch.tensor(float('inf')), o_head)).item())
+                self.stats['o_mean'][layer][i].append(torch.nanmean(flattened).item())
+                self.stats['o_median'][layer][i].append(torch.nanmedian(flattened).item())
+                self.stats['o_stdev'][layer][i].append(torch.std(o_head[mask]).item())
+                self.stats['o_max'][layer][i].append(torch.max(torch.where(torch.isnan(o_head), torch.tensor(float('-inf')), o_head)).item())
+                self.stats['o_min'][layer][i].append(torch.min(torch.where(torch.isnan(o_head), torch.tensor(float('inf')), o_head)).item())
 
             #BETA GAMMA
             if self.args.softmax_variant_attn == 'consmax':
