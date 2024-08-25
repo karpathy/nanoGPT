@@ -209,8 +209,8 @@ class FIRE(nn.Module):
         pos_normalizer = pos_normalizer[:, None] + self.eps  # Ensure pos_normalizer is never zero
 
         # Use safe log operation
-        log_rel_distance = torch.log(abs_rel_distance * self.c + self.eps)
-        log_pos_normalizer = torch.log(torch.abs(self.c * pos_normalizer) + self.eps)
+        log_rel_distance = torch.log(abs_rel_distance * self.c + 1 + self.eps)
+        log_pos_normalizer = torch.log(torch.abs(self.c * pos_normalizer) + 1 + self.eps)
 
         normalized_distance = log_rel_distance / log_pos_normalizer
 
