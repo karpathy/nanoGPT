@@ -102,6 +102,7 @@
     "shared_fire_embeddings": true,
     "embedding_mean_init": 0.0,
     "embedding_std_init": 0.02,
+    "fire_log_bias": 1.0,
     "softmax_variant_attn": "softmax",
     "softmax_variant_output": "softmax",
     "consmax_initial_beta": 2.5,

@@ -105,6 +105,9 @@ class GPTConfig:
     embedding_mean_init: float= 0.0
     embedding_std_init: float= 0.02
 
+    ## FIRE Options (Functional Interpolation for Relative Positional Encoding)
+    fire_log_bias: float = 1.0
+
     # Structuring Options, remember to compile the model
     use_post_ln: bool = True
 

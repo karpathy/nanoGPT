@@ -52,7 +52,7 @@ def create_shared_param_group(layer_type, config):
     # if attn layer check if using shared fire embeddings
     fire_pos_enc = None
     if layer_type == "attn" and config.shared_fire_embeddings:
-        fire_pos_enc = FIRE(num_heads=config.n_head)
+        fire_pos_enc = FIRE(config, num_heads=config.n_head)
 
     for i in range (config.n_layer):
 
@@ -158,7 +158,7 @@ class CausalSelfAttention(nn.Module):
                 self.fire_pos_enc = fire_pos_enc
                 print("shared fire")
             else:
-                self.fire_pos_enc = FIRE(num_heads=config.n_head)
+                self.fire_pos_enc = FIRE(config, num_heads=config.n_head)
                 print("indiv fire")
 
         # Rotary Positional Embeddings

@@ -233,6 +233,9 @@ def parse_args():
     model_group.add_argument( "--embedding_mean_init", type=float, default=0.0)
     model_group.add_argument( "--embedding_std_init", type=float, default=0.02)
 
+    ## FIRE Options (Functional Interpolation for Relative Positional Encoding)
+    model_group.add_argument( "--fire_log_bias", type=float, default=1.0)
+
     # SOFTMAX VARIATIONS
 
     softmax_variations = [

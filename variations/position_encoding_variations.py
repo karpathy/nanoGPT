@@ -186,7 +186,7 @@ class FIRE(nn.Module):
     Arxiv Paper Source: https://arxiv.org/pdf/2310.04418.pdf
     """
 
-    def __init__(self, num_heads=12, mlp_width=32, init_c=0.1, init_L=512.0, eps=1e-6):
+    def __init__(self, config, num_heads=12, mlp_width=32, init_c=0.1, init_L=512.0, eps=1e-6):
         super(FIRE, self).__init__()
         self.mlp = nn.Sequential(
             nn.Linear(1, mlp_width), nn.ReLU(), nn.Linear(mlp_width, num_heads)
@@ -195,6 +195,7 @@ class FIRE(nn.Module):
         self.init_L = nn.Parameter(torch.tensor(init_L, dtype=torch.float), requires_grad=False)
         self.L_multiplier = nn.Parameter(torch.tensor(1.0, dtype=torch.float))
         self.eps = eps
+        self.fire_log_bias = config.fire_log_bias
 
     def forward(self, x: torch.Tensor):
         seq_length = x.size(1)
@@ -209,8 +210,8 @@ class FIRE(nn.Module):
         pos_normalizer = pos_normalizer[:, None] + self.eps  # Ensure pos_normalizer is never zero
 
         # Use safe log operation
-        log_rel_distance = torch.log(abs_rel_distance * self.c + 1 + self.eps)
-        log_pos_normalizer = torch.log(torch.abs(self.c * pos_normalizer) + 1 + self.eps)
+        log_rel_distance = torch.log(abs_rel_distance * self.c + self.fire_log_bias + self.eps)
+        log_pos_normalizer = torch.log(torch.abs(self.c * pos_normalizer) + self.fire_log_bias + self.eps)
 
         normalized_distance = log_rel_distance / log_pos_normalizer
 
