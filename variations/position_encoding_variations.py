@@ -186,13 +186,30 @@ class FIRE(nn.Module):
     Arxiv Paper Source: https://arxiv.org/pdf/2310.04418.pdf
     """
 
-    def __init__(self, config, num_heads=12, mlp_width=32, init_c=0.1, init_L=512.0, eps=1e-6):
+    def __init__(self, config, num_heads=12, eps=1e-6):
         super(FIRE, self).__init__()
-        self.mlp = nn.Sequential(
-            nn.Linear(1, mlp_width), nn.ReLU(), nn.Linear(mlp_width, num_heads)
-        )
-        self.c = nn.Parameter(torch.tensor(init_c, dtype=torch.float))
-        self.init_L = nn.Parameter(torch.tensor(init_L, dtype=torch.float), requires_grad=False)
+
+        if config.fire_num_hidden_layers >= 1:
+            # First linear layer
+            mlp_layers = []
+            mlp_layers.append(nn.Linear(1, config.fire_mlp_width))
+            
+            for _ in range(config.fire_num_hidden_layers - 1):
+                mlp_layers.append(nn.ReLU())
+                mlp_layers.append(nn.Linear(config.fire_mlp_width, config.fire_mlp_width))
+            
+            mlp_layers.append(nn.ReLU())
+            # Final linear layer
+            mlp_layers.append(nn.Linear(config.fire_mlp_width, num_heads))
+
+            self.mlp = nn.Sequential(*mlp_layers)
+        elif config.fire_num_hidden_layers == 0:
+            self.mlp = nn.Sequential(
+                nn.Linear(1, num_heads)
+            )
+
+        self.c = nn.Parameter(torch.tensor(config.fire_init_c, dtype=torch.float))
+        self.init_L = nn.Parameter(torch.tensor(config.fire_init_L, dtype=torch.float), requires_grad=False)
         self.L_multiplier = nn.Parameter(torch.tensor(1.0, dtype=torch.float))
         self.eps = eps
         self.fire_log_bias = config.fire_log_bias

@@ -107,6 +107,11 @@ class GPTConfig:
 
     ## FIRE Options (Functional Interpolation for Relative Positional Encoding)
     fire_log_bias: float = 1.0
+    fire_num_hidden_layers: int = 1
+    fire_mlp_width: int = 32
+    fire_init_c: float = 0.1
+    fire_init_L: float = 512.0
+    fire_outermost_sigma: bool = False
 
     # Structuring Options, remember to compile the model
     use_post_ln: bool = True
