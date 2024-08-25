@@ -4,3 +4,6 @@
 [submodule "modules/nanoGPT"]
 	path = modules/nanoGPT
 	url = https://github.com/karpathy/nanoGPT
+[submodule "modules/llm.c"]
+	path = modules/llm.c
+	url = https://github.com/karpathy/llm.c.git
