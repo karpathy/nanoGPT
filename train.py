@@ -234,7 +234,7 @@ def parse_args():
     model_group.add_argument( "--embedding_std_init", type=float, default=0.02)
 
     ## FIRE Options (Functional Interpolation for Relative Positional Encoding)
-    model_group.add_argument( "--fire_log_bias", type=float, default=1.0, help="bias in the function phi(x) = log(cx + bias)")
+    model_group.add_argument( "--fire_log_bias", type=float, default=1.0, help="bias in the function psi(x) = log(cx + bias)")
     model_group.add_argument( "--fire_num_hidden_layers", type=int, default=1, help="number of hidden layers (sigmas) in mlp in FIRE without counting outermost sigma")
     model_group.add_argument( "--fire_mlp_width", type=int, default=32, help="mlp_width: one hidden dimension of linear layers in mlp in FIRE")
     model_group.add_argument( "--fire_init_c", type=float, default=0.1, help="init_c: initial value of log transformation parameter c in FIRE")
