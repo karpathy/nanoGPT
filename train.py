@@ -21,6 +21,7 @@ import time
 import math
 import pickle
 from contextlib import nullcontext
+from functools import partial
 
 import numpy as np
 import torch
@@ -43,6 +44,8 @@ init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 wandb_log = False # disabled by default
 wandb_project = 'owt'
 wandb_run_name = 'gpt2' # 'run' + str(time.time())
+# csv logging
+csv_log = False # disabled by default. Requires wandb_log=True to work
 # data
 dataset = 'openwebtext'
 gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
@@ -72,6 +75,7 @@ mup_enabled = False # Whether to use muP. If False then all other mup variables 
 mup_width_multiplier = 1 # mup_width_multiplier = width / base_width where base_width is typically 256
 mup_input_alpha = 1 # Optional tunable multiplier applied to input embedding forward pass output
 mup_output_alpha = 1 # Optional tunable multiplier applied to output unembedding forward pass output
+mup_enable_coord_check_logging = False # If True will track the output.abs().mean() of various layers throughout training
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
@@ -232,7 +236,7 @@ def estimate_loss():
             with ctx:
                 logits, loss = model(X, Y)
             losses[k] = loss.item()
-        out[split] = losses.mean()
+        out[split] = losses.mean().item()
     model.train()
     return out
 
@@ -253,7 +257,12 @@ def get_lr(it):
 # logging
 if wandb_log and master_process:
     import wandb
-    wandb.init(project=wandb_project, name=wandb_run_name, config=config)
+    wandb_run = wandb.init(project=wandb_project, name=wandb_run_name, config=config)
+    def log(log_dict):
+        wandb_run.log(log_dict)
+    if csv_log:
+        from csv_logging import CSVLogWrapper
+        csv_logger = CSVLogWrapper(log, config=config, out_dir=out_dir)
 
 # training loop
 X, Y = get_batch('train') # fetch the very first batch
@@ -261,6 +270,7 @@ t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
+coord_check_dict = None
 while True:
 
     # determine and set the learning rate for this iteration
@@ -271,15 +281,25 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
+        # losses = {'train': 1, 'val': 1}
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
         if wandb_log:
-            wandb.log({
+            log_dict = {
                 "iter": iter_num,
                 "train/loss": losses['train'],
                 "val/loss": losses['val'],
                 "lr": lr,
                 "mfu": running_mfu*100, # convert to percentage
-            })
+            }
+            if mup_enabled and mup_enable_coord_check_logging and coord_check_dict is not None:
+                for key in coord_check_dict:
+                    log_dict[key + '_act_abs_mean'] = np.mean(coord_check_dict[key])
+
+            if csv_log:
+                csv_logger.log(log_dict)
+                csv_logger.step()
+            else:
+                log(log_dict)
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
             if iter_num > 0:
@@ -295,6 +315,29 @@ while True:
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
     if iter_num == 0 and eval_only:
         break
+
+    if mup_enabled and mup_enable_coord_check_logging:
+        coord_check_dict = {
+            'token_embedding': [],
+            'attn': [],
+            'mlp': [],
+            'lm_head': [],
+        }
+        def hook(module, input, output, key):
+            with torch.no_grad():
+                coord_check_dict[key].append(output.abs().mean().item())
+        coord_check_handles = []
+        for module_name, module in model.named_modules():
+            if module_name == 'transformer.wte':
+                coord_check_handles.append(module.register_forward_hook(partial(hook, key='token_embedding')))
+            elif module_name.endswith('.attn'):
+                coord_check_handles.append(module.register_forward_hook(partial(hook, key='attn')))
+            elif module_name.endswith('.mlp'):
+                coord_check_handles.append(module.register_forward_hook(partial(hook, key='mlp')))
+            elif module_name == 'lm_head':
+                coord_check_handles.append(module.register_forward_hook(partial(hook, key='lm_head')))
+    else:
+        coord_check_dict = None
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
@@ -336,6 +379,10 @@ while True:
         print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
     iter_num += 1
     local_iter_num += 1
+
+    if mup_enabled and mup_enable_coord_check_logging:
+        for handle in coord_check_handles:
+            handle.remove()
 
     # termination conditions
     if iter_num > max_iters:
