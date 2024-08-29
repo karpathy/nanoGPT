@@ -54,6 +54,7 @@ n_head = 12
 n_embd = 768
 dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
 bias = False # do we use bias inside LayerNorm and Linear layers?
+init_std = 0.02 # Initialization standard deviation for weights
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
 max_iters = 600000 # total number of training iterations
@@ -66,6 +67,11 @@ decay_lr = True # whether to decay the learning rate
 warmup_iters = 2000 # how many steps to warm up for
 lr_decay_iters = 600000 # should be ~= max_iters per Chinchilla
 min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
+# mup settings
+mup_enabled = False # Whether to use muP. If False then all other mup variables are ignored
+mup_width_multiplier = 1 # mup_width_multiplier = width / base_width where base_width is typically 256
+mup_input_alpha = 1 # Optional tunable multiplier applied to input embedding forward pass output
+mup_output_alpha = 1 # Optional tunable multiplier applied to output unembedding forward pass output
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
@@ -145,7 +151,10 @@ if os.path.exists(meta_path):
 
 # model init
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
-                  bias=bias, vocab_size=None, dropout=dropout) # start with model_args from command line
+                  bias=bias, vocab_size=None, dropout=dropout, mup_enabled=mup_enabled,
+                  mup_width_multiplier=mup_width_multiplier, mup_input_alpha=mup_input_alpha,
+                  mup_output_alpha=mup_output_alpha) # start with model_args from command line
+
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -257,7 +266,7 @@ while True:
     # determine and set the learning rate for this iteration
     lr = get_lr(iter_num) if decay_lr else learning_rate
     for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
+        param_group['lr'] = lr * param_group.get('lr_scale', 1.0)
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
