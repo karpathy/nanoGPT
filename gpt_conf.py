@@ -30,6 +30,7 @@ class GPTConfig:
     # MLP Options
     use_parallel_mlp: bool = False
     mlp_variant: str = "mlp"
+    mlp_expansion_factor: int = 4
 
     ## KAN Option
     kan_poly_order: int = 3
