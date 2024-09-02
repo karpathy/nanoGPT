@@ -188,10 +188,11 @@ class FIRE(nn.Module):
 
     def __init__(self, config, num_heads=12, eps=1e-6):
         super(FIRE, self).__init__()
+        
+        mlp_layers = []
 
         if config.fire_num_hidden_layers >= 1:
             # First linear layer
-            mlp_layers = []
             mlp_layers.append(nn.Linear(1, config.fire_mlp_width))
             
             for _ in range(config.fire_num_hidden_layers - 1):
@@ -202,12 +203,13 @@ class FIRE(nn.Module):
             # Final linear layer
             mlp_layers.append(nn.Linear(config.fire_mlp_width, num_heads))
 
-            self.mlp = nn.Sequential(*mlp_layers)
         elif config.fire_num_hidden_layers == 0:
-            self.mlp = nn.Sequential(
-                nn.Linear(1, num_heads)
-            )
+            mlp_layers.append(nn.Linear(1, num_heads))
+        
+        if config.fire_outermost_sigma:
+            mlp_layers.append(nn.ReLU())
 
+        self.mlp = nn.Sequential(*mlp_layers)
         self.c = nn.Parameter(torch.tensor(config.fire_init_c, dtype=torch.float))
         self.init_L = nn.Parameter(torch.tensor(config.fire_init_L, dtype=torch.float), requires_grad=False)
         self.L_multiplier = nn.Parameter(torch.tensor(1.0, dtype=torch.float))
