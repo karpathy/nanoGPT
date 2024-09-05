@@ -10,4 +10,4 @@ __pycache__/
 input.txt
 env/
 venv/
-coord_check/*/out/
+coord_check/*/out/*
