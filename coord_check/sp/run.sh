@@ -37,6 +37,7 @@ do
         --backend='nccl' \
         --device='mps' \
         --dtype='float32' \
-        --compile=False
+        --compile=False \
+        --mup_enable_coord_check_logging=True
     done
 done

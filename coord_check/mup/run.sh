@@ -47,8 +47,3 @@ do
         --compile=False
     done
 done
-        # --wandb_project='owt' \
-        # --wandb_run_name='gpt2' \
-        # --warmup_iters=0 \
-        # --lr_decay_iters=10 \
-        # --min_lr=6e-5 \

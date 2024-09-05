@@ -213,11 +213,12 @@ class GPT(nn.Module):
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
-            logits = self.lm_head(x)
             if self.config.mup_enabled:
                 ### Begin muP code ###
-                logits *= self.config.mup_output_alpha / self.config.mup_width_multiplier
+                # Scaling `x` instead of `logits` allows coord check to log change
+                x *= self.config.mup_output_alpha / self.config.mup_width_multiplier
                 ### End muP code ###
+            logits = self.lm_head(x)
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position

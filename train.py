@@ -300,7 +300,7 @@ while True:
             "lr": lr,
             "mfu": running_mfu*100, # convert to percentage
         }
-        if mup_enabled and mup_enable_coord_check_logging and coord_check_dict is not None:
+        if mup_enable_coord_check_logging and coord_check_dict is not None:
             for key in coord_check_dict:
                 log_dict[key + '_act_abs_mean'] = np.mean(coord_check_dict[key])
         if wandb_log:
@@ -324,7 +324,7 @@ while True:
     if iter_num == 0 and eval_only:
         break
 
-    if mup_enabled and mup_enable_coord_check_logging:
+    if mup_enable_coord_check_logging:
         coord_check_dict = {
             'token_embedding': [],
             'attn': [],
@@ -388,7 +388,7 @@ while True:
     iter_num += 1
     local_iter_num += 1
 
-    if mup_enabled and mup_enable_coord_check_logging:
+    if mup_enable_coord_check_logging:
         for handle in coord_check_handles:
             handle.remove()
 
