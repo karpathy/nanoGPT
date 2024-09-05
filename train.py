@@ -39,13 +39,14 @@ log_interval = 1
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
+never_save_checkpoint = False # if True, never save a checkpoint
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = 'owt'
 wandb_run_name = 'gpt2' # 'run' + str(time.time())
 # csv logging
-csv_log = False # disabled by default. Requires wandb_log=True to work
+csv_log = False # If enabled, logs stats to a csv file
 # data
 dataset = 'openwebtext'
 gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
@@ -72,10 +73,14 @@ lr_decay_iters = 600000 # should be ~= max_iters per Chinchilla
 min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # mup settings
 mup_enabled = False # Whether to use muP. If False then all other mup variables are ignored
-mup_width_multiplier = 1 # mup_width_multiplier = width / base_width where base_width is typically 256
-mup_input_alpha = 1 # Optional tunable multiplier applied to input embedding forward pass output
-mup_output_alpha = 1 # Optional tunable multiplier applied to output unembedding forward pass output
+mup_disable_attention_scaling = False # Uses 1/sqrt(d_head) attn scaling instead of 1/d_head (Only needed for the step-by-step coord check in the blog)
+mup_disable_hidden_lr_scaling = False # Disables muP hidden LR adjustment (Only needed for the step-by-step coord check in the blog)
+mup_width_multiplier = 1.0 # mup_width_multiplier = width / base_width where base_width is typically 256
+mup_input_alpha = 1.0 # Optional tunable multiplier applied to input embedding forward pass output
+mup_output_alpha = 1.0 # Optional tunable multiplier applied to output unembedding forward pass output
 mup_enable_coord_check_logging = False # If True will track the output.abs().mean() of various layers throughout training
+# seed
+seed = 1337
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
@@ -87,6 +92,8 @@ config_keys = [k for k,v in globals().items() if not k.startswith('_') and isins
 exec(open('configurator.py').read()) # overrides from command line or config file
 config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
+
+assert not (never_save_checkpoint and always_save_checkpoint)
 
 # various inits, derived attributes, I/O setup
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
@@ -113,7 +120,7 @@ print(f"tokens per iteration will be: {tokens_per_iter:,}")
 
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
-torch.manual_seed(1337 + seed_offset)
+torch.manual_seed(seed + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
@@ -156,6 +163,8 @@ if os.path.exists(meta_path):
 # model init
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
                   bias=bias, vocab_size=None, dropout=dropout, mup_enabled=mup_enabled,
+                  mup_disable_attention_scaling=mup_disable_attention_scaling,
+                  mup_disable_hidden_lr_scaling=mup_disable_hidden_lr_scaling,
                   mup_width_multiplier=mup_width_multiplier, mup_input_alpha=mup_input_alpha,
                   mup_output_alpha=mup_output_alpha) # start with model_args from command line
 
@@ -255,13 +264,14 @@ def get_lr(it):
     return min_lr + coeff * (learning_rate - min_lr)
 
 # logging
-if wandb_log and master_process:
-    import wandb
-    wandb_run = wandb.init(project=wandb_project, name=wandb_run_name, config=config)
-    def log(log_dict):
-        wandb_run.log(log_dict)
+if master_process:
+    if wandb_log:
+        import wandb
+        wandb_run = wandb.init(project=wandb_project, name=wandb_run_name, config=config)
     if csv_log:
         from csv_logging import CSVLogWrapper
+        def log(log_dict):
+            pass
         csv_logger = CSVLogWrapper(log, config=config, out_dir=out_dir)
 
 # training loop
@@ -283,24 +293,22 @@ while True:
         losses = estimate_loss()
         # losses = {'train': 1, 'val': 1}
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        log_dict = {
+            "iter": iter_num,
+            "train/loss": losses['train'],
+            "val/loss": losses['val'],
+            "lr": lr,
+            "mfu": running_mfu*100, # convert to percentage
+        }
+        if mup_enabled and mup_enable_coord_check_logging and coord_check_dict is not None:
+            for key in coord_check_dict:
+                log_dict[key + '_act_abs_mean'] = np.mean(coord_check_dict[key])
         if wandb_log:
-            log_dict = {
-                "iter": iter_num,
-                "train/loss": losses['train'],
-                "val/loss": losses['val'],
-                "lr": lr,
-                "mfu": running_mfu*100, # convert to percentage
-            }
-            if mup_enabled and mup_enable_coord_check_logging and coord_check_dict is not None:
-                for key in coord_check_dict:
-                    log_dict[key + '_act_abs_mean'] = np.mean(coord_check_dict[key])
-
-            if csv_log:
-                csv_logger.log(log_dict)
-                csv_logger.step()
-            else:
-                log(log_dict)
-        if losses['val'] < best_val_loss or always_save_checkpoint:
+            wandb_run.log(log_dict)
+        if csv_log:
+            csv_logger.log(log_dict)
+            csv_logger.step()
+        if (not never_save_checkpoint) and (losses['val'] < best_val_loss or always_save_checkpoint):
             best_val_loss = losses['val']
             if iter_num > 0:
                 checkpoint = {

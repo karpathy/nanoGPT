@@ -42,6 +42,7 @@ class CausalSelfAttention(nn.Module):
         self.n_embd = config.n_embd
         self.dropout = config.dropout
         self.mup_enabled = config.mup_enabled
+        self.mup_disable_attention_scaling = config.mup_disable_attention_scaling
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
         if not self.flash:
@@ -59,7 +60,7 @@ class CausalSelfAttention(nn.Module):
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 
-        if self.mup_enabled:
+        if self.mup_enabled and not self.mup_disable_attention_scaling:
             ### Begin muP code ###
             attention_scale = 1.0 / k.size(-1)
             ### End muP code ###
@@ -126,6 +127,8 @@ class GPTConfig:
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
     init_std: float = 0.02
     mup_enabled: bool = False # Whether to use muP. If False then all other mup variables are ignored
+    mup_disable_attention_scaling: bool = False # Disables mup attention scaling
+    mup_disable_hidden_lr_scaling: bool = False # Disables mup hidden LR scaling
     mup_width_multiplier: float = 1 # `mup_width_multiplier = width / base_width` where base_width is typically 256
     mup_input_alpha: float = 1 # Optional tunable multiplier applied to input embedding forward pass output
     mup_output_alpha: float = 1 # Optional tunable multiplier applied to output unembedding forward pass output
@@ -298,7 +301,7 @@ class GPT(nn.Module):
         param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
         # create optim groups. Any parameters that is 2D will be weight decayed, otherwise no.
         # i.e. all weight tensors in matmuls + embeddings decay, all biases and layernorms don't.
-        if self.config.mup_enabled:
+        if self.config.mup_enabled and not self.config.mup_disable_hidden_lr_scaling:
             ### Begin muP code ###
             mup_decay_params = []
             decay_params = []
