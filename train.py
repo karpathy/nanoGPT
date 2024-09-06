@@ -73,7 +73,7 @@ def parse_args():
     model_group.add_argument('--n_head', default=6, type=int)
     model_group.add_argument('--n_kv_group', default=None, type=int)
     model_group.add_argument('--n_embd', default=384, type=int)
-    model_group.add_argument('--dropout', default=0.2, type=float)
+    model_group.add_argument('--dropout', default=0.0, type=float)
     model_group.add_argument('--use_post_ln', default=False, action=argparse.BooleanOptionalAction)
     model_group.add_argument('--window_size', default=None, type=int, help="Sliding window size, note this cannot be greater than block size")
     model_group.add_argument('--gate', default=False, action=argparse.BooleanOptionalAction, help="option for gated attention see https://arxiv.org/abs/2306.12929")

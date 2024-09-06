@@ -602,12 +602,12 @@ class GPT(nn.Module):
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
         x = None
-        if self.config.use_abs_pos_embeddings:
-          pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
-          pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
-          x = self.transformer.drop(tok_emb + pos_emb)
-        else:
-          x = self.transformer.drop(tok_emb)
+        #if self.config.use_abs_pos_embeddings:
+            #pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
+            #pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
+            #x = self.transformer.drop(tok_emb + pos_emb)
+        #else:
+        x = self.transformer.drop(tok_emb)
 
         x.requires_grad_(True)  # Ensure requires_grad is True
 
