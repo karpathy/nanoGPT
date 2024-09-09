@@ -78,6 +78,8 @@ config_keys = [k for k,v in globals().items() if not k.startswith('_') and isins
 exec(open('configurator.py').read()) # overrides from command line or config file
 config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
+mfu = 0 
+flops_achieved = 0
 
 # various inits, derived attributes, I/O setup
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
@@ -210,7 +212,34 @@ if compile:
 
 # wrap model into DDP container
 if ddp:
-    model = DDP(model, device_ids=[ddp_local_rank])
+    model = DDP(model, device_ids=[ddp_local_rank], gradient_as_bucket_view=True)
+
+import os
+
+# Define a custom trace export function
+def export_chrome_trace(prof):
+    trace_dir = "profile_traces"
+    os.makedirs(trace_dir, exist_ok=True)
+    # add date and time to the trace file name
+    filename = f"trace_{time.strftime('%Y%m%d-%H%M%S')}.json"
+    trace_file = os.path.join(trace_dir, filename)
+    print(f"Exporting trace to {trace_file}")
+    prof.export_chrome_trace(trace_file)
+
+if ddp_local_rank == 0:
+    profiler = torch.profiler.profile(
+        activities=[
+            torch.profiler.ProfilerActivity.CPU,
+            torch.profiler.ProfilerActivity.CUDA,
+        ],
+        schedule=torch.profiler.schedule(wait=1, warmup=10, active=3, repeat=1),
+        on_trace_ready=export_chrome_trace,  # Use the custom export function
+        profile_memory=True,
+        with_stack=True,
+        record_shapes=True,
+    )
+else:
+    profiler = None
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
@@ -254,8 +283,9 @@ local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
 running_tflops = -1.0
-while True:
 
+# if rank = 0 then start the profiler 
+while True:    
     # determine and set the learning rate for this iteration
     lr = get_lr(iter_num) if decay_lr else learning_rate
     for param_group in optimizer.param_groups:
@@ -327,9 +357,12 @@ while True:
             mfu, flops_achieved = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
             running_tflops = flops_achieved if running_tflops == -1.0 else 0.9*running_tflops + 0.1*flops_achieved
-        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%, TFLOPs {running_tflops/1e12:.2f}")
+        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, running mfu {running_mfu*100:.2f}%, running TFLOPs {running_tflops/1e12:.2f}, running mfu {mfu*100:.2f}%, running TFLOPs {flops_achieved/1e12:.2f}")
     iter_num += 1
     local_iter_num += 1
+    
+    if profiler:
+        profiler.step()
 
     # termination conditions
     if iter_num > max_iters:

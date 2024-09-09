@@ -10,4 +10,6 @@ __pycache__/
 input.txt
 env/
 venv/
+*.csv
 gpucore.*
+profile_traces/*

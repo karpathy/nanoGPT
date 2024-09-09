@@ -27,6 +27,12 @@ class LayerNorm(nn.Module):
     def forward(self, input):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
+
+@torch.compiler.disable()
+def attention(q, k, v, dropout_p=0.0):
+    y = flash_attn_func(q, k, v, dropout_p=dropout_p, causal=True)
+    return y
+
 class CausalSelfAttention(nn.Module):
 
     def __init__(self, config):
@@ -79,7 +85,7 @@ class CausalSelfAttention(nn.Module):
         v = v.view(B, T, self.n_head, C // self.n_head).contiguous()  # (B, T, nh_k, hs)
         # print("world")
         # causal self-attention using Flash Attention
-        y = flash_attn_func(q, k, v, dropout_p=self.dropout if self.training else 0, causal=True)
+        y = attention(q, k, v, dropout_p=self.dropout)
         # print("123")
         # re-assemble all head outputs side by side
         y = y.view(B, T, C)  # (batch_size, seqlen, embed_dim)
