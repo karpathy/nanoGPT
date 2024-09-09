@@ -30,3 +30,13 @@ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 ```sh
 torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2_eager.py
 ```
+
+``sh
+DISABLE_ADDMM_HIP_LT=0 PYTORCH_TUNABLEOP_ENABLED=1 torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2_eager.py
+```
+
+pip3 install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/rocm6.2/
+
+git clone --recursive https://github.com/ROCm/flash-attention.git
+cd flash-attention
+MAX_JOBS=$((`nproc` - 1)) pip install -v .

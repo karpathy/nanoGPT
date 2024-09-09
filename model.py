@@ -6,6 +6,7 @@ https://github.com/openai/gpt-2/blob/master/src/model.py
 2) huggingface/transformers PyTorch implementation:
 https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
 """
+from flash_attn.flash_attn_interface import flash_attn_func
 
 import math
 import inspect
@@ -53,23 +54,36 @@ class CausalSelfAttention(nn.Module):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
-        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        # q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
+        # k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        # q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        # v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 
-        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        if self.flash:
-            # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
-        else:
-            # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
-            att = F.softmax(att, dim=-1)
-            att = self.attn_dropout(att)
-            y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
+        # # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
+        # if self.flash:
+        #     # efficient attention using Flash Attention CUDA kernels
+        #     y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
+        # else:
+        #     # manual implementation of attention
+        #     att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+        #     att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+        #     att = F.softmax(att, dim=-1)
+        #     att = self.attn_dropout(att)
+        #     y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+        # y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
+        
+        q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
+        # print("hello")
+        k = k.view(B, T, self.n_head, C // self.n_head).contiguous()  # (B, T, nh_k, hs)
+        q = q.view(B, T, self.n_head, C // self.n_head).contiguous()      # (B, T, nh, hs)
+        v = v.view(B, T, self.n_head, C // self.n_head).contiguous()  # (B, T, nh_k, hs)
+        # print("world")
+        # causal self-attention using Flash Attention
+        y = flash_attn_func(q, k, v, dropout_p=self.dropout if self.training else 0, causal=True)
+        # print("123")
+        # re-assemble all head outputs side by side
+        y = y.view(B, T, C)  # (batch_size, seqlen, embed_dim)
+
 
         # output projection
         y = self.resid_dropout(self.c_proj(y))
