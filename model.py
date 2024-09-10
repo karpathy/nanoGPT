@@ -88,7 +88,7 @@ class CausalSelfAttention(nn.Module):
         y = attention(q, k, v, dropout_p=self.dropout)
         # print("123")
         # re-assemble all head outputs side by side
-        y = y.view(B, T, C)  # (batch_size, seqlen, embed_dim)
+        y = y.view(B, T, C).contiguous()  # (batch_size, seqlen, embed_dim)
 
 
         # output projection
