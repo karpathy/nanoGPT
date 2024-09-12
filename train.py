@@ -38,6 +38,7 @@ eval_interval = 2000
 log_interval = 1
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
+skip_val_loss = False # If True, will only measure train loss
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 never_save_checkpoint = False # if True, never save a checkpoint
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
@@ -238,7 +239,8 @@ if ddp:
 def estimate_loss():
     out = {}
     model.eval()
-    for split in ['train', 'val']:
+    splits = ['train'] if skip_val_loss else ['train', 'val']
+    for split in splits:
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = get_batch(split)
@@ -246,6 +248,8 @@ def estimate_loss():
                 logits, loss = model(X, Y)
             losses[k] = loss.item()
         out[split] = losses.mean().item()
+    if skip_val_loss:
+        out['val'] = -1
     model.train()
     return out
 
@@ -291,7 +295,8 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
-        # losses = {'train': 1, 'val': 1}
+        if np.isnan(losses['train']):
+            raise Exception('NaN loss')
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
         log_dict = {
             "iter": iter_num,

@@ -11,3 +11,4 @@ input.txt
 env/
 venv/
 coord_check/*/out/*
+mutransfer_lr/*/out/*
