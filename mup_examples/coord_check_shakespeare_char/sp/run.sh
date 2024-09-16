@@ -4,9 +4,7 @@ do
     do
     head_size=64
     n_heads=$((width / head_size))
-    mup_base_width=256
-    mup_width_multiplier=$(echo "scale=8; $width/$mup_base_width" | bc -l)
-    out_dir="coord_check/sp_with_mup_hidden_init_and_lr/out/width${width}_depth2_seed${seed}"
+    out_dir="mup_examples/coord_check_shakespeare_char/sp/out/width${width}_depth2_seed${seed}"
     python train.py \
         --out_dir=$out_dir \
         --eval_interval=1 \
@@ -35,17 +33,11 @@ do
         --beta2=0.95 \
         --grad_clip=1.0 \
         --decay_lr=False \
-        --mup_enabled=True \
-        --mup_disable_attention_scaling=True \
-        --mup_disable_hidden_lr_scaling=False \
-        --mup_width_multiplier=$mup_width_multiplier \
-        --mup_input_alpha=1.0 \
-        --mup_output_alpha=$mup_width_multiplier \
-        --mup_enable_coord_check_logging=True \
         --seed=$seed \
         --backend='nccl' \
         --device='mps' \
         --dtype='float32' \
-        --compile=False
+        --compile=False \
+        --mup_enable_coord_check_logging=True
     done
 done

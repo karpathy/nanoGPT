@@ -8,7 +8,7 @@ do
             n_heads=$((width / head_size))
             mup_base_width=256
             mup_width_multiplier=$(echo "scale=8; $width/$mup_base_width" | bc -l)
-            out_dir="mutransfer_lr/mup/out/width${width}_depth2_seed${seed}_lr${lr}"
+            out_dir="mup_examples/mutransfer_lr_shakespeare_char/mup/out/width${width}_depth2_seed${seed}_lr${lr}"
             python train.py \
                 --out_dir=$out_dir \
                 --eval_interval=1 \

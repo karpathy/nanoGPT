@@ -6,7 +6,7 @@ do
         do
             head_size=64
             n_heads=$((width / head_size))
-            out_dir="mutransfer_lr/sp/out/width${width}_depth2_seed${seed}_lr${lr}"
+            out_dir="mup_examples/mutransfer_lr_shakespeare_char/sp/out/width${width}_depth2_seed${seed}_lr${lr}"
             python train.py \
                 --out_dir=$out_dir \
                 --eval_interval=1 \
