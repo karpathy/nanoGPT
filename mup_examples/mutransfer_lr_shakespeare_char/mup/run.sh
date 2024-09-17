@@ -1,12 +1,3 @@
-# Single-GPU Launching
-LAUNCHER=python
-
-# Multi-GPU Launching (single node)
-#GPU=2
-#LAUNCHER=torchrun --standalone --nproc_per_node=$GPU
-
-LAYERS=2
-
 for width in 256 512 1024 2048
 do
     for lr in 0.125 0.0625 0.03125 0.015625 0.0078125 0.00390625 0.001953125 0.0009765625 0.00048828125 0.000244140625 0.0001220703125 0.00006103515625
@@ -17,8 +8,8 @@ do
             n_heads=$((width / head_size))
             mup_base_width=256
             mup_width_multiplier=$(echo "scale=8; $width/$mup_base_width" | bc -l)
-            out_dir="mup_examples/mutransfer_lr_shakespeare_char/mup/out/width${width}_depth${LAYERS}_seed${seed}_lr${lr}"
-            $LAUNCHER train.py \
+            out_dir="mup_examples/mutransfer_lr_shakespeare_char/mup/out/width${width}_depth2_seed${seed}_lr${lr}"
+            python train.py \
                 --out_dir=$out_dir \
                 --eval_interval=1 \
                 --log_interval=1 \
