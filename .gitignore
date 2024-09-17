@@ -10,5 +10,4 @@ __pycache__/
 input.txt
 env/
 venv/
-coord_check/*/out/*
-mutransfer_lr/*/out/*
+mup_examples/*/*/out/*
