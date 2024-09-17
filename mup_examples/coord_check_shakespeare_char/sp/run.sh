@@ -4,7 +4,7 @@ do
     do
     head_size=64
     n_heads=$((width / head_size))
-    out_dir="coord_check/sp/out/width${width}_depth2_seed${seed}"
+    out_dir="mup_examples/coord_check_shakespeare_char/sp/out/width${width}_depth2_seed${seed}"
     python train.py \
         --out_dir=$out_dir \
         --eval_interval=1 \

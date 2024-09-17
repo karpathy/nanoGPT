@@ -6,7 +6,7 @@ do
     n_heads=$((width / head_size))
     mup_base_width=256
     mup_width_multiplier=$(echo "scale=8; $width/$mup_base_width" | bc -l)
-    out_dir="coord_check/sp_with_mup_hidden_init_and_lr/out/width${width}_depth2_seed${seed}"
+    out_dir="mup_examples/coord_check_shakespeare_char/sp_with_mup_hidden_init_and_lr/out/width${width}_depth2_seed${seed}"
     python train.py \
         --out_dir=$out_dir \
         --eval_interval=1 \
