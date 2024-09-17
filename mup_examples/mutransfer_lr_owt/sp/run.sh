@@ -5,17 +5,18 @@ LAUNCHER=python
 #GPU=2
 #LAUNCHER=torchrun --standalone --nproc_per_node=$GPU
 
+LAYERS=2
+
 for width in 256 512 1024 2048
 do
-    for lr in 0.0009765625 0.00048828125 0.000244140625 0.0001220703125 0.00006103515625
+    for lr in 0.00390625 0.001953125 0.0009765625 0.00048828125 0.000244140625 0.0001220703125 0.00006103515625 0.00003051757812
     do
         for seed in 1 2 3
         do
             head_size=64
             n_heads=$((width / head_size))
-            mup_base_width=256
-            mup_width_multiplier=$(echo "scale=8; $width/$mup_base_width" | bc -l)
-            out_dir="mutransfer_lr/mup/out/width${width}_depth2_seed${seed}_lr${lr}"
+            min_lr=$(awk "BEGIN {print $lr/10}")
+            out_dir="mup_examples/mutransfer_lr_owt/sp/out/width${width}_depth${LAYERS}_seed${seed}_lr${lr}"
             $LAUNCHER train.py \
                 --out_dir=$out_dir \
                 --eval_interval=1 \
@@ -28,9 +29,9 @@ do
                 --init_from='scratch' \
                 --wandb_log=False \
                 --csv_log=True \
-                --dataset='shakespeare_char' \
-                --gradient_accumulation_steps=8\
-                --batch_size=1 \
+                --dataset='openwebtext' \
+                --gradient_accumulation_steps=1 \
+                --batch_size=32 \
                 --block_size=1024 \
                 --n_layer=2 \
                 --n_head=$n_heads \
@@ -39,21 +40,19 @@ do
                 --bias=False \
                 --init_std=0.02 \
                 --learning_rate=$lr \
-                --max_iters=122 \
+                --lr_decay_iters=1000 \
+                --min_lr=$min_lr \
+                --max_iters=1000 \
                 --weight_decay=1e-1 \
                 --beta1=0.9 \
                 --beta2=0.95 \
                 --grad_clip=1.0 \
-                --decay_lr=False \
-                --mup_enabled=True \
-                --mup_width_multiplier=$mup_width_multiplier \
-                --mup_input_alpha=1.0 \
-                --mup_output_alpha=1.0 \
+                --decay_lr=True \
                 --seed=$seed \
                 --backend='nccl' \
-                --device='mps' \
-                --dtype='float32' \
-                --compile=False
+                --device='cuda' \
+                --dtype='bfloat16' \
+                --compile=True
         done
     done
 done
