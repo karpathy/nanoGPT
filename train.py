@@ -21,6 +21,7 @@ import time
 import math
 import pickle
 from contextlib import nullcontext
+from functools import partial
 
 import numpy as np
 import torch
@@ -37,12 +38,16 @@ eval_interval = 2000
 log_interval = 1
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
+skip_val_loss = False # If True, will only measure train loss
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
+never_save_checkpoint = False # if True, never save a checkpoint
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
 wandb_project = 'owt'
 wandb_run_name = 'gpt2' # 'run' + str(time.time())
+# csv logging
+csv_log = False # If enabled, logs stats to a csv file
 # data
 dataset = 'openwebtext'
 gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
@@ -54,6 +59,7 @@ n_head = 12
 n_embd = 768
 dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
 bias = False # do we use bias inside LayerNorm and Linear layers?
+init_std = 0.02 # Initialization standard deviation for weights
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
 max_iters = 600000 # total number of training iterations
@@ -66,6 +72,16 @@ decay_lr = True # whether to decay the learning rate
 warmup_iters = 2000 # how many steps to warm up for
 lr_decay_iters = 600000 # should be ~= max_iters per Chinchilla
 min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
+# mup settings
+mup_enabled = False # Whether to use muP. If False then all other mup variables are ignored
+mup_disable_attention_scaling = False # Uses 1/sqrt(d_head) attn scaling instead of 1/d_head (Only needed for the step-by-step coord check in the blog)
+mup_disable_hidden_lr_scaling = False # Disables muP hidden LR adjustment (Only needed for the step-by-step coord check in the blog)
+mup_width_multiplier = 1.0 # mup_width_multiplier = width / base_width where base_width is typically 256
+mup_input_alpha = 1.0 # Optional tunable multiplier applied to input embedding forward pass output
+mup_output_alpha = 1.0 # Optional tunable multiplier applied to output unembedding forward pass output
+mup_enable_coord_check_logging = False # If True will track the output.abs().mean() of various layers throughout training
+# seed
+seed = 1337
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
@@ -77,6 +93,8 @@ config_keys = [k for k,v in globals().items() if not k.startswith('_') and isins
 exec(open('configurator.py').read()) # overrides from command line or config file
 config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
+
+assert not (never_save_checkpoint and always_save_checkpoint)
 
 # various inits, derived attributes, I/O setup
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
@@ -103,7 +121,7 @@ print(f"tokens per iteration will be: {tokens_per_iter:,}")
 
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
-torch.manual_seed(1337 + seed_offset)
+torch.manual_seed(seed + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
@@ -145,7 +163,12 @@ if os.path.exists(meta_path):
 
 # model init
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
-                  bias=bias, vocab_size=None, dropout=dropout) # start with model_args from command line
+                  bias=bias, vocab_size=None, dropout=dropout, mup_enabled=mup_enabled,
+                  mup_disable_attention_scaling=mup_disable_attention_scaling,
+                  mup_disable_hidden_lr_scaling=mup_disable_hidden_lr_scaling,
+                  mup_width_multiplier=mup_width_multiplier, mup_input_alpha=mup_input_alpha,
+                  mup_output_alpha=mup_output_alpha) # start with model_args from command line
+
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -216,14 +239,17 @@ if ddp:
 def estimate_loss():
     out = {}
     model.eval()
-    for split in ['train', 'val']:
+    splits = ['train'] if skip_val_loss else ['train', 'val']
+    for split in splits:
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = get_batch(split)
             with ctx:
                 logits, loss = model(X, Y)
             losses[k] = loss.item()
-        out[split] = losses.mean()
+        out[split] = losses.mean().item()
+    if skip_val_loss:
+        out['val'] = -1
     model.train()
     return out
 
@@ -242,9 +268,15 @@ def get_lr(it):
     return min_lr + coeff * (learning_rate - min_lr)
 
 # logging
-if wandb_log and master_process:
-    import wandb
-    wandb.init(project=wandb_project, name=wandb_run_name, config=config)
+if master_process:
+    if wandb_log:
+        import wandb
+        wandb_run = wandb.init(project=wandb_project, name=wandb_run_name, config=config)
+    if csv_log:
+        from csv_logging import CSVLogWrapper
+        def log(log_dict):
+            pass
+        csv_logger = CSVLogWrapper(log, config=config, out_dir=out_dir)
 
 # training loop
 X, Y = get_batch('train') # fetch the very first batch
@@ -252,26 +284,36 @@ t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
+coord_check_dict = None
 while True:
 
     # determine and set the learning rate for this iteration
     lr = get_lr(iter_num) if decay_lr else learning_rate
     for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
+        param_group['lr'] = lr * param_group.get('lr_scale', 1.0)
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
+        if np.isnan(losses['train']):
+            raise Exception('NaN loss')
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        log_dict = {
+            "iter": iter_num,
+            "train/loss": losses['train'],
+            "val/loss": losses['val'],
+            "lr": lr,
+            "mfu": running_mfu*100, # convert to percentage
+        }
+        if mup_enable_coord_check_logging and coord_check_dict is not None:
+            for key in coord_check_dict:
+                log_dict[key + '_act_abs_mean'] = np.mean(coord_check_dict[key])
         if wandb_log:
-            wandb.log({
-                "iter": iter_num,
-                "train/loss": losses['train'],
-                "val/loss": losses['val'],
-                "lr": lr,
-                "mfu": running_mfu*100, # convert to percentage
-            })
-        if losses['val'] < best_val_loss or always_save_checkpoint:
+            wandb_run.log(log_dict)
+        if csv_log:
+            csv_logger.log(log_dict)
+            csv_logger.step()
+        if (not never_save_checkpoint) and (losses['val'] < best_val_loss or always_save_checkpoint):
             best_val_loss = losses['val']
             if iter_num > 0:
                 checkpoint = {
@@ -286,6 +328,29 @@ while True:
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
     if iter_num == 0 and eval_only:
         break
+
+    if mup_enable_coord_check_logging:
+        coord_check_dict = {
+            'token_embedding': [],
+            'attn': [],
+            'mlp': [],
+            'lm_head': [],
+        }
+        def hook(module, input, output, key):
+            with torch.no_grad():
+                coord_check_dict[key].append(output.abs().mean().item())
+        coord_check_handles = []
+        for module_name, module in model.named_modules():
+            if module_name == 'transformer.wte':
+                coord_check_handles.append(module.register_forward_hook(partial(hook, key='token_embedding')))
+            elif module_name.endswith('.attn'):
+                coord_check_handles.append(module.register_forward_hook(partial(hook, key='attn')))
+            elif module_name.endswith('.mlp'):
+                coord_check_handles.append(module.register_forward_hook(partial(hook, key='mlp')))
+            elif module_name == 'lm_head':
+                coord_check_handles.append(module.register_forward_hook(partial(hook, key='lm_head')))
+    else:
+        coord_check_dict = None
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
@@ -327,6 +392,10 @@ while True:
         print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
     iter_num += 1
     local_iter_num += 1
+
+    if mup_enable_coord_check_logging:
+        for handle in coord_check_handles:
+            handle.remove()
 
     # termination conditions
     if iter_num > max_iters:

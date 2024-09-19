@@ -1,5 +1,30 @@
 
-# nanoGPT
+# nanoGPT-mup
+
+This repository is a fork of [nanoGPT](https://github.com/karpathy/nanoGPT) that provides a minimal implementation of the [maximal update parameterization](https://arxiv.org/abs/2203.03466) ([muP](https://github.com/microsoft/mup)) and acts as supplementary material for ["The Practitioner’s Guide to the Maximal Update Parameterization"](https://www.cerebras.ai/blog/the-practitioners-guide-to-the-maximal-update-parameterization). The `mup_examples` folder contains scripts to reproduce the plots in the blog post (see `mup_examples/README.md` for instructions to reproduce). 
+
+Each of the critical muP changes are marked with
+```
+### Begin muP code ###
+<code for mup change>
+### End muP code ###
+```
+to make everything easily searchable.
+
+
+If ["The Practitioner’s Guide to the Maximal Update Parameterization"](https://www.cerebras.ai/blog/the-practitioners-guide-to-the-maximal-update-parameterization) or this repository was useful to you, please cite:
+```
+@misc{cerebras2024mupguide,
+author = {Dey, Nolan and Anthony, Quentin and Hestness, Joel},
+title = {{The practitioner’s guide to the maximal update parameterization}},
+month = September,
+year = 2024,
+howpublished = {\url{https://www.cerebras.ai/blog/the-practitioners-guide-to-the-maximal-update-parameterization}},
+url = \url{https://www.cerebras.ai/blog/the-practitioners-guide-to-the-maximal-update-parameterization},
+}
+```
+
+# nanoGPT (Original README)
 
 ![nanoGPT](assets/nanogpt.jpg)
 
