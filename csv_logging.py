@@ -1,10 +1,10 @@
 """
+Authored by Gavia Gray (https://github.com/gngdb)
+
 Wrapper for wandb logging with efficient CSV logging and correct config JSON writing.
 The CSV structure maintains a consistent order of keys based on their first appearance,
 using a simple list for ordering. This ensures data integrity and allows for graceful
 failure and manual recovery if needed.
-
-Test this implementation using `test_tracker.py`
 
 Example usage:
   run = wandb.init(config=your_config)
