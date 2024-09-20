@@ -14,8 +14,6 @@ to make everything easily searchable.
 
 ## Implementation Validation
 
-We've verified the correctness of this implementation via coordinate checks and LR transfer.
-
 ### Coordinate Checks
 
 Standard Parameterization:
@@ -33,6 +31,8 @@ muTransfer:
 :-------------------------:|:-------------------------:
 <img src="assets/mutransfer_lr_shakespeare_char.png" alt="mup-shakespeare">     |  <img src="assets/mutransfer_lr_owt.png" alt="mup-owt"> 
 
+
+## Citation
 
 If ["The Practitioner’s Guide to the Maximal Update Parameterization"](https://www.cerebras.ai/blog/the-practitioners-guide-to-the-maximal-update-parameterization) or this repository was useful to you, please cite:
 ```
