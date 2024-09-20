@@ -11,6 +11,16 @@ Each of the critical muP changes are marked with
 ```
 to make everything easily searchable.
 
+| Parameterization | SP | **μP** | Code |
+|------------------|----|----|----|
+| Embedding Init. Var. | $σ_{base}^2$ | $σ_{base}^2$ |    |
+| Embedding LR | $η_{base}$ | $η_{base}$ |    |
+| Embedding Fwd. | $x W_{\text{emb}}$ | $\mathbf{α_{input}} · x W_{\text{emb}}$ |  [Code](https://github.com/EleutherAI/nanoGPT-mup/blob/bcadbc3c7a44138525eca8a799764afba7dca2b3/model.py#L208)  |
+| Hidden Init. Var. | $σ_{base}^2$ | $σ_{base}^2 / \mathbf{m_d}$ |  [Code](https://github.com/EleutherAI/nanoGPT-mup/blob/bcadbc3c7a44138525eca8a799764afba7dca2b3/model.py#L163-L169)  |
+| Hidden LR (Adam) | $η_{base}$ | $η_{base} / \mathbf{m_d}$ |  [Code](https://github.com/EleutherAI/nanoGPT-mup/blob/bcadbc3c7a44138525eca8a799764afba7dca2b3/model.py#L306-L329)  |
+| Output Logit Fwd. | $x W_{\text{emb}}^\top$ | $\mathbf{α_{output}} · x W_{\text{emb}}^\top / \mathbf{m_d}$ |  [Code](https://github.com/EleutherAI/nanoGPT-mup/blob/bcadbc3c7a44138525eca8a799764afba7dca2b3/model.py#L219)  |
+| Attention logits | $Q^\top K / \sqrt{d_{\text{head}}}$ | $Q^\top K / \mathbf{d_{\text{head}}}$ |  [Code](https://github.com/EleutherAI/nanoGPT-mup/blob/bcadbc3c7a44138525eca8a799764afba7dca2b3/model.py#L65)  |
+
 
 ## Implementation Validation
 
