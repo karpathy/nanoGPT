@@ -34,7 +34,7 @@ from model import GPTConfig, GPT
 
 def get_nvidia_gpu_performance():
     performance_map = {
-        "H100": 1979e12,  # 1979 TFLOPS
+        "H100": 989e12,  # 989 TFLOPS
         "A100": 312e12    # 312 TFLOPS
     }
     try:
