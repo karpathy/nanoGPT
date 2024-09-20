@@ -1,7 +1,7 @@
 
 # nanoGPT-mup
 
-This repository is a fork of [nanoGPT](https://github.com/karpathy/nanoGPT) that provides a minimal implementation of the [maximal update parameterization](https://arxiv.org/abs/2203.03466) ([muP](https://github.com/microsoft/mup)) and acts as supplementary material for ["The Practitioner’s Guide to the Maximal Update Parameterization"](https://www.cerebras.ai/blog/the-practitioners-guide-to-the-maximal-update-parameterization). The `mup_examples` folder contains scripts to reproduce the plots in the blog post (see `mup_examples/README.md` for instructions to reproduce). 
+This repository is a fork of [nanoGPT](https://github.com/karpathy/nanoGPT) that provides a minimal implementation of the [maximal update parameterization](https://arxiv.org/abs/2203.03466) ([muP](https://github.com/microsoft/mup)) and acts as supplementary material for ["The Practitioner’s Guide to the Maximal Update Parameterization"](https://www.cerebras.ai/blog/the-practitioners-guide-to-the-maximal-update-parameterization). The [mup_examples](https://github.com/EleutherAI/nanoGPT-mup/tree/master/mup_examples) folder contains scripts to reproduce the plots in the blog post (see [mup_examples/README.md](https://github.com/EleutherAI/nanoGPT-mup/blob/master/mup_examples/README.md) for instructions to reproduce). 
 
 Each of the critical muP changes are marked with
 ```
@@ -11,6 +11,28 @@ Each of the critical muP changes are marked with
 ```
 to make everything easily searchable.
 
+
+## Implementation Validation
+
+### Coordinate Checks
+
+Standard Parameterization:
+
+<img src="assets/coord_check_sp.png" alt="SP">
+
+muTransfer:
+
+<img src="assets/coord_check_mup.png" alt="muP">
+
+
+### Learning Rate muTransfer
+
+**Tiny Shakespeare**    |    **OpenWebText**
+:-------------------------:|:-------------------------:
+<img src="assets/mutransfer_lr_shakespeare_char.png" alt="mup-shakespeare">     |  <img src="assets/mutransfer_lr_owt.png" alt="mup-owt"> 
+
+
+## Citation
 
 If ["The Practitioner’s Guide to the Maximal Update Parameterization"](https://www.cerebras.ai/blog/the-practitioners-guide-to-the-maximal-update-parameterization) or this repository was useful to you, please cite:
 ```
