@@ -31,7 +31,7 @@ muTransfer:
 
 **Tiny Shakespeare**    |    **OpenWebText**
 :-------------------------:|:-------------------------:
-<img src="assets/mutransfer_lr_shakespeare_char.png" alt="mup-shakespeare" width="100%">     |  <img src="assets/mutransfer_lr_owt.png" alt="mup-owt" width="100%"> 
+<img src="assets/mutransfer_lr_shakespeare_char.png" alt="mup-shakespeare">     |  <img src="assets/mutransfer_lr_owt.png" alt="mup-owt"> 
 
 
 If ["The Practitioner’s Guide to the Maximal Update Parameterization"](https://www.cerebras.ai/blog/the-practitioners-guide-to-the-maximal-update-parameterization) or this repository was useful to you, please cite:
