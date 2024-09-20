@@ -20,11 +20,11 @@ We've verified the correctness of this implementation via coordinate checks and 
 
 Standard Parameterization:
 
-<img src="assets/coord_check_sp.png" alt="SP" width="60%">
+<img src="assets/coord_check_sp.png" alt="SP">
 
 muTransfer:
 
-<img src="assets/coord_check_mup.png" alt="muP" width="60%">
+<img src="assets/coord_check_mup.png" alt="muP">
 
 
 ### Learning Rate muTransfer
