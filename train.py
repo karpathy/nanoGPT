@@ -21,6 +21,8 @@ import time
 import math
 import pickle
 from contextlib import nullcontext
+import subprocess
+import re 
 
 import numpy as np
 import torch
@@ -28,6 +30,29 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
 from model import GPTConfig, GPT
+
+
+def get_nvidia_gpu_performance():
+    performance_map = {
+        "H100": 1979e12,  # 1979 TFLOPS
+        "A100": 312e12    # 312 TFLOPS
+    }
+    try:
+        result = subprocess.run(['nvidia-smi', '--query-gpu=name', '--format=csv,noheader'], 
+                                capture_output=True, text=True, check=True)
+        gpu_name = result.stdout.strip()
+        match = re.search(r'(A100|H100)', gpu_name)      
+        if match:
+            gpu_model = match.group(0)
+            return performance_map.get(gpu_model, "Unknown performance")
+        else:
+            return "Unknown performance"
+    except subprocess.CalledProcessError:
+        return "Unknown performance"
+    except Exception as e:
+        return "Unknown performance"
+
+GPU_PERFORMANCE = get_nvidia_gpu_performance()
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -321,10 +346,13 @@ while True:
         # get loss as float. note: this is a CPU-GPU sync point
         # scale up to undo the division above, approximating the true total loss (exact would have been a sum)
         lossf = loss.item() * gradient_accumulation_steps
-        if local_iter_num >= 5: # let the training loop settle a bit
-            mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
-            running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+        if GPU_PERFORMANCE != "Unknown performance":
+            if local_iter_num >= 5: # let the training loop settle a bit
+                mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt, GPU_PERFORMANCE)
+                running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
+            print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+        else:
+            print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms")
     iter_num += 1
     local_iter_num += 1
 
