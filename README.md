@@ -240,7 +240,7 @@ Whoa there, GPT, entering some dark place over there. I didn't really tune the h
 - In the pull request adhere with the following guidelines to ensure that your PR will be accepted (based off of existing accepted PR for this project):
   - Make sure to have a clear title for your pull request. The title should be clear and should start with a verb for clarity and briefly explain what you did to what file. For example, "Added feature one to enhance performance for file.py". 
   - Try to explain what you did in the description of the pull request and if needed, reference other pull requests by their number like PR #123.
-  - Make sure to fork the repository. Merge the changes to your forked repository, as this repository does not allow you to create branches. Then create a pull request to merge your forked branch to karpathy/master.
+  - Make sure to fork the repository. Merge the changes to your forked repository, as this repository does not allow you to create branches. Then create a pull request to merge your master branch to karpathy/master.
 
 
 ## sampling / inference
