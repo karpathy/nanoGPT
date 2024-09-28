@@ -1,4 +1,10 @@
 
+# Mods
+
+Just playin around
+
+
+
 # nanoGPT
 
 ![nanoGPT](assets/nanogpt.jpg)
