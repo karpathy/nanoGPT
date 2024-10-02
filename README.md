@@ -1,42 +1,107 @@
-# Adopted from NanoGPT commit https://github.com/karpathy/nanoGPT/commit/9755682b981a45507f6eb9b11eadef8cb83cebd5
+# Benchmark LLM Training
 
-Rocm 6.2
+Repo for benchmarking LLM training workloads.
+
+
+## Installation
+
+To build the image:
 ```bash
-docker run -it --privileged --network=host --device=/dev/kfd --device=/dev/dri --group-add video --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --ipc=host --shm-size 192G -v .:/var/lib/jenkins/nanoGPT rocm/pytorch:rocm6.2_ubuntu22.04_py3.10_pytorch_release_2.3.0
-cd /var/lib/jenkins/nanoGPT
-pip install tiktoken datasets
-pip install numpy==1.22.4
+docker build -t llm-train-bench .
 ```
 
-Pytorch 24.07 is the recommended image for H100
+To start the container:
 ```bash
-docker run --gpus all -it --ipc=host --shm-size=192G --rm -v .:/workspace/nanoGPT nvcr.io/nvidia/pytorch:24.07-py3
-cd /workspace/nanoGPT
+./docker/launch.sh
 ```
 
-## Downloading dataset (inside container)
-- note that since yr local_dir is mounted at /workspace/nanoGPT, the dataset will be cached there between runs and between container stop and starts as long as you remount it.
-The following command will downloads and tokenizes the [OpenWebText](https://huggingface.co/datasets/openwebtext) dataset. It will create a `train.bin` and `val.bin`
-```sh
-python data/openwebtext/prepare.py
+
+## Single GPU Training
+
+```
+NAME
+    train.py
+
+SYNOPSIS
+    train.py CFG_PATH <flags>
+
+POSITIONAL ARGUMENTS
+    CFG_PATH
+        Type: str
+
+FLAGS
+    --gpu_id=GPU_ID
+        Type: int
+        Default: 0
+    -b, --bsz=BSZ
+        Type: int
+        Default: 8
+    --n_workers=N_WORKERS
+        Type: int
+        Default: 8
+    --n_steps=N_STEPS
+        Type: int
+        Default: 128
+    --grad_acc_steps=GRAD_ACC_STEPS
+        Type: int
+        Default: 8
+    -c, --ckpt_freq=CKPT_FREQ
+        Type: int
+        Default: 64
+    --pt_compile=PT_COMPILE
+        Type: bool
+        Default: False
+    --profile=PROFILE
+        Type: bool
+        Default: False
+    -o, --output_dir=OUTPUT_DIR
+        Type: str
+        Default: 'outputs/single_gpu'
+
+NOTES
+    You can also use flags syntax for POSITIONAL ARGUMENTS
 ```
 
-## GPT2 125M Running torch.compile
-```sh
-torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
+
+## Multi-GPU Training with DDP
+
 ```
+NAME
+    train_ddp.py
 
-## Gpt2 125M Run Command Eager
-```sh
-torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2_eager.py
+SYNOPSIS
+    train_ddp.py CFG_PATH <flags>
+
+POSITIONAL ARGUMENTS
+    CFG_PATH
+        Type: str
+
+FLAGS
+    -b, --bsz=BSZ
+        Type: int
+        Default: 8
+    --n_workers=N_WORKERS
+        Type: int
+        Default: 8
+    --n_steps=N_STEPS
+        Type: int
+        Default: 1024
+    -g, --grad_acc_steps=GRAD_ACC_STEPS
+        Type: int
+        Default: 8
+    -c, --ckpt_freq=CKPT_FREQ
+        Type: int
+        Default: 64
+    --pt_compile=PT_COMPILE
+        Type: bool
+        Default: False
+    --profile=PROFILE
+        Type: bool
+        Default: False
+    -o, --output_dir=OUTPUT_DIR
+        Type: str
+        Default: 'outputs/ddp/'
+
+NOTES
+    You can also use flags syntax for POSITIONAL ARGUMENTS
 ```
-
-``sh
-DISABLE_ADDMM_HIP_LT=0 PYTORCH_TUNABLEOP_ENABLED=1 torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2_eager.py
-```
-
-pip3 install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/rocm6.2/
-
-git clone --recursive https://github.com/ROCm/flash-attention.git
-cd flash-attention
-MAX_JOBS=$((`nproc` - 1)) pip install -v .

@@ -1,0 +1,14 @@
+{
+  "n_layers": 1,
+  "n_heads": 64,
+  "n_kv_heads": 8,
+  "d_embd": 8192,
+  "max_seq_len": 131072,
+  "vocab_size": 128256,
+  "ffn_mult": 1.3,
+  "ffn_factor": 1024,
+  "rope_base": 500000.0,
+  "norm_eps": 1e-05,
+  "d_hid": 28672,
+  "arch_name": "llama"
+}

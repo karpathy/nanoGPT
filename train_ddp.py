@@ -12,21 +12,40 @@ from tqdm import tqdm
 from gpt import GPTConfig, GPT
 from llama import LLaMAConfig, LLaMA
 
+import os
+import torch.multiprocessing as mp
+from torch.distributed import init_process_group, destroy_process_group
+from torch.utils.data.distributed import DistributedSampler
+from torch.nn.parallel import DistributedDataParallel as DDP
 
-def train(
+
+def train_ddp(
     cfg_path: str,
-    gpu_id: int = 0,
     bsz: int = 8,
     n_workers: int = 8,
-    n_steps: int = 128,
+    n_steps: int = 128*8,
     grad_acc_steps: int = 8,
     ckpt_freq: int = 64,
     pt_compile: bool = False,
     profile: bool = False,
-    output_dir: str = 'outputs/single_gpu'
+    output_dir: str = 'outputs/ddp/'
 ):
     torch.manual_seed(3985)
-    torch.cuda.set_device(gpu_id)
+    world_size = torch.cuda.device_count()
+    train_args = (
+        world_size, cfg_path, bsz, n_workers, n_steps, grad_acc_steps,
+        ckpt_freq, pt_compile, profile, output_dir
+    )
+    mp.spawn(train, train_args, nprocs=world_size)
+
+
+def train(
+    rank, world_size,
+    cfg_path, bsz, n_workers, n_steps, grad_acc_steps, ckpt_freq, pt_compile, profile, output_dir
+):
+    os.environ.update({'MASTER_ADDR': 'localhost', 'MASTER_PORT': '30985'})
+    torch.cuda.set_device(rank)
+    init_process_group(backend='nccl', rank=rank, world_size=world_size)
 
     with open(cfg_path) as f:
         cfg_json = json.load(f)
@@ -36,24 +55,31 @@ def train(
         case 'llama':
             cfg_cls, model_cls = LLaMAConfig, LLaMA
         case _:
-            raise ValueError(f'Unsupported model {cfg_json["arch_name"]}.')
+            raise ValueError(f'Model architecture {cfg_json["arch_name"]} not supported.')
     cfg_m = cfg_cls(**cfg_json)
-    model = model_cls(**cfg_json).to(gpu_id)
+    model = DDP(model_cls(**cfg_json).to(rank))
     if pt_compile:
         model = torch.compile(model)
 
     dataset = SimulatedDataset(cfg_m.vocab_size, cfg_m.max_seq_len, bsz*n_steps)
     data_loader = DataLoader(
-        dataset, batch_size=bsz, num_workers=n_workers, pin_memory=True, shuffle=True,
+        dataset, batch_size=bsz,
+        num_workers=n_workers, pin_memory=True, shuffle=False,
+        sampler=DistributedSampler(dataset, rank=rank, num_replicas=world_size, shuffle=True)
     )
     optimizer = torch.optim.AdamW(model.parameters())
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda t: 1.0)
     scaler = torch.amp.GradScaler()
 
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    if rank == 0:
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        if not profile:
+            flops_per_token = cfg_m.estimate_flops_per_token(**cfg_json)
+            flops_per_iter = 3 * flops_per_token * (bsz * cfg_m.max_seq_len)
+    pbar_ctx = tqdm(total=n_steps) if rank == 0 else nullcontext()
     model.train()
 
-    if profile:
+    if profile and rank == 0:
         prof_ctx = torch.profiler.profile(
             activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
             schedule=torch.profiler.schedule(wait=5, warmup=5, active=5, repeat=1),
@@ -61,17 +87,15 @@ def train(
         )
     else:
         prof_ctx = nullcontext()
-        flops_per_token = cfg_m.estimate_flops_per_token(**cfg_json)
-        flops_per_iter = 3 * flops_per_token * (bsz * cfg_m.max_seq_len)
 
-    with prof_ctx as prof, tqdm(total=n_steps) as pbar:
+    with prof_ctx as prof, pbar_ctx as pbar:
         for step_idx, data_batch in enumerate(data_loader):
-            if not profile:
+            if rank == 0 and not profile:
                 start = torch.cuda.Event(enable_timing=True)
                 end = torch.cuda.Event(enable_timing=True)
                 start.record()
 
-            input_BT, label_BT = map(lambda t: t.pin_memory().to(gpu_id), data_batch)
+            input_BT, label_BT = map(lambda t: t.pin_memory().to(rank, non_blocking=True), data_batch)
 
             with torch.amp.autocast('cuda', torch.float16):
                 logits_BTV = model(input_BT)
@@ -87,7 +111,7 @@ def train(
                 scheduler.step()
                 optimizer.zero_grad(set_to_none=True)
 
-            if (step_idx + 1) % ckpt_freq == 0:  # Assume n_steps % ckpt_freq == 0
+            if rank == 0 and (step_idx + 1) % ckpt_freq == 0:  # Assume n_steps % ckpt_freq == 0
                 ckpt = {
                     'model': model.state_dict(),
                     'optimizer': optimizer.state_dict(), 
@@ -95,21 +119,24 @@ def train(
                 }
                 torch.save(ckpt, Path(output_dir) / 'ckpt.pt')
 
-            if not profile:
-                end.record()
-                torch.cuda.synchronize()
+            if rank == 0:
+                if not profile:
+                    end.record()
+                    torch.cuda.synchronize()
 
-                t = start.elapsed_time(end) / 1e3
-                flops_per_sec = flops_per_iter / t
-                mfu = flops_per_sec / 989.5e12
+                    t = start.elapsed_time(end) / 1e3
+                    flops_per_sec = flops_per_iter / t
+                    mfu = flops_per_sec / 989.5e12
 
-                pbar.set_description(f'[GPU ID {gpu_id}]  {(flops_per_sec/1e12):.2f} TFLOP/s  MFU={mfu:.2%}')
-            else:
-                prof.step()
-            pbar.update()
+                    pbar.set_description(f'[Rank {rank}]  {(flops_per_sec/1e12):.2f} TFLOP/s  MFU={mfu:.2%}')
+                else:
+                    prof.step()
+                pbar.update(world_size)
 
-    if profile:
+    if rank == 0 and profile:
         prof.export_chrome_trace(f'{output_dir}/{Path(cfg_path).stem}_trace.json')
+
+    destroy_process_group()
 
 
 class SimulatedDataset(Dataset):
@@ -130,4 +157,4 @@ class SimulatedDataset(Dataset):
 
 if __name__ == '__main__':
     import fire
-    fire.Fire(train)
+    fire.Fire(train_ddp)

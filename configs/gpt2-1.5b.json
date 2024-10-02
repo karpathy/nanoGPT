@@ -1,0 +1,8 @@
+{
+  "n_layers": 48,
+  "n_heads": 25,
+  "d_embd": 1600,
+  "max_seq_len": 1024,
+  "vocab_size": 50304,
+  "arch_name": "gpt"
+}
