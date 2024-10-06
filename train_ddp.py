@@ -50,13 +50,12 @@ def train(
 
     with open(cfg_path) as f:
         cfg_json = json.load(f)
-    match cfg_json['arch_name']:
-        case 'gpt':
+    if cfg_json['arch_name'] == 'gpt':
             cfg_cls, model_cls = GPTConfig, GPT
-        case 'llama':
+    elif cfg_json['arch_name'] == 'llama':
             cfg_cls, model_cls = LLaMAConfig, LLaMA
-        case _:
-            raise ValueError(f'Model architecture {cfg_json["arch_name"]} not supported.')
+    else:
+        raise ValueError(f'Model architecture {cfg_json["arch_name"]} not supported.')
     cfg_m = cfg_cls(**cfg_json)
     model = DDP(model_cls(**cfg_json).to(rank))
     if pt_compile:
