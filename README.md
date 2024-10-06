@@ -105,3 +105,14 @@ FLAGS
 NOTES
     You can also use flags syntax for POSITIONAL ARGUMENTS
 ```
+
+
+## References
+
+- [karpathy/nanoGPT](https://github.com/karpathy/nanoGPT)
+- [pytorchlabs/gpt-fast](https://github.com/pytorch-labs/gpt-fast/tree/main)
+- [Multi-GPU training with DDP](https://pytorch.org/tutorials/beginner/ddp_series_multigpu.html)
+- [PyTorch profiler](https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html)
+- [`torch.profiler` docs](https://pytorch.org/docs/stable/profiler.html#torch.profiler.profile)
+- [Tutorial: Getting started with FSDP](https://pytorch.org/tutorials/intermediate/FSDP_tutorial.html)
+- [Tutorial: Advanced model training with FSDP](https://pytorch.org/tutorials/intermediate/FSDP_adavnced_tutorial.html)

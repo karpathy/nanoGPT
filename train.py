@@ -63,6 +63,12 @@ def train(
         prof_ctx = nullcontext()
         flops_per_token = cfg_m.estimate_flops_per_token(**cfg_json)
         flops_per_iter = 3 * flops_per_token * (bsz * cfg_m.max_seq_len)
+        if 'H100' in torch.cuda.get_device_name():
+            flops_promised = 989.5e12
+        elif 'MI300X' in torch.cuda.get_device_name():
+            flops_promised = 1300e12
+        else:
+            raise ValueError(f'FLOP/s for device {torch.cuda.get_device_name()} is unknown')
 
     with prof_ctx as prof, tqdm(total=n_steps) as pbar:
         for step_idx, data_batch in enumerate(data_loader):
