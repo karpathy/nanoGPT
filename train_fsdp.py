@@ -74,9 +74,9 @@ def train(
 
     # Configure FSDP
     mp_policy = MixedPrecision(
-        param_dtype=torch.float16,
-        reduce_dtype=torch.float16,
-        buffer_dtype=torch.float16
+        param_dtype=torch.bfloat16,
+        reduce_dtype=torch.bfloat16,
+        buffer_dtype=torch.bfloat16
     )
     wrap_policy = partial(transformer_auto_wrap_policy, transformer_layer_cls={blk_cls})
     model = FSDP(
@@ -137,7 +137,7 @@ def train(
 
             input_BT, label_BT = map(lambda t: t.pin_memory().to(rank, non_blocking=True), data_batch)
 
-            with torch.amp.autocast('cuda', torch.float16):
+            with torch.amp.autocast('cuda', torch.bfloat16):
                 logits_BTV = model(input_BT)
                 loss = F.cross_entropy(logits_BTV.flatten(0, 1), label_BT.flatten())
                 loss /= grad_acc_steps

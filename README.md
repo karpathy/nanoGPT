@@ -7,7 +7,7 @@ Repo for benchmarking LLM training workloads.
 
 To build the image:
 ```bash
-docker build -t llm-train-bench .
+docker build -t llm-train-bench -f ./docker/Dockerfile .
 ```
 
 To start the container:

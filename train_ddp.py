@@ -32,6 +32,7 @@ def train_ddp(
 ):
     torch.manual_seed(3985)
     world_size = torch.cuda.device_count()
+    
     train_args = (
         world_size, cfg_path, bsz, n_workers, n_steps, grad_acc_steps,
         ckpt_freq, pt_compile, profile, output_dir
@@ -67,7 +68,7 @@ def train(
         num_workers=n_workers, pin_memory=True, shuffle=False,
         sampler=DistributedSampler(dataset, rank=rank, num_replicas=world_size, shuffle=True)
     )
-    optimizer = torch.optim.AdamW(model.parameters())
+    optimizer = torch.optim.AdamW(model.parameters(), fused=True)
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda t: 1.0)
     scaler = torch.amp.GradScaler()
 
@@ -104,7 +105,7 @@ def train(
 
             input_BT, label_BT = map(lambda t: t.pin_memory().to(rank, non_blocking=True), data_batch)
 
-            with torch.amp.autocast('cuda', torch.float16):
+            with torch.amp.autocast('cuda', torch.bfloat16):
                 logits_BTV = model(input_BT)
                 loss = F.cross_entropy(logits_BTV.flatten(0, 1), label_BT.flatten())
                 loss /= grad_acc_steps
