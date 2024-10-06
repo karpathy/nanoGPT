@@ -205,7 +205,7 @@ def precompute_freq_cis(dim, rope_base, max_seq_len, **kwargs):
     pos_idx_T = torch.arange(max_seq_len)
     freq_TF = pos_idx_T.unsqueeze(1) * theta_F.unsqueeze(0)
     freq_cis_TF = torch.polar(torch.ones_like(freq_TF), freq_TF)
-    freq_cis_TFC = torch.view_as_real(freq_cis_TF)
+    freq_cis_TFC = torch.stack([freq_cis_TF.real, freq_cis_TF.imag], dim=-1)
     return freq_cis_TFC
 
 

@@ -99,7 +99,6 @@ def train(
     )
     optimizer = torch.optim.AdamW(model.parameters())
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda t: 1.0)
-    scaler = torch.amp.GradScaler()
 
     # Configure profiling
     if rank == 0:
@@ -141,16 +140,14 @@ def train(
                 logits_BTV = model(input_BT)
                 loss = F.cross_entropy(logits_BTV.flatten(0, 1), label_BT.flatten())
                 loss /= grad_acc_steps
-            scaler.scale(loss).backward()
+            loss.backward()
 
             ddp_loss[0] += loss.item()
             ddp_loss[1] += input_BT.size(0)
 
             if (step_idx + 1) % grad_acc_steps == 0:  # Assume n_steps % grad_acc_steps == 0
-                scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                scaler.step(optimizer)
-                scaler.update()
+                optimizer.step()
                 scheduler.step()
                 optimizer.zero_grad(set_to_none=True)
 
@@ -173,7 +170,7 @@ def train(
                     flops_per_sec = flops_per_iter / t
                     mfu = flops_per_sec / flops_promised
 
-                    pbar.set_description(f'[Rank {rank}]  {(flops_per_sec/1e12):.2f} TFLOP/s  MFU={mfu:.2%}')
+                    pbar.set_description(f'[rank{rank}]  {(flops_per_sec/1e12):.2f} TFLOP/s  MFU={mfu:.2%}')
                 else:
                     prof.step()
                 pbar.update(world_size)

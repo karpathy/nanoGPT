@@ -70,7 +70,6 @@ def train(
     )
     optimizer = torch.optim.AdamW(model.parameters(), fused=True)
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda t: 1.0)
-    scaler = torch.amp.GradScaler()
 
     if rank == 0:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -109,13 +108,11 @@ def train(
                 logits_BTV = model(input_BT)
                 loss = F.cross_entropy(logits_BTV.flatten(0, 1), label_BT.flatten())
                 loss /= grad_acc_steps
-            scaler.scale(loss).backward()
+            loss.backward()
 
             if (step_idx + 1) % grad_acc_steps == 0:  # Assume n_steps % grad_acc_steps == 0
-                scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                scaler.step(optimizer)
-                scaler.update()
+                optimizer.step()
                 scheduler.step()
                 optimizer.zero_grad(set_to_none=True)
 
@@ -123,7 +120,6 @@ def train(
                 ckpt = {
                     'model': model.state_dict(),
                     'optimizer': optimizer.state_dict(), 
-                    'scaler': scaler.state_dict()
                 }
                 torch.save(ckpt, Path(output_dir) / 'ckpt.pt')
 
@@ -134,9 +130,9 @@ def train(
 
                     t = start.elapsed_time(end) / 1e3
                     flops_per_sec = flops_per_iter / t
-                    mfu = flops_per_sec / 989.5e12
+                    mfu = flops_per_sec / flops_promised
 
-                    pbar.set_description(f'[Rank {rank}]  {(flops_per_sec/1e12):.2f} TFLOP/s  MFU={mfu:.2%}')
+                    pbar.set_description(f'[rank{rank}]  {(flops_per_sec/1e12):.2f} TFLOP/s  MFU={mfu:.2%}')
                 else:
                     prof.step()
                 pbar.update(world_size)
