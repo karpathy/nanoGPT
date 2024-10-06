@@ -1,0 +1,15 @@
+FROM rocm/pytorch:latest-internal
+
+RUN apt install nano
+
+# RUN pip3 uninstall -y torch
+
+# RUN pip3 install --pre torch --index-url https://download.pytorch.org/whl/nightly/rocm6.2
+
+RUN pip install uv
+
+RUN uv pip install --system ipython pytest fire pydantic
+
+WORKDIR /workspace/llm-train-bench/
+
+CMD ["/usr/bin/bash"]

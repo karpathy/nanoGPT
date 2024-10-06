@@ -14,6 +14,19 @@ To start the container:
 ```bash
 ./docker/launch.sh
 ```
+### AMD
+To build the image:
+```bash
+docker build -t llm-train-bench -f ./docker/Dockerfile.amd .
+```
+
+To start the container:
+```bash
+./docker/launch_amd.sh
+```
+
+##### IMPORTANT for amd
+set env flag `DISABLE_ADDMM_HIP_LT=0`
 
 
 ## Single GPU Training

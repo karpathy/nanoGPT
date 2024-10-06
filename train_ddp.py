@@ -134,7 +134,7 @@ def train(
 
                     t = start.elapsed_time(end) / 1e3
                     flops_per_sec = flops_per_iter / t
-                    mfu = flops_per_sec / 989.5e12
+                    mfu = flops_per_sec / flops_promised
 
                     pbar.set_description(f'[Rank {rank}]  {(flops_per_sec/1e12):.2f} TFLOP/s  MFU={mfu:.2%}')
                 else:
