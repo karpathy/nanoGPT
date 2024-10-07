@@ -7,7 +7,8 @@ Repo for benchmarking LLM training workloads.
 - [ ] selection act checkpointing @kimbochen
 - [ ] removing torch.save 
 - [ ] benchmark fsdp + selection act ckpt 8B llama3 @kimbochen
-- [ ] add transformer engine fp8 for nvidia. similar to https://github.com/cchan/nanoGPT-fp8/commits/master/
+- [ ] add transformer engine fp8 for nvidia. similar to https://github.com/cchan/nanoGPT-fp8/commits/master/ https://docs.nvidia.com/deeplearning/transformer-engine/user-guide/examples/te_llama/tutorial_accelerate_hf_llama_with_te.html
+
 - [ ] multi-node nvidia
 - [ ] multi-node amd
 
