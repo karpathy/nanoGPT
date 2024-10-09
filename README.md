@@ -32,6 +32,7 @@ python data/shakespeare_char/prepare.py
 Let's first benchmark the kernel to make sure that everything is set up correctly. Prepare `data` of choice from NanoGPT README below (modify ``dataset`` in `bench.py` path accordingly - default = `shakespeare_char`). 
 To benchmark the TK Forward Causal Attention, set `TK_kernel` = True in `bench.py` and run:
 
+
 ```bash
 python scripts/bench.py
 ```
@@ -44,12 +45,12 @@ We can train a full model using our kernels:
 ```bash
 python train.py config/train_shakespeare_char.py
 ```
-
 To scale things up with an 8 GPU node:
 ```bash
 python data/openwebtext/prepare.py
 torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 ```
+
 
 ## Finetuning
 
@@ -68,5 +69,4 @@ python scripts/inference.py
 ```
 
 ## Citations
-
 We build on the [nanoGPT](https://github.com/karpathy/nanoGPT) repository. To learn more about the repository, please view the original README.
