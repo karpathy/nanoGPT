@@ -27,6 +27,12 @@ from torch.distributed.fsdp import (
 )
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 
+from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import (
+    CheckpointImpl,
+    apply_activation_checkpointing,
+    checkpoint_wrapper
+)
+
 
 def train_fsdp(
     cfg_path: str,
@@ -35,7 +41,7 @@ def train_fsdp(
     n_steps: int = 128*8,
     grad_acc_steps: int = 8,
     reduce_freq: int = 32,
-    ckpt_freq: int = 64,
+    sac_freq: str = '1/1',
     pt_compile: bool = False,
     profile: bool = False,
     output_dir: str = 'outputs/fsdp/'
@@ -45,7 +51,7 @@ def train_fsdp(
     train_args = (
         world_size,
         cfg_path, bsz, n_workers, n_steps, grad_acc_steps, reduce_freq,
-        ckpt_freq, pt_compile, profile, output_dir
+        sac_freq, pt_compile, profile, output_dir
     )
     mp.spawn(train, train_args, nprocs=world_size)
 
@@ -53,7 +59,7 @@ def train_fsdp(
 def train(
     rank, world_size,
     cfg_path, bsz, n_workers, n_steps, grad_acc_steps, reduce_freq,
-    ckpt_freq, pt_compile, profile, output_dir
+    sac_freq, pt_compile, profile, output_dir
 ):
     # Construct process group
     os.environ.update({'MASTER_ADDR': 'localhost', 'MASTER_PORT': '30985'})
@@ -63,13 +69,12 @@ def train(
     # Configure model
     with open(cfg_path) as f:
         cfg_json = json.load(f)
-    match cfg_json['arch_name']:
-        case 'gpt':
-            cfg_cls, model_cls, blk_cls = GPTConfig, GPT, GPTBlock
-        case 'llama':
-            cfg_cls, model_cls, blk_cls = LLaMAConfig, LLaMA, LLaMABlock
-        case _:
-            raise ValueError(f'Model architecture {cfg_json["arch_name"]} not supported.')
+    if cfg_json['arch_name'] == 'gpt':
+        cfg_cls, model_cls, blk_cls = GPTConfig, GPT, GPTBlock
+    elif cfg_json['arch_name'] == 'llama':
+        cfg_cls, model_cls, blk_cls = LLaMAConfig, LLaMA, LLaMABlock
+    else:
+        raise ValueError(f'Model architecture {cfg_json["arch_name"]} not supported.')
     cfg_m = cfg_cls(**cfg_json)
 
     # Configure FSDP
@@ -87,11 +92,26 @@ def train(
         use_orig_params=True
     )
 
+    # Selective activation checkpointing
+    # Reference: https://github.com/OrenLeung/fsdp/blob/main/fms_fsdp/policies/ac_handler.py
+    block_idx = 0
+    q, p = map(int, sac_freq.split('/'))  # Applies AC for q out of every p blocks
+    def should_ckpt(submodule):
+        nonlocal block_idx
+        if isinstance(submodule, blk_cls):
+            ckpt = (block_idx % p < q)
+            block_idx += 1
+            return ckpt
+        return False
+    if sac_freq != '1/1':
+        non_reentrant_wrapper = partial(checkpoint_wrapper, checkpoint_impl=CheckpointImpl.NO_REENTRANT)
+        apply_activation_checkpointing(model, checkpoint_wrapper_fn=non_reentrant_wrapper, check_fn=should_ckpt)
+
     if pt_compile:
         model = torch.compile(model)
 
     # Configure training setup
-    dataset = SimulatedDataset(cfg_m.vocab_size, cfg_m.max_seq_len, bsz*n_steps)
+    dataset = DummyDataset(cfg_m.vocab_size, cfg_m.max_seq_len, bsz*n_steps)
     data_loader = DataLoader(
         dataset, batch_size=bsz,
         num_workers=n_workers, pin_memory=True, shuffle=False,
@@ -154,13 +174,6 @@ def train(
             if (step_idx + 1) % reduce_freq == 0:  # Assume n_steps % reduce_freq == 0
                 dist.all_reduce(ddp_loss, op=dist.ReduceOp.SUM)
 
-            if (step_idx + 1) % ckpt_freq == 0:  # Assume n_steps % ckpt_freq == 0
-                save_policy = FullStateDictConfig(offload_to_cpu=True, rank0_only=True)
-                with FSDP.state_dict_type(model, StateDictType.FULL_STATE_DICT, save_policy):
-                    cpu_state = model.state_dict()
-                if rank == 0:
-                    torch.save(cpu_state, Path(output_dir) / 'ckpt.pt')
-
             if rank == 0:
                 if not profile:
                     end.record()
@@ -182,7 +195,7 @@ def train(
     destroy_process_group()
 
 
-class SimulatedDataset(Dataset):
+class DummyDataset(Dataset):
     def __init__(self, vocab_size, max_seq_len, ds_len):
         super().__init__()
         self.vocab_size = vocab_size

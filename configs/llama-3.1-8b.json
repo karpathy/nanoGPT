@@ -3,7 +3,7 @@
   "n_heads": 32,
   "n_kv_heads": 8,
   "d_embd": 4096,
-  "max_seq_len": 131072,
+  "max_seq_len": 4096,
   "vocab_size": 128256,
   "ffn_mult": 1.3,
   "ffn_factor": 1024,

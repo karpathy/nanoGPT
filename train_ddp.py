@@ -25,7 +25,6 @@ def train_ddp(
     n_workers: int = 8,
     n_steps: int = 128*8,
     grad_acc_steps: int = 8,
-    ckpt_freq: int = 64,
     pt_compile: bool = False,
     profile: bool = False,
     output_dir: str = 'outputs/ddp/'
@@ -35,14 +34,15 @@ def train_ddp(
     
     train_args = (
         world_size, cfg_path, bsz, n_workers, n_steps, grad_acc_steps,
-        ckpt_freq, pt_compile, profile, output_dir
+        pt_compile, profile, output_dir
     )
     mp.spawn(train, train_args, nprocs=world_size)
 
 
 def train(
     rank, world_size,
-    cfg_path, bsz, n_workers, n_steps, grad_acc_steps, ckpt_freq, pt_compile, profile, output_dir
+    cfg_path, bsz, n_workers, n_steps, grad_acc_steps, pt_compile, profile,
+    output_dir
 ):
     os.environ.update({'MASTER_ADDR': 'localhost', 'MASTER_PORT': '30985'})
     torch.cuda.set_device(rank)
@@ -51,17 +51,18 @@ def train(
     with open(cfg_path) as f:
         cfg_json = json.load(f)
     if cfg_json['arch_name'] == 'gpt':
-            cfg_cls, model_cls = GPTConfig, GPT
+        cfg_cls, model_cls = GPTConfig, GPT
     elif cfg_json['arch_name'] == 'llama':
-            cfg_cls, model_cls = LLaMAConfig, LLaMA
+        cfg_cls, model_cls = LLaMAConfig, LLaMA
     else:
         raise ValueError(f'Model architecture {cfg_json["arch_name"]} not supported.')
     cfg_m = cfg_cls(**cfg_json)
     model = DDP(model_cls(**cfg_json).to(rank))
+
     if pt_compile:
         model = torch.compile(model)
 
-    dataset = SimulatedDataset(cfg_m.vocab_size, cfg_m.max_seq_len, bsz*n_steps)
+    dataset = DummyDataset(cfg_m.vocab_size, cfg_m.max_seq_len, bsz*n_steps)
     data_loader = DataLoader(
         dataset, batch_size=bsz,
         num_workers=n_workers, pin_memory=True, shuffle=False,
@@ -115,13 +116,6 @@ def train(
                 scheduler.step()
                 optimizer.zero_grad(set_to_none=True)
 
-            if rank == 0 and (step_idx + 1) % ckpt_freq == 0:  # Assume n_steps % ckpt_freq == 0
-                ckpt = {
-                    'model': model.state_dict(),
-                    'optimizer': optimizer.state_dict(), 
-                }
-                torch.save(ckpt, Path(output_dir) / 'ckpt.pt')
-
             if rank == 0:
                 if not profile:
                     end.record()
@@ -142,7 +136,7 @@ def train(
     destroy_process_group()
 
 
-class SimulatedDataset(Dataset):
+class DummyDataset(Dataset):
     def __init__(self, vocab_size, max_seq_len, ds_len):
         super().__init__()
         self.vocab_size = vocab_size

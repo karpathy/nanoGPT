@@ -20,7 +20,6 @@ def train(
     n_workers: int = 8,
     n_steps: int = 128,
     grad_acc_steps: int = 8,
-    ckpt_freq: int = 64,
     pt_compile: bool = False,
     profile: bool = False,
     output_dir: str = 'outputs/single_gpu'
@@ -28,30 +27,30 @@ def train(
     torch.manual_seed(3985)
     torch.cuda.set_device(gpu_id)
 
+    # Configure model
     with open(cfg_path) as f:
         cfg_json = json.load(f)
-    match cfg_json['arch_name']:
-        case 'gpt':
-            cfg_cls, model_cls = GPTConfig, GPT
-        case 'llama':
-            cfg_cls, model_cls = LLaMAConfig, LLaMA
-        case _:
-            raise ValueError(f'Unsupported model {cfg_json["arch_name"]}.')
+    if cfg_json['arch_name'] == 'gpt':
+        cfg_cls, model_cls = GPTConfig, GPT
+    elif cfg_json['arch_name'] == 'llama':
+        cfg_cls, model_cls = LLaMAConfig, LLaMA
+    else:
+        raise ValueError(f'Model architecture {cfg_json["arch_name"]} not supported.')
     cfg_m = cfg_cls(**cfg_json)
     model = model_cls(**cfg_json).to(gpu_id)
+
     if pt_compile:
         model = torch.compile(model)
 
-    dataset = SimulatedDataset(cfg_m.vocab_size, cfg_m.max_seq_len, bsz*n_steps)
+    # Configure training setup
+    dataset = DummyDataset(cfg_m.vocab_size, cfg_m.max_seq_len, bsz*n_steps)
     data_loader = DataLoader(
         dataset, batch_size=bsz, num_workers=n_workers, pin_memory=True, shuffle=True,
     )
     optimizer = torch.optim.AdamW(model.parameters())
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda t: 1.0)
 
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-    model.train()
-
+    # Configure profiling
     if profile:
         prof_ctx = torch.profiler.profile(
             activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
@@ -68,6 +67,10 @@ def train(
             flops_promised = 1300e12
         else:
             raise ValueError(f'FLOP/s for device {torch.cuda.get_device_name()} is unknown')
+
+    # Training loop
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    model.train()
 
     with prof_ctx as prof, tqdm(total=n_steps) as pbar:
         for step_idx, data_batch in enumerate(data_loader):
@@ -90,13 +93,6 @@ def train(
                 scheduler.step()
                 optimizer.zero_grad(set_to_none=True)
 
-            if (step_idx + 1) % ckpt_freq == 0:  # Assume n_steps % ckpt_freq == 0
-                ckpt = {
-                    'model': model.state_dict(),
-                    'optimizer': optimizer.state_dict(), 
-                }
-                torch.save(ckpt, Path(output_dir) / 'ckpt.pt')
-
             if not profile:
                 end.record()
                 torch.cuda.synchronize()
@@ -105,7 +101,7 @@ def train(
                 flops_per_sec = flops_per_iter / t
                 mfu = flops_per_sec / flops_promised
 
-                pbar.set_description(f'[GPU ID {gpu_id}]  {(flops_per_sec/1e12):.2f} TFLOP/s  MFU={mfu:.2%}')
+                pbar.set_description(f'{(flops_per_sec/1e12):.2f} TFLOP/s  MFU={mfu:.2%}')
             else:
                 prof.step()
             pbar.update()
@@ -114,7 +110,7 @@ def train(
         prof.export_chrome_trace(f'{output_dir}/{Path(cfg_path).stem}_trace.json')
 
 
-class SimulatedDataset(Dataset):
+class DummyDataset(Dataset):
     def __init__(self, vocab_size, max_seq_len, ds_len):
         super().__init__()
         self.vocab_size = vocab_size
