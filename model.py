@@ -58,13 +58,18 @@ class CausalSelfAttention(nn.Module):
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 
+        # Normalize each query and key within each head
+        q = q/q.norm(dim=-1, keepdim=True)
+        k = k/k.norm(dim=-1, keepdim=True)
+        scaling_factor = math.sqrt(k.size(-1))
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
             # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
+            # Adjusted scaling factor
+            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True, scale=scaling_factor)
         else:
             # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+            att = (q @ k.transpose(-2, -1)) * scaling_factor # Adjusted scaling factor
             att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
@@ -75,21 +80,56 @@ class CausalSelfAttention(nn.Module):
         y = self.resid_dropout(self.c_proj(y))
         return y
 
+    def normalize_parameters(self):
+        # TODO: Determine what to do with the bias in the normalization step.
+        # TODO: it would also make sense to normalize the value matrix along the output embedding dimension rather
+        #  than the input embedding dimension.
+
+        # TODO: there is an ambiguity w.r.t the meaning of the embedding dimension for the projection matrix, we'll
+        #   assume it means the vectors that get linearly combined to produce the output
+
+        # normalize the c_fc_u and c_fc_v parameter matrices
+        with torch.no_grad():
+            c_attn_weight = self.c_attn.weight
+            c_attn_weight[:] = c_attn_weight/c_attn_weight.norm(dim=-1, keepdim=True)
+            c_proj_weight = self.c_proj.weight
+            c_proj_weight[:] = c_proj_weight/c_proj_weight.norm(dim=-2, keepdim=True)
+
 class MLP(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
-        self.gelu    = nn.GELU()
+        self.c_fc_u    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
+        self.c_fc_v    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
+        self.silu    = nn.SiLU()
         self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
+        self.scale_u = nn.Parameter(torch.full(size=(config.n_embd,), fill_value=1.0, requires_grad=True))
+        self.scale_v = nn.Parameter(torch.full(size=(config.n_embd,), fill_value=1.0, requires_grad=True))
+        self.scale_v_constant = 1.0/math.sqrt(config.n_embd)
 
     def forward(self, x):
-        x = self.c_fc(x)
-        x = self.gelu(x)
+        u = self.c_fc_u(x)
+        v = self.c_fc_v(x)
+        # Apply the scaling
+        u = u * self.scale_u[None, None, -1]
+        v = v * self.scale_v[None, None, -1]*self.scale_v_constant
+        # Compute SwiGLU
+        x = u*self.silu(v)
         x = self.c_proj(x)
         x = self.dropout(x)
         return x
+
+    def normalize_parameters(self):
+        # normalize the q, k, v projector matrices parameter matrices
+        with torch.no_grad():
+            c_fc_u_weight = self.c_fc_u.weight
+            c_fc_u_weight[:] = c_fc_u_weight/c_fc_u_weight.norm(dim=-1, keepdim=True)
+            c_fc_v_weight = self.c_fc_v.weight
+            c_fc_v_weight[:] = c_fc_v_weight/c_fc_v_weight.norm(dim=-1, keepdim=True)
+            # The embedding dimension here is the output dimension
+            c_proj_weight = self.c_proj.weight
+            c_proj_weight[:] = c_proj_weight/c_proj_weight.norm(dim=-2, keepdim=True)
 
 class Block(nn.Module):
 
@@ -110,11 +150,16 @@ class Block(nn.Module):
     def forward(self, x):
         # The forward pass becomes x<- h+alpha_a(h_A-h) = (1-alpha_a)h + alpha_a h_A, the same for the MLP residual step
         # Normalizations of the activations will be differentiable, we introduce them in the forward computation.
-        def _norm(x):
-            return x/x.norm(dim=-1, keepdim=True)
-        x = _norm(((1-self.alpha_attention)*x + self.alpha_attention[None, None, :]*self.attn(self.ln_1(x))))
-        x = _norm((1-self.alpha_mlp)*x + self.alpha_mlp[None, None, :]*self.mlp(self.ln_2(x)))
+        x = ((1-self.alpha_attention)*x + self.alpha_attention[None, None, :]*self.attn(self.ln_1(x)))
+        x = x/x.norm(dim=-1, keepdim=True)
+        x = (1-self.alpha_mlp)*x + self.alpha_mlp[None, None, :]*self.mlp(self.ln_2(x))
+        x = x/x.norm(dim=-1, keepdim=True)
         return x
+
+    def normalize_parameters(self):
+        # Call the submodules which have parameters to normalize
+        self.attn.normalize_parameters()
+        self.mlp.normalize_parameters()
 
 @dataclass
 class GPTConfig:
@@ -339,3 +384,17 @@ class GPT(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
 
         return idx
+
+    def normalize_parameters(self):
+        # normalize our wte and wpe
+        # Make sure this operation doesn't become differentiable
+        wte = self.transformer['wte']
+        wpe = self.transformer['wpe']
+
+        with torch.no_grad():
+            wte.weight[:] = wte.weight/wte.weight.norm(dim=-1, keepdim=True)
+            wpe.weight[:] = wpe.weight/wpe.weight.norm(dim=-1, keepdim=True)
+
+        # Call all submodules that have parameters which need to be normalized.
+        for block in self.transformer['h']:
+            block.normalize_parameters()

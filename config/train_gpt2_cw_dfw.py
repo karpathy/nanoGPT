@@ -4,8 +4,8 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-out_dir = experiment_name = wandb_run_name = 'coreweave_nano_gpt_test_8gpu'
-wandb_notes = """Initial test in coreweave with 8 gpus"""
+out_dir = experiment_name = wandb_run_name = 'normalized_activations'
+wandb_notes = """Test normalized activations after the updated residual step"""
 
 data_root_path='/data/'
 dataset = 'nanoGPTopenwebtext'
