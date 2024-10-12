@@ -13,7 +13,7 @@ dataset = 'nanoGPTopenwebtext'
 # 12 batch size * 1024 block size * 5 gradaccum * 8 GPUs = 491,520
 batch_size = 12
 block_size = 1024
-gradient_accumulation_steps = 5 # 5 instead of 5x8 because this is intended to run in 8 gpus
+gradient_accumulation_steps = 5 * 8  # This gets downscaled by the number of gpus automatically in train.py
 
 # this makes total number of tokens be 300B
 max_iters = 600000
