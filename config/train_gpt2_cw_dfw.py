@@ -4,8 +4,8 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-out_dir = experiment_name = wandb_run_name = 'normalized_activations'
-wandb_notes = """Test normalized activations after the updated residual step"""
+out_dir = experiment_name = wandb_run_name = 'normalized_gpt_test'
+wandb_notes = """Test normalized gpt with all modifications"""
 
 data_root_path='/data/'
 dataset = 'nanoGPTopenwebtext'
