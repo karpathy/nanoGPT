@@ -99,10 +99,18 @@ class Block(nn.Module):
         self.attn = CausalSelfAttention(config)
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
+        # Interlayer step sizes "eigen step-size" we keep these rank 1 instead of [batch, seq, dim] so that
+        # they don't get added to the decay parameters
+        # The initialization should be roughly 1/n_layers
+        alpha_init_val = 1.0 / config.n_layer
+        self.alpha_attention = nn.Parameter(
+            torch.full(size=(config.n_embd,), fill_value=alpha_init_val, requires_grad=True))
+        self.alpha_mlp = nn.Parameter(torch.full(size=(config.n_embd,), fill_value=alpha_init_val, requires_grad=True))
 
     def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
-        x = x + self.mlp(self.ln_2(x))
+        # The forward pass becomes x<- h+alpha_a(h_A-h) = (1-alpha_a)h + alpha_a h_A, the same for the MLP residual step
+        x = ((1-self.alpha_attention)*x + self.alpha_attention[None, None, :]*self.attn(self.ln_1(x)))
+        x = (1-self.alpha_mlp)*x + self.alpha_mlp[None, None, :]*self.mlp(self.ln_2(x))
         return x
 
 @dataclass
