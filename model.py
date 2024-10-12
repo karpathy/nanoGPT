@@ -15,17 +15,6 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-class LayerNorm(nn.Module):
-    """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
-
-    def __init__(self, ndim, bias):
-        super().__init__()
-        self.weight = nn.Parameter(torch.ones(ndim))
-        self.bias = nn.Parameter(torch.zeros(ndim)) if bias else None
-
-    def forward(self, input):
-        return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
-
 class CausalSelfAttention(nn.Module):
 
     def __init__(self, config):
@@ -135,9 +124,7 @@ class Block(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
         self.attn = CausalSelfAttention(config)
-        self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
         # Interlayer step sizes "eigen step-size" we keep these rank 1 instead of [batch, seq, dim] so that
         # they don't get added to the decay parameters
@@ -150,9 +137,9 @@ class Block(nn.Module):
     def forward(self, x):
         # The forward pass becomes x<- h+alpha_a(h_A-h) = (1-alpha_a)h + alpha_a h_A, the same for the MLP residual step
         # Normalizations of the activations will be differentiable, we introduce them in the forward computation.
-        x = ((1-self.alpha_attention)*x + self.alpha_attention[None, None, :]*self.attn(self.ln_1(x)))
+        x = ((1-self.alpha_attention)*x + self.alpha_attention[None, None, :]*self.attn(x))
         x = x/x.norm(dim=-1, keepdim=True)
-        x = (1-self.alpha_mlp)*x + self.alpha_mlp[None, None, :]*self.mlp(self.ln_2(x))
+        x = (1-self.alpha_mlp)*x + self.alpha_mlp[None, None, :]*self.mlp(x)
         x = x/x.norm(dim=-1, keepdim=True)
         return x
 
@@ -184,7 +171,6 @@ class GPT(nn.Module):
             wpe = nn.Embedding(config.block_size, config.n_embd),
             drop = nn.Dropout(config.dropout),
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
-            ln_f = LayerNorm(config.n_embd, bias=config.bias),
         ))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         # with weight tying when using torch.compile() some warnings get generated:
@@ -235,7 +221,6 @@ class GPT(nn.Module):
         x = self.transformer.drop(tok_emb + pos_emb)
         for block in self.transformer.h:
             x = block(x)
-        x = self.transformer.ln_f(x)
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
