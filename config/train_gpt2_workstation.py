@@ -4,9 +4,9 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-out_dir = experiment_name = wandb_run_name = 'gpt2-124M-workstation-debug-residual-step'
+out_dir = experiment_name = wandb_run_name = 'gpt2-124M-normalized_gpt'
 wandb_log = True
-wandb_notes = "Changing the residual step"
+wandb_notes = "Base normalized GPT run"
 wandb_project = "normalized_gpt_dev_sakle"
 
 data_root_path='/mnt/data/'
