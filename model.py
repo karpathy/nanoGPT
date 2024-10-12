@@ -109,8 +109,11 @@ class Block(nn.Module):
 
     def forward(self, x):
         # The forward pass becomes x<- h+alpha_a(h_A-h) = (1-alpha_a)h + alpha_a h_A, the same for the MLP residual step
-        x = ((1-self.alpha_attention)*x + self.alpha_attention[None, None, :]*self.attn(self.ln_1(x)))
-        x = (1-self.alpha_mlp)*x + self.alpha_mlp[None, None, :]*self.mlp(self.ln_2(x))
+        # Normalizations of the activations will be differentiable, we introduce them in the forward computation.
+        def _norm(x):
+            return x/x.norm(dim=-1, keepdim=True)
+        x = _norm(((1-self.alpha_attention)*x + self.alpha_attention[None, None, :]*self.attn(self.ln_1(x))))
+        x = _norm((1-self.alpha_mlp)*x + self.alpha_mlp[None, None, :]*self.mlp(self.ln_2(x)))
         return x
 
 @dataclass
