@@ -4,9 +4,8 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-wandb_log = True
-wandb_project = 'fast_conformer_language_modeling'
-wandb_run_name='gpt2-124M-workstation-debug'
+experiment_name = 'gpt2-124M-workstation-debug'
+experiment_notes = "local test of nano GPT"
 
 data_root_path='/mnt/data/'
 dataset = 'nanoGPTopenweb'

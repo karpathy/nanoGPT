@@ -32,17 +32,27 @@ from model import GPTConfig, GPT
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'out'
+
+# These must be specified for each experiment
+# experiment name must be a valid directory name, it will be used for the wandb run_name
+# experiment notes can be any string.
+experiment_name = None
+experiment_notes = None
+
+out_dir = experiment_name
 eval_interval = 2000
 log_interval = 1
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+
 # wandb logging
-wandb_log = False # disabled by default
-wandb_project = 'owt'
-wandb_run_name = 'gpt2' # 'run' + str(time.time())
+wandb_log = True
+wandb_project = 'normalized_gpt_dev_sakle'
+wandb_run_name = experiment_name
+wandb_notes = experiment_notes
+
 # data
 data_root_path = None
 dataset = 'openwebtext'
@@ -246,7 +256,7 @@ def get_lr(it):
 # logging
 if wandb_log and master_process:
     import wandb
-    wandb.init(project=wandb_project, name=wandb_run_name, config=config)
+    wandb.init(project=wandb_project, name=wandb_run_name, notes=wandb_notes, config=config)
 
 # training loop
 X, Y = get_batch('train') # fetch the very first batch
