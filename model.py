@@ -77,7 +77,7 @@ class CausalSelfAttention(nn.Module):
         # TODO: there is an ambiguity w.r.t the meaning of the embedding dimension for the projection matrix, we'll
         #   assume it means the vectors that get linearly combined to produce the output
 
-        # normalize the c_fc_u and c_fc_v parameter matrices
+        # normalize the qkv and the output projection matrices
         with torch.no_grad():
             c_attn_weight = self.c_attn.weight
             c_attn_weight[:] = c_attn_weight/c_attn_weight.norm(dim=-1, keepdim=True)
