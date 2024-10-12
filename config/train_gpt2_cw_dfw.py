@@ -3,8 +3,9 @@
 # config for training GPT-2 (124M) down to very nice loss of ~2.85 on 1 node of 8X A100 40GB
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
-out_dir = experiment_name = 'coreweave_nano_gpt_test_8gpu'
-experiment_notes = """Initial test in coreweave with 8 gpus"""
+
+out_dir = experiment_name = wandb_run_name = 'coreweave_nano_gpt_test_8gpu'
+wandb_notes = """Initial test in coreweave with 8 gpus"""
 
 data_root_path='/data/'
 dataset = 'nanoGPTopenwebtext'
