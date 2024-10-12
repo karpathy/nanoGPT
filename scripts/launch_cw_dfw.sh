@@ -95,7 +95,7 @@ echo "******STARTING ${SLURM_NODEID}:${SLURM_LOCALID} ******" \
 && export PYTHONPATH=/workspaces/nanoGPT:/opt/NeMo-Framework-Launcher/launcher_scripts:/opt/megatron-lm \
 && export WANDB_TAGS="nanogpt_git_sha=$(cat ${RESULTS_DIR}/nanogpt_git_commit_job_${SLURM_JOB_ID}),SLURM_JOB_ID=${SLURM_JOB_ID}" \
 && export WANDB_RUN_ID=${WANDB_RUN_ID} \
-&& CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python /workspaces/nanoGPT/train.py /workspaces/nanoGPT/config/train_gpt2.py
+&& CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python /workspaces/nanoGPT/train.py /workspaces/nanoGPT/config/train_gpt2_cw_dfw.py
 EOF
 
 echo ${cmd}
