@@ -6,6 +6,7 @@
 
 out_dir = experiment_name = wandb_run_name = 'gpt2-124M-workstation-debug-residual-step'
 wandb_notes = "Changing the residual step"
+wandb_project = "normalized_gpt_dev_sakle"
 
 data_root_path='/mnt/data/'
 dataset = 'nanoGPTopenweb'
