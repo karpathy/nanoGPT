@@ -93,16 +93,16 @@ class MLP(nn.Module):
         self.silu    = nn.SiLU()
         self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
-        self.scale_u = nn.Parameter(torch.full(size=(config.n_embd,), fill_value=1.0, requires_grad=True))
-        self.scale_v = nn.Parameter(torch.full(size=(config.n_embd,), fill_value=1.0, requires_grad=True))
+        self.scale_u = nn.Parameter(torch.full(size=(4 * config.n_embd,), fill_value=1.0, requires_grad=True))
+        self.scale_v = nn.Parameter(torch.full(size=(4 * config.n_embd,), fill_value=1.0, requires_grad=True))
         self.scale_v_constant = 1.0/math.sqrt(config.n_embd)
 
     def forward(self, x):
         u = self.c_fc_u(x)
         v = self.c_fc_v(x)
         # Apply the scaling
-        u = u * self.scale_u[None, None, -1]
-        v = v * self.scale_v[None, None, -1]*self.scale_v_constant
+        u = u * self.scale_u[None, None, :]
+        v = v * self.scale_v[None, None, :]*self.scale_v_constant
         # Compute SwiGLU
         x = u*self.silu(v)
         x = self.c_proj(x)
@@ -137,9 +137,9 @@ class Block(nn.Module):
     def forward(self, x):
         # The forward pass becomes x<- h+alpha_a(h_A-h) = (1-alpha_a)h + alpha_a h_A, the same for the MLP residual step
         # Normalizations of the activations will be differentiable, we introduce them in the forward computation.
-        x = ((1-self.alpha_attention)*x + self.alpha_attention[None, None, :]*self.attn(x))
+        x = ((1-self.alpha_attention[None, None, :])*x + self.alpha_attention[None, None, :]*self.attn(x))
         x = x/x.norm(dim=-1, keepdim=True)
-        x = (1-self.alpha_mlp)*x + self.alpha_mlp[None, None, :]*self.mlp(x)
+        x = (1-self.alpha_mlp[None, None, :])*x + self.alpha_mlp[None, None, :]*self.mlp(x)
         x = x/x.norm(dim=-1, keepdim=True)
         return x
 

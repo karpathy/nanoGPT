@@ -29,4 +29,4 @@ eval_iters = 200
 log_interval = 10
 
 # weight decay
-weight_decay = 1e-1
+weight_decay = 0.0
