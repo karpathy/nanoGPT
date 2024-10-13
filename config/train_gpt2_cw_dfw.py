@@ -23,6 +23,7 @@ max_iters = 600000
 lr_decay_iters = 600000
 learning_rate = 1e-3
 warmup_iters = 0 # how many steps to warm up for
+grad_clip = 0.0 # clip gradients at this value, or disable if == 0.0
 
 # eval stuff
 eval_interval = 1000
