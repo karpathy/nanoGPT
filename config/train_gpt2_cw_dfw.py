@@ -4,9 +4,9 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-out_dir = experiment_name = wandb_run_name = 'normalized_gpt_test_lr1e3'
+out_dir = experiment_name = wandb_run_name = 'normalized_gpt_test_lr1e3_test_silu'
 wandb_log = True
-wandb_notes = """Test normalized gpt with all modifications with lower learning rate"""
+wandb_notes = """Test normalized gpt with all modifications with lower learning rate remove u and siglu try silu"""
 wandb_project = "normalized_gpt_dev_sakle"
 
 data_root_path='/data/'
