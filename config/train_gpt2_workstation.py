@@ -8,7 +8,7 @@ out_dir = experiment_name = wandb_run_name = 'gpt2-124M-normalized_gpt'
 wandb_log = True
 wandb_notes = "Base normalized GPT run"
 wandb_project = "normalized_gpt_dev_sakle"
-
+compile = True
 data_root_path='/mnt/data/'
 dataset = 'nanoGPTopenweb'
 
