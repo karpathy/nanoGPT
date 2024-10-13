@@ -43,6 +43,7 @@ def train_fsdp(
     reduce_freq: int = 32,
     sac_freq: str = '1/1',
     pt_compile: bool = False,
+    compile_mode: str = 'default', # "default", "reduce-overhead", "max-autotune" or "max-autotune-no-cudagraphs"
     profile: bool = False,
     output_dir: str = 'outputs/fsdp/'
 ):
@@ -51,7 +52,7 @@ def train_fsdp(
     train_args = (
         world_size,
         cfg_path, bsz, n_workers, n_steps, grad_acc_steps, reduce_freq,
-        sac_freq, pt_compile, profile, output_dir
+        sac_freq, pt_compile, compile_mode, profile, output_dir
     )
     mp.spawn(train, train_args, nprocs=world_size)
 
@@ -59,7 +60,7 @@ def train_fsdp(
 def train(
     rank, world_size,
     cfg_path, bsz, n_workers, n_steps, grad_acc_steps, reduce_freq,
-    sac_freq, pt_compile, profile, output_dir
+    sac_freq, pt_compile, compile_mode, profile, output_dir
 ):
     # Construct process group
     os.environ.update({'MASTER_ADDR': 'localhost', 'MASTER_PORT': '30985'})
@@ -84,8 +85,12 @@ def train(
         buffer_dtype=torch.bfloat16
     )
     wrap_policy = partial(transformer_auto_wrap_policy, transformer_layer_cls={blk_cls})
+    
+    model = model_cls(**cfg_json)
+    # need to do before wrapping in FSDP
+    flops_per_token = cfg_m.estimate_flops_per_token(model, cfg_json)
     model = FSDP(
-        model_cls(**cfg_json),
+        model,
         device_id=rank,
         auto_wrap_policy=wrap_policy,
         mixed_precision=mp_policy,
@@ -108,7 +113,9 @@ def train(
         apply_activation_checkpointing(model, checkpoint_wrapper_fn=non_reentrant_wrapper, check_fn=should_ckpt)
 
     if pt_compile:
-        model = torch.compile(model)
+        print("compiling")
+        print(compile_mode)
+        model = torch.compile(model, mode=compile_mode)
 
     # Configure training setup
     dataset = DummyDataset(cfg_m.vocab_size, cfg_m.max_seq_len, bsz*n_steps)
@@ -117,27 +124,31 @@ def train(
         num_workers=n_workers, pin_memory=True, shuffle=False,
         sampler=DistributedSampler(dataset, rank=rank, num_replicas=world_size, shuffle=True)
     )
-    optimizer = torch.optim.AdamW(model.parameters())
+    optimizer = torch.optim.AdamW(model.parameters(), fused=True)
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda t: 1.0)
 
     # Configure profiling
     if rank == 0:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
-        if not profile:
-            flops_per_token = cfg_m.estimate_flops_per_token(**cfg_json)
-            flops_per_iter = 3 * flops_per_token * (bsz * cfg_m.max_seq_len)
-            if 'H100' in torch.cuda.get_device_name():
-                flops_promised = 989.5e12
-            elif 'MI300X' in torch.cuda.get_device_name():
-                flops_promised = 1300e12
-            else:
-                raise ValueError(f'FLOP/s for device {torch.cuda.get_device_name()} is unknown')
+        flops_per_iter = flops_per_token * (bsz * cfg_m.max_seq_len)
+        if 'H100' in torch.cuda.get_device_name():
+            flops_promised = 989.5e12
+        elif 'MI300X' in torch.cuda.get_device_name():
+            flops_promised = 1300e12
+        else:
+            raise ValueError(f'FLOP/s for device {torch.cuda.get_device_name()} is unknown')
 
     if profile and rank == 0:
+        def trace_export_callback(prof):
+            prof.export_chrome_trace(f'{output_dir}/{Path(cfg_path).stem}_trace.json')
+
         prof_ctx = torch.profiler.profile(
             activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
             schedule=torch.profiler.schedule(wait=5, warmup=5, active=5, repeat=1),
-            with_flops=True
+            with_flops=True,
+            with_stack=True,
+            record_shapes=True,
+            on_trace_ready=torch.profiler.tensorboard_trace_handler(output_dir)
         )
     else:
         prof_ctx = nullcontext()
@@ -149,7 +160,7 @@ def train(
 
     with prof_ctx as prof, pbar_ctx as pbar:
         for step_idx, data_batch in enumerate(data_loader):
-            if rank == 0 and not profile:
+            if rank == 0:
                 start = torch.cuda.Event(enable_timing=True)
                 end = torch.cuda.Event(enable_timing=True)
                 start.record()
@@ -175,21 +186,19 @@ def train(
                 dist.all_reduce(ddp_loss, op=dist.ReduceOp.SUM)
 
             if rank == 0:
-                if not profile:
-                    end.record()
-                    torch.cuda.synchronize()
+                end.record()
+                torch.cuda.synchronize()
 
-                    t = start.elapsed_time(end) / 1e3
-                    flops_per_sec = flops_per_iter / t
-                    mfu = flops_per_sec / flops_promised
+                t = start.elapsed_time(end) / 1e3
+                flops_per_sec = flops_per_iter / t
+                mfu = flops_per_sec / flops_promised
 
-                    pbar.set_description(f'[rank{rank}]  {(flops_per_sec/1e12):.2f} TFLOP/s  MFU={mfu:.2%}')
-                else:
-                    prof.step()
+                pbar.set_description(f'[rank{rank}]  {(flops_per_sec/1e12):.2f} TFLOP/s  MFU={mfu:.2%}')
+
                 pbar.update(world_size)
-
-    if rank == 0 and profile:
-        prof.export_chrome_trace(f'{output_dir}/{Path(cfg_path).stem}_trace.json')
+                
+                if profile:
+                    prof.step()
 
     dist.barrier()
     destroy_process_group()

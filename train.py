@@ -21,6 +21,7 @@ def train(
     n_steps: int = 128,
     grad_acc_steps: int = 8,
     pt_compile: bool = False,
+    compile_mode: str = 'default',
     profile: bool = False,
     output_dir: str = 'outputs/single_gpu'
 ):
@@ -40,27 +41,32 @@ def train(
     model = model_cls(**cfg_json).to(gpu_id)
 
     if pt_compile:
-        model = torch.compile(model)
+        print("compiling")
+        model = torch.compile(model, mode=compile_mode)
 
     # Configure training setup
     dataset = DummyDataset(cfg_m.vocab_size, cfg_m.max_seq_len, bsz*n_steps)
     data_loader = DataLoader(
         dataset, batch_size=bsz, num_workers=n_workers, pin_memory=True, shuffle=True,
     )
-    optimizer = torch.optim.AdamW(model.parameters())
+    optimizer = torch.optim.AdamW(model.parameters(), fused=True)
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda t: 1.0)
 
     # Configure profiling
     if profile:
+        def trace_export_callback(prof):
+            prof.export_chrome_trace(f'{output_dir}/{Path(cfg_path).stem}_trace.json')
+
         prof_ctx = torch.profiler.profile(
             activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
             schedule=torch.profiler.schedule(wait=5, warmup=5, active=5, repeat=1),
-            with_flops=True
+            with_flops=True,
+            on_trace_ready=trace_export_callback
         )
     else:
         prof_ctx = nullcontext()
-        flops_per_token = cfg_m.estimate_flops_per_token(**cfg_json)
-        flops_per_iter = 3 * flops_per_token * (bsz * cfg_m.max_seq_len)
+        flops_per_token = cfg_m.estimate_flops_per_token(model, cfg_json)
+        flops_per_iter = flops_per_token * (bsz * cfg_m.max_seq_len)
         if 'H100' in torch.cuda.get_device_name():
             flops_promised = 989.5e12
         elif 'MI300X' in torch.cuda.get_device_name():
@@ -74,10 +80,9 @@ def train(
 
     with prof_ctx as prof, tqdm(total=n_steps) as pbar:
         for step_idx, data_batch in enumerate(data_loader):
-            if not profile:
-                start = torch.cuda.Event(enable_timing=True)
-                end = torch.cuda.Event(enable_timing=True)
-                start.record()
+            start = torch.cuda.Event(enable_timing=True)
+            end = torch.cuda.Event(enable_timing=True)
+            start.record()
 
             input_BT, label_BT = map(lambda t: t.pin_memory().to(gpu_id), data_batch)
 
@@ -93,21 +98,19 @@ def train(
                 scheduler.step()
                 optimizer.zero_grad(set_to_none=True)
 
-            if not profile:
-                end.record()
-                torch.cuda.synchronize()
+            end.record()
+            torch.cuda.synchronize()
 
-                t = start.elapsed_time(end) / 1e3
-                flops_per_sec = flops_per_iter / t
-                mfu = flops_per_sec / flops_promised
+            t = start.elapsed_time(end) / 1e3
+            flops_per_sec = flops_per_iter / t
+            mfu = flops_per_sec / flops_promised
 
-                pbar.set_description(f'{(flops_per_sec/1e12):.2f} TFLOP/s  MFU={mfu:.2%}')
-            else:
-                prof.step()
+            pbar.set_description(f'{(flops_per_sec/1e12):.2f} TFLOP/s  MFU={mfu:.2%}')
             pbar.update()
+            
+            if profile:
+                prof.step()
 
-    if profile:
-        prof.export_chrome_trace(f'{output_dir}/{Path(cfg_path).stem}_trace.json')
 
 
 class DummyDataset(Dataset):

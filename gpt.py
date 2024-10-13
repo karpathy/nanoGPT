@@ -6,6 +6,24 @@ import torch.nn as nn
 from pydantic.dataclasses import dataclass
 
 
+def disable_torch_compile_if_amd(func):
+    # Define a wrapper that applies the torch.compiler.disable decorator conditionally
+    if torch.cuda.is_available() and "MI300X" in torch.cuda.get_device_name():
+        return torch.compiler.disable()(func)
+    else:
+        return func
+
+
+@disable_torch_compile_if_amd
+def scaled_dot_product_attention_wrapper(q_BHTD, k_BHTD, v_BHTD, dropout_p=0.0, is_causal=True):
+    # with torch.nn.attention.sdpa_kernel(
+    #     enable_math=True,
+    #     enable_flash=False,
+    #     enable_mem_efficient=False
+    # ):
+    o_BHTD = F.scaled_dot_product_attention(q_BHTD, k_BHTD, v_BHTD, dropout_p=dropout_p, is_causal=is_causal)
+    return o_BHTD
+
 @dataclass
 class GPTConfig:
     n_layers: int    # L
@@ -16,36 +34,14 @@ class GPTConfig:
     arch_name: str = 'gpt'
 
     @staticmethod
-    def estimate_flops_per_token(n_layers, n_heads, d_embd, max_seq_len, vocab_size, **kwargs):
-        ''' FLOPs per token derivation:
-        We first derive FLOPs per sequence:
-
-        qkvo_proj_flops = 4 * (2 * d_embd * d_embd * seq_len) = 8 * d_embd^2 * seq_len
-        sdpa_flops = n_heads * ((2 * seq_len * d_head * seq_len) + (2 * seq_len * seq_len * d_head)) = 4 * d_embd * seq_len^2
-        ffn_flops = (2 * (4 * d_embd) * d_embd * seq_len) + (2 * d_embd * (4 * d_embd) * seq_len) = 16 * d_embd^2 * seq_len
-        in_embd_flops = 2 * d_embd * vocab_size * seq_len = 2 * vocab_size * d_embd * seq_len
-        out_embd_flops = 2 * vocab_size * d_embd * seq_len = 2 * vocab_size * d_embd * seq_len
-
-        flops_per_seq = in_embd_flops + n_layers * (qkvo_flops + sdpa_flops + ffn_flops) + out_embd_flops
-        = n_layers * (24 * d_embd^2 * seq_len + 4 * d_embd * seq_len^2) + 4 * vocab_size * d_embd * seq_len
-        = (n_layers * (24 * d_embd^2 + 4 * d_embd * seq_len) + 4 * vocab_size * d_embd) * seq_len
-        = (24 * n_layers * d_embd^2 + 4 * d_embd * (n_layers * seq_len + vocab_size)) * seq_len
-
-        Thus, on average,
-        flops_per_token = 24 * n_layers * d_embd^2 + 4 * d_embd * (n_layers * seq_len + vocab_size)
-        '''
-        mm_flops = lambda M, K, N: 2 * M * K * N
-        d_head = d_embd // n_heads
-
-        qkvo_flops = 4 * mm_flops(d_embd, d_embd, max_seq_len)
-        sdpa_flops = n_heads * (mm_flops(max_seq_len, d_head, max_seq_len) + mm_flops(max_seq_len, max_seq_len, d_head))
-        ffn_flops = mm_flops(4*d_embd, d_embd, max_seq_len) + mm_flops(d_embd, 4*d_embd, max_seq_len)
-        in_embd_flops = mm_flops(d_embd, vocab_size, max_seq_len)
-        out_embd_flops = mm_flops(vocab_size, d_embd, max_seq_len)
-
-        flops_per_seq = in_embd_flops + n_layers * (qkvo_flops + sdpa_flops + ffn_flops) + out_embd_flops
-        flops_per_token = flops_per_seq // max_seq_len
-
+    def estimate_flops_per_token(model, config):
+        # get param count
+        N = sum(p.numel() for p in model.parameters())
+                 
+        head_dim = config['d_embd'] // config['n_heads'] 
+         
+        flops_per_token = 6 * N + 12 * config['n_layers'] * config['n_heads'] * head_dim * config['max_seq_len']
+        
         return flops_per_token
 
     def __post_init__(self):
@@ -63,7 +59,7 @@ class CausalSelfAttention(nn.Module):
         qkv = self.attn_proj(x_BTE).split(x_BTE.size(-1), -1)
         split_attn_head = lambda z: z.unflatten(-1, [-1, self.d_head]).transpose(1, 2)
         q_BHTD, k_BHTD, v_BHTD = map(split_attn_head, qkv)
-        o_BHTD = F.scaled_dot_product_attention(q_BHTD, k_BHTD, v_BHTD, dropout_p=0.0, is_causal=True)
+        o_BHTD = scaled_dot_product_attention_wrapper(q_BHTD, k_BHTD, v_BHTD, dropout_p=0.0, is_causal=True)
         o_BTE = o_BHTD.transpose(1, 2).flatten(-2)
         y_BTE = self.out_proj(o_BTE)
         return y_BTE

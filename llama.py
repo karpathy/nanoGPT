@@ -7,6 +7,24 @@ import torch.nn.functional as F
 from pydantic.dataclasses import dataclass
 from torch import nn
 
+def disable_torch_compile_if_amd(func):
+    # Define a wrapper that applies the torch.compiler.disable decorator conditionally
+    if torch.cuda.is_available() and "MI300X" in torch.cuda.get_device_name():
+        return torch.compiler.disable()(func)
+    else:
+        return func
+
+
+@disable_torch_compile_if_amd
+def scaled_dot_product_attention_wrapper(q_BHTD, k_BHTD, v_BHTD, dropout_p=0.0, is_causal=True):
+    # with torch.nn.attention.sdpa_kernel(
+    #     enable_math=True,
+    #     enable_flash=False,
+    #     enable_mem_efficient=False
+    # ):
+    o_BHTD = F.scaled_dot_product_attention(q_BHTD, k_BHTD, v_BHTD, dropout_p=dropout_p, is_causal=is_causal)
+    return o_BHTD
+
 
 @dataclass
 class LLaMAConfig:
@@ -24,43 +42,19 @@ class LLaMAConfig:
     arch_name: str = 'llama'
 
     @staticmethod
-    def estimate_flops_per_token(n_layers, n_heads, n_kv_heads, d_embd, d_hid, max_seq_len, vocab_size, **kwargs):
-        ''' FLOPs per token derivation:
-        We first derive FLOPs per sequence:
-
-        qo_proj_flops = 2 * n_heads * (2 * d_head * d_embd * seq_len) = 4 * d_embd^2 * seq_len
-        kv_proj_flops = 2 * n_kv_heads * (2 * d_head * d_embd * seq_len) = 4 / gq_size * d_embd^2 * seq_len
-        sdpa_flops = n_heads * ((2 * seq_len * d_head * seq_len) + (2 * seq_len * seq_len * d_head)) = 4 * d_embd * seq_len^2
-        ffn_flops = 2 * (2 * d_hid * d_embd * seq_len) + d_hid * seq_len + (2 * d_embd * d_hid * seq_len)
-                   = (6 * d_embd + 1) * d_hid * seq_len
-        in_embd_flops = 2 * d_embd * vocab_size * seq_len
-        out_embd_flops = 2 * vocab_size * d_embd * seq_len
-
-        flops_per_seq = in_embd_flops + n_layers * (qo_proj_flops + kv_proj_flops + sdpa_flops + ffn_flops) + out_embd_flops
-        = n_layers * (
-            (4 + 4/gq_size) * d_embd^2 * seq_len + 4 * d_embd * seq_len^2 + (6 * d_embd + 1) * d_hid * seq_len
-          ) + 4 * vocab_size * d_embd * seq_len
-        = n_layers * (((4 + 4/gq_size) * d_embd + 4 * seq_len + 6 * d_hid) * d_embd * seq_len + d_hid * seq_len) + \
-            4 * vocab_size * d_embd * seq_len
-
-        Thus, on average,
-        flops_per_token = n_layers * d_embd * ((4+4/gq_size) * d_embd + 4 * seq_len + 6 * d_hid) + \
-            n_layers * d_hid + 4 * vocab_size * d_embd
-        '''
-        mm_flops = lambda M, K, N: 2 * M * K * N
-        d_head = d_embd // n_heads
-
-        qo_proj_flops = 2 * n_heads * mm_flops(d_head, d_embd, max_seq_len)
-        kv_proj_flops = 2 * n_kv_heads * mm_flops(d_head, d_embd, max_seq_len)
-        sdpa_flops = n_heads * (mm_flops(max_seq_len, d_head, max_seq_len) + mm_flops(max_seq_len, max_seq_len, d_head))
-        ffn_flops = 2 * mm_flops(d_hid, d_embd, max_seq_len) + d_hid * max_seq_len + mm_flops(d_embd, d_hid, max_seq_len)
-        in_embd_flops = mm_flops(d_embd, vocab_size, max_seq_len)
-        out_embd_flops = mm_flops(vocab_size, d_embd, max_seq_len)
-
-        flops_per_seq = in_embd_flops + n_layers * (qo_proj_flops + kv_proj_flops + sdpa_flops + ffn_flops) + out_embd_flops
-        flops_per_token = flops_per_seq // max_seq_len
-
+    def estimate_flops_per_token(model, config):
+        # get param count
+        N = sum(p.numel() for p in model.parameters())
+        
+        # print number of billion parameters
+        print(f"Number of parameters: {N/1e9:.2f}B")
+                 
+        head_dim = config['d_embd'] // config['n_heads'] 
+         
+        flops_per_token = 6 * N + 12 * config['n_layers'] * config['n_heads'] * head_dim * config['max_seq_len']
+        
         return flops_per_token
+         
 
 
     def __post_init__(self):
@@ -95,7 +89,7 @@ class GroupedQueryAttention(nn.Module):
         k_BHTD = k_BJTD.repeat_interleave(self.d_embd//self.d_kv_embd, 1)
         v_BHTD = v_BJTD.repeat_interleave(self.d_embd//self.d_kv_embd, 1)
 
-        o_BHTD = F.scaled_dot_product_attention(q_BHTD, k_BHTD, v_BHTD, dropout_p=0.0, is_causal=True)
+        o_BHTD = scaled_dot_product_attention_wrapper(q_BHTD, k_BHTD, v_BHTD, dropout_p=0.0, is_causal=True)
         y_BTE = self.out_proj(o_BHTD.transpose(1, 2).flatten(-2))
 
         return y_BTE
