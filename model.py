@@ -31,8 +31,8 @@ class CausalSelfAttention(nn.Module):
         self.n_embd = config.n_embd
         self.dropout = config.dropout
         # Query and key rescaling
-        self.key_scaling = nn.Parameter(torch.full(size=(config.n_head, config.n_embd//config.n_head), fill_value=1.0))
-        self.query_scaling = nn.Parameter(torch.full(size=(config.n_head, config.n_embd//config.n_head), fill_value=1.0))
+        # self.key_scaling = nn.Parameter(torch.full(size=(config.n_head, config.n_embd//config.n_head), fill_value=1.0))
+        # self.query_scaling = nn.Parameter(torch.full(size=(config.n_head, config.n_embd//config.n_head), fill_value=1.0))
 
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
@@ -52,10 +52,10 @@ class CausalSelfAttention(nn.Module):
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 
         # Normalize each query and key within each head
-        q = q/q.norm(dim=-1, keepdim=True)
-        q = q*self.query_scaling.reshape(1, self.n_head, 1, C // self.n_head)
-        k = k/k.norm(dim=-1, keepdim=True)
-        k = k*self.key_scaling.reshape(1, self.n_head, 1, C // self.n_head)
+        # q = q/q.norm(dim=-1, keepdim=True)
+        # q = q*self.query_scaling.reshape(1, self.n_head, 1, C // self.n_head)
+        # k = k/k.norm(dim=-1, keepdim=True)
+        # k = k*self.key_scaling.reshape(1, self.n_head, 1, C // self.n_head)
         scaling_factor = math.sqrt(k.size(-1))
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
@@ -100,15 +100,15 @@ class MLP(nn.Module):
         self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
         # self.scale_u = nn.Parameter(torch.full(size=(4 * config.n_embd,), fill_value=1.0, requires_grad=True))
-        self.scale_v = nn.Parameter(torch.full(size=(4 * config.n_embd,), fill_value=1.0, requires_grad=True))
-        self.scale_v_constant = 1.0/math.sqrt(config.n_embd)
+        # self.scale_v = nn.Parameter(torch.full(size=(4 * config.n_embd,), fill_value=1.0, requires_grad=True))
+        # self.scale_v_constant = 1.0/math.sqrt(config.n_embd)
 
     def forward(self, x):
         #u = self.c_fc_u(x)
         v = self.c_fc_v(x)
         # Apply the scaling
-        #u = u * self.scale_u.reshape(1, 1, -1)
-        v = v * self.scale_v.reshape(1, 1, -1)*self.scale_v_constant
+        # u = u * self.scale_u.reshape(1, 1, -1)
+        # v = v * self.scale_v.reshape(1, 1, -1)*self.scale_v_constant
         # Compute SwiGLU
         # x = u*self.silu(v)
         x = self.silu(v)
@@ -137,9 +137,11 @@ class Block(nn.Module):
         # they don't get added to the decay parameters
         # The initialization should be roughly 1/n_layers
         alpha_init_val = 1.0 / config.n_layer
-        self.alpha_attention = nn.Parameter(
-            torch.full(size=(config.n_embd,), fill_value=alpha_init_val, requires_grad=True))
-        self.alpha_mlp = nn.Parameter(torch.full(size=(config.n_embd,), fill_value=alpha_init_val, requires_grad=True))
+        #self.alpha_attention = nn.Parameter(
+        #    torch.full(size=(config.n_embd,), fill_value=alpha_init_val, requires_grad=True))
+        #self.alpha_mlp = nn.Parameter(torch.full(size=(config.n_embd,), fill_value=alpha_init_val, requires_grad=True))
+        self.alpha_attention = nn.Parameter(torch.ones((1, )), requires_grad=False)
+        self.alpha_mlp = nn.Parameter(torch.ones((1, )), requires_grad=False)
 
     def forward(self, x):
         # The forward pass becomes x<- h+alpha_a(h_A-h) = (1-alpha_a)h + alpha_a h_A, the same for the MLP residual step
