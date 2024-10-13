@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/pytorch:24.07-py3
+FROM nvcr.io/nvidia/pytorch:24.09-py3
 
 RUN pip install uv
 RUN uv pip install --system ipython pytest fire pydantic
