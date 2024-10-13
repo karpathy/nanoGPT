@@ -22,6 +22,7 @@ gradient_accumulation_steps = 5 * 8  # This gets downscaled by the number of gpu
 max_iters = 600000
 lr_decay_iters = 600000
 learning_rate = 1e-3
+warmup_iters = 0 # how many steps to warm up for
 
 # eval stuff
 eval_interval = 1000
