@@ -290,11 +290,11 @@ while True:
         break
 
     # Time to normalize all matrices, this gets once per gradient step:
-    if ddp:
-        # If we're using distributed data parallel, then the model is a wrapper
-        model.module.normalize_parameters()
-    else:
-        model.normalize_parameters()
+#    if ddp:
+#        # If we're using distributed data parallel, then the model is a wrapper
+#        model.module.normalize_parameters()
+#    else:
+#        model.normalize_parameters()
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
