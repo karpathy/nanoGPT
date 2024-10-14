@@ -8,6 +8,8 @@ from tqdm import tqdm
 from gpt import GPTConfig, GPT, GPTBlock, Fp8GPT, Fp8GPTBlock
 from llama import LLaMAConfig, LLaMA, LLaMABlock, Fp8LLaMA, Fp8LLaMABlock
 
+from torch.utils.data.distributed import DistributedSampler
+from torch.utils.data import DataLoader
 
 class DummyDataset(Dataset):
     def __init__(self, vocab_size, max_seq_len, ds_len):
@@ -76,7 +78,10 @@ def configure_train_loop(data_loader, profile, output_path, cfg_m, bsz, fp8, ran
         )
     else:
         prof_ctx = nullcontext()
-
+    
+    flops_list = []    
+    mfu_list = []
+    
     with prof_ctx as prof, tqdm(total=len(data_loader)) as pbar:
         for step_idx, data_batch in enumerate(data_loader):
             start = torch.cuda.Event(enable_timing=True)
@@ -91,14 +96,42 @@ def configure_train_loop(data_loader, profile, output_path, cfg_m, bsz, fp8, ran
             t = start.elapsed_time(end) / 1e3
             flops_per_sec = flops_per_iter / t
             mfu = flops_per_sec / flops_promised
+            
+            flops_list.append(flops_per_sec)
+            mfu_list.append(mfu)
 
             pbar.set_description(f'[rank0]  {(flops_per_sec/1e12):.2f} TFLOP/s  MFU={mfu:.2%}')
             pbar.update()
             
             if profile:
                 prof.step()
+                
+    # get mean tflops and mfu after 32 step warmup with numpy and disard the last 16 steps
+    import numpy as np
+    flops_list = np.array(flops_list)
+    mfu_list = np.array(mfu_list)
+    mean_flops = np.mean(flops_list[32:-16])
+    mean_mfu = np.mean(mfu_list[32:-16])
+        
+    dprint(rank, f'After 32 Warmup: Mean TFLOP/s: {mean_flops/1e12:.2f} Mean MFU: {mean_mfu:.2%}')
 
 
 def dprint(rank, *args, **kwargs):
     if rank == 0:
         print(*args, **kwargs)
+
+
+def create_distributed_data_loader(rank, world_size, bsz, n_steps, cfg_m):
+    dataset = DummyDataset(cfg_m.vocab_size, cfg_m.max_seq_len, bsz*n_steps)
+    data_loader = DataLoader(
+        dataset, batch_size=bsz,
+        num_workers=8, pin_memory=True, shuffle=False,
+        sampler=DistributedSampler(dataset, rank=rank, num_replicas=world_size, shuffle=True)
+    )
+    
+    return data_loader
+
+def create_data_loader(bsz, n_steps, cfg_m):
+    dataset = DummyDataset(cfg_m.vocab_size, cfg_m.max_seq_len, bsz*n_steps)
+    data_loader = DataLoader(dataset, batch_size=bsz, num_workers=8, pin_memory=True, shuffle=True)
+    return data_loader

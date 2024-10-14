@@ -1,10 +1,9 @@
+import contextlib
 from dataclasses import asdict
 from pathlib import Path
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
 
 from utils import *
 
@@ -16,7 +15,6 @@ from transformer_engine.common.recipe import Format, DelayedScaling
 def train(
     cfg_path: str,
     bsz: int = 8,
-    n_workers: int = 8,
     n_steps: int = 128,
     grad_acc_steps: int = 8,
     pt_compile: bool = False,
@@ -28,7 +26,6 @@ def train(
     '''
     :param       cfg_path: Model configuration file path
     :param            bsz: Batch size
-    :param      n_workers: Number of CPUs for data loading
     :param        n_steps: Number of training steps
     :param grad_acc_steps: Number of gradient accumulation steps
     :param     pt_compile: Enable PyTorch compile
@@ -44,8 +41,7 @@ def train(
     print(f'Loaded {model_cls} model.', end=' ')
     cfg_m.estimate_flops_per_token(model, bsz)
 
-    dataset = DummyDataset(cfg_m.vocab_size, cfg_m.max_seq_len, bsz*n_steps)
-    data_loader = DataLoader(dataset, batch_size=bsz, num_workers=n_workers, pin_memory=True, shuffle=True)
+    data_loader = create_data_loader(bsz, n_steps, cfg_m)
     optimizer = torch.optim.AdamW(model.parameters(), fused=True)
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda t: 1.0)
 
@@ -61,12 +57,24 @@ def train(
 
     loop_iter = configure_train_loop(data_loader, profile, output_path, cfg_m, bsz, use_fp8)
     model.train()
+    
+    if use_fp8:
+        # FP8
+        fp8_format = Format.HYBRID  # E4M3 during forward pass, E5M2 during backward pass
+        fp8_recipe = DelayedScaling(fp8_format=fp8_format, amax_history_len=16, amax_compute_algo='max')
+        
+        @contextlib.contextmanager
+        def maybe_fp8_ctx():
+            with te.fp8_autocast(enabled=use_fp8, fp8_recipe=fp8_recipe):
+                yield
+    else:
+        maybe_fp8_ctx = nullcontext
 
     for step_idx, data_batch in loop_iter:
         input_BT, label_BT = map(lambda t: t.pin_memory().to('cuda'), data_batch)
 
         with torch.amp.autocast('cuda', torch.bfloat16):
-            with te.fp8_autocast(enabled=use_fp8, fp8_recipe=fp8_recipe):
+            with maybe_fp8_ctx():
                 weight_cache = use_fp8 and (step_idx % grad_acc_steps == 0)
                 logits_BTV = model(input_BT, is_first_microbatch=weight_cache)
                 loss = F.cross_entropy(logits_BTV.flatten(0, 1), label_BT.flatten())
