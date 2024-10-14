@@ -63,11 +63,14 @@ class CausalSelfAttention(nn.Module):
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)  # (B, nh, T, hs)
 
         # Normalize each query and key within each head
-        # q = q/q.norm(dim=-1, keepdim=True)
+        scale = q.norm(dim=-1, keepdim=True).detach()
+        q = q/scale
 
         query_scaling = self.query_scaling * self.scaling_constant
         q = q*query_scaling.reshape(1, self.n_head, 1, C // self.n_head)
-        # k = k/k.norm(dim=-1, keepdim=True)
+
+        scale = k.norm(dim=-1, keepdim=True).detach()
+        k = k / scale
 
         key_scaling = self.key_scaling * self.scaling_constant
         k = k * key_scaling.reshape(1, self.n_head, 1, C // self.n_head)
