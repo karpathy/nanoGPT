@@ -6,7 +6,7 @@
 
 out_dir = experiment_name = wandb_run_name = 'normalized_gpt_test_reintroduce_layer_norm_swiglu_sqrtdinv_scaling'
 wandb_log = True
-wandb_notes = """Residual update and swiglu."""
+wandb_notes = """Usual residual update and swiglu."""
 wandb_project = "normalized_gpt_dev_sakle"
 
 data_root_path='/data/'
