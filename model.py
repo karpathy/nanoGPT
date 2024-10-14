@@ -64,9 +64,11 @@ class CausalSelfAttention(nn.Module):
 
         # Normalize each query and key within each head
         # q = q/q.norm(dim=-1, keepdim=True)
+
         query_scaling = self.query_scaling * self.scaling_constant
         q = q*query_scaling.reshape(1, self.n_head, 1, C // self.n_head)
         # k = k/k.norm(dim=-1, keepdim=True)
+
         key_scaling = self.key_scaling * self.scaling_constant
         k = k * key_scaling.reshape(1, self.n_head, 1, C // self.n_head)
         scaling_factor = math.sqrt(k.size(-1))
@@ -219,7 +221,7 @@ class GPT(nn.Module):
             wpe=nn.Embedding(config.block_size, config.n_embd),
             drop=nn.Dropout(config.dropout),
             h=nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
-            # ln_f=LayerNorm(config.n_embd, bias=config.bias),
+            ln_f=LayerNorm(config.n_embd, bias=config.bias),
         ))
         self.logit_scale = nn.Parameter(torch.full(size=(config.vocab_size,), fill_value=1.0))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
@@ -271,7 +273,7 @@ class GPT(nn.Module):
         x = self.transformer.drop(tok_emb + pos_emb)
         for block in self.transformer.h:
             x = block(x)
-        # x = self.transformer.ln_f(x)
+        x = self.transformer.ln_f(x)
 
         logit_scaling = self.logit_scale.reshape(1, 1, -1)/math.sqrt(self.config.n_embd)
         if targets is not None:
