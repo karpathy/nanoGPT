@@ -109,6 +109,8 @@ def train_ddp(
     for step_idx, data_batch in loop_iter:
         input_BT, label_BT = map(lambda t: t.pin_memory().to(rank), data_batch)
 
+        model.require_backward_grad_sync = (step_idx == grad_acc_steps - 1)
+
         with torch.amp.autocast('cuda', torch.bfloat16):
             with maybe_fp8_ctx():
                 weight_cache = use_fp8 and (step_idx % grad_acc_steps == 0)
