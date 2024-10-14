@@ -4,9 +4,9 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-out_dir = experiment_name = wandb_run_name = 'normalized_gpt_test_normalization_of_mlp_and_att_and_word_embeddings_logit_scaling'
+out_dir = experiment_name = wandb_run_name = 'normalized_gpt_test_normalization_of_mlp_and_att_and_word_embeddings_logit_scaling_qk_scaling'
 wandb_log = True
-wandb_notes = """Normalize MLP weights and Att weights word embeddings and logit scaling"""
+wandb_notes = """Normalize MLP weights and Att weights word embeddings and logit scaling qk scaling and adjusted scale factor"""
 wandb_project = "normalized_gpt_dev_sakle"
 
 data_root_path='/data/'
