@@ -46,7 +46,7 @@ class CausalSelfAttention(nn.Module):
         # Query and key rescaling
         self.key_scaling = nn.Parameter(torch.full(size=(config.n_head, config.n_embd//config.n_head), fill_value=1.0))
         self.query_scaling = nn.Parameter(torch.full(size=(config.n_head, config.n_embd//config.n_head), fill_value=1.0))
-
+        self.scaling_constant = 1.0/math.sqrt(config.n_embd)
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
         if not self.flash:
@@ -66,10 +66,10 @@ class CausalSelfAttention(nn.Module):
 
         # Normalize each query and key within each head
         # q = q/q.norm(dim=-1, keepdim=True)
-        query_scaling = self.query_scaling*1/math.sqrt(self.config.n_embd)
+        query_scaling = self.query_scaling * self.scaling_constant
         q = q*query_scaling.reshape(1, self.n_head, 1, C // self.n_head)
         # k = k/k.norm(dim=-1, keepdim=True)
-        key_scaling = self.key_scaling * 1 / math.sqrt(self.config.n_embd)
+        key_scaling = self.key_scaling * self.scaling_constant
         k = k * key_scaling.reshape(1, self.n_head, 1, C // self.n_head)
         scaling_factor = math.sqrt(k.size(-1))
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
