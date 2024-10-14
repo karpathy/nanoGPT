@@ -147,9 +147,9 @@ class Block(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
+        # self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
         self.attn = CausalSelfAttention(config)
-        self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
+        # self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
         # Interlayer step sizes "eigen step-size" we keep these rank 1 instead of [batch, seq, dim] so that
         # they don't get added to the decay parameters
@@ -172,15 +172,14 @@ class Block(nn.Module):
         scaled_alpha_attention = self.alpha_attention * self.alpha_forward_pass_scaling
         scaled_alpha_mlp = self.alpha_mlp * self.alpha_forward_pass_scaling
 
-        x = ((1.0 - scaled_alpha_attention[None, None, :]) * x + scaled_alpha_attention[None, None, :] * self.attn(
-            self.ln_1(x)))
+        x = (1.0 - scaled_alpha_attention[None, None, :]) * x + scaled_alpha_attention[None, None, :] * self.attn(x) #self.ln_1(x)))
 
         # We do not back propagate through the norm
         # scale = x.norm(dim=-1, keepdim=True).detach()
         # x = x/scale
 
 
-        x = (1.0 - scaled_alpha_mlp[None, None, :]) * x + scaled_alpha_mlp[None, None, :] * self.mlp(self.ln_2(x))
+        x = (1.0 - scaled_alpha_mlp[None, None, :]) * x + scaled_alpha_mlp[None, None, :] * self.mlp(x) # self.ln_2(x))
 
         # We do not back propagate through the norm
         # scale = x.norm(dim=-1, keepdim=True).detach()
@@ -220,7 +219,7 @@ class GPT(nn.Module):
             wpe=nn.Embedding(config.block_size, config.n_embd),
             drop=nn.Dropout(config.dropout),
             h=nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
-            ln_f=LayerNorm(config.n_embd, bias=config.bias),
+            # ln_f=LayerNorm(config.n_embd, bias=config.bias),
         ))
         self.logit_scale = nn.Parameter(torch.full(size=(config.vocab_size,), fill_value=1.0))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
@@ -272,7 +271,7 @@ class GPT(nn.Module):
         x = self.transformer.drop(tok_emb + pos_emb)
         for block in self.transformer.h:
             x = block(x)
-        x = self.transformer.ln_f(x)
+        # x = self.transformer.ln_f(x)
 
         logit_scaling = self.logit_scale.reshape(1, 1, -1)/math.sqrt(self.config.n_embd)
         if targets is not None:
