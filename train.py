@@ -292,7 +292,7 @@ while True:
     # Time to normalize all matrices, this gets once per gradient step:
     if ddp:
         # If we're using distributed data parallel, then the model is a wrapper
-        model.module.normalize_parameter()
+        model.module.normalize_parameters()
     else:
         model.normalize_parameters()
 
