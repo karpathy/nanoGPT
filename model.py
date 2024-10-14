@@ -154,8 +154,8 @@ class Block(nn.Module):
         #self.alpha_attention = nn.Parameter(
         #    torch.full(size=(config.n_embd,), fill_value=alpha_init_val, requires_grad=True))
         #self.alpha_mlp = nn.Parameter(torch.full(size=(config.n_embd,), fill_value=alpha_init_val, requires_grad=True))
-        self.alpha_attention = nn.Parameter(torch.ones((1, )), requires_grad=False)
-        self.alpha_mlp = nn.Parameter(torch.ones((1, )), requires_grad=False)
+        self.alpha_attention = nn.Parameter(torch.ones((0, )), requires_grad=False)
+        self.alpha_mlp = nn.Parameter(torch.ones((0, )), requires_grad=False)
 
     def forward(self, x):
         # The forward pass becomes x<- h+alpha_a(h_A-h) = (1-alpha_a)h + alpha_a h_A, the same for the MLP residual step
