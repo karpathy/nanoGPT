@@ -177,15 +177,15 @@ class Block(nn.Module):
             self.ln_1(x)))
 
         # We do not back propagate through the norm
-        scale = x.norm(dim=-1, keepdim=True).detach()
-        x = x/scale
+        # scale = x.norm(dim=-1, keepdim=True).detach()
+        # x = x/scale
 
 
         x = (1.0 - scaled_alpha_mlp[None, None, :]) * x + scaled_alpha_mlp[None, None, :] * self.mlp(self.ln_2(x))
 
         # We do not back propagate through the norm
-        scale = x.norm(dim=-1, keepdim=True).detach()
-        x = x/scale
+        # scale = x.norm(dim=-1, keepdim=True).detach()
+        # x = x/scale
 
 
         return x
@@ -426,14 +426,13 @@ class GPT(nn.Module):
         return idx
 
     def normalize_parameters(self):
-        # normalize our wte and wpe
-        # Make sure this operation doesn't become differentiable
-        #wte = self.transformer['wte']
-        #wpe = self.transformer['wpe']
+        # Normalize our wte and wpe
+        wte = self.transformer['wte']
+        wpe = self.transformer['wpe']
 
-        #with torch.no_grad():
-        #    wte.weight[:] = wte.weight / wte.weight.norm(dim=-1, keepdim=True)
-        #    wpe.weight[:] = wpe.weight / wpe.weight.norm(dim=-1, keepdim=True)
+        with torch.no_grad():
+            wte.weight[:] = wte.weight / wte.weight.norm(dim=-1, keepdim=True)
+            wpe.weight[:] = wpe.weight / wpe.weight.norm(dim=-1, keepdim=True)
 
         # Call all submodules that have parameters which need to be normalized.
         for block in self.transformer['h']:
