@@ -4,9 +4,9 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-out_dir = experiment_name = wandb_run_name = 'normalized_gpt_test_normalization_of_weights_logit_qk_uv_scaling'
+out_dir = experiment_name = wandb_run_name = 'normalized_gpt_test_normalization_of_weights_dynamic_scalings_no_wd'
 wandb_log = True
-wandb_notes = """Normalize MLP weights and Att weights word embeddings and logit scaling qk scaling add uv scaling"""
+wandb_notes = """Normalize MLP, Att, Embeddings add logit, qk, uv scaling no weight decay"""
 wandb_project = "normalized_gpt_dev_sakle"
 
 data_root_path='/data/'
@@ -31,4 +31,4 @@ eval_iters = 200
 log_interval = 10
 
 # weight decay
-weight_decay = 1e-1
+weight_decay = 0.0
