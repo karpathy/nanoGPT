@@ -2,10 +2,12 @@ from dataclasses import asdict
 from typing import Optional
 
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
+import transformer_engine.pytorch as te
 
 from pydantic.dataclasses import dataclass
-from torch import nn
+
 
 def disable_torch_compile_if_amd(func):
     # Define a wrapper that applies the torch.compiler.disable decorator conditionally
@@ -41,21 +43,14 @@ class LLaMAConfig:
     d_hid: int = Optional[int] # K
     arch_name: str = 'llama'
 
-    @staticmethod
-    def estimate_flops_per_token(model, config):
-        # get param count
-        N = sum(p.numel() for p in model.parameters())
-        
-        # print number of billion parameters
-        print(f"Number of parameters: {N/1e9:.2f}B")
-                 
-        head_dim = config['d_embd'] // config['n_heads'] 
-         
-        flops_per_token = 6 * N + 12 * config['n_layers'] * config['n_heads'] * head_dim * config['max_seq_len']
-        
-        return flops_per_token
-         
+    def estimate_flops_per_token(self, model, bsz, rank=0):
+        head_dim = self.d_embd // self.n_heads
+        N = sum(p.numel() for p in model.parameters())  # get param count
 
+        if rank == 0:
+            print(f"Number of parameters: {N/1e9:.2f}B")    # print number of billion parameters 
+
+        self.flops_per_token = 6 * N + 12 * self.n_layers * self.n_heads * head_dim * self.max_seq_len
 
     def __post_init__(self):
         assert self.d_embd % self.n_heads == 0, 'd_embd must be a multiple of n_heads.'
@@ -176,7 +171,7 @@ class LLaMA(nn.Module):
         self.lm_head = nn.Linear(d_embd, vocab_size, bias=False)
         self.register_buffer('freq_cis_TFC', precompute_freq_cis(d_embd//n_heads, **kwargs).to(self.lm_head.weight.dtype))
 
-    def forward(self, idx_BT):
+    def forward(self, idx_BT, **kwargs):
         x_BTE = self.tok_embd(idx_BT)
         for tsfmr_blk in self.tsfmr_blks:
             x_BTE = tsfmr_blk(x_BTE, self.freq_cis_TFC)
@@ -201,6 +196,51 @@ def precompute_freq_cis(dim, rope_base, max_seq_len, **kwargs):
     freq_cis_TF = torch.polar(torch.ones_like(freq_TF), freq_TF)
     freq_cis_TFC = torch.stack([freq_cis_TF.real, freq_cis_TF.imag], dim=-1)
     return freq_cis_TFC
+
+
+class Fp8LLaMA(nn.Module):
+    def __init__(self, vocab_size, d_embd, n_layers, n_heads, **kwargs):
+        super().__init__()
+        self.tok_embd = nn.Embedding(vocab_size, d_embd)
+        self.tsfmr_blks = nn.ModuleList(
+            Fp8LLaMABlock(d_embd, n_heads=n_heads, **kwargs) for _ in range(n_layers)
+        )
+        self.norm_lm_head = te.LayerNormLinear(
+            d_embd, vocab_size, bias=False,
+            normalization='RMSNorm', eps=kwargs['norm_eps']
+        )
+
+        # Reference: https://huggingface.co/meta-llama/Llama-3.1-8B/blob/main/config.json
+        freq_cis_TE = te.attention.RotaryPositionEmbedding(d_embd//n_heads)(max_seq_len=131072)
+        self.register_buffer('freq_cis_TE', freq_cis_TE.to(torch.bfloat16))
+
+    def forward(self, idx_BT, is_first_microbatch):
+        x_BTE = self.tok_embd(idx_BT)
+        for tsfmr_blk in self.tsfmr_blks:
+            x_BTE = tsfmr_blk(x_BTE, rotary_pos_emb=self.freq_cis_TE, is_first_microbatch=is_first_microbatch)
+        logits_BTV = self.norm_lm_head(x_BTE)
+        return logits_BTV
+
+
+class Fp8LLaMABlock(te.TransformerLayer):
+    ''' Reference Implementation:
+    https://github.com/NVIDIA/TransformerEngine/blob/55dcbb4b02f560d52dc1215a9de348b37487ee3d/docs/examples/te_llama/te_llama.py#L42
+    '''
+    def __init__(self, d_embd, d_hid, n_heads, n_kv_heads, norm_eps, **kwargs):
+        super().__init__(
+            hidden_size=d_embd,
+            num_attention_heads=n_heads,
+            num_gqa_groups=n_heads//n_kv_heads,
+            fuse_qkv_params=True,
+            attn_input_format='bshd',
+            attention_dropout=0.0,
+            normalization='RMSNorm',
+            layernorm_epsilon=norm_eps,
+            ffn_hidden_size=d_hid,
+            bias=False,
+            activation='swiglu',
+            hidden_dropout=0.0
+        )
 
 
 if __name__ == '__main__':

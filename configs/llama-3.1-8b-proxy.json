@@ -1,5 +1,5 @@
 {
-  "n_layers": 16,
+  "n_layers": 1,
   "n_heads": 32,
   "n_kv_heads": 8,
   "d_embd": 4096,
