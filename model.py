@@ -15,7 +15,6 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
 
@@ -26,7 +25,6 @@ class LayerNorm(nn.Module):
 
     def forward(self, input):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
-
 
 class CausalSelfAttention(nn.Module):
 
@@ -117,16 +115,16 @@ class MLP(nn.Module):
         self.silu = nn.SiLU()
         self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
-        # self.scale_u = nn.Parameter(torch.full(size=(4 * config.n_embd,), fill_value=1.0, requires_grad=True))
-        # self.scale_v = nn.Parameter(torch.full(size=(4 * config.n_embd,), fill_value=1.0, requires_grad=True))
-        # self.scale_v_constant = 1.0/math.sqrt(config.n_embd)
+        self.scale_u = nn.Parameter(torch.full(size=(4 * config.n_embd,), fill_value=1.0, requires_grad=True))
+        self.scale_v = nn.Parameter(torch.full(size=(4 * config.n_embd,), fill_value=1.0, requires_grad=True))
+        self.scale_v_constant = math.sqrt(config.n_embd)
 
     def forward(self, x):
         u = self.c_fc_u(x)
         v = self.c_fc_v(x)
         # Apply the scaling
-        # u = u * self.scale_u.reshape(1, 1, -1)
-        # v = v * self.scale_v.reshape(1, 1, -1)*self.scale_v_constant
+        u = u * self.scale_u.reshape(1, 1, -1)
+        v = v * self.scale_v.reshape(1, 1, -1) * self.scale_v_constant
         # Compute SwiGLU
         x = u*self.silu(v)
         x = self.c_proj(x)
