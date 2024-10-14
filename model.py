@@ -186,7 +186,7 @@ class Block(nn.Module):
     def normalize_parameters(self):
         # Call the submodules which have parameters to normalize
 
-        # self.attn.normalize_parameters()
+        self.attn.normalize_parameters()
         self.mlp.normalize_parameters()
 
 
