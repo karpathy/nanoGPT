@@ -4,7 +4,7 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-out_dir = experiment_name = wandb_run_name = 'scalings_and_weight_norms_layer_norms_on_normalized_activations'
+out_dir = experiment_name = wandb_run_name = 'scalings_and_weight_norms_layer_norms_on_normalized_activations_lr1.25e-4'
 wandb_log = True
 wandb_notes = """Layer norms on, reduce learning rate to try and make normalized activations converge"""
 wandb_project = "normalized_gpt_dev_sakle"
