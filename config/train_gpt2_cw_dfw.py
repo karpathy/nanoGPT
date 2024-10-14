@@ -4,9 +4,9 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-out_dir = experiment_name = wandb_run_name = 'normalized_gpt_test_change_in_residual_updates'
+out_dir = experiment_name = wandb_run_name = 'normalized_gpt_test_change_to_SWIGLU'
 wandb_log = True
-wandb_notes = """Change residual updates to new formula"""
+wandb_notes = """Swap to SwiGLU"""
 wandb_project = "normalized_gpt_dev_sakle"
 
 data_root_path='/data/'

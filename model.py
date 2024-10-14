@@ -111,9 +111,9 @@ class MLP(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        # self.c_fc_u    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
+        self.c_fc_u    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
         self.c_fc_v = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
-        self.silu = nn.GELU()
+        self.silu = nn.SiLU()
         self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
         # self.scale_u = nn.Parameter(torch.full(size=(4 * config.n_embd,), fill_value=1.0, requires_grad=True))
@@ -121,14 +121,13 @@ class MLP(nn.Module):
         # self.scale_v_constant = 1.0/math.sqrt(config.n_embd)
 
     def forward(self, x):
-        # u = self.c_fc_u(x)
+        u = self.c_fc_u(x)
         v = self.c_fc_v(x)
         # Apply the scaling
         # u = u * self.scale_u.reshape(1, 1, -1)
         # v = v * self.scale_v.reshape(1, 1, -1)*self.scale_v_constant
         # Compute SwiGLU
-        # x = u*self.silu(v)
-        x = self.silu(v)
+        x = u*self.silu(v)
         x = self.c_proj(x)
         x = self.dropout(x)
         return x
