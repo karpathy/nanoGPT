@@ -4,18 +4,12 @@ Repo for benchmarking LLM training workloads.
 
 
 ## TODO
-
-- [x] reprod why torch compile doesnt work on amd pypi nightly even on gpt2 single gpu @orenleung
-- [x] selection act checkpointing @kimbochen
-- [x] removing torch.save
-- [x] benchmark fsdp + selection act ckpt 8B llama3 @orenleung
-- [x] fix amd stuff @orenleung
-- [x] add transformer engine fp8 for nvidia. similar to
-  - https://github.com/cchan/nanoGPT-fp8/commits/master/
-  - https://docs.nvidia.com/deeplearning/transformer-engine/user-guide/examples/te_llama/tutorial_accelerate_hf_llama_with_te.html
-   - [x] reshape from [batch, seq, hidden] to [seq, batch, hidden] when using TE
-- [ ] multi-node nvidia
-- [ ] multi-node amd
+- [ ] te.checkpoint @kimbo
+- [ ] debug AMD TE @orenleung
+- [ ] add perf to spreadsheet @orenleung
+- [ ] H200 & mi300x perf to spreadsheet @orenleung
+- [ ] multi-node nvidia @orenleung
+- [ ] multi-node amd @orenleung
 
 
 ## Setup
