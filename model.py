@@ -15,6 +15,17 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+class LayerNorm(nn.Module):
+    """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
+
+    def __init__(self, ndim, bias):
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(ndim))
+        self.bias = nn.Parameter(torch.zeros(ndim)) if bias else None
+
+    def forward(self, input):
+        return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
+
 class CausalSelfAttention(nn.Module):
 
     def __init__(self, config):
@@ -31,8 +42,8 @@ class CausalSelfAttention(nn.Module):
         self.n_embd = config.n_embd
         self.dropout = config.dropout
         # Query and key rescaling
-        self.key_scaling = nn.Parameter(torch.full(size=(config.n_head, config.n_embd//config.n_head), fill_value=1.0))
-        self.query_scaling = nn.Parameter(torch.full(size=(config.n_head, config.n_embd//config.n_head), fill_value=1.0))
+        # self.key_scaling = nn.Parameter(torch.full(size=(config.n_head, config.n_embd//config.n_head), fill_value=1.0))
+        # self.query_scaling = nn.Parameter(torch.full(size=(config.n_head, config.n_embd//config.n_head), fill_value=1.0))
 
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
@@ -52,11 +63,12 @@ class CausalSelfAttention(nn.Module):
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 
         # Normalize each query and key within each head
-        q = q/q.norm(dim=-1, keepdim=True)
-        q = q*self.query_scaling.reshape(1, self.n_head, 1, C // self.n_head)
-        k = k/k.norm(dim=-1, keepdim=True)
-        k = k*self.key_scaling.reshape(1, self.n_head, 1, C // self.n_head)
+        # q = q/q.norm(dim=-1, keepdim=True)
+        # q = q*self.query_scaling.reshape(1, self.n_head, 1, C // self.n_head)
+        # k = k/k.norm(dim=-1, keepdim=True)
+        # k = k*self.key_scaling.reshape(1, self.n_head, 1, C // self.n_head)
         scaling_factor = math.sqrt(k.size(-1))
+        scaling_factor = 1.0/scaling_factor
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
             # efficient attention using Flash Attention CUDA kernels
@@ -94,23 +106,24 @@ class MLP(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        # self.c_fc_u    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
+        #self.c_fc_u    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
         self.c_fc_v    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
-        self.silu    = nn.SiLU()
+        self.silu    = nn.GELU()
         self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
-        #self.scale_u = nn.Parameter(torch.full(size=(4 * config.n_embd,), fill_value=1.0, requires_grad=True))
-        self.scale_v = nn.Parameter(torch.full(size=(4 * config.n_embd,), fill_value=1.0, requires_grad=True))
-        self.scale_v_constant = 1.0/math.sqrt(config.n_embd)
+        # self.scale_u = nn.Parameter(torch.full(size=(4 * config.n_embd,), fill_value=1.0, requires_grad=True))
+        # self.scale_v = nn.Parameter(torch.full(size=(4 * config.n_embd,), fill_value=1.0, requires_grad=True))
+        # self.scale_v_constant = 1.0/math.sqrt(config.n_embd)
 
     def forward(self, x):
-        # u = self.c_fc_u(x)
+        #u = self.c_fc_u(x)
         v = self.c_fc_v(x)
         # Apply the scaling
-        #u = u * self.scale_u.reshape(1, 1, -1)
-        v = v * self.scale_v.reshape(1, 1, -1)*self.scale_v_constant
+        # u = u * self.scale_u.reshape(1, 1, -1)
+        # v = v * self.scale_v.reshape(1, 1, -1)*self.scale_v_constant
         # Compute SwiGLU
-        x = self.silu(v) #u*self.silu(v)
+        # x = u*self.silu(v)
+        x = self.silu(v)
         x = self.c_proj(x)
         x = self.dropout(x)
         return x
@@ -118,8 +131,8 @@ class MLP(nn.Module):
     def normalize_parameters(self):
         # normalize the q, k, v projector matrices parameter matrices
         with torch.no_grad():
-            c_fc_u_weight = self.c_fc_u.weight
-            c_fc_u_weight[:] = c_fc_u_weight/c_fc_u_weight.norm(dim=-1, keepdim=True)
+            #c_fc_u_weight = self.c_fc_u.weight
+            #c_fc_u_weight[:] = c_fc_u_weight/c_fc_u_weight.norm(dim=-1, keepdim=True)
             c_fc_v_weight = self.c_fc_v.weight
             c_fc_v_weight[:] = c_fc_v_weight/c_fc_v_weight.norm(dim=-1, keepdim=True)
             # The embedding dimension here is the output dimension
@@ -130,15 +143,19 @@ class Block(nn.Module):
 
     def __init__(self, config):
         super().__init__()
+        self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
         self.attn = CausalSelfAttention(config)
+        self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
         # Interlayer step sizes "eigen step-size" we keep these rank 1 instead of [batch, seq, dim] so that
         # they don't get added to the decay parameters
         # The initialization should be roughly 1/n_layers
         alpha_init_val = 1.0 / config.n_layer
-        self.alpha_attention = nn.Parameter(
-            torch.full(size=(config.n_embd,), fill_value=alpha_init_val, requires_grad=True))
-        self.alpha_mlp = nn.Parameter(torch.full(size=(config.n_embd,), fill_value=alpha_init_val, requires_grad=True))
+        #self.alpha_attention = nn.Parameter(
+        #    torch.full(size=(config.n_embd,), fill_value=alpha_init_val, requires_grad=True))
+        #self.alpha_mlp = nn.Parameter(torch.full(size=(config.n_embd,), fill_value=alpha_init_val, requires_grad=True))
+        self.alpha_attention = nn.Parameter(torch.ones((1, )), requires_grad=False)
+        self.alpha_mlp = nn.Parameter(torch.ones((1, )), requires_grad=False)
 
     def forward(self, x):
         # The forward pass becomes x<- h+alpha_a(h_A-h) = (1-alpha_a)h + alpha_a h_A, the same for the MLP residual step
@@ -232,12 +249,12 @@ class GPT(nn.Module):
         if targets is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
-            logits = logits*self.logit_scale.reshape(1, 1, -1)
+            # logits = logits*self.logit_scale.reshape(1, 1, -1)
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(x[:, [-1], :]) # note: using list [-1] to preserve the time dim
-            logits = logits*self.logit_scale.reshape(1, 1, -1)
+            # logits = logits*self.logit_scale.reshape(1, 1, -1)
             loss = None
 
         return logits, loss

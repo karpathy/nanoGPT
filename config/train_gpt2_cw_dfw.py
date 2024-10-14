@@ -4,9 +4,9 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-out_dir = experiment_name = wandb_run_name = 'normalized_gpt_test_remove_weight_normalizations_no_swiglu'
+out_dir = experiment_name = wandb_run_name = 'normalized_gpt_test_reintroduce_layer_norm_gelu_sqrtdinv_scaling'
 wandb_log = True
-wandb_notes = """Remove weight normalizations keep activation normalizations remove swiglu"""
+wandb_notes = """Revert most changes to test for convergence Keep new residual update!."""
 wandb_project = "normalized_gpt_dev_sakle"
 
 data_root_path='/data/'
@@ -31,4 +31,4 @@ eval_iters = 200
 log_interval = 10
 
 # weight decay
-weight_decay = 0.0
+weight_decay = 1e-1
