@@ -4,9 +4,9 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-out_dir = experiment_name = wandb_run_name = 'normalized_gpt_test_revert_all'
+out_dir = experiment_name = wandb_run_name = 'normalized_gpt_test_change_in_residual_updates'
 wandb_log = True
-wandb_notes = """Revert all changes."""
+wandb_notes = """Change residual updates to new formula"""
 wandb_project = "normalized_gpt_dev_sakle"
 
 data_root_path='/data/'
