@@ -63,14 +63,11 @@ class CausalSelfAttention(nn.Module):
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)  # (B, nh, T, hs)
 
         # Normalize each query and key within each head
-        scale = q.norm(dim=-1, keepdim=True).detach()
-        q = q/scale
+        # q = q/q.norm(dim=-1, keepdim=True)
 
         query_scaling = self.query_scaling * self.scaling_constant
         q = q*query_scaling.reshape(1, self.n_head, 1, C // self.n_head)
-
-        scale = k.norm(dim=-1, keepdim=True).detach()
-        k = k / scale
+        # k = k/k.norm(dim=-1, keepdim=True)
 
         key_scaling = self.key_scaling * self.scaling_constant
         k = k * key_scaling.reshape(1, self.n_head, 1, C // self.n_head)
@@ -152,9 +149,9 @@ class Block(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        # self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
+        self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
         self.attn = CausalSelfAttention(config)
-        # self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
+        self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
         # Interlayer step sizes "eigen step-size" we keep these rank 1 instead of [batch, seq, dim] so that
         # they don't get added to the decay parameters
@@ -177,13 +174,13 @@ class Block(nn.Module):
         scaled_alpha_attention = self.alpha_attention * self.alpha_forward_pass_scaling
         scaled_alpha_mlp = self.alpha_mlp * self.alpha_forward_pass_scaling
 
-        x = (1.0 - scaled_alpha_attention[None, None, :]) * x + scaled_alpha_attention[None, None, :] * self.attn(x) #self.ln_1(x))
+        x = (1.0 - scaled_alpha_attention[None, None, :]) * x + scaled_alpha_attention[None, None, :] * self.attn(self.ln_1(x))
 
         # We do not back propagate through the norm
         scale = x.norm(dim=-1, keepdim=True).detach()
         x = x/scale
 
-        x = (1.0 - scaled_alpha_mlp[None, None, :]) * x + scaled_alpha_mlp[None, None, :] * self.mlp(x) # self.ln_2(x))
+        x = (1.0 - scaled_alpha_mlp[None, None, :]) * x + scaled_alpha_mlp[None, None, :] * self.mlp(self.ln_2(x))
 
         # We do not back propagate through the norm
         scale = x.norm(dim=-1, keepdim=True).detach()

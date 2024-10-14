@@ -4,9 +4,9 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-out_dir = experiment_name = wandb_run_name = 'normalized_gpt_test_normalization_of_weights_dynamic_scalings_no_wd_no_block_ln_and_block_scaling_query_key_norm'
+out_dir = experiment_name = wandb_run_name = 'scalings_and_weight_norms_layer_norms_on_normalized_activations'
 wandb_log = True
-wandb_notes = """Normalize MLP, Att, Embeddings add logit, qk, uv scaling no weight decay remove block layer norms, activation normalization in block and query and key normalization"""
+wandb_notes = """Layer norms on, reduce learning rate to try and make normalized activations converge"""
 wandb_project = "normalized_gpt_dev_sakle"
 
 data_root_path='/data/'
@@ -21,7 +21,7 @@ gradient_accumulation_steps = 5 * 8  # This gets downscaled by the number of gpu
 # this makes total number of tokens be 300B
 max_iters = 600000
 lr_decay_iters = 600000
-learning_rate = 1e-3
+learning_rate = 1.25e-4
 warmup_iters = 0 # how many steps to warm up for
 grad_clip = 0.0 # clip gradients at this value, or disable if == 0.0
 
