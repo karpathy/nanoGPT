@@ -163,8 +163,8 @@ class Block(nn.Module):
         # x = (1-self.alpha_mlp[None, None, :])*x + self.alpha_mlp[None, None, :]*self.mlp(x)
         # x = x/x.norm(dim=-1, keepdim=True)
         # Usual update
-        x = x + self.attn(x)
-        x = x + self.mlp(x)
+        x = x + self.attn(self.ln_1(x))
+        x = x + self.mlp(self.ln_2(x))
         return x
 
     def normalize_parameters(self):
@@ -195,6 +195,7 @@ class GPT(nn.Module):
             wpe = nn.Embedding(config.block_size, config.n_embd),
             drop = nn.Dropout(config.dropout),
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
+            ln_f = LayerNorm(config.n_embd, bias=config.bias),
         ))
         # self.logit_scale = nn.Parameter(torch.full(size=(config.vocab_size,), fill_value=1.0))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
@@ -246,6 +247,7 @@ class GPT(nn.Module):
         x = self.transformer.drop(tok_emb + pos_emb)
         for block in self.transformer.h:
             x = block(x)
+        x = self.transformer.ln_f(x)
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
