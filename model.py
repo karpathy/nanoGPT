@@ -180,16 +180,14 @@ class Block(nn.Module):
         scale = x.norm(dim=-1, keepdim=True).detach()
         x = x/scale
 
+
+        x = (1.0 - scaled_alpha_mlp[None, None, :]) * x + scaled_alpha_mlp[None, None, :] * self.mlp(self.ln_2(x))
+
         # We do not back propagate through the norm
         scale = x.norm(dim=-1, keepdim=True).detach()
         x = x/scale
 
-        x = (1.0 - scaled_alpha_mlp[None, None, :]) * x + scaled_alpha_mlp[None, None, :] * self.mlp(self.ln_2(x))
-        # x = x/x.norm(dim=-1, keepdim=True)
 
-        # Usual update
-        # x = x + self.attn(self.ln_1(x))
-        # x = x + self.mlp(self.ln_2(x))
         return x
 
     def normalize_parameters(self):
