@@ -16,8 +16,8 @@ dataset = 'nanoGPTopenweb'
 # 12 batch size * 1024 block size * 5 gradaccum * 8 GPUs = 491,520
 batch_size = 12
 block_size = 1024
-gradient_accumulation_steps = 5 * 8
-
+gradient_accumulation_steps = 1 # 5 * 8
+compile = False
 # this makes total number of tokens be 300B
 max_iters = 600000
 lr_decay_iters = 600000

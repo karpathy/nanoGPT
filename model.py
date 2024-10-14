@@ -103,10 +103,11 @@ class CausalSelfAttention(nn.Module):
         # normalize the qkv and the output projection matrices
         with torch.no_grad():
             c_attn_weight = self.c_attn.weight
-            c_attn_weight[:] = c_attn_weight / c_attn_weight.norm(dim=-1, keepdim=True)
+            scale = c_attn_weight.norm(dim=-1, keepdim=True) + 7.E-2
+            c_attn_weight[:] = c_attn_weight / scale
             c_proj_weight = self.c_proj.weight
-            c_proj_weight[:] = c_proj_weight / c_proj_weight.norm(dim=-2, keepdim=True)
-
+            scale = c_proj_weight.norm(dim=-2, keepdim=True) + 7.E-2
+            c_proj_weight[:] = c_proj_weight / scale
 
 class MLP(nn.Module):
 
@@ -137,21 +138,27 @@ class MLP(nn.Module):
         # Execute the normalization of MLP parameters
         with torch.no_grad():
             c_fc_u_weight = self.c_fc_u.weight
-            c_fc_u_weight[:] = c_fc_u_weight/c_fc_u_weight.norm(dim=-1, keepdim=True)
+            u_scale =  c_fc_u_weight.norm(dim=-1, keepdim=True) + 7.E-2
+            print(f"torch mean u_scale {torch.mean(u_scale)}, {u_scale.shape}")
+            c_fc_u_weight[:] = c_fc_u_weight/u_scale
             c_fc_v_weight = self.c_fc_v.weight
-            c_fc_v_weight[:] = c_fc_v_weight / c_fc_v_weight.norm(dim=-1, keepdim=True)
+            v_scale =  c_fc_v_weight.norm(dim=-1, keepdim=True) + 7.E-2
+            print(f"torch mean v_scale {torch.mean(v_scale)}, {v_scale.shape}")
+            c_fc_v_weight[:] = c_fc_v_weight / v_scale
             # The embedding dimension here is the output dimension
             c_proj_weight = self.c_proj.weight
-            c_proj_weight[:] = c_proj_weight / c_proj_weight.norm(dim=-2, keepdim=True)
+            proj_scale = c_proj_weight.norm(dim=-2, keepdim=True) + 7.E-2
+            c_proj_weight[:] = c_proj_weight / proj_scale
+            print(f"torch mean proj_scale {torch.mean(proj_scale)}, {proj_scale.shape}")
 
 
 class Block(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
+        # self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
         self.attn = CausalSelfAttention(config)
-        self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
+        # self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
         # Interlayer step sizes "eigen step-size" we keep these rank 1 instead of [batch, seq, dim] so that
         # they don't get added to the decay parameters
@@ -174,23 +181,24 @@ class Block(nn.Module):
         scaled_alpha_attention = self.alpha_attention * self.alpha_forward_pass_scaling
         scaled_alpha_mlp = self.alpha_mlp * self.alpha_forward_pass_scaling
 
-        x = (1.0 - scaled_alpha_attention[None, None, :]) * x + scaled_alpha_attention[None, None, :] * self.attn(self.ln_1(x))
+        x = (1.0 - scaled_alpha_attention[None, None, :]) * x + scaled_alpha_attention[None, None, :] * self.attn(x) # self.ln_1(x))
 
         # We do not back propagate through the norm
-        scale = x.norm(dim=-1, keepdim=True)
+        scale = x.norm(dim=-1, keepdim=True) + 7.E-2
         x = x/scale
 
-        x = (1.0 - scaled_alpha_mlp[None, None, :]) * x + scaled_alpha_mlp[None, None, :] * self.mlp(self.ln_2(x))
+        x = (1.0 - scaled_alpha_mlp[None, None, :]) * x + scaled_alpha_mlp[None, None, :] * self.mlp(x) # self.ln_2(x))
 
         # We do not back propagate through the norm
-        scale = x.norm(dim=-1, keepdim=True)
-        x = x/scale
+        # scale = x.norm(dim=-1, keepdim=True)
+        # x = x/scale
 
         return x
 
     def normalize_parameters(self):
         # Call the submodules which have parameters to normalize
-
+        print(f"mean alpha attention  {self.alpha_attention.mean()}")
+        print(f"mean alpha mlp  {self.alpha_mlp.mean()}")
         self.attn.normalize_parameters()
         self.mlp.normalize_parameters()
 
@@ -269,7 +277,12 @@ class GPT(nn.Module):
         tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
         pos_emb = self.transformer.wpe(pos)  # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
-        for block in self.transformer.h:
+        # Normalize the word embeddings
+        w_emb_scale = x.norm(dim=-1, keepdim=True) + 7.E-2
+        x = x/w_emb_scale
+
+        for ix, block in enumerate(self.transformer.h):
+            print(f"layer ix {ix}")
             x = block(x)
         x = self.transformer.ln_f(x)
 
@@ -434,5 +447,6 @@ class GPT(nn.Module):
             wpe.weight[:] = wpe.weight / wpe.weight.norm(dim=-1, keepdim=True)
 
         # Call all submodules that have parameters which need to be normalized.
-        for block in self.transformer['h']:
+        for ix, block in enumerate(self.transformer['h']):
+            print(f"normalize layer {ix}")
             block.normalize_parameters()
