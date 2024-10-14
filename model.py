@@ -133,10 +133,10 @@ class MLP(nn.Module):
         return x
 
     def normalize_parameters(self):
-        # normalize the q, k, v projector matrices parameter matrices
+        # Execute the normalization of MLP parameters
         with torch.no_grad():
-            # c_fc_u_weight = self.c_fc_u.weight
-            # c_fc_u_weight[:] = c_fc_u_weight/c_fc_u_weight.norm(dim=-1, keepdim=True)
+            c_fc_u_weight = self.c_fc_u.weight
+            c_fc_u_weight[:] = c_fc_u_weight/c_fc_u_weight.norm(dim=-1, keepdim=True)
             c_fc_v_weight = self.c_fc_v.weight
             c_fc_v_weight[:] = c_fc_v_weight / c_fc_v_weight.norm(dim=-1, keepdim=True)
             # The embedding dimension here is the output dimension
@@ -185,7 +185,8 @@ class Block(nn.Module):
 
     def normalize_parameters(self):
         # Call the submodules which have parameters to normalize
-        self.attn.normalize_parameters()
+
+        # self.attn.normalize_parameters()
         self.mlp.normalize_parameters()
 
 
@@ -420,12 +421,12 @@ class GPT(nn.Module):
     def normalize_parameters(self):
         # normalize our wte and wpe
         # Make sure this operation doesn't become differentiable
-        wte = self.transformer['wte']
-        wpe = self.transformer['wpe']
+        #wte = self.transformer['wte']
+        #wpe = self.transformer['wpe']
 
-        with torch.no_grad():
-            wte.weight[:] = wte.weight / wte.weight.norm(dim=-1, keepdim=True)
-            wpe.weight[:] = wpe.weight / wpe.weight.norm(dim=-1, keepdim=True)
+        #with torch.no_grad():
+        #    wte.weight[:] = wte.weight / wte.weight.norm(dim=-1, keepdim=True)
+        #    wpe.weight[:] = wpe.weight / wpe.weight.norm(dim=-1, keepdim=True)
 
         # Call all submodules that have parameters which need to be normalized.
         for block in self.transformer['h']:
