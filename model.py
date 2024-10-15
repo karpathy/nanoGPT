@@ -190,8 +190,8 @@ class Block(nn.Module):
         x = (1.0 - scaled_alpha_mlp[None, None, :]) * x + scaled_alpha_mlp[None, None, :] * self.mlp(x) # self.ln_2(x))
 
         # We do not back propagate through the norm
-        # scale = x.norm(dim=-1, keepdim=True)
-        # x = x/scale
+        scale = x.norm(dim=-1, keepdim=True)
+        x = x/scale
 
         return x
 
