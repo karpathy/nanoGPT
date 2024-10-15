@@ -189,12 +189,12 @@ class Block(nn.Module):
 
         x = (1.0 - scaled_alpha_attention[None, None, :]) * x + scaled_alpha_attention[None, None, :] * self.attn(x)
 
-        scale = x.norm(dim=-1, keepdim=True) + 7.E-4
+        scale = x.norm(dim=-1, keepdim=True) + _SCALE_SAFEGUARD
         x = x / scale
 
         x = (1.0 - scaled_alpha_mlp[None, None, :]) * x + scaled_alpha_mlp[None, None, :] * self.mlp(x)
 
-        scale = x.norm(dim=-1, keepdim=True) + 7.E-4
+        scale = x.norm(dim=-1, keepdim=True) + _SCALE_SAFEGUARD
         x = x / scale
 
         return x
