@@ -35,8 +35,8 @@ class CausalSelfAttention(nn.Module):
         # Query and key rescaling
         self.sqk_init_value = 1.0
         self.sqk_init_scaling = config.base_scale
-        self.key_scaling = nn.Parameter(torch.full(size=(config.n_head, config.n_embd//config.n_head), fill_value=self.sqk_init_scaling, dtype=torch.float32))
-        self.query_scaling = nn.Parameter(torch.full(size=(config.n_head, config.n_embd//config.n_head), fill_value=self.sqk_init_scaling, dtype=torch.float32))
+        self.key_scaling = nn.Parameter(torch.full(size=(config.n_head, config.n_embd//config.n_head), fill_value=self.sqk_init_scaling))
+        self.query_scaling = nn.Parameter(torch.full(size=(config.n_head, config.n_embd//config.n_head), fill_value=self.sqk_init_scaling))
 
         head_dimension = config.n_embd//config.n_head
         self.scaling_constant = 1.0/math.sqrt(head_dimension)
@@ -124,8 +124,8 @@ class MLP(nn.Module):
 
         self.suv_init_value = 1.0
         self.suv_init_scaling = 1.0
-        self.scale_u = nn.Parameter(torch.full(size=(4 * config.n_embd,), fill_value=self.suv_init_value, requires_grad=True, dtype=torch.float32))
-        self.scale_v = nn.Parameter(torch.full(size=(4 * config.n_embd,), fill_value=self.suv_init_value, requires_grad=True, dtype=torch.float32))
+        self.scale_u = nn.Parameter(torch.full(size=(4 * config.n_embd,), fill_value=self.suv_init_value, requires_grad=True))
+        self.scale_v = nn.Parameter(torch.full(size=(4 * config.n_embd,), fill_value=self.suv_init_value, requires_grad=True))
 
     def forward(self, x):
         u = self.c_fc_u(x)
@@ -176,9 +176,9 @@ class Block(nn.Module):
 
         # According to the paper we initialize with alpha_scale and use alpha_init to rescale in the forward pass
         self.alpha_attention = nn.Parameter(
-            torch.full(size=(config.n_embd,), fill_value=self.attn_alpha_init_scaling, requires_grad=True, dtype=torch.float32))
+            torch.full(size=(config.n_embd,), fill_value=self.attn_alpha_init_scaling, requires_grad=True))
         self.alpha_mlp = nn.Parameter(
-            torch.full(size=(config.n_embd,), fill_value=self.mlp_alpha_init_scaling, requires_grad=True, dtype=torch.float32))
+            torch.full(size=(config.n_embd,), fill_value=self.mlp_alpha_init_scaling, requires_grad=True))
 
     def forward(self, x):
         # The forward pass becomes x<- h+alpha_a(h_A-h) = (1-alpha_a)h + alpha_a h_A, the same for the MLP residual step
@@ -245,7 +245,7 @@ class GPT(nn.Module):
         self.sz_init_value = 1.00
         self.sz_init_scaling = config.base_scale
         # TODO (SA) test if float 32 is important here !
-        self.logit_scale = nn.Parameter(torch.full(size=(config.vocab_size,), fill_value=1.0, dtype=torch.float32))
+        self.logit_scale = nn.Parameter(torch.full(size=(config.vocab_size,), fill_value=1.0))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         # with weight tying when using torch.compile() some warnings get generated:
         # "UserWarning: functional_call was passed multiple values for tied weights.
