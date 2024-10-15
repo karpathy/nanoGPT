@@ -15,17 +15,7 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-
-class LayerNorm(nn.Module):
-    """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
-
-    def __init__(self, ndim, bias):
-        super().__init__()
-        self.weight = nn.Parameter(torch.ones(ndim))
-        self.bias = nn.Parameter(torch.zeros(ndim)) if bias else None
-
-    def forward(self, input):
-        return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
+from typing import Optional
 
 class CausalSelfAttention(nn.Module):
 
@@ -43,9 +33,13 @@ class CausalSelfAttention(nn.Module):
         self.n_embd = config.n_embd
         self.dropout = config.dropout
         # Query and key rescaling
-        self.key_scaling = nn.Parameter(torch.full(size=(config.n_head, config.n_embd//config.n_head), fill_value=1.0))
-        self.query_scaling = nn.Parameter(torch.full(size=(config.n_head, config.n_embd//config.n_head), fill_value=1.0))
-        self.scaling_constant = 1.0/math.sqrt(config.n_embd)
+        self.sqk_init_value = 1.0
+        self.sqk_init_scaling = config.base_scale
+        self.key_scaling = nn.Parameter(torch.full(size=(config.n_head, config.n_embd//config.n_head), fill_value=self.sqk_init_scaling, dtype=torch.float32))
+        self.query_scaling = nn.Parameter(torch.full(size=(config.n_head, config.n_embd//config.n_head), fill_value=self.sqk_init_scaling, dtype=torch.float32))
+
+        head_dimension = config.n_embd//config.n_head
+        self.scaling_constant = 1.0/math.sqrt(head_dimension)
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
         if not self.flash:
@@ -64,14 +58,14 @@ class CausalSelfAttention(nn.Module):
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)  # (B, nh, T, hs)
 
         # Normalize each query and key within each head
-        # q = q/q.norm(dim=-1, keepdim=True)
-
-        query_scaling = self.query_scaling * self.scaling_constant
+        q = q/q.norm(dim=-1, keepdim=True)
+        query_scaling = self.query_scaling * (self.sqk_init_value/self.sqk_init_scaling)
         q = q*query_scaling.reshape(1, self.n_head, 1, C // self.n_head)
-        # k = k/k.norm(dim=-1, keepdim=True)
 
-        key_scaling = self.key_scaling * self.scaling_constant
+        k = k/k.norm(dim=-1, keepdim=True)
+        key_scaling = self.key_scaling * (self.sqk_init_value/self.sqk_init_scaling)
         k = k * key_scaling.reshape(1, self.n_head, 1, C // self.n_head)
+
         scaling_factor = math.sqrt(k.size(-1))
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
@@ -121,21 +115,26 @@ class MLP(nn.Module):
 
     def __init__(self, config):
         super().__init__()
+        self.n_embd = config.n_embd
         self.c_fc_u    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
         self.c_fc_v = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
         self.silu = nn.SiLU()
         self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
-        self.scale_u = nn.Parameter(torch.full(size=(4 * config.n_embd,), fill_value=1.0, requires_grad=True))
-        self.scale_v = nn.Parameter(torch.full(size=(4 * config.n_embd,), fill_value=1.0, requires_grad=True))
-        self.scale_v_constant = math.sqrt(config.n_embd)
+
+        self.suv_init_value = 1.0
+        self.suv_init_scaling = 1.0
+        self.scale_u = nn.Parameter(torch.full(size=(4 * config.n_embd,), fill_value=self.suv_init_value, requires_grad=True, dtype=torch.float32))
+        self.scale_v = nn.Parameter(torch.full(size=(4 * config.n_embd,), fill_value=self.suv_init_value, requires_grad=True, dtype=torch.float32))
 
     def forward(self, x):
         u = self.c_fc_u(x)
         v = self.c_fc_v(x)
         # Apply the scaling
-        u = u * self.scale_u.reshape(1, 1, -1)
-        v = v * self.scale_v.reshape(1, 1, -1) * self.scale_v_constant
+        u_scaling = self.scale_u.reshape(1, 1, -1) * (self.suv_init_value/self.suv_init_scaling) * (self.n_embd ** 0.5)
+        v_scaling = self.scale_v.reshape(1, 1, -1) * (self.suv_init_value/self.suv_init_scaling) * (self.n_embd ** 0.5)
+        u = u * u_scaling
+        v = v * v_scaling
         # Compute SwiGLU
         x = u*self.silu(v)
         x = self.c_proj(x)
@@ -147,17 +146,14 @@ class MLP(nn.Module):
         with torch.no_grad():
             c_fc_u_weight = self.c_fc_u.weight
             u_scale =  c_fc_u_weight.norm(dim=-1, keepdim=True) + _SCALE_SAFEGUARD
-            print(f"torch mean u_scale {torch.mean(u_scale)}, {u_scale.shape}")
             c_fc_u_weight[:] = c_fc_u_weight/u_scale
             c_fc_v_weight = self.c_fc_v.weight
             v_scale =  c_fc_v_weight.norm(dim=-1, keepdim=True) + _SCALE_SAFEGUARD
-            print(f"torch mean v_scale {torch.mean(v_scale)}, {v_scale.shape}")
             c_fc_v_weight[:] = c_fc_v_weight / v_scale
             # The embedding dimension here is the output dimension
             c_proj_weight = self.c_proj.weight
             proj_scale = c_proj_weight.norm(dim=-2, keepdim=True) + _SCALE_SAFEGUARD
             c_proj_weight[:] = c_proj_weight / proj_scale
-            print(f"torch mean proj_scale {torch.mean(proj_scale)}, {proj_scale.shape}")
 
 
 class Block(nn.Module):
@@ -166,33 +162,43 @@ class Block(nn.Module):
         super().__init__()
         self.attn = CausalSelfAttention(config)
         self.mlp = MLP(config)
+        self.attn_alpha_init_value = 0.05
+        self.attn_alpha_init_scaling = config.base_scale
+
+        self.mlp_alpha_init_value = 0.05
+        self.mlp_alpha_init_scaling = config.base_scale
+
         # Interlayer step sizes "eigen step-size" we keep these rank 1 instead of [batch, seq, dim] so that
         # they don't get added to the decay parameters
 
         # The initialization should be roughly 1/n_layers
-        self.alpha_initial_scaling = 1.0 / math.sqrt(config.n_embd)
 
-        self.alpha_forward_pass_scaling = math.sqrt(config.n_embd) / config.n_layer
 
         # According to the paper we initialize with alpha_scale and use alpha_init to rescale in the forward pass
         self.alpha_attention = nn.Parameter(
-            torch.full(size=(config.n_embd,), fill_value=self.alpha_initial_scaling, requires_grad=True))
+            torch.full(size=(config.n_embd,), fill_value=self.attn_alpha_init_scaling, requires_grad=True, dtype=torch.float32))
         self.alpha_mlp = nn.Parameter(
-            torch.full(size=(config.n_embd,), fill_value=self.alpha_initial_scaling, requires_grad=True))
+            torch.full(size=(config.n_embd,), fill_value=self.mlp_alpha_init_scaling, requires_grad=True, dtype=torch.float32))
 
     def forward(self, x):
         # The forward pass becomes x<- h+alpha_a(h_A-h) = (1-alpha_a)h + alpha_a h_A, the same for the MLP residual step
         # Normalizations of the activations will be differentiable, we introduce them in the forward computation.
         ## Rescale the parameters
-        scaled_alpha_attention = self.alpha_attention * self.alpha_forward_pass_scaling
-        scaled_alpha_mlp = self.alpha_mlp * self.alpha_forward_pass_scaling
+        scaled_alpha_attention = self.alpha_attention * (self.attn_alpha_init_value / self.attn_alpha_init_scaling)
+        scaled_alpha_mlp = self.alpha_mlp * (self.mlp_alpha_init_value / self.mlp_alpha_init_scaling)
 
-        x = (1.0 - scaled_alpha_attention[None, None, :]) * x + scaled_alpha_attention[None, None, :] * self.attn(x)
+        # TODO (SA) describe this initial attention step on paper
+        y_att = self.attn(x)
+        y_att = y_att/y_att.norm(dim=-1, keepdim=True)
+        x = (1.0 - scaled_alpha_attention[None, None, :]) * x + scaled_alpha_attention[None, None, :] * y_att
 
         scale = x.norm(dim=-1, keepdim=True) + _SCALE_SAFEGUARD
         x = x / scale
 
-        x = (1.0 - scaled_alpha_mlp[None, None, :]) * x + scaled_alpha_mlp[None, None, :] * self.mlp(x)
+        y_mlp = self.mlp(x)
+        scale = y_mlp.norm(dim=-1, keepdim=True)
+        y_mlp = y_mlp / scale
+        x = (1.0 - scaled_alpha_mlp[None, None, :]) * x + scaled_alpha_mlp[None, None, :] * y_mlp
 
         scale = x.norm(dim=-1, keepdim=True) + _SCALE_SAFEGUARD
         x = x / scale
@@ -201,8 +207,6 @@ class Block(nn.Module):
 
     def normalize_parameters(self):
         # Call the submodules which have parameters to normalize
-        print(f"mean alpha attention  {self.alpha_attention.mean()}")
-        print(f"mean alpha mlp  {self.alpha_mlp.mean()}")
         self.attn.normalize_parameters()
         self.mlp.normalize_parameters()
 
@@ -214,9 +218,15 @@ class GPTConfig:
     n_layer: int = 12
     n_head: int = 12
     n_embd: int = 768
+    base_scale_override: Optional[float] = None
     dropout: float = 0.0
     bias: bool = True  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
-
+    @property
+    def base_scale(self) -> float:
+        if self.base_scale_override is None:
+            return 1.0 / (self.n_embd ** 0.5)
+        else:
+            return self.base_scale_override
 
 class GPT(nn.Module):
 
@@ -231,14 +241,17 @@ class GPT(nn.Module):
             wpe=nn.Embedding(config.block_size, config.n_embd),
             drop=nn.Dropout(config.dropout),
             h=nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
-            ln_f=LayerNorm(config.n_embd, bias=config.bias),
         ))
-        self.logit_scale = nn.Parameter(torch.full(size=(config.vocab_size,), fill_value=1.0))
+        self.sz_init_value = 1.00
+        self.sz_init_scaling = config.base_scale
+        # TODO (SA) test if float 32 is important here !
+        self.logit_scale = nn.Parameter(torch.full(size=(config.vocab_size,), fill_value=1.0, dtype=torch.float32))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         # with weight tying when using torch.compile() some warnings get generated:
         # "UserWarning: functional_call was passed multiple values for tied weights.
         # This behavior is deprecated and will be an error in future versions"
         # not 100% sure what this is, so far seems to be harmless. TODO investigate
+        ## TODO (SA) why is this gone?
         self.transformer.wte.weight = self.lm_head.weight  # https://paperswithcode.com/method/weight-tying
 
         # init all weights
@@ -246,7 +259,8 @@ class GPT(nn.Module):
         # apply special scaled init to the residual projections, per GPT-2 paper
         for pn, p in self.named_parameters():
             if pn.endswith('c_proj.weight'):
-                torch.nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layer))
+                # TODO (SA) this initialization changes
+                torch.nn.init.normal_(p, mean=0.0, std=config.base_scale/math.sqrt(2 * config.n_layer))
 
         # report number of parameters
         print("number of parameters: %.2fM" % (self.get_num_params() / 1e6,))
@@ -265,11 +279,11 @@ class GPT(nn.Module):
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            torch.nn.init.normal_(module.weight, mean=0.0, std=self.config.base_scale)
             if module.bias is not None:
                 torch.nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            torch.nn.init.normal_(module.weight, mean=0.0, std=self.config.base_scale)
 
     def forward(self, idx, targets=None):
         device = idx.device
@@ -281,16 +295,17 @@ class GPT(nn.Module):
         tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
         pos_emb = self.transformer.wpe(pos)  # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
+
         # Normalize the word embeddings
         w_emb_scale = x.norm(dim=-1, keepdim=True) + _SCALE_SAFEGUARD
         x = x / w_emb_scale
 
         for ix, block in enumerate(self.transformer.h):
-            print(f"layer ix {ix}")
             x = block(x)
-        x = self.transformer.ln_f(x)
 
-        logit_scaling = self.logit_scale.reshape(1, 1, -1)/math.sqrt(self.config.n_embd)
+        # x = self.transformer.ln_f(x)
+
+        logit_scaling = self.logit_scale.reshape(1, 1, -1) * (self.sz_init_value/self.sz_init_scaling)
         if targets is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
@@ -452,5 +467,4 @@ class GPT(nn.Module):
 
         # Call all submodules that have parameters which need to be normalized.
         for ix, block in enumerate(self.transformer['h']):
-            print(f"normalize layer {ix}")
             block.normalize_parameters()

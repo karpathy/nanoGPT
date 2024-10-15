@@ -4,9 +4,9 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-out_dir = experiment_name = wandb_run_name = 'output_ln_no_kq_norm_all_other_norms_normalize_value_lower_scale_safeguard_1.25e-4'
+out_dir = experiment_name = wandb_run_name = 'test_implementation_matching_illya_different_init_different_scalar_scaling'
 wandb_log = True
-wandb_notes = """Test with all normalizations, except key query, and with output layer norm, value col norm, reduce scale safeguard"""
+wandb_notes = """Test an implementation that better matches Illya's"""
 wandb_project = "normalized_gpt_dev_sakle"
 
 data_root_path='/data/'
@@ -21,9 +21,10 @@ gradient_accumulation_steps = 5 * 8  # This gets downscaled by the number of gpu
 # this makes total number of tokens be 300B
 max_iters = 600000
 lr_decay_iters = 600000
-learning_rate = 1.25e-4
+learning_rate = 15e-4 * (5*8/64*12/8) # Linear scaling w.r.t the effective batch size
 warmup_iters = 0 # how many steps to warm up for
 grad_clip = 0.0 # clip gradients at this value, or disable if == 0.0
+min_lr = 0.0
 
 # eval stuff
 eval_interval = 1000
