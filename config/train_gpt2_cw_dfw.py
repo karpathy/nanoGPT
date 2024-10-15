@@ -4,9 +4,9 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-out_dir = experiment_name = wandb_run_name = 'no_layer_norms_normalize_after_att_residual_and_mlp_residual_normalize_input_emb'
+out_dir = experiment_name = wandb_run_name = 'no_layer_norms_normalize_after_att_residual'
 wandb_log = True
-wandb_notes = """No layer norms, regularize normalization, normalize input ebm and both skip connections"""
+wandb_notes = """No layer norms, regularize normalization, remove input emb normalization to see if that is the important step"""
 wandb_project = "normalized_gpt_dev_sakle"
 
 data_root_path='/data/'
