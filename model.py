@@ -102,9 +102,16 @@ class CausalSelfAttention(nn.Module):
 
         # normalize the qkv and the output projection matrices
         with torch.no_grad():
-            c_attn_weight = self.c_attn.weight
-            scale = c_attn_weight.norm(dim=-1, keepdim=True) + 7.E-2
-            c_attn_weight[:] = c_attn_weight / scale
+            embedding_dim = self.c_attn.in_features
+            qkv_attn_weight = self.c_attn.weight[:2*embedding_dim, :]
+            # Compute the row norm for the k qnd q components
+            scale_kq = qkv_attn_weight[:2*embedding_dim, :].norm(dim=-1, keepdim=True) + 7.E-2
+            qkv_attn_weight[:2*embedding_dim, :] = qkv_attn_weight[:2*embedding_dim, :] / scale_kq
+
+            # The value subset of the matrix should have normalized columns rather than rows!
+            scale_v = qkv_attn_weight[2 * embedding_dim:, :].norm(dim=-2, keepdim=True) + 7.E-2
+            qkv_attn_weight[2 * embedding_dim:, :] = qkv_attn_weight[2 * embedding_dim:, :] / scale_v
+
             c_proj_weight = self.c_proj.weight
             scale = c_proj_weight.norm(dim=-2, keepdim=True) + 7.E-2
             c_proj_weight[:] = c_proj_weight / scale
