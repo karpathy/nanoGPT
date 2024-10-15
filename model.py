@@ -156,9 +156,7 @@ class Block(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        # self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
         self.attn = CausalSelfAttention(config)
-        # self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
         # Interlayer step sizes "eigen step-size" we keep these rank 1 instead of [batch, seq, dim] so that
         # they don't get added to the decay parameters
@@ -181,17 +179,15 @@ class Block(nn.Module):
         scaled_alpha_attention = self.alpha_attention * self.alpha_forward_pass_scaling
         scaled_alpha_mlp = self.alpha_mlp * self.alpha_forward_pass_scaling
 
-        x = (1.0 - scaled_alpha_attention[None, None, :]) * x + scaled_alpha_attention[None, None, :] * self.attn(x) # self.ln_1(x))
+        x = (1.0 - scaled_alpha_attention[None, None, :]) * x + scaled_alpha_attention[None, None, :] * self.attn(x)
 
-        # We do not back propagate through the norm
         scale = x.norm(dim=-1, keepdim=True) + 7.E-2
-        x = x/scale
+        x = x / scale
 
-        x = (1.0 - scaled_alpha_mlp[None, None, :]) * x + scaled_alpha_mlp[None, None, :] * self.mlp(x) # self.ln_2(x))
+        x = (1.0 - scaled_alpha_mlp[None, None, :]) * x + scaled_alpha_mlp[None, None, :] * self.mlp(x)
 
-        # We do not back propagate through the norm
-        # scale = x.norm(dim=-1, keepdim=True)
-        # x = x/scale
+        scale = x.norm(dim=-1, keepdim=True)
+        x = x / scale
 
         return x
 
@@ -278,8 +274,8 @@ class GPT(nn.Module):
         pos_emb = self.transformer.wpe(pos)  # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
         # Normalize the word embeddings
-        # w_emb_scale = x.norm(dim=-1, keepdim=True) + 7.E-2
-        # x = x/w_emb_scale
+        w_emb_scale = x.norm(dim=-1, keepdim=True) + 7.E-2
+        x = x / w_emb_scale
 
         for ix, block in enumerate(self.transformer.h):
             print(f"layer ix {ix}")
