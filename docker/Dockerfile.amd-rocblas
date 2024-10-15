@@ -1,6 +1,7 @@
 
+# uses rocBLAS backend for Transformer Engine
+
 FROM rocm/pytorch:rocm6.2_ubuntu22.04_py3.10_pytorch_release_2.3.0
-# FROM rocm/pytorch:latest-internal
 
 RUN apt install nano
 
@@ -18,7 +19,7 @@ WORKDIR /workspace/
 # Unlike Nvidia NGC Pytorch image, ROCm Pytorch does not have Transformer Engine Installed
 # So we need to install from source
 RUN git clone --recursive https://github.com/ROCm/TransformerEngine.git
-ENV NVTE_USE_HIPBLASLT=1
+
 ENV NVTE_FRAMEWORK=pytorch
 ENV PYTORCH_ROCM_ARCH=gfx942
 
