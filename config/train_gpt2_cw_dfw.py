@@ -4,9 +4,9 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-out_dir = experiment_name = wandb_run_name = 'output_ln_no_kq_norm_all_other_norms_normalize_value_out_fix_scale_safeguard'
+out_dir = experiment_name = wandb_run_name = 'output_ln_no_kq_norm_all_other_norms_normalize_value_lower_scale_safeguard'
 wandb_log = True
-wandb_notes = """Test with all normalizations, except key query, and with output layer norm, test if column value normalization matters add a missing scale safeguard"""
+wandb_notes = """Test with all normalizations, except key query, and with output layer norm, value col norm, reduce scale safeguard"""
 wandb_project = "normalized_gpt_dev_sakle"
 
 data_root_path='/data/'

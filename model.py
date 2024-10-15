@@ -6,6 +6,7 @@ https://github.com/openai/gpt-2/blob/master/src/model.py
 2) huggingface/transformers PyTorch implementation:
 https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
 """
+_SCALE_SAFEGUARD = 7.0E-3
 
 import math
 import inspect
@@ -105,15 +106,15 @@ class CausalSelfAttention(nn.Module):
             embedding_dim = self.c_attn.in_features
             qkv_attn_weight = self.c_attn.weight[:2*embedding_dim, :]
             # Compute the row norm for the k qnd q components
-            scale_kq = qkv_attn_weight[:2*embedding_dim, :].norm(dim=-1, keepdim=True) + 7.E-2
+            scale_kq = qkv_attn_weight[:2*embedding_dim, :].norm(dim=-1, keepdim=True) + _SCALE_SAFEGUARD
             qkv_attn_weight[:2*embedding_dim, :] = qkv_attn_weight[:2*embedding_dim, :] / scale_kq
 
             # The value subset of the matrix should have normalized columns rather than rows!
-            scale_v = qkv_attn_weight[2 * embedding_dim:, :].norm(dim=-2, keepdim=True) + 7.E-2
+            scale_v = qkv_attn_weight[2 * embedding_dim:, :].norm(dim=-2, keepdim=True) + _SCALE_SAFEGUARD
             qkv_attn_weight[2 * embedding_dim:, :] = qkv_attn_weight[2 * embedding_dim:, :] / scale_v
 
             c_proj_weight = self.c_proj.weight
-            scale = c_proj_weight.norm(dim=-2, keepdim=True) + 7.E-2
+            scale = c_proj_weight.norm(dim=-2, keepdim=True) + _SCALE_SAFEGUARD
             c_proj_weight[:] = c_proj_weight / scale
 
 class MLP(nn.Module):
@@ -145,16 +146,16 @@ class MLP(nn.Module):
         # Execute the normalization of MLP parameters
         with torch.no_grad():
             c_fc_u_weight = self.c_fc_u.weight
-            u_scale =  c_fc_u_weight.norm(dim=-1, keepdim=True) + 7.E-2
+            u_scale =  c_fc_u_weight.norm(dim=-1, keepdim=True) + _SCALE_SAFEGUARD
             print(f"torch mean u_scale {torch.mean(u_scale)}, {u_scale.shape}")
             c_fc_u_weight[:] = c_fc_u_weight/u_scale
             c_fc_v_weight = self.c_fc_v.weight
-            v_scale =  c_fc_v_weight.norm(dim=-1, keepdim=True) + 7.E-2
+            v_scale =  c_fc_v_weight.norm(dim=-1, keepdim=True) + _SCALE_SAFEGUARD
             print(f"torch mean v_scale {torch.mean(v_scale)}, {v_scale.shape}")
             c_fc_v_weight[:] = c_fc_v_weight / v_scale
             # The embedding dimension here is the output dimension
             c_proj_weight = self.c_proj.weight
-            proj_scale = c_proj_weight.norm(dim=-2, keepdim=True) + 7.E-2
+            proj_scale = c_proj_weight.norm(dim=-2, keepdim=True) + _SCALE_SAFEGUARD
             c_proj_weight[:] = c_proj_weight / proj_scale
             print(f"torch mean proj_scale {torch.mean(proj_scale)}, {proj_scale.shape}")
 
@@ -188,12 +189,12 @@ class Block(nn.Module):
 
         x = (1.0 - scaled_alpha_attention[None, None, :]) * x + scaled_alpha_attention[None, None, :] * self.attn(x)
 
-        scale = x.norm(dim=-1, keepdim=True) + 7.E-2
+        scale = x.norm(dim=-1, keepdim=True) + 7.E-4
         x = x / scale
 
         x = (1.0 - scaled_alpha_mlp[None, None, :]) * x + scaled_alpha_mlp[None, None, :] * self.mlp(x)
 
-        scale = x.norm(dim=-1, keepdim=True) + 7.E-2
+        scale = x.norm(dim=-1, keepdim=True) + 7.E-4
         x = x / scale
 
         return x
@@ -281,7 +282,7 @@ class GPT(nn.Module):
         pos_emb = self.transformer.wpe(pos)  # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
         # Normalize the word embeddings
-        w_emb_scale = x.norm(dim=-1, keepdim=True) + 7.E-2
+        w_emb_scale = x.norm(dim=-1, keepdim=True) + _SCALE_SAFEGUARD
         x = x / w_emb_scale
 
         for ix, block in enumerate(self.transformer.h):
