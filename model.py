@@ -173,7 +173,6 @@ class Block(nn.Module):
 
         # The initialization should be roughly 1/n_layers
 
-
         # According to the paper we initialize with alpha_scale and use alpha_init to rescale in the forward pass
         self.alpha_attention = nn.Parameter(
             torch.full(size=(config.n_embd,), fill_value=self.attn_alpha_init_scaling, requires_grad=True))
@@ -189,15 +188,21 @@ class Block(nn.Module):
 
         # TODO (SA) describe this initial attention step on paper
         y_att = self.attn(x)
-        y_att = y_att/y_att.norm(dim=-1, keepdim=True)
+
+        # Ablated this for a test
+        # y_att = y_att/y_att.norm(dim=-1, keepdim=True)
+
         x = (1.0 - scaled_alpha_attention[None, None, :]) * x + scaled_alpha_attention[None, None, :] * y_att
 
         scale = x.norm(dim=-1, keepdim=True) + _SCALE_SAFEGUARD
         x = x / scale
 
         y_mlp = self.mlp(x)
-        scale = y_mlp.norm(dim=-1, keepdim=True)
-        y_mlp = y_mlp / scale
+
+        # Ablated this for a test
+        # scale = y_mlp.norm(dim=-1, keepdim=True)
+        # y_mlp = y_mlp / scale
+
         x = (1.0 - scaled_alpha_mlp[None, None, :]) * x + scaled_alpha_mlp[None, None, :] * y_mlp
 
         scale = x.norm(dim=-1, keepdim=True) + _SCALE_SAFEGUARD
