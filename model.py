@@ -193,7 +193,7 @@ class Block(nn.Module):
 
         x = (1.0 - scaled_alpha_mlp[None, None, :]) * x + scaled_alpha_mlp[None, None, :] * self.mlp(x)
 
-        scale = x.norm(dim=-1, keepdim=True)
+        scale = x.norm(dim=-1, keepdim=True) + 7.E-2
         x = x / scale
 
         return x
