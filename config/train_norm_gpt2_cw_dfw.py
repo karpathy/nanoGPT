@@ -4,11 +4,11 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-experiment_name = wandb_run_name = 'test_match_head_and_embedding_size_match_lr_16gpus'
+experiment_name = wandb_run_name = 'test_match_head_and_embedding_size_match_lr_16gpus_flash_attn'
 out_dir = f"/results/{experiment_name}"
 
 wandb_log = True
-wandb_notes = """Test if setting the emb size to 1024 and 16 heads improves the behavior with rope"""
+wandb_notes = """Test if setting the emb size to 1024 and 16 heads improves the behavior with rope swap the flash attn implementatiation"""
 wandb_project = "normalized_gpt_dev_sakle"
 
 data_root_path='/data/'
