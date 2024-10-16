@@ -17,6 +17,27 @@ import torch.nn as nn
 from torch.nn import functional as F
 from typing import Optional
 
+def apply_rotary_position_embeddings(sinusoidal_pos, q, k):
+    # Split the sinusoidal_pos into sin and cos parts
+    sin, cos = sinusoidal_pos.chunk(2, dim=-1)
+    # Apply the rotary embeddings to the query and key
+    q_rot = torch.stack((-q[..., 1::2], q[..., ::2]), dim=-1)
+    k_rot = torch.stack((-k[..., 1::2], k[..., ::2]), dim=-1)
+    q_rot = torch.reshape(q_rot, q.shape[:-1] + (q.shape[-1]//2, 2)) * torch.stack((cos, sin), dim=-1)
+    k_rot = torch.reshape(k_rot, k.shape[:-1] + (k.shape[-1]//2, 2)) * torch.stack((cos, sin), dim=-1)
+    q_rot = torch.reshape(q_rot, q.shape)
+    k_rot = torch.reshape(k_rot, k.shape)
+    return q_rot, k_rot
+
+def get_sinusoidal_embeddings( n_positions, dim):
+    """Generate sinusoidal positional embeddings."""
+    position = torch.arange(n_positions, dtype=torch.float).unsqueeze(1)
+    div_term = torch.exp(torch.arange(0, dim, 2).float() * (-math.log(10000.0) / dim))
+    sinusoidal_emb = torch.zeros((n_positions, dim))
+    sinusoidal_emb[:, 0::2] = torch.sin(position * div_term)
+    sinusoidal_emb[:, 1::2] = torch.cos(position * div_term)
+    return sinusoidal_emb
+
 class CausalSelfAttention(nn.Module):
 
     def __init__(self, config):
@@ -56,6 +77,9 @@ class CausalSelfAttention(nn.Module):
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)  # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)  # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)  # (B, nh, T, hs)
+
+        sinusoidal_pos = get_sinusoidal_embeddings(T, self.n_embd // self.n_head).to(device=q.device)
+        q, k = apply_rotary_position_embeddings(sinusoidal_pos, q, k)
 
         # Normalize each query and key within each head
         q = q/q.norm(dim=-1, keepdim=True)
@@ -124,20 +148,19 @@ class Block(nn.Module):
         super().__init__()
         self.attn = CausalSelfAttention(config)
         self.mlp = MLP(config)
+
+        # Scaling parameters applied to the eigen learning rates for the attention step
         self.attn_alpha_init_value = 0.05
         self.attn_alpha_init_scaling = config.base_scale
 
+        # Scaling parameters applied to the eigen learning rates for the mlp step
         self.mlp_alpha_init_value = 0.05
         self.mlp_alpha_init_scaling = config.base_scale
-
-        # Interlayer step sizes "eigen step-size" we keep these rank 1 instead of [batch, seq, dim] so that
-        # they don't get added to the decay parameters
-
-        # The initialization should be roughly 1/n_layers
 
         # According to the paper we initialize with alpha_scale and use alpha_init to rescale in the forward pass
         self.alpha_attention = nn.Parameter(
             torch.full(size=(config.n_embd,), fill_value=self.attn_alpha_init_scaling, requires_grad=True))
+
         self.alpha_mlp = nn.Parameter(
             torch.full(size=(config.n_embd,), fill_value=self.mlp_alpha_init_scaling, requires_grad=True))
 
@@ -148,12 +171,11 @@ class Block(nn.Module):
         scaled_alpha_attention = self.alpha_attention * (self.attn_alpha_init_value / self.attn_alpha_init_scaling)
         scaled_alpha_mlp = self.alpha_mlp * (self.mlp_alpha_init_value / self.mlp_alpha_init_scaling)
 
-        # TODO (SA) describe this initial attention step on paper
         y_att = self.attn(x)
         y_att = y_att/y_att.norm(dim=-1, keepdim=True)
         x = (1.0 - scaled_alpha_attention[None, None, :]) * x + scaled_alpha_attention[None, None, :] * y_att
 
-        scale = x.norm(dim=-1, keepdim=True) + _SCALE_SAFEGUARD
+        scale = x.norm(dim=-1, keepdim=True)
         x = x / scale
 
         y_mlp = self.mlp(x)
@@ -161,7 +183,7 @@ class Block(nn.Module):
         y_mlp = y_mlp / scale
         x = (1.0 - scaled_alpha_mlp[None, None, :]) * x + scaled_alpha_mlp[None, None, :] * y_mlp
 
-        scale = x.norm(dim=-1, keepdim=True) + _SCALE_SAFEGUARD
+        scale = x.norm(dim=-1, keepdim=True)
         x = x / scale
 
         return x
@@ -195,21 +217,20 @@ class GPT(nn.Module):
 
         self.transformer = nn.ModuleDict(dict(
             wte=nn.Embedding(config.vocab_size, config.n_embd),
-            wpe=nn.Embedding(config.block_size, config.n_embd),
             drop=nn.Dropout(config.dropout),
             h=nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
         ))
         self.sz_init_value = 1.00
         self.sz_init_scaling = config.base_scale
-        # TODO (SA) test if float 32 is important here !
+
         self.logit_scale = nn.Parameter(torch.full(size=(config.vocab_size,), fill_value=1.0))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+
         # with weight tying when using torch.compile() some warnings get generated:
         # "UserWarning: functional_call was passed multiple values for tied weights.
         # This behavior is deprecated and will be an error in future versions"
         # not 100% sure what this is, so far seems to be harmless. TODO investigate
-        ## TODO (SA) why is this gone?
-        self.transformer.wte.weight = self.lm_head.weight  # https://paperswithcode.com/method/weight-tying
+        # self.transformer.wte.weight = self.lm_head.weight  # https://paperswithcode.com/method/weight-tying
 
         # init all weights
         self.apply(self._init_weights)
@@ -222,7 +243,7 @@ class GPT(nn.Module):
         # report number of parameters
         print("number of parameters: %.2fM" % (self.get_num_params() / 1e6,))
 
-    def get_num_params(self, non_embedding=True):
+    def get_num_params(self):
         """
         Return the number of parameters in the model.
         For non-embedding count (default), the position embeddings get subtracted.
@@ -230,8 +251,6 @@ class GPT(nn.Module):
         params are actually used as weights in the final layer, so we include them.
         """
         n_params = sum(p.numel() for p in self.parameters())
-        if non_embedding:
-            n_params -= self.transformer.wpe.weight.numel()
         return n_params
 
     def _init_weights(self, module):
@@ -246,16 +265,10 @@ class GPT(nn.Module):
         device = idx.device
         b, t = idx.size()
         assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
-        pos = torch.arange(0, t, dtype=torch.long, device=device)  # shape (t)
 
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
-        pos_emb = self.transformer.wpe(pos)  # position embeddings of shape (t, n_embd)
-        x = self.transformer.drop(tok_emb + pos_emb)
-
-        # Normalize the word embeddings
-        w_emb_scale = x.norm(dim=-1, keepdim=True) + _SCALE_SAFEGUARD
-        x = x / w_emb_scale
+        x = self.transformer.drop(tok_emb)
 
         for ix, block in enumerate(self.transformer.h):
             x = block(x)

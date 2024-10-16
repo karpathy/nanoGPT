@@ -262,11 +262,8 @@ def normalize_parameters(model):
 
     # Normalize our wte and wpe
     wte = model.transformer['wte']
-    wpe = model.transformer['wpe']
-
     with torch.no_grad():
         wte.weight.data = _normalize(wte.weight.data)
-        wpe.weight.data = _normalize(wpe.weight.data)
 
         # Iterate over the internal blocks and rescale the weight matrices
         for ix, block in enumerate(model.transformer['h']):
