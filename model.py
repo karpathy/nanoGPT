@@ -57,8 +57,12 @@ class CausalSelfAttention(nn.Module):
         # Query and key rescaling
         self.sqk_init_value = 1.0
         self.sqk_init_scaling = config.base_scale
-        self.key_scaling = nn.Parameter(torch.full(size=(config.n_head, config.n_embd//config.n_head), fill_value=self.sqk_init_scaling))
-        self.query_scaling = nn.Parameter(torch.full(size=(config.n_head, config.n_embd//config.n_head), fill_value=self.sqk_init_scaling))
+        self.key_scaling = nn.Parameter(
+            torch.full(size=(config.n_head, config.n_embd//config.n_head), fill_value=self.sqk_init_scaling)
+        )
+        self.query_scaling = nn.Parameter(
+            torch.full(size=(config.n_head, config.n_embd//config.n_head), fill_value=self.sqk_init_scaling)
+        )
 
         head_dimension = config.n_embd//config.n_head
         self.scaling_constant = 1.0/math.sqrt(head_dimension)
@@ -156,8 +160,10 @@ class Block(nn.Module):
         # Normalizations of the activations will be differentiable, we introduce them in the forward computation.
         ## Rescale the parameters
 
-        scaled_alpha_attention = torch.abs(self.alpha_attention * (self.attn_alpha_init_value / self.attn_alpha_init_scaling))
-        scaled_alpha_mlp = torch.abs(self.alpha_mlp * (self.mlp_alpha_init_value / self.mlp_alpha_init_scaling))
+        # scaled_alpha_attention = torch.abs(self.alpha_attention * (self.attn_alpha_init_value / self.attn_alpha_init_scaling))
+        scaled_alpha_attention = self.alpha_attention * (self.attn_alpha_init_value / self.attn_alpha_init_scaling)
+        # scaled_alpha_mlp = torch.abs(self.alpha_mlp * (self.mlp_alpha_init_value / self.mlp_alpha_init_scaling))
+        scaled_alpha_mlp = self.alpha_mlp * (self.mlp_alpha_init_value / self.mlp_alpha_init_scaling)
 
         y_att = self.attn(x)
         y_att = y_att/y_att.norm(dim=-1, keepdim=True)
