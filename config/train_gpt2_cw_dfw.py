@@ -4,9 +4,9 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-out_dir = experiment_name = wandb_run_name = 'test_migrate_to_rope'
+out_dir = experiment_name = wandb_run_name = 'test_migrate_to_rope_reintroduce_tied_weights'
 wandb_log = True
-wandb_notes = """Test to evaluate a rope version of the model"""
+wandb_notes = """Test if rope with tied weights behaves better"""
 wandb_project = "normalized_gpt_dev_sakle"
 
 data_root_path='/data/'
