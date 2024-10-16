@@ -96,7 +96,7 @@ echo "******STARTING ${SLURM_NODEID}:${SLURM_LOCALID} ******" \
 && export WANDB_TAGS="nanogpt_git_sha=$(cat ${RESULTS_DIR}/nanogpt_git_commit_job_${SLURM_JOB_ID}),SLURM_JOB_ID=${SLURM_JOB_ID}" \
 && export WANDB_RUN_ID=${WANDB_RUN_ID} \
 && cd /workspaces/nanoGPT/ \
-&& CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python train.py ./config/train_norm_gpt2_cw_dfw.py
+&& CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python train.py ./config/train_gpt2_cw_dfw.py
 EOF
 
 echo ${cmd}
