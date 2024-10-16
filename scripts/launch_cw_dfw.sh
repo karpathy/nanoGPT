@@ -83,7 +83,7 @@ if [ "$SLURM_LOCALID" -eq 0 ]; then
       git fetch origin "${NANOGPT_GIT_REF}" --depth 1
       git checkout "${NANOGPT_GIT_REF}"
     else
-      echo "nanoGPT code for ${NEMO_CODE_DIR} already cached reusing"
+      echo "nanoGPT code for ${NANOGPT_GIT_REF} already cached reusing"
     fi
     echo "${NANOGPT_GIT_REF}" > "${RESULTS_DIR}/nanogpt_git_commit_job_${SLURM_JOB_ID}"
 fi
