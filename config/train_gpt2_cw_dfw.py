@@ -4,15 +4,16 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-from model import nGPT, nGPTConfig
-model_class = nGPT
-model_config = nGPTConfig
+# These variables determine if the baseline gpt or the normalized gpt implementation will be executed
+from gpt_model import GPT, GPTConfig
+model_class = GPT
+model_config = GPTConfig
 
-experiment_name = wandb_run_name = 'test_match_head_and_embedding_size_match_lr_16gpus_flash_attn_ablate_abs_eig_lr_revert_from_flash_implementation'
+experiment_name = wandb_run_name = 'base_gpt_test_run'
 out_dir = f"/results/{experiment_name}"
 
 wandb_log = True
-wandb_notes = """Test if setting the emb size to 1024 and 16 heads improves the behavior with rope swap the flash attn implementation ablate the abs lr"""
+wandb_notes = """Baseline GPT implementation"""
 wandb_project = "normalized_gpt_dev_sakle"
 data_root_path='/data/'
 dataset = 'nanoGPTopenwebtext'
@@ -31,10 +32,15 @@ lr_decay_iters = 600000
 learning_rate = 15e-4
 grad_clip = 0.0 # clip gradients at this value, or disable if == 0.0
 min_lr = 0.0
-weight_decay = 0.0
-warmup_iters = 0
+weight_decay = 0.1
+warmup_iters = 2000
 
-
+# Model dimension settings
 n_layer = 12
 n_head = 16
 n_embd = 1024
+base_scale_override = 1.0 / n_embd ** 0.5
+
+
+
+

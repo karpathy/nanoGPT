@@ -27,13 +27,16 @@ compile = False
 max_iters = 600000
 lr_decay_iters = 600000
 learning_rate = 15e-4
-warmup_iters = 0 # how many steps to warm up for
 grad_clip = 0.0 # clip gradients at this value, or disable if == 0.0
-
-# eval stuff
-eval_interval = 1000
-eval_iters = 200
-log_interval = 10
+min_lr = 0.0
+weight_decay = 0.0
+warmup_iters = 0
 
 # weight decay
 weight_decay = 0.0
+
+# Model dimension settings
+n_layer = 12
+n_head = 16
+n_embd = 1024
+base_scale_override = 1.0 / n_embd ** 0.5

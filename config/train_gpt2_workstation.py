@@ -4,17 +4,17 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-# These variables detemrine if the baseline gpt or the normalized gpt implementation will be executed
+# These variables determine if the baseline gpt or the normalized gpt implementation will be executed
 from gpt_model import GPT, GPTConfig
 model_class = GPT
 model_config = GPTConfig
 
 out_dir = experiment_name = wandb_run_name = 'gpt2-124M-base-gpt'
+out_dir = f"{experiment_name}"
 
 wandb_log = True
 wandb_notes = "Base normalized GPT run"
 wandb_project = "normalized_gpt_dev_sakle"
-compile = True
 data_root_path='/mnt/data/'
 dataset = 'nanoGPTopenweb'
 
@@ -30,13 +30,17 @@ compile = False
 max_iters = 600000
 lr_decay_iters = 600000
 learning_rate = 15e-4
-warmup_iters = 0 # how many steps to warm up for
 grad_clip = 0.0 # clip gradients at this value, or disable if == 0.0
+min_lr = 0.0
+weight_decay = 0.1
+warmup_iters = 2000
 
-# eval stuff
-eval_interval = 1000
-eval_iters = 200
-log_interval = 10
+# Model dimension settings
+n_layer = 12
+n_head = 16
+n_embd = 1024
+base_scale_override = 1.0 / n_embd ** 0.5
 
-# weight decay
-weight_decay = 0.0
+
+
+

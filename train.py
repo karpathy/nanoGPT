@@ -38,9 +38,12 @@ model_config = nGPTConfig
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
 out_dir = 'out'
-eval_interval = 2000
-log_interval = 1
+
+# eval stuff
+eval_interval = 1000
 eval_iters = 200
+log_interval = 10
+
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
@@ -57,9 +60,9 @@ batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch si
 block_size = 1024
 
 # model
-n_layer = 12
-n_head = 16
-n_embd = 1024
+n_layer = None
+n_head = None
+n_embd = None
 dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
 bias = False # do we use bias inside LayerNorm and Linear layers?
 
