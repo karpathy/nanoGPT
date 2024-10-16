@@ -4,7 +4,11 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-experiment_name = wandb_run_name = 'test_match_head_and_embedding_size_match_lr_16gpus_flash_attn'
+from model import nGPT, nGPTConfig
+model_class = nGPT
+model_config = nGPTConfig
+
+experiment_name = wandb_run_name = 'test_match_head_and_embedding_size_match_lr_16gpus_flash_attn_abs_eig_lr'
 out_dir = f"/results/{experiment_name}"
 
 wandb_log = True

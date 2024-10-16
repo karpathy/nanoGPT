@@ -15,6 +15,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from typing import Optional
+from flash_attn import flash_attn_qkvpacked_func, flash_attn_func
 
 
 def apply_rotary_position_embeddings(sinusoidal_pos, q, k):
@@ -80,13 +81,6 @@ class CausalSelfAttention(nn.Module):
 
         head_dimension = config.n_embd//config.n_head
         self.scaling_constant = 1.0/math.sqrt(head_dimension)
-        # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
-        self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
-        if not self.flash:
-            print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
-            # causal mask to ensure that attention is only applied to the left in the input sequence
-            self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
-                                 .view(1, 1, config.block_size, config.block_size))
 
     def forward(self, x):
         B, T, C = x.size()  # batch size, sequence length, embedding dimensionality (n_embd)
@@ -103,25 +97,16 @@ class CausalSelfAttention(nn.Module):
         scaling_factor = 1.0/math.sqrt(k.size(-1))
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        if self.flash:
-            # efficient attention using Flash Attention CUDA kernels
-            # Adjusted scaling factor
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None,
-                                                                 dropout_p=self.dropout if self.training else 0,
-                                                                 is_causal=True, scale=scaling_factor)
-        else:
-            # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * scaling_factor  # Adjusted scaling factor
-            att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float('-inf'))
-            att = F.softmax(att, dim=-1)
-            att = self.attn_dropout(att)
-            y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        y = y.transpose(1, 2).contiguous().view(B, T, C)  # re-assemble all head outputs side by side
+        # This implementation expects (B, T, nh, hs) inputs for k,q,v
+        y = flash_attn_func(q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2),
+                            dropout_p=0.0, softmax_scale=scaling_factor, causal=True, window_size=(-1, -1),
+                            alibi_slopes=None, deterministic=True)
+
+        y = y.contiguous().view(B, T, C)  # re-assemble all head outputs side by side
 
         # output projection
         y = self.resid_dropout(self.c_proj(y))
         return y
-
 
 class MLP(nn.Module):
 
@@ -247,6 +232,7 @@ class GPT(nn.Module):
             loss = None
 
         return logits, loss
+
 
     def configure_optimizers(self, weight_decay, learning_rate, betas, device_type):
         # start with all of the candidate parameters

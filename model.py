@@ -154,8 +154,9 @@ class Block(nn.Module):
         # The forward pass becomes x<- h+alpha_a(h_A-h) = (1-alpha_a)h + alpha_a h_A, the same for the MLP residual step
         # Normalizations of the activations will be differentiable, we introduce them in the forward computation.
         ## Rescale the parameters
-        scaled_alpha_attention = self.alpha_attention * (self.attn_alpha_init_value / self.attn_alpha_init_scaling)
-        scaled_alpha_mlp = self.alpha_mlp * (self.mlp_alpha_init_value / self.mlp_alpha_init_scaling)
+
+        scaled_alpha_attention = torch.abs(self.alpha_attention * (self.attn_alpha_init_value / self.attn_alpha_init_scaling))
+        scaled_alpha_mlp = torch.abs(self.alpha_mlp * (self.mlp_alpha_init_value / self.mlp_alpha_init_scaling))
 
         y_att = self.attn(x)
         y_att = y_att/y_att.norm(dim=-1, keepdim=True)
@@ -292,22 +293,6 @@ class nGPT(nn.Module):
         print(f"using fused AdamW: {use_fused}")
 
         return optimizer
-
-    def estimate_mfu(self, fwdbwd_per_iter, dt):
-        """ estimate model flops utilization (MFU) in units of A100 bfloat16 peak FLOPS """
-        # first estimate the number of flops we do per iteration.
-        # see PaLM paper Appendix B as ref: https://arxiv.org/abs/2204.02311
-        N = self.get_num_params()
-        cfg = self.config
-        L, H, Q, T = cfg.n_layer, cfg.n_head, cfg.n_embd // cfg.n_head, cfg.block_size
-        flops_per_token = 6 * N + 12 * L * H * Q * T
-        flops_per_fwdbwd = flops_per_token * T
-        flops_per_iter = flops_per_fwdbwd * fwdbwd_per_iter
-        # express our flops throughput as ratio of A100 bfloat16 peak flops
-        flops_achieved = flops_per_iter * (1.0 / dt)  # per second
-        flops_promised = 312e12  # A100 GPU bfloat16 peak flops is 312 TFLOPS
-        mfu = flops_achieved / flops_promised
-        return mfu
 
     @torch.no_grad()
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
