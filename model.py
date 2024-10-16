@@ -87,7 +87,8 @@ class CausalSelfAttention(nn.Module):
         scaling_factor = math.sqrt(k.size(-1))
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         # This implementation expects (B, T, nh, hs) inputs for k,q,v
-        y = flash_attn_func(q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2),
+        # TODO autocast seems to be failing
+        y = flash_attn_func(q.transpose(1, 2).to(dtype=torch.bfloat16), k.transpose(1, 2).to(dtype=torch.bfloat16), v.transpose(1, 2).to(dtype=torch.bfloat16),
                             dropout_p=0.0, softmax_scale=scaling_factor, causal=True, window_size=(-1, -1),
                             alibi_slopes=None, deterministic=True)
 
