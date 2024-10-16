@@ -14,7 +14,7 @@ dataset = 'nanoGPTopenweb'
 
 # these make the total batch size be ~0.5M
 # 12 batch size * 1024 block size * 5 gradaccum * 8 GPUs = 491,520
-batch_size = 12
+batch_size = 8
 block_size = 1024
 gradient_accumulation_steps = 1 # 5 * 8
 base_scale_override = None # set to None to default to normalized GPT initialization
@@ -23,7 +23,7 @@ compile = True
 # this makes total number of tokens be 300B
 max_iters = 600000
 lr_decay_iters = 600000
-learning_rate = 1e-3
+learning_rate = 15e-4
 warmup_iters = 0 # how many steps to warm up for
 grad_clip = 0.0 # clip gradients at this value, or disable if == 0.0
 
