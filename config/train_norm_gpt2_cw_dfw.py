@@ -8,7 +8,7 @@ from model import nGPT, nGPTConfig
 model_class = nGPT
 model_config = nGPTConfig
 
-experiment_name = wandb_run_name = 'test_match_head_and_embedding_size_match_lr_16gpus_flash_attn_ablate_abs_eig_lr'
+experiment_name = wandb_run_name = 'test_match_head_and_embedding_size_match_lr_16gpus_flash_attn_ablate_abs_eig_lr_revert_from_flash_implementation'
 out_dir = f"/results/{experiment_name}"
 
 wandb_log = True
