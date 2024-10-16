@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH -A llmservice_nemo_long-context
-#SBATCH --partition batch
+#SBATCH --partition batch_short
 #SBATCH --nodes 2
-#SBATCH -t 4:00:00
+#SBATCH -t 2:00:00
 #SBATCH --exclusive # exclusive node access
 #SBATCH --mem=0 # all available memory
 #SBATCH --gpus-per-node=8      # n gpus per machine <required>
