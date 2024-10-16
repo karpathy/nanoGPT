@@ -4,9 +4,9 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-out_dir = experiment_name = wandb_run_name = 'test_implementation_matching_illya_different_init_different_scalar_scaling_remove_float32_revert_init_0.02'
+out_dir = experiment_name = wandb_run_name = 'compare_float32_normalization_remove_normalization_safeguard'
 wandb_log = True
-wandb_notes = """Test an implementation that better matches Illya's ablate float 32 scaling revert initialization to 0.02"""
+wandb_notes = """implement matrix rescaling in float 32 remove the normalization safeguard in the reciprocals"""
 wandb_project = "normalized_gpt_dev_sakle"
 
 data_root_path='/data/'
@@ -17,7 +17,7 @@ dataset = 'nanoGPTopenwebtext'
 batch_size = 12
 block_size = 1024
 gradient_accumulation_steps = 5 * 8  # This gets downscaled by the number of gpus automatically in train.py
-base_scale_override = 0.02 # set to None to default to normalized GPT initialization
+base_scale_override = None # set to None to default to normalized GPT initialization
 
 # this makes total number of tokens be 300B
 max_iters = 600000

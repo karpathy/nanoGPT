@@ -6,7 +6,7 @@ https://github.com/openai/gpt-2/blob/master/src/model.py
 2) huggingface/transformers PyTorch implementation:
 https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
 """
-_SCALE_SAFEGUARD = 7.0E-3
+_SCALE_SAFEGUARD = 0.0
 
 import math
 import inspect
@@ -87,30 +87,6 @@ class CausalSelfAttention(nn.Module):
         y = self.resid_dropout(self.c_proj(y))
         return y
 
-    def normalize_parameters(self):
-        # TODO: Determine what to do with the bias in the normalization step.
-        # TODO: it would also make sense to normalize the value matrix along the output embedding dimension rather
-        #  than the input embedding dimension.
-
-        # TODO: there is an ambiguity w.r.t the meaning of the embedding dimension for the projection matrix, we'll
-        #   assume it means the vectors that get linearly combined to produce the output
-
-        # normalize the qkv and the output projection matrices
-        with torch.no_grad():
-            embedding_dim = self.c_attn.in_features
-            qkv_attn_weight = self.c_attn.weight[:2*embedding_dim, :]
-            # Compute the row norm for the k qnd q components
-            scale_kq = qkv_attn_weight[:2*embedding_dim, :].norm(dim=-1, keepdim=True) + _SCALE_SAFEGUARD
-            qkv_attn_weight[:2*embedding_dim, :] = qkv_attn_weight[:2*embedding_dim, :] / scale_kq
-
-            # The value subset of the matrix should have normalized columns rather than rows!
-            scale_v = qkv_attn_weight[2 * embedding_dim:, :].norm(dim=-2, keepdim=True) + _SCALE_SAFEGUARD
-            qkv_attn_weight[2 * embedding_dim:, :] = qkv_attn_weight[2 * embedding_dim:, :] / scale_v
-
-            c_proj_weight = self.c_proj.weight
-            scale = c_proj_weight.norm(dim=-2, keepdim=True) + _SCALE_SAFEGUARD
-            c_proj_weight[:] = c_proj_weight / scale
-
 class MLP(nn.Module):
 
     def __init__(self, config):
@@ -140,20 +116,6 @@ class MLP(nn.Module):
         x = self.c_proj(x)
         x = self.dropout(x)
         return x
-
-    def normalize_parameters(self):
-        # Execute the normalization of MLP parameters
-        with torch.no_grad():
-            c_fc_u_weight = self.c_fc_u.weight
-            u_scale =  c_fc_u_weight.norm(dim=-1, keepdim=True) + _SCALE_SAFEGUARD
-            c_fc_u_weight[:] = c_fc_u_weight/u_scale
-            c_fc_v_weight = self.c_fc_v.weight
-            v_scale =  c_fc_v_weight.norm(dim=-1, keepdim=True) + _SCALE_SAFEGUARD
-            c_fc_v_weight[:] = c_fc_v_weight / v_scale
-            # The embedding dimension here is the output dimension
-            c_proj_weight = self.c_proj.weight
-            proj_scale = c_proj_weight.norm(dim=-2, keepdim=True) + _SCALE_SAFEGUARD
-            c_proj_weight[:] = c_proj_weight / proj_scale
 
 
 class Block(nn.Module):
@@ -204,10 +166,6 @@ class Block(nn.Module):
 
         return x
 
-    def normalize_parameters(self):
-        # Call the submodules which have parameters to normalize
-        self.attn.normalize_parameters()
-        self.mlp.normalize_parameters()
 
 
 @dataclass
@@ -301,8 +259,6 @@ class GPT(nn.Module):
 
         for ix, block in enumerate(self.transformer.h):
             x = block(x)
-
-        # x = self.transformer.ln_f(x)
 
         logit_scaling = self.logit_scale.reshape(1, 1, -1) * (self.sz_init_value/self.sz_init_scaling)
         if targets is not None:
@@ -454,16 +410,3 @@ class GPT(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
 
         return idx
-
-    def normalize_parameters(self):
-        # Normalize our wte and wpe
-        wte = self.transformer['wte']
-        wpe = self.transformer['wpe']
-
-        with torch.no_grad():
-            wte.weight[:] = wte.weight / wte.weight.norm(dim=-1, keepdim=True)
-            wpe.weight[:] = wpe.weight / wpe.weight.norm(dim=-1, keepdim=True)
-
-        # Call all submodules that have parameters which need to be normalized.
-        for ix, block in enumerate(self.transformer['h']):
-            block.normalize_parameters()

@@ -43,6 +43,7 @@ init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 wandb_log = False # disabled by default
 wandb_project = 'owt'
 wandb_run_name = 'gpt2' # 'run' + str(time.time())
+wandb_notes = """"""
 # data
 data_root_path = None
 dataset = 'openwebtext'
@@ -56,7 +57,8 @@ n_embd = 768
 dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
 bias = False # do we use bias inside LayerNorm and Linear layers?
 # Initialization std
-base_scale_override = 0.02
+base_scale_override = None
+
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
 max_iters = 600000 # total number of training iterations
@@ -251,6 +253,61 @@ def get_lr(it):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
 
+def normalize_parameters(model):
+    def _normalize(x, dim=-1):
+        # Utility to normalize rows or cols in float32
+        x_f32 = x.to(dtype=torch.float32)
+        vector_norms = x_f32.norm(dim=dim, keepdim=True)
+        return (x_f32 / vector_norms).to(dtype=x.dtype)
+
+    # Normalize our wte and wpe
+    wte = model.transformer['wte']
+    wpe = model.transformer['wpe']
+
+    with torch.no_grad():
+        wte.weight.data = _normalize(wte.weight.data)
+        wpe.weight.data = _normalize(wpe.weight.data)
+
+        # Iterate over the internal blocks and rescale the weight matrices
+        for ix, block in enumerate(model.transformer['h']):
+            # Call the submodules which have parameters to normalize
+            attn = block.attn
+
+            # TODO: Determine what to do with the bias in the normalization step.
+            # TODO: it would also make sense to normalize the value matrix along the output embedding dimension rather
+            #  than the input embedding dimension.
+
+            # TODO: there is an ambiguity w.r.t the meaning of the embedding dimension for the projection matrix, we'll
+            #   assume it means the vectors that get linearly combined to produce the output
+
+            # normalize the qkv and the output projection matrices
+            embedding_dim = attn.c_attn.in_features
+
+            qkv_attn_weight = attn.c_attn.weight
+
+            # Compute the row norm for the k qnd q components
+            qkv_attn_weight.data[:2 * embedding_dim, :] = _normalize(qkv_attn_weight[:2 * embedding_dim, :])
+
+            # The value subset of the matrix should have normalized columns rather than rows!
+            qkv_attn_weight.data[2 * embedding_dim:, :] = _normalize(qkv_attn_weight[2 * embedding_dim:, :], dim=-2)
+
+            # We also probably want the projection to form vectors that are convex combinations of unit length vectors
+            c_proj_weight = attn.c_proj.weight
+            c_proj_weight.data = _normalize(c_proj_weight, dim=-2)
+
+            # Normalization of the MLP matrices
+            mlp = block.mlp
+            c_fc_u_weight = mlp.c_fc_u.weight
+            c_fc_u_weight.data = _normalize(c_fc_u_weight)
+
+            c_fc_v_weight = mlp.c_fc_v.weight
+            c_fc_v_weight.data = _normalize(c_fc_v_weight.data)
+
+            # The embedding dimension here could be interpreted as the output dimension rather than the input
+            c_proj_weight = mlp.c_proj.weight
+            c_proj_weight.data = _normalize(c_proj_weight, dim=-2)
+
+
 # logging
 if wandb_log and master_process:
     import wandb
@@ -271,6 +328,8 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
+        rng_state_pytorch = torch.get_rng_state()
+        rng_state_bytes = rng_state_pytorch.numpy().tobytes()
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
         if wandb_log:
@@ -291,6 +350,8 @@ while True:
                     'iter_num': iter_num,
                     'best_val_loss': best_val_loss,
                     'config': config,
+                    'rng_state_pytorch_bytes': rng_state_bytes,
+                    'rng_state_numpy': np.random.get_state()
                 }
                 print(f"saving checkpoint to {out_dir}")
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
@@ -300,9 +361,9 @@ while True:
     # Time to normalize all matrices, this gets once per gradient step:
     if ddp:
         # If we're using distributed data parallel, then the model is a wrapper
-        model.module.normalize_parameters()
+        normalize_parameters(model.module)
     else:
-        model.normalize_parameters()
+        normalize_parameters(model)
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16

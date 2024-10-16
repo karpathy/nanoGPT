@@ -19,7 +19,7 @@ block_size = 1024
 gradient_accumulation_steps = 1 # 5 * 8
 base_scale_override = None # set to None to default to normalized GPT initialization
 
-compile = False
+compile = True
 # this makes total number of tokens be 300B
 max_iters = 600000
 lr_decay_iters = 600000
