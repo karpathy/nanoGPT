@@ -99,12 +99,17 @@ class CausalSelfAttention(nn.Module):
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         # This implementation expects (B, T, nh, hs) inputs for k,q,v
         # TODO autocast seems to be failing
-        y = flash_attn_func(q.transpose(1, 2).to(dtype=torch.bfloat16), k.transpose(1, 2).to(dtype=torch.bfloat16),
-                            v.transpose(1, 2).to(dtype=torch.bfloat16),
-                            dropout_p=0.0, softmax_scale=scaling_factor, causal=True, window_size=(-1, -1),
-                            alibi_slopes=None, deterministic=True)
+        # This is an ablation swap back
+        #y = flash_attn_func(q.transpose(1, 2).to(dtype=torch.bfloat16), k.transpose(1, 2).to(dtype=torch.bfloat16),
+        #                    v.transpose(1, 2).to(dtype=torch.bfloat16),
+        #                    dropout_p=0.0, softmax_scale=scaling_factor, causal=True, window_size=(-1, -1),
+        #                    alibi_slopes=None, deterministic=True)
+        #y = y.contiguous().view(B, T, C)  # re-assemble all head outputs side by side
 
-        y = y.contiguous().view(B, T, C)  # re-assemble all head outputs side by side
+        y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None,
+                                                             dropout_p=self.dropout if self.training else 0,
+                                                             is_causal=True)
+        y = y.transpose(1, 2).contiguous().view(B, T, C)
 
         # output projection
         y = self.resid_dropout(self.c_proj(y))

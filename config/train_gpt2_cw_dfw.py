@@ -9,11 +9,11 @@ from gpt_model import GPT, GPTConfig
 model_class = GPT
 model_config = GPTConfig
 
-experiment_name = wandb_run_name = 'base_gpt_test_run'
+experiment_name = wandb_run_name = 'base_gpt_test_run_pytorch_flash_attn'
 out_dir = f"/results/{experiment_name}"
 
 wandb_log = True
-wandb_notes = """Baseline GPT implementation"""
+wandb_notes = """Baseline GPT implementation using pytorch's flash attention"""
 wandb_project = "normalized_gpt_dev_sakle"
 data_root_path='/data/'
 dataset = 'nanoGPTopenwebtext'
