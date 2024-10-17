@@ -90,59 +90,6 @@ FSDP:
 | Selective AC | V | V | X | |
 
 
-## Performance Results
-
-- MP: Mixed-precision Training (bfloat16)
-- PC: PyTorch Compile (default mode)
-- SAC: Selective Activation Checkpointing (1 every 4 blocks)
-
-
-### NVIDIA H100
-
-| | `gpt2-1.5b` | `llama-3.1-70b-proxy` |
-| :-: | :-: | :-: |
-| Batch Size | 8 | 2 |
-
-Single GPU:
-| Config | `gpt2-1.5b` | `llama-3.1-70b-proxy` |
-| :- | :-: | :-: |
-| MP | 350 TFLOP/s (35% MFU) | 700 TFLOP/s (70% MFU) |
-| MP + PC | 400 TFLOP/s (40% MFU) | 790 TFLOP/s (80% MFU) |
-| MP + FP8 | 400 TFLOP/s (20% MFU) | 1200 TFLOP/s (60% MFU) |
-
-DDP:
-| Config | `gpt2-1.5b` | `llama-3.1-70b-proxy` |
-| :- | :-: | :-: |
-| MP | 325 TFLOP/s (32% MFU) | 600 TFLOP/s (60% MFU) |
-| MP + PC | 360 TFLOP/s (36% MFU) | 650 TFLOP/s (65% MFU) |
-| MP + FP8 | 350 TFLOP/s (20% MFU) | 950 TFLOP/s (48% MFU) |
-
-FSDP:
-| Config | `gpt2-1.5b` | `llama-3.1-70b-proxy` |
-| :- | :-: | :-: |
-| MP | 320 TFLOP/s (32% MFU) | 650 TFLOP/s (65% MFU) |
-| MP + PC | 330 TFLOP/s (33% MFU) | 680 TFLOP/s (68% MFU) |
-| MP + FP8 | 250 TFLOP/s (12% MFU) | 1000 TFLOP/s (50% MFU) |
-
-> [!NOTE]
-> FP8 seems to allow larger batch sizes. Will update the numbers in the future.
-
-
-#### Selective AC
-
-Current selective AC implementation works only when there is more than 1 transformer block,
-so we replace `llama-3.1-70b-proxy` with `llama-3.1-8b`.
-
-| | `gpt2-1.5b` | `llama-3.1-8b` |
-| :-: | :-: | :-: |
-| Selective AC | 1/8 | 1/4 |
-
-| Config | `gpt2-1.5b` | `llama-3.1-8b` |
-| :- | :-: | :-: |
-| MP + SAC | 320 TFLOP/s (32% MFU) | 330 TFLOP/s (33% MFU) |
-| MP + SAC + PC | 330 TFLOP/s (33% MFU) | Crashes |
-
-
 ### AMD MI300X
 
 `/long_pathname_so_that_rpms_can_package_the_debug_info/src/external/clr/hipamd/src/hip_internal.hpp:555`
