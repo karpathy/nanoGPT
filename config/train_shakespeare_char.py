@@ -34,4 +34,4 @@ warmup_iters = 100 # not super necessary potentially
 
 # on macbook also add
 # device = 'cpu'  # run on cpu only
-# compile = False # do not torch compile the model
+compile = False # do not torch compile the model
