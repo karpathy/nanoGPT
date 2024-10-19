@@ -39,9 +39,12 @@ class GPTConfig:
         N = sum(p.numel() for p in model.parameters())  # get param count
 
         if rank == 0:
-            print(f"Number of parameters: {N/1e9:.2f}B")    # print number of billion parameters 
+            print(f"Number of parameters: {N/1e9:.2f}B")    # print number of billion parameters
 
-        self.flops_per_token = 6 * N + 12 * self.n_layers * self.n_heads * head_dim * self.max_seq_len
+	# since we are doing casual mask
+    	density = 0.5
+
+        self.flops_per_token = 6 * N + 12 * self.n_layers * self.n_heads * head_dim * self.max_seq_len * density
 
     def __post_init__(self):
         assert self.d_embd % self.n_heads == 0, 'd_embd must be a multiple of n_heads.'
