@@ -41,8 +41,8 @@ class GPTConfig:
         if rank == 0:
             print(f"Number of parameters: {N/1e9:.2f}B")    # print number of billion parameters
 
-	# since we are doing casual mask
-    	density = 0.5
+    # since we are doing casual mask
+        density = 0.5
 
         self.flops_per_token = 6 * N + 12 * self.n_layers * self.n_heads * head_dim * self.max_seq_len * density
 
@@ -129,19 +129,19 @@ class GPT(nn.Module):
 class Fp8GPTBlock(te.TransformerLayer):
     def __init__(self, d_embd, n_heads, **kwargs):
         super().__init__(
-			d_embd,
-			4*d_embd,
-			n_heads,
-			hidden_dropout=0.0,
-			attention_dropout=0.0,
-			layer_type='encoder',
-			self_attn_mask_type='causal',
-			normalization='LayerNorm',
-			bias=True,
-			activation='gelu',
-			attn_input_format='bshd',
-			fuse_qkv_params=True
-		)
+            d_embd,
+            4*d_embd,
+            n_heads,
+            hidden_dropout=0.0,
+            attention_dropout=0.0,
+            layer_type='encoder',
+            self_attn_mask_type='causal',
+            normalization='LayerNorm',
+            bias=True,
+            activation='gelu',
+            attn_input_format='bshd',
+            fuse_qkv_params=True
+        )
 
 
 class Fp8GPT(nn.Module):
@@ -159,7 +159,7 @@ class Fp8GPT(nn.Module):
         for tsfmr_blk in self.tsfmr_blks:
             x_BTE = tsfmr_blk(x_BTE, is_first_microbatch=is_first_microbatch)
 
-		# Couldn't fuse layer norm with linear due to weight tying
+        # Couldn't fuse layer norm with linear due to weight tying
         x_BTE = self.out_norm(x_BTE)
         logits_BTV = x_BTE @ self.tok_embd.weight.T
 
