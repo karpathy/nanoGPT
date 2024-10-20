@@ -7,6 +7,7 @@ from tqdm import tqdm
 
 from gpt import GPTConfig, GPT, GPTBlock, Fp8GPT, Fp8GPTBlock
 from llama import LLaMAConfig, LLaMA, LLaMABlock, Fp8LLaMA, Fp8LLaMABlock
+from mistral import MistralConfig, Mistral, MistralBlock
 
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data import DataLoader
@@ -43,6 +44,12 @@ def get_model_config(cfg_path, fp8):
             model_cls, blk_cls = Fp8LLaMA, Fp8LLaMABlock
         else:
             model_cls, blk_cls = LLaMA, LLaMABlock
+    elif cfg_json['arch_name'] == 'mistral':
+        cfg_cls = MistralConfig
+        if fp8:
+            raise RuntimeError('FP8 Mistral not supported')
+        else:
+            model_cls, blk_cls = Mistral, MistralBlock
     else:
         raise ValueError(f'Model architecture {cfg_json["arch_name"]} not supported.')
 
@@ -61,7 +68,7 @@ def configure_train_loop(data_loader, profile, output_path, cfg_m, bsz, fp8, ran
 
     if 'H100' in torch.cuda.get_device_name():
         flops_promised = 1979e12 if fp8 else 989.5e12
-    if 'H200' in torch.cuda.get_device_name():
+    elif 'H200' in torch.cuda.get_device_name():
         flops_promised = 1979e12 if fp8 else 989.5e12
     elif 'MI300X' in torch.cuda.get_device_name():
         flops_promised = 2610e12 if fp8 else 1300e12
