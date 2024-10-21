@@ -8,26 +8,6 @@ import transformer_engine.pytorch as te
 
 from pydantic.dataclasses import dataclass
 
-
-def disable_torch_compile_if_amd(func):
-    # Define a wrapper that applies the torch.compiler.disable decorator conditionally
-    if torch.cuda.is_available() and "MI300X" in torch.cuda.get_device_name():
-        return torch.compiler.disable()(func)
-    else:
-        return func
-
-
-@disable_torch_compile_if_amd
-def scaled_dot_product_attention_wrapper(q_BHTD, k_BHTD, v_BHTD, dropout_p=0.0, is_causal=True):
-    # with torch.nn.attention.sdpa_kernel(
-    #     enable_math=True,
-    #     enable_flash=False,
-    #     enable_mem_efficient=False
-    # ):
-    o_BHTD = F.scaled_dot_product_attention(q_BHTD, k_BHTD, v_BHTD, dropout_p=dropout_p, is_causal=is_causal)
-    return o_BHTD
-
-
 @dataclass
 class LLaMAConfig:
     n_layers: int    # L
@@ -87,7 +67,7 @@ class GroupedQueryAttention(nn.Module):
         k_BHTD = k_BJTD.repeat_interleave(self.d_embd//self.d_kv_embd, 1)
         v_BHTD = v_BJTD.repeat_interleave(self.d_embd//self.d_kv_embd, 1)
 
-        o_BHTD = scaled_dot_product_attention_wrapper(q_BHTD, k_BHTD, v_BHTD, dropout_p=0.0, is_causal=True)
+        o_BHTD = F.scaled_dot_product_attention(q_BHTD, k_BHTD, v_BHTD, dropout_p=0.0, is_causal=True)
         y_BTE = self.out_proj(o_BHTD.transpose(1, 2).flatten(-2))
 
         return y_BTE

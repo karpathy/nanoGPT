@@ -6,25 +6,6 @@ import torch.nn.functional as F
 import transformer_engine.pytorch as te
 from pydantic.dataclasses import dataclass
 
-
-def disable_torch_compile_if_amd(func):
-    # Define a wrapper that applies the torch.compiler.disable decorator conditionally
-    if torch.cuda.is_available() and "MI300X" in torch.cuda.get_device_name():
-        return torch.compiler.disable()(func)
-    else:
-        return func
-
-
-@disable_torch_compile_if_amd
-def scaled_dot_product_attention_wrapper(q_BHTD, k_BHTD, v_BHTD, dropout_p=0.0, is_causal=True):
-    # with torch.nn.attention.sdpa_kernel(
-    #     enable_math=True,
-    #     enable_flash=False,
-    #     enable_mem_efficient=False
-    # ):
-    o_BHTD = F.scaled_dot_product_attention(q_BHTD, k_BHTD, v_BHTD, dropout_p=dropout_p, is_causal=is_causal)
-    return o_BHTD
-
 @dataclass
 class GPTConfig:
     n_layers: int    # L
@@ -42,7 +23,7 @@ class GPTConfig:
             print(f"Number of parameters: {N/1e9:.2f}B")    # print number of billion parameters
 
 	# since we are doing casual mask
-    	density = 0.5
+        density = 0.5
 
         self.flops_per_token = 6 * N + 12 * self.n_layers * self.n_heads * head_dim * self.max_seq_len * density
 
@@ -61,7 +42,7 @@ class CausalSelfAttention(nn.Module):
         qkv = self.attn_proj(x_BTE).split(x_BTE.size(-1), -1)
         split_attn_head = lambda z: z.unflatten(-1, [-1, self.d_head]).transpose(1, 2)
         q_BHTD, k_BHTD, v_BHTD = map(split_attn_head, qkv)
-        o_BHTD = scaled_dot_product_attention_wrapper(q_BHTD, k_BHTD, v_BHTD, dropout_p=0.0, is_causal=True)
+        o_BHTD = F.scaled_dot_product_attention(q_BHTD, k_BHTD, v_BHTD, dropout_p=0.0, is_causal=True)
         o_BTE = o_BHTD.transpose(1, 2).flatten(-2)
         y_BTE = self.out_proj(o_BTE)
         return y_BTE
