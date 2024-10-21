@@ -5,8 +5,8 @@
   "d_embd": 4096,
   "d_hid": 14336,
   "vocab_size": 32000,
-  "max_seq_len": 32768,
-  "window_size": 4096,
+  "max_seq_len": 8192,
+  "window_size": 1024,
   "rope_base": 10000.0,
   "norm_eps": 1e-05,
   "arch_name": "mistral"
