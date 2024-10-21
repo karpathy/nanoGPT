@@ -7,10 +7,11 @@ from tqdm import tqdm
 
 from gpt import GPTConfig, GPT, GPTBlock, Fp8GPT, Fp8GPTBlock
 from llama import LLaMAConfig, LLaMA, LLaMABlock, Fp8LLaMA, Fp8LLaMABlock
-from mistral import MistralConfig, Mistral, MistralBlock
+from mistral import MistralConfig, Mistral, MistralBlock, Fp8Mistral, Fp8MistralBlock
 
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data import DataLoader
+
 
 class DummyDataset(Dataset):
     def __init__(self, vocab_size, max_seq_len, ds_len):
@@ -47,7 +48,7 @@ def get_model_config(cfg_path, fp8):
     elif cfg_json['arch_name'] == 'mistral':
         cfg_cls = MistralConfig
         if fp8:
-            raise RuntimeError('FP8 Mistral not supported')
+            model_cls, blk_cls = Fp8Mistral, Fp8MistralBlock
         else:
             model_cls, blk_cls = Mistral, MistralBlock
     else:
