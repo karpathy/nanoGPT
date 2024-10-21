@@ -5,9 +5,6 @@ Repo for benchmarking LLM training workloads.
 
 ## TODO
 - [ ] te.checkpoint @kimbo
-- [ ] debug AMD TE @orenleung
-- [ ] add perf to spreadsheet @orenleung
-- [ ] H200 & mi300x perf to spreadsheet @orenleung
 - [ ] multi-node nvidia @orenleung
 - [ ] multi-node amd @orenleung
 
