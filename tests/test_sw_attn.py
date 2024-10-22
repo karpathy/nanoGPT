@@ -15,7 +15,7 @@ from torch.nn.attention.flex_attention import (
 torch.set_default_device('cuda')
 torch.manual_seed(3985)
 
-B, H, T, D = 16, 16, 8192, 64
+B, H, T, D = 16, 32, 8192, 128
 W = 1024
 
 query = torch.rand([B, H, T, D], dtype=torch.bfloat16)
@@ -28,7 +28,7 @@ flex_attention = torch.compile(flex_attention, dynamic=False)
 
 def swa_mask_mod(b, h, q_idx, kv_idx):
     causal_mask = (q_idx >= kv_idx)
-    window_mask = (q_idx - kv_idx < W)  # attention-gym says <= but I think it's wrong
+    window_mask = (q_idx - kv_idx <= W)  # attention-gym says <= for sliding window
     return causal_mask & window_mask
 
 @lru_cache
@@ -46,9 +46,9 @@ def test_swa_mask():
 
 def test_density():
     density = (W * (W - 1) / 2 + (T - W + 1) * W) / (T * T)
-    density_g = swa_mask.count_nonzero() / swa_mask.numel()
-    # density_g = 1.0 - blk_mask.sparsity() / 100  # Block sparsity counts non-zero blocks instead of elements
-    assert np.isclose(density, density_g.item()), f'{density=}, {density_g=}'
+    # density_g = swa_mask.count_nonzero() / swa_mask.numel()
+    density_g = 1.0 - blk_mask.sparsity() / 100  # Block sparsity counts non-zero blocks instead of elements
+    assert np.isclose(density, density_g), f'{density=}, {density_g=}'
 
 
 def test_correctness():
