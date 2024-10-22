@@ -145,3 +145,10 @@ def create_data_loader(bsz, n_steps, cfg_m):
     dataset = DummyDataset(cfg_m.vocab_size, cfg_m.max_seq_len, bsz*n_steps)
     data_loader = DataLoader(dataset, batch_size=bsz, num_workers=8, pin_memory=True, shuffle=True)
     return data_loader
+
+def disable_torch_compile_if_amd(func):
+    # Define a wrapper that applies the torch.compiler.disable decorator conditionally
+    if torch.cuda.is_available() and "MI300X" in torch.cuda.get_device_name():
+        return torch.compiler.disable()(func)
+    else:
+        return func

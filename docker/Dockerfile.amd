@@ -2,7 +2,7 @@
 FROM rocm/pytorch:rocm6.2_ubuntu22.04_py3.10_pytorch_release_2.3.0
 # FROM rocm/pytorch:latest-internal
 
-RUN apt install nano
+RUN apt install -y nano wget
 
 RUN pip install uv
 
@@ -20,7 +20,7 @@ WORKDIR /workspace/
 RUN git clone --recursive https://github.com/ROCm/TransformerEngine.git
 ENV NVTE_USE_HIPBLASLT=1
 ENV NVTE_FRAMEWORK=pytorch
-ENV PYTORCH_ROCM_ARCH=gfx942
+ENV NVTE_ROCM_ARCH=gfx942
 
 RUN cd TransformerEngine && pip install .
 
