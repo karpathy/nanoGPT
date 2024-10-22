@@ -1,11 +1,13 @@
-from dataclasses import asdict
-from typing import Optional
+from functools import lru_cache
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import transformer_engine.pytorch as te
 from pydantic.dataclasses import dataclass
+
+from torch.nn.attention.flex_attention import create_block_mask
+from torch.nn.attention.flex_attention import flex_attention
 
 
 @dataclass
@@ -35,7 +37,7 @@ class MistralConfig:
 
 
 class GroupedQueryAttention(nn.Module):
-    def __init__(self, d_embd, n_heads, n_kv_heads, **kwargs):
+    def __init__(self, d_embd, n_heads, n_kv_heads, window_size, max_seq_len, **kwargs):
         super().__init__()
         self.d_embd = d_embd
         self.d_head = d_embd // n_heads  # D
@@ -43,7 +45,13 @@ class GroupedQueryAttention(nn.Module):
 
         self.attn_proj = nn.Linear(d_embd, d_embd+2*self.d_kv_embd, bias=False)
         self.out_proj = nn.Linear(d_embd, d_embd, bias=False)
-        self.sdpa = disable_torch_compile_if_amd(F.scaled_dot_product_attention)
+
+        self.use_flex = torch.cuda.is_available() and 'MI300X' not in torch.cuda.get_device_name() 
+        if self.use_flex:
+            self.sdpa = torch.compile(flex_attention, dynamic=False)
+            self.window_size, self.max_seq_len = window_size, max_seq_len
+        else:
+            self.sdpa = F.scaled_dot_product_attention
 
     def forward(self, x_BTE, attn_mask, freq_cis_TF):
         qkv = self.attn_proj(x_BTE).split([self.d_embd, self.d_kv_embd, self.d_kv_embd], -1)
@@ -53,21 +61,20 @@ class GroupedQueryAttention(nn.Module):
         q_BHTD = apply_rotary_embd(q_BHTD, freq_cis_TF)
         k_BJTD = apply_rotary_embd(k_BJTD, freq_cis_TF)
 
-        k_BHTD = k_BJTD.repeat_interleave(self.d_embd//self.d_kv_embd, 1)
-        v_BHTD = v_BJTD.repeat_interleave(self.d_embd//self.d_kv_embd, 1)
+        if self.use_flex:
+            blk_mask = create_block_mask_cached(self.window_size, self.max_seq_len)
+            # o_BHTD = self.sdpa(q_BHTD, k_BJTD, v_BJTD, block_mask=blk_mask, enable_gqa=True)  # enable_gpa=True not working
+            k_BHTD = k_BJTD.repeat_interleave(self.d_embd//self.d_kv_embd, 1)
+            v_BHTD = v_BJTD.repeat_interleave(self.d_embd//self.d_kv_embd, 1)
+            o_BHTD = self.sdpa(q_BHTD, k_BHTD, v_BHTD, block_mask=blk_mask)
+        else:
+            k_BHTD = k_BJTD.repeat_interleave(self.d_embd//self.d_kv_embd, 1)
+            v_BHTD = v_BJTD.repeat_interleave(self.d_embd//self.d_kv_embd, 1)
+            o_BHTD = self.sdpa(q_BHTD, k_BHTD, v_BHTD, attn_mask=attn_mask)
 
-        o_BHTD = self.sdpa(q_BHTD, k_BHTD, v_BHTD, attn_mask=attn_mask)
         y_BTE = self.out_proj(o_BHTD.transpose(1, 2).flatten(-2))
 
         return y_BTE
-
-
-def disable_torch_compile_if_amd(fn):
-    # Define a wrapper that applies the torch.compiler.disable decorator conditionally
-    if torch.cuda.is_available() and "MI300X" in torch.cuda.get_device_name():
-        return torch.compiler.disable()(fn)
-    else:
-        return fn
 
 
 def apply_rotary_embd(x_BXTD, freq_cis_TFC):
@@ -81,6 +88,19 @@ def apply_rotary_embd(x_BXTD, freq_cis_TFC):
     out_BXTD = out_BXTDC.flatten(-2)
 
     return out_BXTD.type_as(x_BXTD)
+
+
+@lru_cache
+def create_block_mask_cached(window_size, max_seq_len):
+    def swa_mask_mod(b, h, q_idx, kv_idx):
+        causal_mask = (q_idx >= kv_idx)
+        window_mask = (q_idx - kv_idx <= window_size)  # (window_size + 1) kv per q unmasked
+        return causal_mask & window_mask
+
+    blk_mask = create_block_mask(swa_mask_mod, 1, 1, max_seq_len, max_seq_len, device='cuda')
+
+    return blk_mask
+
 
 
 class SwiGLU(nn.Module):
@@ -127,16 +147,22 @@ class Mistral(nn.Module):
     def __init__(self, vocab_size, d_embd, n_layers, n_heads, window_size, **kwargs):
         super().__init__()
         self.tok_embd = nn.Embedding(vocab_size, d_embd)
-        self.tsfmr_blks = nn.ModuleList(MistralBlock(d_embd, n_heads=n_heads, **kwargs) for _ in range(n_layers))
+        self.tsfmr_blks = nn.ModuleList(
+            MistralBlock(d_embd, n_heads=n_heads, window_size=window_size, **kwargs) for _ in range(n_layers)
+        )
         self.norm = RMSNorm(d_embd, **kwargs)
         self.lm_head = nn.Linear(d_embd, vocab_size, bias=False)
         self.register_buffer('freq_cis_TFC', precompute_freq_cis(d_embd//n_heads, **kwargs).to(self.lm_head.weight.dtype))
-        self.register_buffer('swa_mask', create_sliding_window_attention_mask(window_size, kwargs['max_seq_len']))
+
+        if not torch.cuda.is_available() or 'MI300X' in torch.cuda.get_device_name():
+            self.register_buffer('mask', create_sliding_window_attention_mask(window_size, kwargs['max_seq_len']))
+        else:
+            self.mask = None
 
     def forward(self, idx_BT, **kwargs):
         x_BTE = self.tok_embd(idx_BT)
         for tsfmr_blk in self.tsfmr_blks:
-            x_BTE = tsfmr_blk(x_BTE, self.swa_mask, self.freq_cis_TFC)
+            x_BTE = tsfmr_blk(x_BTE, self.mask, self.freq_cis_TFC)
         logits_BTV = self.lm_head(self.norm(x_BTE))
         return logits_BTV
 
@@ -172,17 +198,11 @@ class Fp8Mistral(nn.Module):
         )
         freq_cis_TE = te.attention.RotaryPositionEmbedding(d_embd//n_heads)(max_seq_len=max_seq_len)
         self.register_buffer('freq_cis_TE', freq_cis_TE.to(torch.bfloat16))
-        self.register_buffer('swa_mask', create_sliding_window_attention_mask(window_size, max_seq_len))
 
     def forward(self, idx_BT, is_first_microbatch):
         x_BTE = self.tok_embd(idx_BT)
         for tsfmr_blk in self.tsfmr_blks:
-            x_BTE = tsfmr_blk(
-                x_BTE,
-                rotary_pos_emb=self.freq_cis_TE,
-                attention_mask=self.swa_mask,
-                is_first_microbatch=is_first_microbatch
-            )
+            x_BTE = tsfmr_blk(x_BTE, rotary_pos_emb=self.freq_cis_TE, is_first_microbatch=is_first_microbatch)
         logits_BTV = self.norm_lm_head(x_BTE)
         return logits_BTV
 
@@ -195,7 +215,8 @@ class Fp8MistralBlock(te.TransformerLayer):
             num_gqa_groups=n_heads//n_kv_heads,
             fuse_qkv_params=True,
             attn_input_format='bshd',
-            self_attn_mask_type='arbitrary',  # attn mask is ignored if not set
+            self_attn_mask_type='causal',  # attn mask is ignored if not set
+            window_size=(window_size, 0),
             attention_dropout=0.0,
             normalization='RMSNorm',
             layernorm_epsilon=norm_eps,
