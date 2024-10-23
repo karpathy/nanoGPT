@@ -2,13 +2,6 @@
 
 Repo for benchmarking LLM training workloads.
 
-
-## TODO
-- [ ] te.checkpoint @kimbo
-- [ ] multi-node nvidia @orenleung
-- [ ] multi-node amd @orenleung
-
-
 ## Setup
 
 ### NVIDIA
