@@ -48,8 +48,8 @@ class GroupedQueryAttention(nn.Module):
 
         self.use_flex = torch.cuda.is_available() and 'MI300X' not in torch.cuda.get_device_name() 
         if self.use_flex:
-            self.sdpa = torch.compile(flex_attention, dynamic=False)
-            self.window_size, self.max_seq_len = window_size, max_seq_len
+            self.sdpa = flex_attention
+            self.blk_mask = blk_mask = create_block_mask_cached(window_size, max_seq_len)
         else:
             self.sdpa = F.scaled_dot_product_attention
 
@@ -61,12 +61,11 @@ class GroupedQueryAttention(nn.Module):
         q_BHTD = apply_rotary_embd(q_BHTD, freq_cis_TF)
         k_BJTD = apply_rotary_embd(k_BJTD, freq_cis_TF)
 
+        k_BHTD = k_BJTD.repeat_interleave(self.d_embd//self.d_kv_embd, 1)
+        v_BHTD = v_BJTD.repeat_interleave(self.d_embd//self.d_kv_embd, 1)
+
         if self.use_flex:
-            blk_mask = create_block_mask_cached(self.window_size, self.max_seq_len)
-            # o_BHTD = self.sdpa(q_BHTD, k_BJTD, v_BJTD, block_mask=blk_mask, enable_gqa=True)  # enable_gpa=True not working
-            k_BHTD = k_BJTD.repeat_interleave(self.d_embd//self.d_kv_embd, 1)
-            v_BHTD = v_BJTD.repeat_interleave(self.d_embd//self.d_kv_embd, 1)
-            o_BHTD = self.sdpa(q_BHTD, k_BHTD, v_BHTD, block_mask=blk_mask)
+            o_BHTD = self.sdpa(q_BHTD, k_BHTD, v_BHTD, block_mask=self.blk_mask)
         else:
             k_BHTD = k_BJTD.repeat_interleave(self.d_embd//self.d_kv_embd, 1)
             v_BHTD = v_BJTD.repeat_interleave(self.d_embd//self.d_kv_embd, 1)
@@ -245,3 +244,18 @@ if __name__ == '__main__':
     )
     with open('configs/mistral-v0.1-proxy.json', 'w') as f:
         json.dump(RootModel[MistralConfig](mistral_v01_proxy).model_dump(), f, indent=2)
+
+    mistral_v01 = MistralConfig(
+        n_layers=32,
+        n_heads=32,
+        n_kv_heads=8,
+        d_embd=4096,
+        d_hid=14336,
+        vocab_size=32000,
+        max_seq_len=8192,
+        window_size=1024,
+        rope_base=1e4,
+        norm_eps=1e-5
+    )
+    with open('configs/mistral-v0.1.json', 'w') as f:
+        json.dump(RootModel[MistralConfig](mistral_v01).model_dump(), f, indent=2)
