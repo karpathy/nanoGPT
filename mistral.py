@@ -48,7 +48,7 @@ class GroupedQueryAttention(nn.Module):
 
         self.use_flex = torch.cuda.is_available() and 'MI300X' not in torch.cuda.get_device_name() 
         if self.use_flex:
-            self.sdpa = flex_attention
+            self.sdpa = torch.compile(flex_attention, dynamic=False)
             self.blk_mask = blk_mask = create_block_mask_cached(window_size, max_seq_len)
         else:
             self.sdpa = F.scaled_dot_product_attention

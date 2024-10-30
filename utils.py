@@ -59,7 +59,7 @@ def get_model_config(cfg_path, fp8):
     return cfg_m, model_cls, blk_cls
 
 
-def configure_train_loop(data_loader, profile, output_path, cfg_m, bsz, fp8, rank=0):
+def configure_train_loop(data_loader, profile, output_path, cfg_m, bsz, fp8, bench_fname, rank=0):
     if rank != 0:
         for step_idx, data_batch in enumerate(data_loader):
             yield step_idx, data_batch
@@ -122,8 +122,11 @@ def configure_train_loop(data_loader, profile, output_path, cfg_m, bsz, fp8, ran
     mfu_list = np.array(mfu_list)
     mean_flops = np.mean(flops_list[32:-16])
     mean_mfu = np.mean(mfu_list[32:-16])
-        
-    dprint(rank, f'After 32 Warmup: Mean TFLOP/s: {mean_flops/1e12:.2f} Mean MFU: {mean_mfu:.2%}')
+    print(f'After 32 Warmup: Mean TFLOP/s: {mean_flops/1e12:.2f} Mean MFU: {mean_mfu:.2%}')
+
+    if bench_fname is not None:
+        with open(f'{bench_fname}.csv', 'a') as f:
+            f.write(f'{mean_flops/1e12:.2f}, {mean_mfu:.2%}')
 
 
 def dprint(rank, *args, **kwargs):

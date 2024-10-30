@@ -31,6 +31,7 @@ def train(
     compile_mode: str = 'default',
     use_fp8: bool = False,
     profile: bool = False,
+    bench_fname: bool = False,
     output_dir: str = 'outputs/'
 ):
     '''
@@ -42,13 +43,14 @@ def train(
     :param   compile_mode: Set PyTorch compile mode. Options: "default", "reduce-overhead", "max-autotune", "max-autotune-no-cudagraphs"
     :param        use_fp8: Enable FP8
     :param        profile: Enable profiling
+    :param    bench_fname: Benchmarking log file name
     :param     output_dir: Profiling output saving directory
     '''
     torch.manual_seed(3985)
     world_size = torch.cuda.device_count()
     train_args = (
         world_size, cfg_path, bsz, n_steps, grad_acc_steps,
-        use_fp8, pt_compile, compile_mode, profile, output_dir
+        use_fp8, pt_compile, compile_mode, profile, bench_fname, output_dir
     )
 
     try:
@@ -60,7 +62,7 @@ def train(
 def train_ddp(
     rank, world_size,
     cfg_path, bsz, n_steps, grad_acc_steps,
-    use_fp8, pt_compile, compile_mode, profile, output_dir
+    use_fp8, pt_compile, compile_mode, profile, bench_fname, output_dir
 ):
     # Construct process group
     os.environ.update({'MASTER_ADDR': 'localhost', 'MASTER_PORT': '30985'})
@@ -103,7 +105,7 @@ def train_ddp(
         maybe_fp8_ctx = nullcontext
 
     # Training loop
-    loop_iter = configure_train_loop(data_loader, profile, output_path, cfg_m, bsz, use_fp8, rank)
+    loop_iter = configure_train_loop(data_loader, profile, output_path, cfg_m, bsz, use_fp8, bench_fname, rank)
     model.train()
 
     for step_idx, data_batch in loop_iter:
@@ -125,6 +127,7 @@ def train_ddp(
             scheduler.step()
             optimizer.zero_grad(set_to_none=True)
 
+    torch.cuda.empty_cache()
     destroy_process_group()
 
 
