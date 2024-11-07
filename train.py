@@ -70,7 +70,7 @@ wandb_project = 'owt'
 wandb_run_name = 'gpt2' # 'run' + str(time.time())
 # data
 dataset = 'openwebtext'
-gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
+gradient_accumulation_steps = 16 # used to simulate larger batch sizes
 batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size = 1024
 # model
@@ -116,7 +116,7 @@ if ddp:
     seed_offset = ddp_rank # each process gets a different seed
     # world_size number of processes will be training simultaneously, so we can scale
     # down the desired gradient accumulation iterations per process proportionally
-    assert gradient_accumulation_steps % ddp_world_size == 0
+    assert gradient_accumulation_steps % ddp_world_size == 0, f"Gradient accumulation steps {gradient_accumulation_steps} is not divisible by world size {ddp_world_size}"
     gradient_accumulation_steps //= ddp_world_size
 else:
     # if not ddp, we are running on a single gpu, and one process
@@ -124,6 +124,9 @@ else:
     seed_offset = 0
     ddp_world_size = 1
 tokens_per_iter = gradient_accumulation_steps * ddp_world_size * batch_size * block_size
+if master_process:
+    print(f"Effective batch size: {gradient_accumulation_steps * ddp_world_size * batch_size}")
+    print(f"Gradient accumulation steps: {gradient_accumulation_steps}")
 print(f"tokens per iteration will be: {tokens_per_iter:,}")
 
 if master_process:
@@ -350,9 +353,9 @@ while True:
             if local_iter_num >= 5: # let the training loop settle a bit
                 mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt, GPU_PERFORMANCE)
                 running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-            print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+            print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%, tk/s {tokens_per_iter/dt:.2f}")
         else:
-            print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms")
+            print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, tk/s {tokens_per_iter/dt:.2f}")
     iter_num += 1
     local_iter_num += 1
 
