@@ -59,7 +59,7 @@ def get_model_config(cfg_path, fp8):
     return cfg_m, model_cls, blk_cls
 
 
-def configure_train_loop(data_loader, profile, output_path, cfg_m, bsz, fp8, bench_fname, rank=0):
+def configure_train_loop(data_loader, profile, output_path, cfg_m, bsz, fp8, log_path, rank=0):
     if rank != 0:
         for step_idx, data_batch in enumerate(data_loader):
             yield step_idx, data_batch
@@ -124,8 +124,8 @@ def configure_train_loop(data_loader, profile, output_path, cfg_m, bsz, fp8, ben
     mean_mfu = np.mean(mfu_list[32:-16])
     print(f'After 32 Warmup: Mean TFLOP/s: {mean_flops/1e12:.2f} Mean MFU: {mean_mfu:.2%}')
 
-    if bench_fname is not None:
-        with open(f'{bench_fname}.csv', 'a') as f:
+    if log_path is not None:
+        with open(log_path, 'a') as f:
             f.write(f'{mean_flops/1e12:.2f}, {mean_mfu:.2%}')
 
 
@@ -141,13 +141,14 @@ def create_distributed_data_loader(rank, world_size, bsz, n_steps, cfg_m):
         num_workers=8, pin_memory=True, shuffle=False,
         sampler=DistributedSampler(dataset, rank=rank, num_replicas=world_size, shuffle=True)
     )
-    
     return data_loader
+
 
 def create_data_loader(bsz, n_steps, cfg_m):
     dataset = DummyDataset(cfg_m.vocab_size, cfg_m.max_seq_len, bsz*n_steps)
     data_loader = DataLoader(dataset, batch_size=bsz, num_workers=8, pin_memory=True, shuffle=True)
     return data_loader
+
 
 def disable_torch_compile_if_amd(func):
     # Define a wrapper that applies the torch.compiler.disable decorator conditionally

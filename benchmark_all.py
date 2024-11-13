@@ -1,149 +1,53 @@
+import json
+import time
+from pathlib import Path
+
 import torch
 
-import train
-import train_ddp
-import train_fsdp
+from train import train as train_single
+from train_ddp import train as train_ddp
+from train_fsdp import train as train_fsdp
 
 
-def main(output_fname):
-    with open(f'{output_fname}.csv', 'w') as f:
-        f.write('Model, Strategy, GPU, dtype, TFLOP/s/GPU, MFU')
+def main():
+    device_name = 'H100'  # Options: 'H100', 'H200', 'MI300X'
+    cfg_suffix = f'*_{device_name.lower()}.json'
 
-    bench_train = catch_error_and_continue(train.train, output_fname)
-    bench_train_ddp = catch_error_and_continue(train_ddp.train, output_fname)
-    bench_train_fsdp = catch_error_and_continue(train_fsdp.train, output_fname)
+    log_path = 'outputs/benchmark_results.csv'
+    assert not Path(log_path).exists()
+    with open(log_path, 'w') as f:
+        f.write('Model, Strategy, GPU, dtype, Batch Size, TFLOP/s/GPU, MFU')
 
-
-    # GPT2 1.5B DDP bf16
-    cfg = dict(
-        cfg_path='configs/gpt2-1.5b.json',
-        bsz=8,
-        pt_compile=True,
-        bench_fname=output_fname
-    )
-    write_config_csv(output_fname, cfg, 'DDP')
-    bench_train_ddp(**cfg)
+    for bm_cfg_path in sorted(Path('bm_configs/').glob(cfg_suffix)):
+        with open(bm_cfg_path) as f:
+            cfg_d = json.load(f)
+        benchmark(**cfg_d, log_path=log_path)
+        time.sleep(1)
 
 
-    # GPT2 1.5B DDP fp8
-    cfg = dict(
-        cfg_path='configs/gpt2-1.5b.json',
-        bsz=8,
-        use_fp8=True,
-        bench_fname=output_fname
-    )
-    write_config_csv(output_fname, cfg, 'DDP')
-    bench_train_ddp(**cfg)
+def benchmark(cfg_path, strategy, dtype, device_name, bsz, log_path, **kwargs):
+    assert device_name in torch.cuda.get_device_name(), 'Incompatible GPU device for the benchmark config'
 
+    with open(log_path, 'a') as f:
+        f.write(f'\n{Path(cfg_path).stem}, {strategy}, {device_name}, {dtype}, {bsz}, ')
 
-    # LLaMA 3.1 70B Proxy 4 FSDP bf16
-    cfg = dict(
-        cfg_path='configs/llama-3.1-70b-proxy4.json',
-        bsz=4,
-        pt_compile=True,
-        bench_fname=output_fname
-    )
-    write_config_csv(output_fname, cfg, 'FSDP')
-    bench_train_fsdp(**cfg)
+    train_fn_dict = {'Single': train_single, 'DDP': train_ddp, 'FSDP': train_fsdp}
+    train_fn = train_fn_dict[strategy]
 
-
-    # LLaMA 3.1 70B Proxy 4 FSDP fp8
-    cfg = dict(
-        cfg_path='configs/llama-3.1-70b-proxy4.json',
-        bsz=4,
-        use_fp8=True,
-        bench_fname=output_fname
-    )
-    write_config_csv(output_fname, cfg, 'FSDP')
-    bench_train_fsdp(**cfg)
-
-
-    # LLaMA 3.1 8B FSDP bf16
-    cfg = dict(
-        cfg_path='configs/llama-3.1-8b.json',
-        bsz=2,
-        pt_compile=True,
-        bench_fname=output_fname
-    )
-    write_config_csv(output_fname, cfg, 'FSDP')
-    bench_train_fsdp(**cfg)
-
-
-    # LLaMA 3.1 8B FSDP fp8
-    cfg = dict(
-        cfg_path='configs/llama-3.1-8b.json',
-        bsz=1,
-        use_fp8=True,
-        bench_fname=output_fname
-    )
-    write_config_csv(output_fname, cfg, 'FSDP')
-    bench_train_fsdp(**cfg)
-
-
-    # LLaMA 2 7B FSDP bf16
-    cfg = dict(
-        cfg_path='configs/llama-2-7b.json',
-        bsz=2,
-        pt_compile=True,
-        bench_fname=output_fname
-    )
-    write_config_csv(output_fname, cfg, 'FSDP')
-    bench_train_fsdp(**cfg)
-
-
-    # LLaMA 2 7B FSDP fp8
-    cfg = dict(
-        cfg_path='configs/llama-2-7b.json',
-        bsz=2,
-        use_fp8=True,
-        bench_fname=output_fname
-    )
-    write_config_csv(output_fname, cfg, 'FSDP')
-    bench_train_fsdp(**cfg)
-
-
-    # Mistral v0.1 7B FSDP bf16
-    cfg = dict(
-        cfg_path='configs/mistral-v0.1.json',
-        bsz=1,
-        pt_compile=True,
-        bench_fname=output_fname
-    )
-    write_config_csv(output_fname, cfg, 'FSDP')
-    bench_train_fsdp(**cfg)
-
-
-    # Mistral v0.1 7B FSDP fp8
-    cfg = dict(
-        cfg_path='configs/mistral-v0.1.json',
-        bsz=1,
-        use_fp8=True,
-        bench_fname=output_fname
-    )
-    write_config_csv(output_fname, cfg, 'FSDP')
-    bench_train_fsdp(**cfg)
-
-
-def write_config_csv(filename, cfg, strategy):
-    device_name = torch.cuda.get_device_name()
-    model_name = cfg['cfg_path'].split('/')[-1]
-    dtype = 'fp8' if cfg.get('use_fp8', False) else 'bf16' 
-
-    with open(f'{filename}.csv', 'a') as f:
-        f.write(f'\n{model_name}, {strategy}, {device_name}, {dtype}, ')
-
-
-def catch_error_and_continue(fn, filename):
-    def inner(*args, **kwargs):
-        try:
-            fn(*args, **kwargs)
-        except:
-            with open(f'{filename}.csv', 'a') as f:
-                f.write('OOM, OOM')
-            return
-    return inner
+    try:
+        train_fn(
+            cfg_path=cfg_path,
+            bsz=bsz,
+            use_fp8=(dtype == 'FP8'),
+            pt_compile=(dtype == 'BF16'),
+            log_path=log_path,
+            n_steps=64*8,
+            **kwargs
+        )
+    except Exception as e:
+        with open(log_path, 'a') as f:
+            f.write('OOM, OOM')
 
 
 if __name__ == '__main__':
-    import sys
-    main(sys.argv[1])
+    main()

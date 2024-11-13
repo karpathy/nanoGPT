@@ -21,7 +21,7 @@ def train(
     compile_mode: str = 'default',
     use_fp8: bool = False,
     profile: bool = False,
-    bench_fname: str = None,
+    log_path: str = None,
     output_dir: str = 'outputs/'
 ):
     '''
@@ -33,7 +33,7 @@ def train(
     :param   compile_mode: Set PyTorch compile mode. Options: "default", "reduce-overhead", "max-autotune", "max-autotune-no-cudagraphs"
     :param        use_fp8: Enable FP8
     :param        profile: Enable profiling
-    :param    bench_fname: Benchmarking log file name
+    :param       log_path: Benchmarking log file path
     :param     output_dir: Profiling output saving directory
     '''
     torch.manual_seed(3985)
@@ -57,7 +57,7 @@ def train(
     fp8_format = Format.HYBRID  # E4M3 during forward pass, E5M2 during backward pass
     fp8_recipe = DelayedScaling(fp8_format=fp8_format, amax_history_len=16, amax_compute_algo='max')
 
-    loop_iter = configure_train_loop(data_loader, profile, output_path, cfg_m, bsz, use_fp8, bench_fname)
+    loop_iter = configure_train_loop(data_loader, profile, output_path, cfg_m, bsz, use_fp8, log_path)
     model.train()
     
     if use_fp8:

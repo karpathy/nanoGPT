@@ -48,7 +48,7 @@ def train(
     pt_compile: bool = False,
     compile_mode: str = 'default',
     profile: bool = False,
-    bench_fname: bool = False,
+    log_path: str = None,
     rng_seed: int = 3985,
     output_dir: str = 'outputs/'
 ):
@@ -63,7 +63,7 @@ def train(
     :param     pt_compile: Enable PyTorch compile
     :param   compile_mode: Set PyTorch compile mode. Options: "default", "reduce-overhead", "max-autotune", "max-autotune-no-cudagraphs"
     :param        profile: Enable profiling
-    :param    bench_fname: Benchmarking log file name
+    :param       log_path: Benchmarking log file path
     :param       rng_seed: Random number generator seed
     :param     output_dir: Profiling output saving directory
     '''
@@ -72,7 +72,7 @@ def train(
     train_args = (
         world_size,
         cfg_path, bsz, n_steps, grad_acc_steps, reduce_freq,
-        sac_freq, use_fp8, pt_compile, compile_mode, profile, bench_fname, rng_seed, output_dir
+        sac_freq, use_fp8, pt_compile, compile_mode, profile, log_path, rng_seed, output_dir
     )
     assert not (use_fp8 and pt_compile), 'PyTorch compile currently doesn\'t work with Transformer Engine.'
 
@@ -85,7 +85,7 @@ def train(
 def train_fsdp(
     rank, world_size,
     cfg_path, bsz, n_steps, grad_acc_steps, reduce_freq,
-    sac_freq, use_fp8, pt_compile, compile_mode, profile, bench_fname, rng_seed, output_dir
+    sac_freq, use_fp8, pt_compile, compile_mode, profile, log_path, rng_seed, output_dir
 ):
     # Construct process group
     os.environ.update({'MASTER_ADDR': 'localhost', 'MASTER_PORT': '30985'})
@@ -153,7 +153,7 @@ def train_fsdp(
         model = torch.compile(model, mode=compile_mode)
 
     # Training loop
-    loop_iter = configure_train_loop(data_loader, profile, output_path, cfg_m, bsz, use_fp8, bench_fname, rank)
+    loop_iter = configure_train_loop(data_loader, profile, output_path, cfg_m, bsz, use_fp8, log_path, rank)
     ddp_loss = torch.zeros(2, device=rank)
     model.train()
     
