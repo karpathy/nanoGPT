@@ -129,7 +129,8 @@ H200_CONFIG = [
 
 
 CONFIG = {
-    "H100": H100_CONFIG
+    "H100": H100_CONFIG,
+    "H200": H200_CONFIG
 }
 
 def main():
