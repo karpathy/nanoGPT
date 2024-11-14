@@ -46,7 +46,7 @@ H100_CONFIG = [
     "bsz": 2
     },
     {
-    "cfg_path": "configs/llama-3.1-70b-proxy.json",
+    "cfg_path": "configs/llama-3.1-70b-proxy4.json",
     "strategy": "FSDP",
     "dtype": "FP8",
     "device_name": "H100",
@@ -67,6 +67,66 @@ H100_CONFIG = [
     "bsz": 1
     }
 ]
+
+H200_CONFIG = [
+    {
+    "cfg_path": "configs/gpt2-1.5b.json",
+    "strategy": "DDP",
+    "dtype": "BF16",
+    "device_name": "H100",
+    "bsz": 28
+    },
+    {
+    "cfg_path": "configs/gpt2-1.5b.json",
+    "strategy": "DDP",
+    "dtype": "FP8",
+    "device_name": "H100",
+    "bsz": 38
+    },
+    {
+    "cfg_path": "configs/llama-3.1-8b.json",
+    "strategy": "FSDP",
+    "dtype": "BF16",
+    "device_name": "H100",
+    "bsz": 4
+    },
+    {
+    "cfg_path": "configs/llama-3.1-8b.json",
+    "strategy": "FSDP",
+    "dtype": "FP8",
+    "device_name": "H100",
+    "bsz": 4
+    },
+    {
+    "cfg_path": "configs/llama-3.1-70b-proxy4.json",
+    "strategy": "FSDP",
+    "dtype": "BF16",
+    "device_name": "H100",
+    "bsz": 8
+    },
+    {
+    "cfg_path": "configs/llama-3.1-70b-proxy4.json",
+    "strategy": "FSDP",
+    "dtype": "FP8",
+    "device_name": "H100",
+    "bsz": 8
+    },
+    {
+    "cfg_path": "configs/mistral-7b-v0.1.json",
+    "strategy": "FSDP",
+    "dtype": "BF16",
+    "device_name": "H100",
+    "bsz": 2
+    },
+    {
+    "cfg_path": "configs/mistral-7b-v0.1.json",
+    "strategy": "FSDP",
+    "dtype": "FP8",
+    "device_name": "H100",
+    "bsz": 2
+    }
+]
+
 
 CONFIG = {
     "H100": H100_CONFIG
