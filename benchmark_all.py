@@ -127,10 +127,70 @@ H200_CONFIG = [
     }
 ]
 
+MI300X_CONFIG = [
+    {
+    "cfg_path": "configs/gpt2-1.5b.json",
+    "strategy": "DDP",
+    "dtype": "BF16",
+    "device_name": "MI300X",
+    "bsz": 42
+    },
+    {
+    "cfg_path": "configs/gpt2-1.5b.json",
+    "strategy": "DDP",
+    "dtype": "FP8",
+    "device_name": "MI300X",
+    "bsz": 42
+    },
+    {
+    "cfg_path": "configs/llama-3.1-8b.json",
+    "strategy": "FSDP",
+    "dtype": "BF16",
+    "device_name": "H200",
+    "bsz": 4
+    },
+    {
+    "cfg_path": "configs/llama-3.1-8b.json",
+    "strategy": "FSDP",
+    "dtype": "FP8",
+    "device_name": "MI300X",
+    "bsz": 4
+    },
+    {
+    "cfg_path": "configs/llama-3.1-70b-proxy4.json",
+    "strategy": "FSDP",
+    "dtype": "BF16",
+    "device_name": "MI300X",
+    "bsz": 12
+    },
+    {
+    "cfg_path": "configs/llama-3.1-70b-proxy4.json",
+    "strategy": "FSDP",
+    "dtype": "FP8",
+    "device_name": "MI300X",
+    "bsz": 12
+    },
+    {
+    "cfg_path": "configs/mistral-7b-v0.1.json",
+    "strategy": "FSDP",
+    "dtype": "BF16",
+    "device_name": "MI300X",
+    "bsz": 4
+    },
+    {
+    "cfg_path": "configs/mistral-7b-v0.1.json",
+    "strategy": "FSDP",
+    "dtype": "FP8",
+    "device_name": "MI300X",
+    "bsz": 4
+    }
+]
+
 
 CONFIG = {
     "H100": H100_CONFIG,
-    "H200": H200_CONFIG
+    "H200": H200_CONFIG,
+    "MI300X": MI300X_CONFIG
 }
 
 def main():

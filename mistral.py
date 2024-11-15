@@ -67,8 +67,6 @@ class GroupedQueryAttention(nn.Module):
         if self.use_flex:
             o_BHTD = self.sdpa(q_BHTD, k_BHTD, v_BHTD, block_mask=self.blk_mask)
         else:
-            k_BHTD = k_BJTD.repeat_interleave(self.d_embd//self.d_kv_embd, 1)
-            v_BHTD = v_BJTD.repeat_interleave(self.d_embd//self.d_kv_embd, 1)
             o_BHTD = self.sdpa(q_BHTD, k_BHTD, v_BHTD, attn_mask=attn_mask)
 
         y_BTE = self.out_proj(o_BHTD.transpose(1, 2).flatten(-2))

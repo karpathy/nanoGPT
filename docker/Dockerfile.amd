@@ -1,6 +1,6 @@
+FROM rocm/vllm-dev:20241022
 
-FROM rocm/pytorch:rocm6.2_ubuntu22.04_py3.10_pytorch_release_2.3.0
-# FROM rocm/pytorch:latest-internal
+RUN apt update
 
 RUN apt install -y nano wget
 
@@ -21,6 +21,10 @@ RUN git clone --recursive https://github.com/ROCm/TransformerEngine.git
 ENV NVTE_USE_HIPBLASLT=1
 ENV NVTE_FRAMEWORK=pytorch
 ENV NVTE_ROCM_ARCH=gfx942
+ENV NVTE_USE_CAST_TRANSPOSE_TRITON=1
+
+RUN sed -i '47i #define LEGACY_HIPBLAS_DIRECT 1' /opt/rocm/include/hipblaslt/hipblaslt.h
+
 
 RUN cd TransformerEngine && pip install .
 
