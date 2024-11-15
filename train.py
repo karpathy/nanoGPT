@@ -21,6 +21,8 @@ import time
 import math
 import pickle
 from contextlib import nullcontext
+import subprocess
+import re 
 
 import numpy as np
 import torch
@@ -28,6 +30,29 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
 from model import GPTConfig, GPT
+
+
+def get_nvidia_gpu_performance():
+    performance_map = {
+        "H100": 989e12,  # 989 TFLOPS
+        "A100": 312e12    # 312 TFLOPS
+    }
+    try:
+        result = subprocess.run(['nvidia-smi', '--query-gpu=name', '--format=csv,noheader'], 
+                                capture_output=True, text=True, check=True)
+        gpu_name = result.stdout.strip()
+        match = re.search(r'(A100|H100)', gpu_name)      
+        if match:
+            gpu_model = match.group(0)
+            return performance_map.get(gpu_model, "Unknown performance")
+        else:
+            return "Unknown performance"
+    except subprocess.CalledProcessError:
+        return "Unknown performance"
+    except Exception as e:
+        return "Unknown performance"
+
+GPU_PERFORMANCE = get_nvidia_gpu_performance()
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -45,7 +70,7 @@ wandb_project = 'owt'
 wandb_run_name = 'gpt2' # 'run' + str(time.time())
 # data
 dataset = 'openwebtext'
-gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
+gradient_accumulation_steps = 16 # used to simulate larger batch sizes
 batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size = 1024
 # model
@@ -91,14 +116,18 @@ if ddp:
     seed_offset = ddp_rank # each process gets a different seed
     # world_size number of processes will be training simultaneously, so we can scale
     # down the desired gradient accumulation iterations per process proportionally
-    assert gradient_accumulation_steps % ddp_world_size == 0
-    gradient_accumulation_steps //= ddp_world_size
+    # assert gradient_accumulation_steps % ddp_world_size == 0, f"Gradient accumulation steps {gradient_accumulation_steps} is not divisible by world size {ddp_world_size}"
+    # gradient_accumulation_steps //= ddp_world_size
+    gradient_accumulation_steps = ddp_world_size * 1 # FSP: 4 steps per GPU
 else:
     # if not ddp, we are running on a single gpu, and one process
     master_process = True
     seed_offset = 0
     ddp_world_size = 1
 tokens_per_iter = gradient_accumulation_steps * ddp_world_size * batch_size * block_size
+if master_process:
+    print(f"Effective batch size: {gradient_accumulation_steps * ddp_world_size * batch_size}")
+    print(f"Gradient accumulation steps: {gradient_accumulation_steps}")
 print(f"tokens per iteration will be: {tokens_per_iter:,}")
 
 if master_process:
@@ -321,10 +350,13 @@ while True:
         # get loss as float. note: this is a CPU-GPU sync point
         # scale up to undo the division above, approximating the true total loss (exact would have been a sum)
         lossf = loss.item() * gradient_accumulation_steps
-        if local_iter_num >= 5: # let the training loop settle a bit
-            mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
-            running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+        if GPU_PERFORMANCE != "Unknown performance":
+            if local_iter_num >= 5: # let the training loop settle a bit
+                mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt, GPU_PERFORMANCE)
+                running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
+            print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%, tk/s {tokens_per_iter/dt:.2f}")
+        else:
+            print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, tk/s {tokens_per_iter/dt:.2f}")
     iter_num += 1
     local_iter_num += 1
 

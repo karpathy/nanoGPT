@@ -25,6 +25,18 @@ Dependencies:
 -  `wandb` for optional logging <3
 -  `tqdm` for progress bars <3
 
+### Docker
+
+Build the container:
+```
+docker build -t nanogpt-env . --no-cache
+```
+
+And run it interactively to before launching training runs:
+```
+docker run -it --gpus all --network=host -v $(pwd):/workspace nanogpt-env
+```
+
 ## quick start
 
 If you are not a deep learning professional and you just want to feel the magic and get your feet wet, the fastest way to get started is to train a character-level GPT on the works of Shakespeare. First, we download it as a single (1MB) file and turn it from raw text into one large stream of integers:
@@ -225,3 +237,7 @@ For more questions/discussions feel free to stop by **#nanoGPT** on Discord:
 ## acknowledgements
 
 All nanoGPT experiments are powered by GPUs on [Lambda labs](https://lambdalabs.com), my favorite Cloud GPU provider. Thank you Lambda labs for sponsoring nanoGPT!
+
+## add mfu with h100
+
+torch.cuda.get_device_name()
