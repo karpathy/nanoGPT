@@ -3,14 +3,14 @@
 # Parameters
 #SBATCH --account=compute-account
 #SBATCH --dependency=singleton
-#SBATCH --error=/srv/scratch/nanogpt/nanoGPT/results/nanotGPT_%j.err
+#SBATCH --error=/mnt/fsp/nanoGPT/results/nanoGPT_%j.err
 #SBATCH --exclusive
 #SBATCH --gpus-per-node=8
 #SBATCH --job-name=nanoGPT
 #SBATCH --mem=0
-#SBATCH --nodes=2
+#SBATCH --nodes=16
 #SBATCH --ntasks-per-node=1
-#SBATCH --output=/srv/scratch/nanogpt/nanoGPT/results/nanotGPT_%j.out
+#SBATCH --output=/mnt/fsp/nanoGPT/results/nanoGPT_%j.out
 #SBATCH --partition=batch
 #SBATCH --time=0-01:00:00
 
@@ -30,10 +30,8 @@ echo "Using MASTER_ADDR: $MASTER_ADDR"
 echo "Using MASTER_PORT: $MASTER_PORT"
 
 # command 1
-srun --output /srv/scratch/nanogpt/nanoGPT/results/nanotGPT_%j_%t.out \
-     --error /srv/scratch/nanogpt/nanoGPT/results/nanotGPT_%j_%t.err \
-     --container-image /srv/scratch/nanogpt/nanoGPT/nvidia+pytorch+24.08-py3.sqsh \
-     --container-mounts /srv/scratch/nanogpt/nanoGPT:/workspace \
+srun --container-image /mnt/fsp/nanoGPT/nvcr.io+nvidia+pytorch+24.08-py3.sqsh \
+     --container-mounts /mnt/fsp/nanoGPT:/workspace \
      --no-container-mount-home \
      bash -c "CUDA_DEVICE_MAX_CONNECTIONS=1 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 torchrun \
        --nnodes=$SLURM_NNODES \

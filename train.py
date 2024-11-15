@@ -116,8 +116,9 @@ if ddp:
     seed_offset = ddp_rank # each process gets a different seed
     # world_size number of processes will be training simultaneously, so we can scale
     # down the desired gradient accumulation iterations per process proportionally
-    assert gradient_accumulation_steps % ddp_world_size == 0, f"Gradient accumulation steps {gradient_accumulation_steps} is not divisible by world size {ddp_world_size}"
-    gradient_accumulation_steps //= ddp_world_size
+    # assert gradient_accumulation_steps % ddp_world_size == 0, f"Gradient accumulation steps {gradient_accumulation_steps} is not divisible by world size {ddp_world_size}"
+    # gradient_accumulation_steps //= ddp_world_size
+    gradient_accumulation_steps = ddp_world_size * 1 # FSP: 4 steps per GPU
 else:
     # if not ddp, we are running on a single gpu, and one process
     master_process = True
