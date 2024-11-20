@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "better-transformer"
+version = "0.1.0"
+description = ""
+authors = ["javiermas <javier.mas93@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+torch = "^2.5.1"
+numpy = "^2.1.3"
+transformers = "^4.46.2"
+datasets = "^3.1.0"
+tiktoken = "^0.8.0"
+wandb = "^0.18.7"
+tqdm = "^4.67.0"
+google-cloud-storage = "^2.18.2"
+matplotlib = "^3.9.2"
+seaborn = "^0.13.2"
+plotly = "^5.24.1"
+nbformat = "^5.10.4"
+
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.29.5"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
