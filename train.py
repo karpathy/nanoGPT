@@ -87,6 +87,32 @@ def download_checkpoint(bucket_name, model_file):
     return torch.load("temp.pt", map_location=device)
 
 
+def extract_dropouts_values(model):
+    dropout_values = []
+    for _i, layer in enumerate(model.transformer.h):
+        _mlp_dropout = torch.sigmoid(layer.mlp.dropout.log_drop_p).item()
+        _resid_dropout = torch.sigmoid(
+            layer.attn.resid_dropout.log_drop_p
+        ).item()
+        dropout_values.append(
+            {
+                "layer": _i,
+                "mlp_dropout": _mlp_dropout,
+                "resid_dropout": _resid_dropout,
+            }
+        )
+
+    return dropout_values
+
+def get_dtype():    
+    if device == "cuda":
+        if torch.cuda.is_bf16_supported():
+            return "bfloat16"
+        else:
+            return "float16"
+    else:
+        return "float32"
+
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
@@ -106,8 +132,6 @@ wandb_project = "owt"
 wandb_run_name = "gpt2"  # 'run' + str(time.time())
 # data
 dataset = "enwik8"  # "shakespeare_char" #'openwebtext'
-# dataset = "shakespeare_char"
-# gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
 gradient_accumulation_steps = 2
 batch_size = 12  # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size = 64
@@ -139,13 +163,8 @@ dropout_reg_weight = 1e-4  # weight for the dropout regularization loss
 backend = "nccl"  # 'nccl', 'gloo', etc.
 # system
 device = "cuda" if torch.cuda.is_available() else "cpu"
-if device == "cuda":
-    if torch.cuda.is_bf16_supported():
-        dtype = "bfloat16"
-    else:
-        dtype = "float16"
-else:
-    dtype = "float32"
+
+dtype = get_dtype(device)
 
 compile = False  # use PyTorch 2.0 to compile the model to be faster
 save_to_cloud = False
@@ -483,7 +502,7 @@ while True:
         bpc = bpc.item()
         try:
             dropout_loss = dropout_loss.item()
-        except AttributeError:
+        except AttributeError: # no concrete dropout
             dropout_loss = 0.0
 
         if local_iter_num >= 5:  # let the training loop settle a bit
@@ -492,22 +511,11 @@ while True:
         print(
             f"iter {iter_num}: loss {lossf:.4f}, bpc {bpc:.3f}, dropout loss {dropout_loss:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%"
         )
-        dropout_values = []
         try:
-            for _i, layer in enumerate(model.transformer.h):
-                _mlp_dropout = torch.sigmoid(layer.mlp.dropout.log_drop_p).item()
-                _resid_dropout = torch.sigmoid(
-                    layer.attn.resid_dropout.log_drop_p
-                ).item()
-                dropout_values.append(
-                    {
-                        "head": _i,
-                        "mlp_dropout": _mlp_dropout,
-                        "resid_dropout": _resid_dropout,
-                    }
-                )
+            dropout_values = extract_dropouts_values(raw_model)
         except AttributeError: # no concrete dropout
-            pass
+            dropout_values = []
+            
 
         dropout_metadata = {
             "iter_num": iter_num,
