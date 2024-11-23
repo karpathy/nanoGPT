@@ -184,7 +184,7 @@ class CausalSelfAttention(nn.Module):
         # output projection
         try:
             y = self.resid_dropout(self.c_proj(y), self.c_proj.weight)
-        except: # Allow for the case where the model is not using ConcreteDropout
+        except TypeError: # Allow for using regular dropout
             y = self.resid_dropout(self.c_proj(y))
         return y
 
@@ -210,7 +210,7 @@ class MLP(nn.Module):
         x = self.c_proj(x)
         try:
             x = self.dropout(x, self.c_proj.weight)
-        except: # Allow for the case where the model is not using ConcreteDropout
+        except TypeError: # Allow for using regular dropout
             x = self.dropout(x)
         return x
 
