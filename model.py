@@ -22,7 +22,7 @@ class ConcreteDropout(nn.Module):
     def __init__(
         self,
         init_p: Optional[float] = None,
-        tau: float = 0.1,
+        temperature: float = 0.1,
         weight_reg_weight: float = 1e-4,
         dropout_reg_weight: float = 1e-3,
     ):
@@ -35,8 +35,8 @@ class ConcreteDropout(nn.Module):
         else:
             # initialize randomly in log scale between -2 and 0
             self.log_drop_p = nn.Parameter(-2 + 2 * torch.rand(1))
-        
-        self.tau = tau
+
+        self.temperature = temperature
         self.dropout_reg_weight = dropout_reg_weight
         self.weight_reg_weight = weight_reg_weight
         self._regularization = 0.0
@@ -53,7 +53,7 @@ class ConcreteDropout(nn.Module):
                 + torch.log(u + eps)
                 - torch.log(1 - u + eps)
             )
-            / self.tau
+            / self.temperature
         )
         retain_prob_mask = 1 - drop_prob_mask
         output = (
@@ -70,17 +70,18 @@ class ConcreteDropout(nn.Module):
             eps = 1e-7
 
             # Weight Regularization (penalizing large weights)
-            #Note : we divide by retain_prob because we also scaled layer output by retain_prob
-            weight_reg = self.weight_reg_weight * torch.sum(weight**2) / (retain_prob + eps)
-            # Dropout Regularization (penalizing extreme p values). 
-            # This term will always be negative. log is -inf with 0 and 0 with 1. 
+            # Note : we divide by retain_prob because we also scaled layer output by retain_prob
+            weight_reg = (
+                self.weight_reg_weight * torch.sum(weight**2) / (retain_prob + eps)
+            )
+            # Dropout Regularization (penalizing extreme p values).
+            # This term will always be negative. log is -inf with 0 and 0 with 1.
             # If p is 0 or 1, then either log(p) or log(1-p) is inf.
             # The closer p is to 0 or 1, the larger the regularization term, hence 0.5 is great.
             dropout_reg = drop_prob * self.log_drop_p + (retain_prob) * torch.log(
                 retain_prob + eps
             )
             dropout_reg = dropout_reg * x[0].numel() * self.dropout_reg_weight
-            # Combine the regularization terms
             regularization = dropout_reg + weight_reg
             self._regularization = regularization
         else:
@@ -93,7 +94,7 @@ class ConcreteDropout(nn.Module):
         return self._regularization
 
     def __repr__(self) -> str:
-        return f"ConcreteDropout(init_p={self.init_drop_p}, tau={self.tau}, weight_reg_weight={self.weight_reg_weight}, dropout_reg_weight={self.dropout_reg_weight})"
+        return f"ConcreteDropout(init_p={self.init_drop_p}, temperature={self.temperature}, weight_reg_weight={self.weight_reg_weight}, dropout_reg_weight={self.dropout_reg_weight})"
 
 
 class LayerNorm(nn.Module):
@@ -118,10 +119,15 @@ class CausalSelfAttention(nn.Module):
         # output projection
         self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
         # regularization
-        self.attn_dropout = nn.Dropout(config.dropout) # Attn dropout cannot be turned to ConcreteDropout because of specific attention mechanism with GPU
+        self.attn_dropout = nn.Dropout(
+            config.dropout
+        )  # Attn dropout cannot be turned to ConcreteDropout because of specific attention mechanism with GPU
         if config.concrete_dropout:
             self.resid_dropout = ConcreteDropout(
-                config.init_p, config.tau, config.weight_reg_weight, config.dropout_reg_weight
+                config.init_p,
+                config.temperature,
+                config.weight_reg_weight,
+                config.dropout_reg_weight,
             )
         else:
             self.resid_dropout = nn.Dropout(config.dropout)
@@ -184,7 +190,7 @@ class CausalSelfAttention(nn.Module):
         # output projection
         try:
             y = self.resid_dropout(self.c_proj(y), self.c_proj.weight)
-        except TypeError: # Allow for using regular dropout
+        except TypeError:  # Allow for using regular dropout
             y = self.resid_dropout(self.c_proj(y))
         return y
 
@@ -198,11 +204,13 @@ class MLP(nn.Module):
         self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
         if config.concrete_dropout:
             self.dropout = ConcreteDropout(
-                config.init_p, config.tau, config.weight_reg_weight, config.dropout_reg_weight
+                config.init_p,
+                config.temperature,
+                config.weight_reg_weight,
+                config.dropout_reg_weight,
             )
         else:
             self.dropout = nn.Dropout(config.dropout)
-
 
     def forward(self, x):
         x = self.c_fc(x)
@@ -210,7 +218,7 @@ class MLP(nn.Module):
         x = self.c_proj(x)
         try:
             x = self.dropout(x, self.c_proj.weight)
-        except TypeError: # Allow for using regular dropout
+        except TypeError:  # Allow for using regular dropout
             x = self.dropout(x)
         return x
 
@@ -234,7 +242,7 @@ class Block(nn.Module):
 class GPTConfig:
     # Concrete Dropout parameters
     concrete_dropout: bool
-    tau: float
+    temperature: float
     weight_reg_weight: float
     dropout_reg_weight: float
     init_p: Optional[float] = None
@@ -250,7 +258,6 @@ class GPTConfig:
     bias: bool = (
         True  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
     )
-
 
 
 class GPT(nn.Module):
@@ -342,16 +349,17 @@ class GPT(nn.Module):
                 dropout_loss = sum(
                     block.mlp.dropout.regularization for block in self.transformer.h
                 )
-                
+
                 att_resid_dropout_loss = sum(
-                    block.attn.resid_dropout.regularization for block in self.transformer.h
+                    block.attn.resid_dropout.regularization
+                    for block in self.transformer.h
                 )
                 dropout_loss += att_resid_dropout_loss
-                loss = bpc + dropout_loss 
+                loss = bpc + dropout_loss
             except AttributeError:
                 loss = bpc
                 dropout_loss = None
-            
+
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(

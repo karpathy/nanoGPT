@@ -104,7 +104,7 @@ def extract_dropouts_values(model):
 
     return dropout_values
 
-def get_dtype():    
+def get_dtype(device):    
     if device == "cuda":
         if torch.cuda.is_bf16_supported():
             return "bfloat16"
