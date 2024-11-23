@@ -28,7 +28,6 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
 from model import GPTConfig, GPT
-import logging
 import json
 from google.cloud import storage
 from datetime import datetime, timezone
@@ -88,12 +87,6 @@ def download_checkpoint(bucket_name, model_file):
     return torch.load("temp.pt", map_location=device)
 
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
-
-
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
@@ -102,7 +95,7 @@ metadata_filename = "better-transformer/metadata.json"
 model_filename = "better-transformer/ckpt.pt"
 out_dir = "out"
 eval_interval = 250
-log_interval = 100
+log_interval = 200
 eval_iters = 200
 eval_only = False  # if True, script exits right after the first eval
 always_save_checkpoint = False  # if True, always save a checkpoint after each eval
@@ -122,7 +115,7 @@ block_size = 64
 n_layer = 1
 n_head = 1
 n_embd = 128
-dropout = 0.0  # for pretraining 0 is good, for finetuning try 0.1+
+dropout = 0.2  # for pretraining 0 is good, for finetuning try 0.1+
 bias = False  # do we use bias inside LayerNorm and Linear layers?
 # adamw optimizer
 learning_rate = 6e-4  # max learning rate
@@ -139,7 +132,7 @@ min_lr = 6e-5  # minimum learning rate, should be ~= learning_rate/10 per Chinch
 # concrete dropout
 concrete_dropout = False
 init_p = None  # If none, it starts randomly.
-tau = 0.1
+temperature = 0.1
 weight_reg_weight = 1e-5  # weight for the weight regularization loss
 dropout_reg_weight = 1e-4  # weight for the dropout regularization loss
 # DDP settings
@@ -155,6 +148,7 @@ else:
     dtype = "float32"
 
 compile = False  # use PyTorch 2.0 to compile the model to be faster
+save_to_cloud = False
 # -----------------------------------------------------------------------------
 config_keys = [
     k
@@ -264,7 +258,7 @@ model_args = dict(
     dropout=dropout,
     concrete_dropout=concrete_dropout,
     init_p=init_p,
-    tau=tau,
+    temperature=temperature,
     weight_reg_weight=weight_reg_weight,
     dropout_reg_weight=dropout_reg_weight,
 )  # start with model_args from command line
@@ -304,7 +298,7 @@ elif init_from == "resume":
     model.load_state_dict(state_dict)
     iter_num = checkpoint["iter_num"]
     best_val_loss = checkpoint["best_val_loss"]
-    logger.info(f"resuming from iteration {iter_num}, best_val_loss: {best_val_loss}")
+    print(f"resuming from iteration {iter_num}, best_val_loss: {best_val_loss}")
 elif init_from.startswith("gpt2"):
     print(f"Initializing from OpenAI GPT-2 weights: {init_from}")
     # initialize from OpenAI GPT-2 weights
@@ -345,10 +339,10 @@ if ddp:
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
-def estimate_loss():
+def estimate_loss(model, splits=["train", "val"]):
     out = {}
     model.eval()
-    for split in ["train", "val"]:
+    for split in splits:
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = get_batch(split)
@@ -399,62 +393,51 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        losses = estimate_loss()
+        losses = estimate_loss(model)
         print(
             f"step {iter_num}: train bpc {losses['train']:.4f}, val bpc {losses['val']:.4f}"
         )
-        if wandb_log:
-            wandb.log(
-                {
-                    "iter": iter_num,
-                    "train/loss": losses["train"],
-                    "val/loss": losses["val"],
-                    "lr": lr,
-                    "mfu": running_mfu * 100,  # convert to percentage
-                }
+        if save_to_cloud:
+            if losses["val"] < best_val_loss or always_save_checkpoint:
+                best_val_loss = losses["val"]
+                if iter_num > 0:
+                    checkpoint = {
+                        "model": raw_model.state_dict(),
+                        "optimizer": optimizer.state_dict(),
+                        "model_args": model_args,
+                        "iter_num": iter_num,
+                        "best_val_loss": best_val_loss,
+                        "config": config,
+                    }
+                    metadata = {
+                        "iter_num": iter_num,
+                        "best_val_loss": best_val_loss.item(),
+                    }
+                    print(f"Saving checkpoint to {bucket_name}/{model_filename}")
+                    save_checkpoint_to_cloud(
+                        bucket_name,
+                        metadata_filename,
+                        metadata,
+                        model_filename,
+                        checkpoint,
+                    )
+
+            upload_from_string(
+                bucket_name,
+                file_name=f"better-transformer/{run_id}/val_{iter_num}.json",
+                content={"iter_num": iter_num, "val_loss": losses["val"].item()},
             )
-        if losses["val"] < best_val_loss or always_save_checkpoint:
-            best_val_loss = losses["val"]
-            if iter_num > 0:
-                checkpoint = {
+            upload_model(
+                bucket_name,
+                f"better-transformer/{run_id}/model_{iter_num}.pt",
+                {
                     "model": raw_model.state_dict(),
                     "optimizer": optimizer.state_dict(),
                     "model_args": model_args,
                     "iter_num": iter_num,
-                    "best_val_loss": best_val_loss,
                     "config": config,
-                }
-                metadata = {
-                    "iter_num": iter_num,
-                    "best_val_loss": best_val_loss.item(),
-                }
-                # print(f"saving checkpoint to {out_dir}")
-                # torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
-                print(f"Saving checkpoint to {bucket_name}/{model_filename}")
-                save_checkpoint_to_cloud(
-                    bucket_name,
-                    metadata_filename,
-                    metadata,
-                    model_filename,
-                    checkpoint,
-                )
-
-        upload_from_string(
-            bucket_name,
-            file_name=f"better-transformer/{run_id}/val_{iter_num}.json",
-            content={"iter_num": iter_num, "val_loss": losses["val"].item()},
-        )
-        upload_model(
-            bucket_name,
-            f"better-transformer/{run_id}/model_{iter_num}.pt",
-            {
-                "model": raw_model.state_dict(),
-                "optimizer": optimizer.state_dict(),
-                "model_args": model_args,
-                "iter_num": iter_num,
-                "config": config,
-            },
-        )
+                },
+            )
 
     if iter_num == 0 and eval_only:
         break
@@ -476,11 +459,8 @@ while True:
                 loss / gradient_accumulation_steps
             )  # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
-        # logger.debug("Fetching data")
         X, Y = get_batch("train")
         # backward pass, with gradient scaling if training in fp16
-        # logger.debug("Data fetched")
-        # logger.debug("Doing backward pass")
         scaler.scale(loss).backward()
     # clip the gradient
     if grad_clip != 0.0:
@@ -526,7 +506,7 @@ while True:
                         "resid_dropout": _resid_dropout,
                     }
                 )
-        except AttributeError:
+        except AttributeError: # no concrete dropout
             pass
 
         dropout_metadata = {
@@ -538,23 +518,34 @@ while True:
             "weight_reg_weight": weight_reg_weight,
             "dropout_reg_weight": dropout_reg_weight,
             "init_p": init_p,
-            "tau": tau,
+            "temperature": temperature,
             "time": t0,
             "concrete_dropout": concrete_dropout,
             "dropout": dropout,  # constant dropout, where applicable
         }
-        upload_from_string(
-            bucket_name,
-            f"better-transformer/{run_id}/train_{iter_num}.json",
-            dropout_metadata,
-        )
+        if save_to_cloud:
+            upload_from_string(
+                bucket_name,
+                f"better-transformer/{run_id}/train_{iter_num}.json",
+                dropout_metadata,
+            )
 
     iter_num += 1
     local_iter_num += 1
 
     # termination conditions
     if iter_num > max_iters:
+        loss = estimate_loss(model, splits=["test"])
+        print(f"final test loss: {loss['test']:.4f}")
+        if save_to_cloud:
+            upload_from_string(
+                bucket_name,
+                f"better-transformer/{run_id}/final_test.json",
+                {"iter_num": iter_num, "test_loss": loss["test"].item()},
+            )
+
         break
+
 
 if ddp:
     destroy_process_group()
