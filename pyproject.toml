@@ -19,6 +19,7 @@ matplotlib = "^3.9.2"
 seaborn = "^0.13.2"
 plotly = "^5.24.1"
 nbformat = "^5.10.4"
+kaleido = "0.2.1"
 
 
 [tool.poetry.group.dev.dependencies]
