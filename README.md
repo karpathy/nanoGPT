@@ -9,6 +9,40 @@ The simplest, fastest repository for training/finetuning medium-sized GPTs. It i
 
 Because the code is so simple, it is very easy to hack to your needs, train new models from scratch, or finetune pretrained checkpoints (e.g. biggest one currently available as a starting point would be the GPT-2 1.3B model from OpenAI).
 
+## Table of Contents
+- [Why would I use this?](#Why-would-I-use-this?)
+- [Installation](#install)
+- [Quick Start](#quick-start)
+- [Reproducing GPT-2](#reproducing-gpt-2)
+- [Baselines](#baselines)
+- [Finetuning](#finetuning)
+- [First Time Contributors](#first-time-contributors)
+- [Sampling / Interference](#sampling--inference)
+- [Todos](#todos)
+- [Troubleshooting](#troubleshooting)
+- [Acknowledgments](#acknowledgements)
+
+
+
+## Why would I use this?
+nanoGPT is useful to train medium-sized GPT model for several reasons: 
+
+Educational Purposes:
+- For those that are new to GPT models, nanoGPT is highly readable code that can allow you to easily grasp how transformers and GPT architectures function. 
+- In addition, nanoGPT has easy installation, which is shown in the next section.
+
+Customization: 
+- The project has a modular structure that allows users to experiemnt with different configurations. This includes different datasets and training. 
+- You can modify the architecture if needed, as the code is very simple to use. 
+
+Fine-Tuning: 
+- Models like GPT-2 are very commonly used, but it may be a pain to change them for specific tasks. 
+- However, nano GPT is quick and easy to change or modify, which is practical for developers. 
+
+Research and Experimentation: 
+- For purposes like wanting to test different GPT models, this is the model for you. NanoGPT provides an easy framework that allows for users to test GPT models without needing to worry about complicated frameworks. 
+- In addition, if simple experiments were needed to carry out, then this is also the model because of its easy-to-use framework. 
+
 ## install
 
 ```
@@ -32,7 +66,15 @@ If you are not a deep learning professional and you just want to feel the magic 
 ```sh
 python data/shakespeare_char/prepare.py
 ```
-
+The output: 
+```
+length of dataset in characters: 1,115,394
+all the unique characters: 
+!$&',-.3:;?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
+vocab size: 65
+train has 1,003,854 tokens
+val has 111,540 tokens
+```
 This creates a `train.bin` and `val.bin` in that data directory. Now it is time to train your GPT. The size of it very much depends on the computational resources of your system:
 
 **I have a GPU**. Great, we can quickly train a baby GPT with the settings provided in the [config/train_shakespeare_char.py](config/train_shakespeare_char.py) config file:
@@ -181,6 +223,25 @@ Thou hast no right, no right, but to be sold.
 ```
 
 Whoa there, GPT, entering some dark place over there. I didn't really tune the hyperparameters in the config too much, feel free to try!
+## First time Contributors
+- First look at the issues that have not been resolved yet, or you can propose working on a feature that you may like to add
+- Make the changes in your local machine:
+  General guidelines to contributing: 
+   - In your code, try to have comments (in python you put a hashtag in front of your comment).
+   - Make the code concise and make sure that the code you provide is not redundant. 
+  Specific guidelines for this project: 
+   - Leave a space between each if statement and else statement
+   - Make sure that pictures are in the assets folder
+   - Leave a space between functions
+   - Leave a space between classes
+   - Make sure that the __init__ function (class constructor) is the first function in the class
+   - Try to leave comments above each function/class/block of code.
+- Then submit a pull request.
+- In the pull request adhere with the following guidelines to ensure that your PR will be accepted (based off of existing accepted PR for this project):
+  - Make sure to have a clear title for your pull request. The title should be clear and should start with a verb for clarity and briefly explain what you did to what file. For example, "Added feature one to enhance performance for file.py". 
+  - Try to explain what you did in the description of the pull request and if needed, reference other pull requests by their number like PR #123.
+  - Make sure to fork the repository. Merge the changes to your forked repository, as this repository does not allow you to create branches. Then create a pull request to merge your master branch to karpathy/master.
+
 
 ## sampling / inference
 
