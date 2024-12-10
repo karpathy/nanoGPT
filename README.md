@@ -7,7 +7,7 @@ The simplest, fastest repository for training/finetuning medium-sized GPTs. It i
 
 ![repro124m](assets/gpt2_124M_loss.png)
 
-Because the code is so simple, it is very easy to hack to your needs, train new models from scratch, or finetune pretrained checkpoints (e.g. biggest one currently available as a starting point would be the GPT-2 1.3B model from OpenAI).
+Because the code is so simple, it is very easy to hack to your needs, train new models from scratch, or finetune pretrained checkpoints (e.g. biggest one currently available as a starting point would be the GPT-2 1.3B model from OpenAI). GPT2 similar to an text autocomplete model, for a more chatbot based model, look into [nanoChatGPT](https://github.com/VatsaDev/nanoChatGPT)
 
 ## install
 
@@ -17,13 +17,13 @@ pip install torch numpy transformers datasets tiktoken wandb tqdm
 
 Dependencies:
 
-- [pytorch](https://pytorch.org) <3
-- [numpy](https://numpy.org/install/) <3
--  `transformers` for huggingface transformers <3 (to load GPT-2 checkpoints)
--  `datasets` for huggingface datasets <3 (if you want to download + preprocess OpenWebText)
--  `tiktoken` for OpenAI's fast BPE code <3
--  `wandb` for optional logging <3
--  `tqdm` for progress bars <3
+- [pytorch](https://pytorch.org)
+- [numpy](https://numpy.org/install/)
+-  `transformers` for huggingface transformers (to load GPT-2 checkpoints)
+-  `datasets` for huggingface datasets (if you want to download + preprocess OpenWebText)
+-  `tiktoken` for OpenAI's fast BPE code
+-  `wandb` for optional logging
+-  `tqdm` for progress bars
 
 ## quick start
 
