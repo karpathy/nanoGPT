@@ -13,35 +13,52 @@ I know people are not going to love this, I just really dislike configuration
 complexity and having to prepend config. to every single variable. If someone
 comes up with a better simple Python solution I am all ears.
 """
+# Changes made here will be reflected in train.py
+# Still allows overriding config.yaml with --key=value
 
-import sys
-from ast import literal_eval
+import yaml
+import argparse
+import os
 
-for arg in sys.argv[1:]:
-    if '=' not in arg:
-        # assume it's the name of a config file
-        assert not arg.startswith('--')
-        config_file = arg
-        print(f"Overriding config with {config_file}:")
-        with open(config_file) as f:
-            print(f.read())
-        exec(open(config_file).read())
-    else:
-        # assume it's a --key=value argument
-        assert arg.startswith('--')
-        key, val = arg.split('=')
-        key = key[2:]
-        if key in globals():
-            try:
-                # attempt to eval it it (e.g. if bool, number, or etc)
-                attempt = literal_eval(val)
-            except (SyntaxError, ValueError):
-                # if that goes wrong, just use the string
-                attempt = val
-            # ensure the types match ok
-            assert type(attempt) == type(globals()[key])
-            # cross fingers
-            print(f"Overriding: {key} = {attempt}")
-            globals()[key] = attempt
+def update_config(config, key, value):
+    parts = key.split(".")
+    for part in parts[:-1]:
+        config = config.setdefault(part, {})
+    config[parts[-1]] = value
+
+def load_config(env):
+    # Load the YAML configuration
+    with open('config.yaml', 'r') as f:
+        yaml_config = yaml.safe_load(f)
+
+    # Get the configuration for the specified environment
+    if env not in yaml_config:
+        raise ValueError(f"Environment '{env}' not found in the configuration.")
+    config = yaml_config[env]
+
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser()
+
+    # Add arguments for each configuration key
+    for key in config.keys():
+        if key == 'learning_rate':
+            parser.add_argument(f'--{key}', type=float, default=argparse.SUPPRESS)
+        elif isinstance(config[key], dict):
+            for sub_key in config[key].keys():
+                parser.add_argument(f'--{key}.{sub_key}', type=type(config[key][sub_key]), default=argparse.SUPPRESS)
         else:
-            raise ValueError(f"Unknown config key: {key}")
+            parser.add_argument(f'--{key}', type=type(config[key]), default=argparse.SUPPRESS)
+
+    args = parser.parse_args()
+
+    # Update the configuration with command-line arguments
+    for key, value in vars(args).items():
+        update_config(config, key, value)
+
+    return config
+
+# Get the environment from the command line or default to 'default'
+env = os.environ.get('ENV', 'default')
+
+# Load the configuration for the specified environment
+config = load_config(env)
