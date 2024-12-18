@@ -15,6 +15,19 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+
+@torch.no_grad() 
+def prune(w, x, s, C_in):
+    for xi in x:
+        metric = torch.abs(w) * xi.norm(p=2, dim=0)
+        _, sorted_idx = torch.sort(metric, dim=1)
+        pruned_idx = sorted_idx[:, :int(C_in * s)]
+        src = torch.zeros(w.shape[0], w.shape[1])
+        w.scatter_(dim=1, index=pruned_idx, src=src)
+ 
+    return w
+
+
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
 
@@ -85,7 +98,14 @@ class MLP(nn.Module):
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
+
+        x_copy = x
+        #print(f'weights before: {self.c_fc.weight}')
+        self.c_fc.weight = prune(self.c_fc.weight, x_copy, 0.6, self.c_fc.weight.shape[1])
+        #print(f'weights after: {self.c_fc.weight}')
         x = self.c_fc(x)
+        x_copy = x
+        self.c_proj.weight = prune(self.c_proj.weight, x_copy, 0.6, self.c_proj.weight.shape[1])
         x = self.gelu(x)
         x = self.c_proj(x)
         x = self.dropout(x)
