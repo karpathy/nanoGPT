@@ -1,20 +1,12 @@
 # GPT for SAT Solving
-## Update Oct 19 2023
-Create train_sat.py that only computes loss for tokens after the `[SEP]` token and before the padding. This is done by finding the indices of the `[SEP]` and `[PAD\]` tokens in `get_batch()` in train_sat.py and using the indices to extract the tokens and logis of interest in `get_interval_values()` in `utils.py`. However, this training procedure becomes extremely slow for unknown reasons.
+I've currently updated the Attention mechanism to use RoPE attention and the MLP layer to use swiGLU activation. This mirrors that of the llama model.
+The updated model is in `model_ext.py`. You can compare it to model.py to see the difference.
 
-To reproduce, run the command
+To train, run the command
 ```
-python train_sat.py config/train_sat_dpll.py
+python data/6_10_marginal/prepare.py
+python train_sat.py config/6_10_marginal.py
 ```
-This should take forever to run.
-However,
-```
-python train.py config/train_sat_dpll.py
-```
-You can do a diff between train.py and train_sat.py to see the exact differences.
-
-
-TODO: Investigate the cause of this and modify the training method to effectively train on only the trace portion and not the padding or original formula portion.
 
 # Training Command
 

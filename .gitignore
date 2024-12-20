@@ -18,3 +18,4 @@ model_ckpts/
 wandb/
 predictions/
 data/
+model-ckpts/
