@@ -1,3 +1,32 @@
+# sign nanoGPT
+
+only train.py is modified, ctrl+f "ayy"
+
+
+adamw:
+```
+step 5000: train loss 0.6171, val loss 1.6973
+iter 5000: loss 0.8138, time 31669.98ms, mfu 4.02%
+```
+sign descent:
+```
+step 5000: train loss 1.0883, val loss 1.4821
+iter 5000: loss 1.1968, time 34425.73ms, mfu 3.27%
+```
+
+seed += 420:
+
+adamw:
+```
+step 5000: train loss 0.6116, val loss 1.6995
+iter 5000: loss 0.8267, time 33304.84ms, mfu 4.56%
+```
+sign descent:
+```
+step 5000: train loss 1.0963, val loss 1.4689
+iter 5000: loss 1.2122, time 30964.94ms, mfu 4.05%
+```
+![sign_nanoGPT](signs.png)
 
 # nanoGPT
 
