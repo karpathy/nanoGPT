@@ -259,7 +259,7 @@ class GPT(nn.Module):
                 loss = F.cross_entropy(
                     logits.view(-1, logits.size(-1)),
                     targets.view(-1),
-                    ignore_index=-1
+                    ignore_index=-100
                 )
             elif targets.dim() == 1:  # shape (b,)
                 loss = F.cross_entropy(logits[:, 0, :], targets)

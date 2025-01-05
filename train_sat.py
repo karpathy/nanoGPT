@@ -61,7 +61,7 @@ def parse_args():
     parser.add_argument('--max_id', type=int, default=30, help='Maximum constant ID in the dataset')
     parser.add_argument('--shift_within_block', action='store_true')
 
-    # New toggles for ablations
+    # New toggles for ablations - Chris
     parser.add_argument('--scale_attn_by_context', action='store_true')
     parser.add_argument('--activation', type=str, default='gelu', choices=['gelu', 'relu'])
     parser.add_argument('--use_lstm_pos_enc', action='store_true')
@@ -139,6 +139,8 @@ def main(args):
     )
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, pin_memory=True)
+    print("DEBUG: number of batches in train_loader =", len(train_loader))
+
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, pin_memory=True)
 
     vocab_size = len(tokenizer)
