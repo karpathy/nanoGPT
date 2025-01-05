@@ -87,38 +87,54 @@ class CausalSelfAttention(nn.Module):
 class MLP(nn.Module):
     def __init__(self, config):
         super().__init__()
-        # We continue to use a 4x expansion, but it will now be split into two 2x parts for SwiGLU.
-        self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
-        self.c_proj = nn.Linear(2 * config.n_embd, config.n_embd, bias=config.bias)
+        # We do an 8× expansion, then split into two 4× halves (SwiGLU),
+        # then project from 4× back to 1×.
+        self.c_fc = nn.Linear(config.n_embd, 8 * config.n_embd, bias=config.bias)
+        self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
 
     def swish(self, x):
         return x * torch.sigmoid(x)
 
     def forward(self, x):
-        # project up to 4*n_embd
-        x_fc = self.c_fc(x)
-        # split into two halves: a and b, each of size 2*n_embd
-        a, b = x_fc.split(x_fc.size(-1) // 2, dim=-1)
-        # apply SwiGLU: a * swish(b)
-        x = a * self.swish(b)
-        # project back down to n_embd
-        x = self.c_proj(x)
+        # Step 1: expand from n_embd -> 8*n_embd
+        x_fc = self.c_fc(x)  # shape: (batch, seq_len, 8*n_embd)
+
+        # Step 2: split into two 4× parts (a, b)
+        a, b = x_fc.split(x_fc.size(-1) // 2, dim=-1)  # each (4*n_embd)
+
+        # Step 3: SwiGLU
+        x = nn.SiLU(b)  # shape: (batch, seq_len, 4*n_embd)
+
+        # Step 4: project back to n_embd
+        x = self.c_proj(x)     # shape: (batch, seq_len, n_embd)
         x = self.dropout(x)
+
         return x
 
 class Block(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
-        self.attn = CausalSelfAttention(config)
-        self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
+        # Built-in RMSNorm in PyTorch >= 2.0
+        # Note: By default eps=1e-5, but LLaMA typically uses eps=1e-6
+        # and bias=False (elementwise_affine=True means there's a weight vector, but no bias term).
+        self.input_layernorm = nn.RMSNorm(config.n_embd, eps=1e-6, elementwise_affine=True)
+
+        # Your causal self-attention module (which may or may not match LLaMA exactly)
+        self.attn = CausalSelfAttention(config)  
+
+        # Another RMSNorm after attention
+        self.post_attention_layernorm = nn.RMSNorm(config.n_embd, eps=1e-6, elementwise_affine=True)
+
+        # Your MLP module (SwiGLU or LLaMA’s triple-linear version)
         self.mlp = MLP(config)
 
     def forward(self, x, position_ids=None, attn_mask=None):
-        # Pass position_ids and attn_mask down to attention if using rotary or masking
-        x = x + self.attn(self.ln_1(x), position_ids=position_ids, attn_mask=attn_mask)
-        x = x + self.mlp(self.ln_2(x))
+        h = self.input_layernorm(x)
+        x = x + self.attn(h, position_ids=position_ids, attn_mask=attn_mask)
+
+        h2 = self.post_attention_layernorm(x)
+        x = x + self.mlp(h2)
         return x
 
 
@@ -151,7 +167,6 @@ class GPT(nn.Module):
         ))
 
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
-        self.transformer.wte.weight = self.lm_head.weight
 
         # NEW: Initialize rotary embedding if requested
         if config.use_rotary_emb:
@@ -279,7 +294,7 @@ class GPT(nn.Module):
         return optimizer
 
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, stop=None):
+    def generate(self, input_ids, max_new_tokens, temperature=1.0, top_k=None, stop=None):
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
@@ -287,7 +302,7 @@ class GPT(nn.Module):
         """
         for _ in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
-            idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
+            idx_cond = input_ids if input_ids.size(1) <= self.config.block_size else input_ids[:, -self.config.block_size:]
             # forward the model to get the logits for the index in the sequence
             logits, _ = self(idx_cond)
 
@@ -308,13 +323,13 @@ class GPT(nn.Module):
                 idx_next = torch.multinomial(probs, num_samples=1)
 
             # append the chosen token index to the running sequence
-            idx = torch.cat((idx, idx_next), dim=1)
+            input_ids = torch.cat((input_ids, idx_next), dim=1)
 
             # if we sampled the stop token, return the sequence
             if stop is not None and idx_next.item() in stop:
                 break
 
-        return idx
+        return input_ids
 
 
     
@@ -326,3 +341,43 @@ class GPT(nn.Module):
         logits, _ = self(idx)
         logits = logits[:, 0, :]
         return logits.argmax(dim=-1)
+
+    @property
+    def device(self):
+        return next(self.parameters()).device
+    
+    def summary(self) -> str:
+        """
+        Returns a string summary of the core model configuration and
+        parameter statistics, which you can compare to a Hugging Face LLaMA model.
+        """
+        # Extract relevant fields from self.config
+        n_layer = getattr(self.config, 'n_layer', 'N/A')
+        n_head = getattr(self.config, 'n_head', 'N/A')
+        n_embd = getattr(self.config, 'n_embd', 'N/A')
+        vocab_size = getattr(self.config, 'vocab_size', 'N/A')
+        block_size = getattr(self.config, 'block_size', 'N/A')
+        dropout = getattr(self.config, 'dropout', 'N/A')
+        bias = getattr(self.config, 'bias', 'N/A')
+
+        # Compute total parameters
+        total_params = self.get_num_params(non_embedding=False)
+        total_params_nonembed = self.get_num_params(non_embedding=True)
+
+        # Build a summary string
+        summary_str = (
+            "======== Model Summary ========\n"
+            f"Model class: {self.__class__.__name__}\n"
+            f"Number of layers (n_layer): {n_layer}\n"
+            f"Hidden size (n_embd): {n_embd}\n"
+            f"Number of attention heads (n_head): {n_head}\n"
+            f"Vocab size (vocab_size): {vocab_size}\n"
+            f"Block size / context window (block_size): {block_size}\n"
+            f"Dropout: {dropout}\n"
+            f"Bias in linear/LN layers: {bias}\n"
+            f"Total parameters (including embeddings): {total_params:,}\n"
+            f"Total parameters (excluding positional embeddings): {total_params_nonembed:,}\n"
+            "===============================\n"
+        )
+        return summary_str
+

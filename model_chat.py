@@ -28,6 +28,10 @@ def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model.to(device)
 
+    print(model.summary())
+    for name, param in model.named_parameters():
+        print(name, param.shape, param.numel())
+
     # Initialize the tokenizer
     tokenizer = SATTokenizer()
 
@@ -46,7 +50,7 @@ def main():
 
         # Generate output
         generated_ids = model.generate(
-            idx=input_ids,
+            input_ids=input_ids,
             max_new_tokens=args.max_new_tokens,
             temperature=args.temperature,
             top_k=args.top_k,
