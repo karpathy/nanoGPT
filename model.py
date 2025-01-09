@@ -196,7 +196,7 @@ class GPT(nn.Module):
         params are actually used as weights in the final layer, so we include them.
         """
         n_params = sum(p.numel() for p in self.parameters())
-        if non_embedding:
+        if non_embedding and 'wpe' in self.transformer:
             n_params -= self.transformer['wpe'].weight.numel()
         return n_params
 
