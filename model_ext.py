@@ -60,7 +60,7 @@ class CausalSelfAttention(nn.Module):
                 .view(1, 1, config.block_size, config.block_size)
             )
 
-    def forward(self, x):
+    def forward(self, x, attention_mask = None):
         B, T, C = x.size()  # batch size, sequence length, embedding dim
 
         # 1) Compute q, k, v
@@ -77,7 +77,7 @@ class CausalSelfAttention(nn.Module):
             # Efficient attention using Flash Attention CUDA kernels
             y = torch.nn.functional.scaled_dot_product_attention(
                 q, k, v,
-                attn_mask=None,
+                attn_mask=attention_mask,
                 dropout_p=self.dropout if self.training else 0,
                 is_causal=True
             )
@@ -85,7 +85,8 @@ class CausalSelfAttention(nn.Module):
             # Manual attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
             # Apply the causal mask
-            att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float('-inf'))
+            if attention_mask is not None:
+                att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float('-inf'))
 
             # Optionally scale by context length * log(pos+1)
             if self.config.scale_attn_by_context:
@@ -135,8 +136,8 @@ class Block(nn.Module):
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
-    def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
+    def forward(self, x, attention_mask = None):
+        x = x + self.attn(self.ln_1(x), attention_mask=attention_mask)
         x = x + self.mlp(self.ln_2(x))
         return x
 
@@ -153,7 +154,7 @@ class GPTConfig:
     activation: str = 'gelu'
     scale_attn_by_context: bool = False
     use_lstm_pos_enc: bool = False
-    # If you want to handle rope separately, add something like: use_rotary_emb: bool = False
+    use_rotary_emb: bool = False
 
 
 class GPT(nn.Module):
@@ -216,7 +217,7 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None, intervals=None):
+    def forward(self, idx, targets=None, intervals=None, attention_mask = None):
         """
         idx:     (b, t) input token IDs
         targets: if shape (b, t), compute autoregressive training loss across the sequence
@@ -245,6 +246,10 @@ class GPT(nn.Module):
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)  # (b, t, n_embd)
+        
+        
+        for block in self.transformer.h:
+            x = block(x, attention_mask=attention_mask)
 
         # Final logits
         logits = self.lm_head(x)  # (b, t, vocab_size)

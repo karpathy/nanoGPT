@@ -16,6 +16,18 @@ class SATStoppingCriteria(StoppingCriteria):
                 return False
         # If all rows contain at least one stop token, stop generation
         return True
+    
+def get_interval_values(logits, intervals):
+    """
+    Extracts the logits at specific time-step 'intervals' for each batch element.
+
+    logits:    [batch_size, seq_len, vocab_size]
+    intervals: [batch_size] (each entry is an integer index into seq_len)
+
+    Returns:   [batch_size, vocab_size]
+    """
+    batch_size, seq_len, vocab_size = logits.shape
+    return logits[torch.arange(batch_size), intervals, :]
 
 def is_old_tokenizer(tokenizer: SATTokenizer):
     return "-" in tokenizer.vocab
