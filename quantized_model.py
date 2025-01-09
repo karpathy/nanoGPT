@@ -197,7 +197,10 @@ class QuantGPT(nn.Module):
                 assert sd_hf[k].shape == sd[k].shape
                 with torch.no_grad():
                     sd[k].copy_(sd_hf[k])
-         
+                    
+        # NOTE: if you use the cuda use the "fbgemm" and if mac M1/M2 or mobile use the qnnpack
+        torch.backends.quantized.engine = 'qnnpack'
+        quant_model.qconfig = torch.quantization.get_default_qconfig("qnnpack")
         quant_model.transformer.wte.qconfig = torch.ao.quantization.float_qparams_weight_only_qconfig
         quant_model.transformer.wpe.qconfig = torch.ao.quantization.float_qparams_weight_only_qconfig
         
@@ -247,7 +250,7 @@ if __name__ == "__main__":
         size_kb = os.path.getsize("temp_model.p")/1e3
         os.remove("temp_model.p")
         
-        print(f"\nModel: {name} -- Model Size: {size_kb:.2f} KB")
+        print(f"\n Model: {name} -- Model Size: {size_kb:.2f} KB")
         return size_kb
     
     gpt2_config = GPTConfig()
@@ -255,11 +258,7 @@ if __name__ == "__main__":
     gpt_2_size = model_size(gpt_2, 'GPT2')
     
     q_gpt_2 = QuantGPT.from_pretrained('gpt2')
-    q_gpt_2_size = model_size(q_gpt_2, 'Quantized GPT2')
+    q_gpt_2_size = model_size(q_gpt_2, 'QGPT2')
     
-    print(f"\nDiffrence -- {gpt_2_size - q_gpt_2_size} KB")
+    print(f"\nDiffrence -- {gpt_2_size - q_gpt_2_size:.2f} KB")
     
-    # gpt_2 = QuantGPT(gpt2_config)
-    # o = gpt_2(torch.randint(1,10, (1, 100)))
-    
-
