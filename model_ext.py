@@ -48,6 +48,10 @@ class CausalSelfAttention(nn.Module):
         self.n_head = config.n_head
         self.n_embd = config.n_embd
         self.dropout = config.dropout
+        
+        if self.config.scale_attn_by_context:
+            # TODO - Per request one param per head
+            self.log_attn_lambda = nn.Parameter(torch.zeros(self.n_head))
 
         # Flash attention is only available in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
@@ -91,8 +95,9 @@ class CausalSelfAttention(nn.Module):
             # Optionally scale by context length * log(pos+1)
             if self.config.scale_attn_by_context:
                 for pos in range(T):
-                    scale_factor = T * math.log(pos + 1)  # pos+1 to avoid log(0)
-                    att[:, :, pos, :] *= scale_factor
+                    for head_idx in range(self.n_head):
+                        scale_factor = 1.0 + self.log_attn_lambda[head_idx] * math.log(pos + 1)
+                        att[:, head_idx, pos, :] *= scale_factor
 
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
