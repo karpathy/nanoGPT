@@ -90,6 +90,11 @@ class CausalSelfAttention(nn.Module):
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
             # Apply the causal mask
             if attention_mask is not None:
+                # Combine them: 0 => attend, 1 => ignore, or a bool tensor
+                # Suppose 'self.bias==0' means "ignore," so you can do a logical OR:
+                att_mask = (self.bias[:, :, :T, :T] == 0) | (attention_mask == False)
+                att = att.masked_fill(att_mask, float('-inf'))
+            else:
                 att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float('-inf'))
 
             # Optionally scale by context length * log(pos+1)
@@ -249,12 +254,8 @@ class GPT(nn.Module):
 
         # Transformer blocks
         for block in self.transformer.h:
-            x = block(x)
-        x = self.transformer.ln_f(x)  # (b, t, n_embd)
-        
-        
-        for block in self.transformer.h:
             x = block(x, attention_mask=attention_mask)
+        x = self.transformer.ln_f(x)
 
         # Final logits
         logits = self.lm_head(x)  # (b, t, vocab_size)
