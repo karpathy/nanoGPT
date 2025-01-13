@@ -33,6 +33,7 @@ from model import GPTConfig, GPT
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
 out_dir = 'out'
+checkpoint_dir = None # directory containing checkpoint to resume from, if using init_from='resume'
 eval_interval = 2000
 log_interval = 1
 eval_iters = 200
@@ -158,9 +159,11 @@ if init_from == 'scratch':
     gptconf = GPTConfig(**model_args)
     model = GPT(gptconf)
 elif init_from == 'resume':
-    print(f"Resuming training from {out_dir}")
-    # resume training from a checkpoint.
-    ckpt_path = os.path.join(out_dir, 'ckpt.pt')
+    # Use checkpoint_dir if specified, otherwise use out_dir
+    resume_dir = checkpoint_dir if checkpoint_dir is not None else out_dir
+    print(f"Resuming training from {resume_dir}")
+    # resume training from a checkpoint
+    ckpt_path = os.path.join(resume_dir, 'ckpt.pt')
     checkpoint = torch.load(ckpt_path, map_location=device)
     checkpoint_model_args = checkpoint['model_args']
     # force these config attributes to be equal otherwise we can't even resume training
