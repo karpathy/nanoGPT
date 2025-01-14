@@ -33,7 +33,7 @@ from model import GPTConfig, GPT
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
 out_dir = 'out'
-checkpoint_dir = None # directory containing checkpoint to resume from, if using init_from='resume'
+checkpoint_dir = '' # directory containing checkpoint to resume from, if using init_from='resume'
 eval_interval = 2000
 log_interval = 1
 eval_iters = 200
@@ -160,7 +160,7 @@ if init_from == 'scratch':
     model = GPT(gptconf)
 elif init_from == 'resume':
     # Use checkpoint_dir if specified, otherwise use out_dir
-    resume_dir = checkpoint_dir if checkpoint_dir is not None else out_dir
+    resume_dir = checkpoint_dir if checkpoint_dir != '' else out_dir
     print(f"Resuming training from {resume_dir}")
     # resume training from a checkpoint
     ckpt_path = os.path.join(resume_dir, 'ckpt.pt')
