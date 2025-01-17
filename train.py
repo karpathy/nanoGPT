@@ -74,6 +74,9 @@ backend = 'nccl' # 'nccl', 'gloo', etc.
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
+# fake checkpoint
+fake_checkpoint = False # if True, use a fake checkpoint for testing
+fake_checkpoint_size_mb = 100 # size of the fake checkpoint in MB
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
@@ -163,9 +166,14 @@ elif init_from == 'resume':
     # Use checkpoint_dir if specified, otherwise use out_dir
     resume_dir = checkpoint_dir if checkpoint_dir != '' else out_dir
     print(f"Resuming training from {resume_dir}")
-    # resume training from a checkpoint
     ckpt_path = os.path.join(resume_dir, 'ckpt.pt')
-    checkpoint = torch.load(ckpt_path, map_location=device)
+    
+    if fake_checkpoint:
+        print(f"Using fake checkpoint of size {fake_checkpoint_size_mb}MB")
+        checkpoint = create_fake_checkpoint(fake_checkpoint_size_mb, model_args)
+    else:
+        checkpoint = torch.load(ckpt_path, map_location=device)
+    
     checkpoint_model_args = checkpoint['model_args']
     # force these config attributes to be equal otherwise we can't even resume training
     # the rest of the attributes (e.g. dropout) can stay as desired from command line
