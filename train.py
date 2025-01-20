@@ -224,11 +224,20 @@ def get_checkpoint_dir():
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     return os.path.join(out_dir, f'checkpoint_{timestamp}')
 
-def create_dummy_file(path, size_mb):
-    """Create a dummy file of specified size in MB"""
-    with open(path, 'wb') as f:
-        f.seek(size_mb * 1024 * 1024 - 1)
-        f.write(b'\0')
+def create_dummy_checkpoint(size_mb):
+    """Create a dummy checkpoint of specified size in MB using torch.save"""
+    # Calculate size in bytes, subtract some overhead for the dictionary structure
+    target_bytes = size_mb * 1024 * 1024 - 1024  
+    dummy_data = torch.zeros(target_bytes // 8, dtype=torch.float64)
+    checkpoint = {
+        'model': {'dummy': dummy_data},
+        'optimizer': {},
+        'model_args': {},
+        'iter_num': 0,
+        'best_val_loss': 1e9,
+        'config': {}
+    }
+    return checkpoint
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
@@ -306,7 +315,8 @@ while True:
                 checkpoint_path = os.path.join(checkpoint_dir, 'ckpt.pt')
                 if fake_checkpoint:
                     print(f"creating dummy checkpoint of size {fake_checkpoint_size_mb}MB at {checkpoint_path}")
-                    create_dummy_file(checkpoint_path, fake_checkpoint_size_mb)
+                    dummy_checkpoint = create_dummy_checkpoint(fake_checkpoint_size_mb)
+                    torch.save(dummy_checkpoint, checkpoint_path)
                 else:
                     print(f"saving checkpoint to {checkpoint_path}")
                     torch.save(checkpoint, checkpoint_path)
