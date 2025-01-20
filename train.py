@@ -167,8 +167,8 @@ elif init_from == 'resume':
     resume_dir = checkpoint_dir if checkpoint_dir != '' else out_dir
     print(f"Resuming training from {resume_dir}")
     ckpt_path = os.path.join(resume_dir, 'ckpt.pt')
-    
-    if fake_checkpoint:
+    print(type(fake_checkpoint))
+    if fake_checkpoint == "True":
         print(f"Using fake checkpoint of size {fake_checkpoint_size_mb}MB")
         checkpoint = create_fake_checkpoint(fake_checkpoint_size_mb, model_args)
     else:
