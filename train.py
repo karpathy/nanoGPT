@@ -166,14 +166,9 @@ elif init_from == 'resume':
     # Use checkpoint_dir if specified, otherwise use out_dir
     resume_dir = checkpoint_dir if checkpoint_dir != '' else out_dir
     print(f"Resuming training from {resume_dir}")
+    # resume training from a checkpoint
     ckpt_path = os.path.join(resume_dir, 'ckpt.pt')
-    print(type(fake_checkpoint))
-    if fake_checkpoint == "True":
-        print(f"Using fake checkpoint of size {fake_checkpoint_size_mb}MB")
-        checkpoint = create_fake_checkpoint(fake_checkpoint_size_mb, model_args)
-    else:
-        checkpoint = torch.load(ckpt_path, map_location=device)
-    
+    checkpoint = torch.load(ckpt_path, map_location=device)
     checkpoint_model_args = checkpoint['model_args']
     # force these config attributes to be equal otherwise we can't even resume training
     # the rest of the attributes (e.g. dropout) can stay as desired from command line
@@ -228,6 +223,24 @@ if ddp:
 def get_checkpoint_dir():
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     return os.path.join(out_dir, f'checkpoint_{timestamp}')
+
+def create_fake_checkpoint(size_mb, model_args, iter_num=0, best_val_loss=1e9):
+    """Create a fake checkpoint with specified size in MB"""
+    checkpoint = {
+        'model_args': model_args,
+        'iter_num': iter_num,
+        'best_val_loss': best_val_loss,
+        'config': config,
+        'model': {},
+        'optimizer': {}
+    }
+    # Calculate how much padding we need
+    base_size = len(pickle.dumps(checkpoint))
+    padding_size = int(size_mb * 1024 * 1024 - base_size)
+    if padding_size > 0:
+        # Add padding to reach desired size
+        checkpoint['_padding'] = b'0' * padding_size
+    return checkpoint
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
@@ -292,14 +305,17 @@ while True:
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
             if iter_num > 0:
-                checkpoint = {
-                    'model': raw_model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'model_args': model_args,
-                    'iter_num': iter_num,
-                    'best_val_loss': best_val_loss,
-                    'config': config,
-                }
+                if fake_checkpoint:
+                    checkpoint = create_fake_checkpoint(fake_checkpoint_size_mb, model_args, iter_num, best_val_loss)
+                else:
+                    checkpoint = {
+                        'model': raw_model.state_dict(),
+                        'optimizer': optimizer.state_dict(),
+                        'model_args': model_args,
+                        'iter_num': iter_num,
+                        'best_val_loss': best_val_loss,
+                        'config': config,
+                    }
                 checkpoint_dir = get_checkpoint_dir()
                 os.makedirs(checkpoint_dir, exist_ok=True)
                 checkpoint_path = os.path.join(checkpoint_dir, 'ckpt.pt')
