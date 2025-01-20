@@ -224,23 +224,11 @@ def get_checkpoint_dir():
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     return os.path.join(out_dir, f'checkpoint_{timestamp}')
 
-def create_fake_checkpoint(size_mb, model_args, iter_num=0, best_val_loss=1e9):
-    """Create a fake checkpoint with specified size in MB"""
-    checkpoint = {
-        'model_args': model_args,
-        'iter_num': iter_num,
-        'best_val_loss': best_val_loss,
-        'config': config,
-        'model': {},
-        'optimizer': {}
-    }
-    # Calculate how much padding we need
-    base_size = len(pickle.dumps(checkpoint))
-    padding_size = int(size_mb * 1024 * 1024 - base_size)
-    if padding_size > 0:
-        # Add padding to reach desired size
-        checkpoint['_padding'] = b'0' * padding_size
-    return checkpoint
+def create_dummy_file(path, size_mb):
+    """Create a dummy file of specified size in MB"""
+    with open(path, 'wb') as f:
+        f.seek(size_mb * 1024 * 1024 - 1)
+        f.write(b'\0')
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
@@ -319,8 +307,12 @@ while True:
                 checkpoint_dir = get_checkpoint_dir()
                 os.makedirs(checkpoint_dir, exist_ok=True)
                 checkpoint_path = os.path.join(checkpoint_dir, 'ckpt.pt')
-                print(f"saving checkpoint to {checkpoint_path}")
-                torch.save(checkpoint, checkpoint_path)
+                if fake_checkpoint:
+                    print(f"creating dummy checkpoint of size {fake_checkpoint_size_mb}MB at {checkpoint_path}")
+                    create_dummy_file(checkpoint_path, fake_checkpoint_size_mb)
+                else:
+                    print(f"saving checkpoint to {checkpoint_path}")
+                    torch.save(checkpoint, checkpoint_path)
     if iter_num == 0 and eval_only:
         break
 
