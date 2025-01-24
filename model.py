@@ -41,6 +41,8 @@ class CausalSelfAttention(nn.Module):
         self.n_head = config.n_head
         self.n_embd = config.n_embd
         self.dropout = config.dropout
+        self.use_rope = config.use_rope
+        self.rope_base = config.rope_base
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
         if not self.flash:
@@ -50,13 +52,35 @@ class CausalSelfAttention(nn.Module):
                                         .view(1, 1, config.block_size, config.block_size))
 
     def forward(self, x):
-        B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+        B, T, C = x.size()  # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+
+        if self.use_rope:
+            # Apply Rotary Position Embedding (RoPE) to queries and keys
+            hs = C // self.n_head  # head dimension
+            d = hs // 2  # number of dimension pairs
+            theta = 1.0 / (self.rope_base ** (2 * torch.arange(0, d, device=x.device, dtype=torch.float32) / hs))
+            t = torch.arange(T, device=x.device, dtype=torch.float32)
+            freqs = torch.outer(t, theta)
+            freqs_cos = torch.cos(freqs).unsqueeze(0).unsqueeze(0)  # (1, 1, T, d)
+            freqs_sin = torch.sin(freqs).unsqueeze(0).unsqueeze(0)  # (1, 1, T, d)
+
+            def apply_rope(x, cos, sin):
+                x_ = x.float().reshape(*x.shape[:-1], -1, 2)  # (B, nh, T, d, 2)
+                x0 = x_[..., 0]
+                x1 = x_[..., 1]
+                x0_rot = x0 * cos - x1 * sin
+                x1_rot = x0 * sin + x1 * cos
+                x_rot = torch.stack([x0_rot, x1_rot], dim=-1).flatten(start_dim=-2)
+                return x_rot.type_as(x)
+
+            q = apply_rope(q, freqs_cos, freqs_sin)
+            k = apply_rope(k, freqs_cos, freqs_sin)
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
@@ -114,6 +138,8 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    use_rope:bool = False
+    rope_base:float = 10000.0
 
 class GPT(nn.Module):
 
@@ -122,10 +148,12 @@ class GPT(nn.Module):
         assert config.vocab_size is not None
         assert config.block_size is not None
         self.config = config
+        self.use_rope = config.use_rope
+        print(f"Using RoPE in GPT init: {self.use_rope}")
 
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
-            wpe = nn.Embedding(config.block_size, config.n_embd),
+            wpe = None if self.use_rope else nn.Embedding(config.block_size, config.n_embd),
             drop = nn.Dropout(config.dropout),
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
             ln_f = LayerNorm(config.n_embd, bias=config.bias),
@@ -155,7 +183,7 @@ class GPT(nn.Module):
         params are actually used as weights in the final layer, so we include them.
         """
         n_params = sum(p.numel() for p in self.parameters())
-        if non_embedding:
+        if non_embedding and not self.use_rope:
             n_params -= self.transformer.wpe.weight.numel()
         return n_params
 
@@ -175,8 +203,11 @@ class GPT(nn.Module):
 
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
-        pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
-        x = self.transformer.drop(tok_emb + pos_emb)
+        if self.use_rope:
+            x = self.transformer.drop(tok_emb)
+        else:
+            pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
+            x = self.transformer.drop(tok_emb + pos_emb)
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)
@@ -198,7 +229,8 @@ class GPT(nn.Module):
         # but want to use a smaller block size for some smaller, simpler model
         assert block_size <= self.config.block_size
         self.config.block_size = block_size
-        self.transformer.wpe.weight = nn.Parameter(self.transformer.wpe.weight[:block_size])
+        if not self.use_rope:
+            self.transformer.wpe.weight = nn.Parameter(self.transformer.wpe.weight[:block_size])
         for block in self.transformer.h:
             if hasattr(block.attn, 'bias'):
                 block.attn.bias = block.attn.bias[:,:,:block_size,:block_size]
