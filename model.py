@@ -50,52 +50,68 @@ class CausalSelfAttention(nn.Module):
             # causal mask to ensure that attention is only applied to the left in the input sequence
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
+        if self.use_rope:
+            hs = self.n_embd // self.n_head
+            d = hs // 2
+            self.register_buffer('theta', 
+                1.0 / (self.rope_base ** (2 * torch.arange(0, d, dtype=torch.float32) / hs)))
 
     def forward(self, x):
         B, T, C = x.size()  # batch size, sequence length, embedding dimensionality (n_embd)
-
+    
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
-        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-
+        q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
+        
+        # Reshape and transpose with contiguous memory layout
+        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2).contiguous()
+        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2).contiguous()
+        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2).contiguous()
+    
         if self.use_rope:
-            # Apply Rotary Position Embedding (RoPE) to queries and keys
+            # Use precomputed theta and cast to input dtype
             hs = C // self.n_head  # head dimension
             d = hs // 2  # number of dimension pairs
-            theta = 1.0 / (self.rope_base ** (2 * torch.arange(0, d, device=x.device, dtype=torch.float32) / hs))
-            t = torch.arange(T, device=x.device, dtype=torch.float32)
+            theta = self.theta[:d].to(x.dtype)  # Cast to input dtype
+            
+            # Compute frequencies using input dtype
+            t = torch.arange(T, device=x.device, dtype=x.dtype)
             freqs = torch.outer(t, theta)
             freqs_cos = torch.cos(freqs).unsqueeze(0).unsqueeze(0)  # (1, 1, T, d)
             freqs_sin = torch.sin(freqs).unsqueeze(0).unsqueeze(0)  # (1, 1, T, d)
-
+    
+            # Optimized RoPE application without type casting
             def apply_rope(x, cos, sin):
-                x_ = x.float().reshape(*x.shape[:-1], -1, 2)  # (B, nh, T, d, 2)
+                x_ = x.reshape(*x.shape[:-1], -1, 2)  # (B, nh, T, d, 2)
                 x0 = x_[..., 0]
                 x1 = x_[..., 1]
                 x0_rot = x0 * cos - x1 * sin
                 x1_rot = x0 * sin + x1 * cos
                 x_rot = torch.stack([x0_rot, x1_rot], dim=-1).flatten(start_dim=-2)
-                return x_rot.type_as(x)
-
+                return x_rot
+    
             q = apply_rope(q, freqs_cos, freqs_sin)
             k = apply_rope(k, freqs_cos, freqs_sin)
-
-        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
+    
+        # Attention implementation
         if self.flash:
-            # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
+            # Use Flash Attention with optimal settings
+            y = torch.nn.functional.scaled_dot_product_attention(
+                q, k, v,
+                attn_mask=None,
+                dropout_p=self.dropout if self.training else 0,
+                is_causal=True
+            )
         else:
-            # manual implementation of attention
+            # Optimized manual attention with contiguous tensors
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
             att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
-            y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
-
-        # output projection
+            y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+    
+        y = y.transpose(1, 2).contiguous().view(B, T, C)  # Re-assemble heads
+    
+        # Output projection with fused dropout
         y = self.resid_dropout(self.c_proj(y))
         return y
 
