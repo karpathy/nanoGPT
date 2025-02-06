@@ -79,34 +79,45 @@ config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
 
 # various inits, derived attributes, I/O setup
-ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
+ddp = int(os.environ.get('RANK', -1)) != -1  # is this a ddp run?
 if ddp:
-    init_process_group(backend=backend)
-    ddp_rank = int(os.environ['RANK'])
-    ddp_local_rank = int(os.environ['LOCAL_RANK'])
-    ddp_world_size = int(os.environ['WORLD_SIZE'])
-    device = f'cuda:{ddp_local_rank}'
-    torch.cuda.set_device(device)
-    master_process = ddp_rank == 0 # this process will do logging, checkpointing etc.
-    seed_offset = ddp_rank # each process gets a different seed
-    # world_size number of processes will be training simultaneously, so we can scale
-    # down the desired gradient accumulation iterations per process proportionally
-    assert gradient_accumulation_steps % ddp_world_size == 0
-    gradient_accumulation_steps //= ddp_world_size
+   init_process_group(backend=backend)
+   ddp_rank = int(os.environ['RANK'])
+   ddp_local_rank = int(os.environ['LOCAL_RANK'])
+   ddp_world_size = int(os.environ['WORLD_SIZE'])
+   device = 'cuda:' + str(ddp_local_rank)  # Assign specific GPU
+   torch.cuda.set_device(device)
+   master_process = ddp_rank == 0  # this process will do logging, checkpointing etc.
+   seed_offset = ddp_rank  # each process gets a different seed
+   # world_size number of processes will be training simultaneously, so we can scale
+   # down the desired gradient accumulation iterations per process proportionally
+   assert gradient_accumulation_steps % ddp_world_size == 0
+   gradient_accumulation_steps //= ddp_world_size
+elif device == 'cuda' and not torch.cuda.is_available():
+   device = 'mps' if torch.backends.mps.is_available() else 'cpu'
+   master_process = True
+   seed_offset = 0
+   ddp_world_size = 1
 else:
-    # if not ddp, we are running on a single gpu, and one process
-    master_process = True
-    seed_offset = 0
-    ddp_world_size = 1
+   # if not ddp, we are running on a single gpu, and one process
+   master_process = True
+   seed_offset = 0
+   ddp_world_size = 1
+
 tokens_per_iter = gradient_accumulation_steps * ddp_world_size * batch_size * block_size
 print(f"tokens per iteration will be: {tokens_per_iter:,}")
 
 if master_process:
-    os.makedirs(out_dir, exist_ok=True)
+   os.makedirs(out_dir, exist_ok=True)
+
 torch.manual_seed(1337 + seed_offset)
-torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
-torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
-device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
+device_type = 'cuda' if 'cuda' in device else 'mps' if 'mps' in device else 'cpu'
+
+# Configure device-specific settings
+if device_type == 'cuda':
+   torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
+   torch.backends.cudnn.allow_tf32 = True  # allow tf32 on cudnn
+
 # note: float16 data type will automatically use a GradScaler
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
