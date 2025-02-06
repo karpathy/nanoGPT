@@ -78,38 +78,41 @@ exec(open('configurator.py').read()) # overrides from command line or config fil
 config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
 
-# various inits, derived attributes, I/O setup
-ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
+# Initialize DDP and device settings
+ddp = int(os.environ.get('RANK', -1)) != -1
 if ddp:
     init_process_group(backend=backend)
     ddp_rank = int(os.environ['RANK'])
     ddp_local_rank = int(os.environ['LOCAL_RANK'])
     ddp_world_size = int(os.environ['WORLD_SIZE'])
-    device = f'cuda:{ddp_local_rank}'
+    device = f'cuda:{ddp_local_rank}'  # Assign specific GPU
     torch.cuda.set_device(device)
-    master_process = ddp_rank == 0 # this process will do logging, checkpointing etc.
-    seed_offset = ddp_rank # each process gets a different seed
-    # world_size number of processes will be training simultaneously, so we can scale
-    # down the desired gradient accumulation iterations per process proportionally
+    master_process = ddp_rank == 0
+    seed_offset = ddp_rank
     assert gradient_accumulation_steps % ddp_world_size == 0
     gradient_accumulation_steps //= ddp_world_size
 else:
-    # if not ddp, we are running on a single gpu, and one process
+    if device == 'cuda' and not torch.cuda.is_available():
+        device = 'mps' if torch.backends.mps.is_available() else 'cpu'
     master_process = True
     seed_offset = 0
     ddp_world_size = 1
-tokens_per_iter = gradient_accumulation_steps * ddp_world_size * batch_size * block_size
-print(f"tokens per iteration will be: {tokens_per_iter:,}")
 
+# Set up training parameters and directories
+tokens_per_iter = gradient_accumulation_steps * ddp_world_size * batch_size * block_size
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
+    print(f"tokens per iteration will be: {tokens_per_iter:,}")
+
+# Initialize seeds and device settings
 torch.manual_seed(1337 + seed_offset)
-torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
-torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
-device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
-# note: float16 data type will automatically use a GradScaler
+if 'cuda' in device:
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+
+# Set up precision and context manager
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
-ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
+ctx = nullcontext() if device == 'cpu' else torch.amp.autocast(device_type=device, dtype=ptdtype)
 
 # poor man's data loader
 data_dir = os.path.join('data', dataset)
