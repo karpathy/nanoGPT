@@ -33,10 +33,6 @@ beta2 = 0.99 # make a bit bigger because number of tokens per iter is small
 
 warmup_iters = 100 # not super necessary potentially
 
-# testing with fake checkpoints
-fake_checkpoint = False
-fake_checkpoint_size_mb = 100 # create a 100MB fake checkpoint
-
 # on macbook also add
 # device = 'cpu'  # run on cpu only
 # compile = False # do not torch compile the model

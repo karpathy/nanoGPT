@@ -2,8 +2,6 @@ import time
 
 out_dir = 'out-shakespeare'
 checkpoint_dir = ''
-fake_checkpoint = False
-fake_checkpoint_size_mb = 100
 eval_interval = 5
 eval_iters = 40
 wandb_log = False # feel free to turn on
