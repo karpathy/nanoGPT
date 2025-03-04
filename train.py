@@ -74,9 +74,6 @@ backend = 'nccl' # 'nccl', 'gloo', etc.
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
-# fake checkpoint
-fake_checkpoint = False # if True, use a fake checkpoint for testing
-fake_checkpoint_size_mb = 100 # size of the fake checkpoint in MB
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
@@ -224,21 +221,6 @@ def get_checkpoint_dir():
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     return os.path.join(out_dir, f'checkpoint_{timestamp}')
 
-def create_dummy_checkpoint(size_mb):
-    """Create a dummy checkpoint of specified size in MB using torch.save"""
-    # Calculate size in bytes, subtract some overhead for the dictionary structure
-    target_bytes = size_mb * 1024 * 1024 - 1024  
-    dummy_data = torch.zeros(target_bytes // 8, dtype=torch.float64)
-    checkpoint = {
-        'model': {'dummy': dummy_data},
-        'optimizer': {},
-        'model_args': {},
-        'iter_num': 0,
-        'best_val_loss': 1e9,
-        'config': {}
-    }
-    return checkpoint
-
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
 def estimate_loss():
@@ -313,13 +295,8 @@ while True:
                 checkpoint_dir = get_checkpoint_dir()
                 os.makedirs(checkpoint_dir, exist_ok=True)
                 checkpoint_path = os.path.join(checkpoint_dir, 'ckpt.pt')
-                if fake_checkpoint:
-                    print(f"creating dummy checkpoint of size {fake_checkpoint_size_mb}MB at {checkpoint_path}")
-                    dummy_checkpoint = create_dummy_checkpoint(fake_checkpoint_size_mb)
-                    torch.save(dummy_checkpoint, checkpoint_path)
-                else:
-                    print(f"saving checkpoint to {checkpoint_path}")
-                    torch.save(checkpoint, checkpoint_path)
+                print(f"saving checkpoint to {checkpoint_path}")
+                torch.save(checkpoint, checkpoint_path)
     if iter_num == 0 and eval_only:
         break
 
