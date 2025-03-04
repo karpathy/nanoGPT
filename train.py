@@ -20,7 +20,6 @@ import os
 import time
 import math
 import pickle
-import datetime
 from contextlib import nullcontext
 
 import numpy as np
@@ -217,10 +216,6 @@ if compile:
 if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
 
-def get_checkpoint_dir():
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    return os.path.join(out_dir, f'checkpoint_{timestamp}')
-
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
 def estimate_loss():
@@ -292,11 +287,8 @@ while True:
                     'best_val_loss': best_val_loss,
                     'config': config,
                 }
-                checkpoint_dir = get_checkpoint_dir()
-                os.makedirs(checkpoint_dir, exist_ok=True)
-                checkpoint_path = os.path.join(checkpoint_dir, 'ckpt.pt')
-                print(f"saving checkpoint to {checkpoint_path}")
-                torch.save(checkpoint, checkpoint_path)
+                print(f"saving checkpoint to {out_dir}")
+                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
     if iter_num == 0 and eval_only:
         break
 
