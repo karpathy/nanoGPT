@@ -80,6 +80,7 @@ config = {k: globals()[k] for k in config_keys} # will be useful for logging
 
 # various inits, derived attributes, I/O setup
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
+ddp_rank = -1
 if ddp:
     init_process_group(backend=backend)
     ddp_rank = int(os.environ['RANK'])
@@ -93,6 +94,7 @@ if ddp:
     # down the desired gradient accumulation iterations per process proportionally
     assert gradient_accumulation_steps % ddp_world_size == 0
     gradient_accumulation_steps //= ddp_world_size
+    print(f"ddp_rank: {ddp_rank} ddp_local_rank: {ddp_local_rank} ddp_world_size: {ddp_world_size} gradient_accumulation_steps: {gradient_accumulation_steps}")
 else:
     # if not ddp, we are running on a single gpu, and one process
     master_process = True
@@ -297,7 +299,7 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            logits, loss = model(X, Y)
+            logits, loss = model(X, Y)                
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, Y = get_batch('train')
