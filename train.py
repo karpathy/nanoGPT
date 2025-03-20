@@ -92,9 +92,9 @@ if ddp:
     seed_offset = ddp_rank # each process gets a different seed
     # world_size number of processes will be training simultaneously, so we can scale
     # down the desired gradient accumulation iterations per process proportionally
+    print(f"ddp_rank: {ddp_rank} ddp_local_rank: {ddp_local_rank} ddp_world_size: {ddp_world_size} gradient_accumulation_steps: {gradient_accumulation_steps}")
     assert gradient_accumulation_steps % ddp_world_size == 0
     gradient_accumulation_steps //= ddp_world_size
-    print(f"ddp_rank: {ddp_rank} ddp_local_rank: {ddp_local_rank} ddp_world_size: {ddp_world_size} gradient_accumulation_steps: {gradient_accumulation_steps}")
 else:
     # if not ddp, we are running on a single gpu, and one process
     master_process = True
@@ -299,7 +299,11 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            logits, loss = model(X, Y)                
+            if ddp_rank == 3 and model.require_backward_grad_sync:
+                s = 0.5
+                time.sleep(s)
+                print(f"rank {ddp_rank} sleeping {s}s", flush=True)
+            logits, loss = model(X, Y)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, Y = get_batch('train')
