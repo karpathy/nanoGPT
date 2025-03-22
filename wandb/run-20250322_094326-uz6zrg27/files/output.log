@@ -1,0 +1,22 @@
+Traceback (most recent call last):
+  File "/Users/biancaganescu/School/transcendence-transformer/transcendenceGPT/train.py", line 264, in <module>
+    losses = estimate_loss()
+  File "/Users/biancaganescu/anaconda3/envs/transcendence/lib/python3.10/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+  File "/Users/biancaganescu/School/transcendence-transformer/transcendenceGPT/train.py", line 224, in estimate_loss
+    logits, loss = model(X, Y)
+  File "/Users/biancaganescu/anaconda3/envs/transcendence/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/Users/biancaganescu/anaconda3/envs/transcendence/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/Users/biancaganescu/School/transcendence-transformer/transcendenceGPT/model.py", line 177, in forward
+    tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
+  File "/Users/biancaganescu/anaconda3/envs/transcendence/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/Users/biancaganescu/anaconda3/envs/transcendence/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/Users/biancaganescu/anaconda3/envs/transcendence/lib/python3.10/site-packages/torch/nn/modules/sparse.py", line 190, in forward
+    return F.embedding(
+  File "/Users/biancaganescu/anaconda3/envs/transcendence/lib/python3.10/site-packages/torch/nn/functional.py", line 2551, in embedding
+    return torch.embedding(weight, input, padding_idx, scale_grad_by_freq, sparse)
+IndexError: index out of range in self

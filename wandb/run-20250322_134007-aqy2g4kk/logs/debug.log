@@ -1,0 +1,23 @@
+2025-03-22 13:40:07,360 INFO    MainThread:16032 [wandb_setup.py:_flush():67] Current SDK version is 0.19.8
+2025-03-22 13:40:07,360 INFO    MainThread:16032 [wandb_setup.py:_flush():67] Configure stats pid to 16032
+2025-03-22 13:40:07,360 INFO    MainThread:16032 [wandb_setup.py:_flush():67] Loading settings from /Users/biancaganescu/.config/wandb/settings
+2025-03-22 13:40:07,360 INFO    MainThread:16032 [wandb_setup.py:_flush():67] Loading settings from /Users/biancaganescu/School/transcendence-transformer/transcendenceGPT/wandb/settings
+2025-03-22 13:40:07,360 INFO    MainThread:16032 [wandb_setup.py:_flush():67] Loading settings from environment variables
+2025-03-22 13:40:07,360 INFO    MainThread:16032 [wandb_init.py:setup_run_log_directory():647] Logging user logs to /Users/biancaganescu/School/transcendence-transformer/transcendenceGPT/wandb/run-20250322_134007-aqy2g4kk/logs/debug.log
+2025-03-22 13:40:07,361 INFO    MainThread:16032 [wandb_init.py:setup_run_log_directory():648] Logging internal logs to /Users/biancaganescu/School/transcendence-transformer/transcendenceGPT/wandb/run-20250322_134007-aqy2g4kk/logs/debug-internal.log
+2025-03-22 13:40:07,361 INFO    MainThread:16032 [wandb_init.py:init():761] calling init triggers
+2025-03-22 13:40:07,361 INFO    MainThread:16032 [wandb_init.py:init():766] wandb.init called with sweep_config: {}
+config: {'out_dir': 'out-transcendence-gpt', 'eval_interval': 250, 'log_interval': 10, 'eval_iters': 200, 'eval_only': False, 'always_save_checkpoint': False, 'init_from': 'scratch', 'wandb_log': True, 'wandb_project': 'transcendence-gpt', 'wandb_run_name': 'in-distribution', 'dataset': 'card_set', 'gradient_accumulation_steps': 1, 'batch_size': 32, 'block_size': 540, 'n_layer': 6, 'n_head': 6, 'n_embd': 384, 'dropout': 0.2, 'bias': False, 'learning_rate': 0.001, 'max_iters': 5000, 'weight_decay': 0.1, 'beta1': 0.9, 'beta2': 0.99, 'grad_clip': 1.0, 'decay_lr': True, 'warmup_iters': 100, 'lr_decay_iters': 5000, 'min_lr': 0.0001, 'backend': 'nccl', 'device': 'cpu', 'dtype': 'float32', 'compile': False, '_wandb': {}}
+2025-03-22 13:40:07,361 INFO    MainThread:16032 [wandb_init.py:init():784] starting backend
+2025-03-22 13:40:07,361 INFO    MainThread:16032 [wandb_init.py:init():788] sending inform_init request
+2025-03-22 13:40:07,413 INFO    MainThread:16032 [backend.py:_multiprocessing_setup():101] multiprocessing start_methods=spawn,fork,forkserver, using: spawn
+2025-03-22 13:40:07,413 INFO    MainThread:16032 [wandb_init.py:init():798] backend started and connected
+2025-03-22 13:40:07,417 INFO    MainThread:16032 [wandb_init.py:init():891] updated telemetry
+2025-03-22 13:40:07,463 INFO    MainThread:16032 [wandb_init.py:init():915] communicating run to backend with 90.0 second timeout
+2025-03-22 13:40:07,943 INFO    MainThread:16032 [wandb_init.py:init():990] starting run threads in backend
+2025-03-22 13:40:07,994 INFO    MainThread:16032 [wandb_run.py:_console_start():2375] atexit reg
+2025-03-22 13:40:07,994 INFO    MainThread:16032 [wandb_run.py:_redirect():2227] redirect: wrap_raw
+2025-03-22 13:40:07,994 INFO    MainThread:16032 [wandb_run.py:_redirect():2292] Wrapping output streams.
+2025-03-22 13:40:07,995 INFO    MainThread:16032 [wandb_run.py:_redirect():2315] Redirects installed.
+2025-03-22 13:40:07,996 INFO    MainThread:16032 [wandb_init.py:init():1032] run started, returning control to user process
+2025-03-22 13:40:08,257 INFO    MsgRouterThr:16032 [mailbox.py:close():129] Closing mailbox, abandoning 1 handles.

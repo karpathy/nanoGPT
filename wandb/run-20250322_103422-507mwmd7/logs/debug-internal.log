@@ -1,0 +1,15 @@
+{"time":"2025-03-22T10:34:22.758801Z","level":"INFO","msg":"stream: starting","core version":"0.19.8","symlink path":"/Users/biancaganescu/School/transcendence-transformer/transcendenceGPT/wandb/run-20250322_103422-507mwmd7/logs/debug-core.log"}
+{"time":"2025-03-22T10:34:22.883956Z","level":"INFO","msg":"created new stream","id":"507mwmd7"}
+{"time":"2025-03-22T10:34:22.884013Z","level":"INFO","msg":"stream: started","id":"507mwmd7"}
+{"time":"2025-03-22T10:34:22.88404Z","level":"INFO","msg":"writer: Do: started","stream_id":"507mwmd7"}
+{"time":"2025-03-22T10:34:22.884103Z","level":"INFO","msg":"sender: started","stream_id":"507mwmd7"}
+{"time":"2025-03-22T10:34:22.884119Z","level":"INFO","msg":"handler: started","stream_id":"507mwmd7"}
+{"time":"2025-03-22T10:34:23.163431Z","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-03-22T10:34:24.626517Z","level":"INFO","msg":"stream: closing","id":"507mwmd7"}
+{"time":"2025-03-22T10:34:24.626527Z","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-03-22T10:34:24.629267Z","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-03-22T10:34:25.180639Z","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-03-22T10:34:25.374919Z","level":"INFO","msg":"handler: closed","stream_id":"507mwmd7"}
+{"time":"2025-03-22T10:34:25.375232Z","level":"INFO","msg":"sender: closed","stream_id":"507mwmd7"}
+{"time":"2025-03-22T10:34:25.374977Z","level":"INFO","msg":"writer: Close: closed","stream_id":"507mwmd7"}
+{"time":"2025-03-22T10:34:25.375921Z","level":"INFO","msg":"stream: closed","id":"507mwmd7"}

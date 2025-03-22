@@ -1,0 +1,64 @@
+tensor([[ 0, 12,  0,  ...,  4,  0,  1],
+        [14,  0,  2,  ...,  0,  2,  0],
+        [14,  0,  2,  ...,  0,  2,  0],
+        ...,
+        [ 0,  0,  6,  ...,  0, 16,  0],
+        [ 8,  0, 11,  ...,  0, 13,  0],
+        [ 8,  0, 11,  ...,  0,  4,  0]])
+tensor([[ 8,  0, 13,  ...,  0, 11,  0],
+        [11,  0, 16,  ...,  0, 14,  0],
+        [ 0,  9,  0,  ...,  9,  0, 12],
+        ...,
+        [ 0, 15,  0,  ...,  1,  0,  0],
+        [ 4,  0,  1,  ...,  0, 10,  0],
+        [13,  0, 16,  ...,  0,  1,  0]])
+tensor([[16,  0,  2,  ...,  0,  2,  0],
+        [16,  0,  2,  ...,  0,  2,  0],
+        [12,  0, 14,  ...,  0,  1,  0],
+        ...,
+        [ 0, 14,  0,  ..., 14,  0,  2],
+        [ 0,  6,  0,  ...,  5,  0,  8],
+        [ 2,  0,  6,  ...,  0,  5,  0]])
+tensor([[ 5,  0, 10,  ...,  0,  2,  0],
+        [ 0, 16,  0,  ...,  1,  0,  0],
+        [ 0,  0,  7,  ...,  0, 15,  0],
+        ...,
+        [ 0,  6,  0,  ..., 14,  0,  2],
+        [ 2,  0,  7,  ...,  0,  6,  0],
+        [ 0,  0,  0,  ..., 13,  0, 16]])
+tensor([[ 0,  8,  0,  ..., 10,  0, 11],
+        [ 7,  0, 10,  ...,  0,  9,  0],
+        [ 0,  7,  0,  ...,  7,  0,  8],
+        ...,
+        [ 0,  7,  0,  ...,  6,  0,  8],
+        [12,  0, 16,  ...,  0,  1,  0],
+        [ 0,  8,  0,  ...,  8,  0, 13]])
+tensor([[ 8,  0, 13,  ...,  0,  4,  0],
+        [ 0,  6,  0,  ...,  7,  0,  8],
+        [ 0,  6,  0,  ...,  7,  0,  8],
+        ...,
+        [12,  0, 14,  ...,  0, 16,  0],
+        [ 0,  0,  0,  ..., 12,  0, 14],
+        [ 0, 13,  0,  ..., 11,  0, 16]])
+Traceback (most recent call last):
+  File "/Users/biancaganescu/School/transcendence-transformer/transcendenceGPT/train.py", line 264, in <module>
+    losses = estimate_loss()
+  File "/Users/biancaganescu/anaconda3/envs/transcendence/lib/python3.10/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+  File "/Users/biancaganescu/School/transcendence-transformer/transcendenceGPT/train.py", line 224, in estimate_loss
+    logits, loss = model(X, Y)
+  File "/Users/biancaganescu/anaconda3/envs/transcendence/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/Users/biancaganescu/anaconda3/envs/transcendence/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/Users/biancaganescu/School/transcendence-transformer/transcendenceGPT/model.py", line 178, in forward
+    tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
+  File "/Users/biancaganescu/anaconda3/envs/transcendence/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/Users/biancaganescu/anaconda3/envs/transcendence/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/Users/biancaganescu/anaconda3/envs/transcendence/lib/python3.10/site-packages/torch/nn/modules/sparse.py", line 190, in forward
+    return F.embedding(
+  File "/Users/biancaganescu/anaconda3/envs/transcendence/lib/python3.10/site-packages/torch/nn/functional.py", line 2551, in embedding
+    return torch.embedding(weight, input, padding_idx, scale_grad_by_freq, sparse)
+IndexError: index out of range in self

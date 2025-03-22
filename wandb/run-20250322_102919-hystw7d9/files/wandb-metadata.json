@@ -1,0 +1,19 @@
+{
+  "os": "macOS-10.16-x86_64-i386-64bit",
+  "python": "CPython 3.10.16",
+  "startedAt": "2025-03-22T10:29:19.824901Z",
+  "args": [
+    "config/transcendence_gpt.py"
+  ],
+  "program": "/Users/biancaganescu/School/transcendence-transformer/transcendenceGPT/train.py",
+  "codePath": "train.py",
+  "git": {
+    "remote": "git@github.com:biancaganescu/transcendenceGPT.git",
+    "commit": "93a43d9a5c22450bbf06e78da2cb6eeef084b717"
+  },
+  "email": "bmg44@cam.ac.uk",
+  "root": "/Users/biancaganescu/School/transcendence-transformer/transcendenceGPT",
+  "host": "Bianca-Mihaelas-MacBook-Pro.local",
+  "executable": "/Users/biancaganescu/anaconda3/envs/transcendence/bin/python",
+  "codePathLocal": "train.py"
+}

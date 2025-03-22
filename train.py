@@ -21,6 +21,8 @@ import time
 import math
 import pickle
 from contextlib import nullcontext
+global tqdm
+from tqdm import tqdm
 
 import numpy as np
 import torch
@@ -113,23 +115,102 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 # poor man's data loader
 data_dir = os.path.join('data', dataset)
+# def get_batch(split):
+#     # We recreate np.memmap every batch to avoid a memory leak, as per
+#     # https://stackoverflow.com/questions/45132940/numpy-memmap-memory-usage-want-to-iterate-once/61472122#61472122
+#     if split == 'train':
+#         data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
+#     else:
+#         data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
+#     ix = torch.randint(len(data) - block_size, (batch_size,))
+#     x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
+#     y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
+#     if device_type == 'cuda':
+#         # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
+#         x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
+#     else:
+#         x, y = x.to(device), y.to(device)
+#     return x, y
+
 def get_batch(split):
-    # We recreate np.memmap every batch to avoid a memory leak, as per
-    # https://stackoverflow.com/questions/45132940/numpy-memmap-memory-usage-want-to-iterate-once/61472122#61472122
-    if split == 'train':
-        data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
-    else:
-        data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
-    ix = torch.randint(len(data) - block_size, (batch_size,))
-    x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
-    y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
+    if not hasattr(get_batch, 'tqdm_imported'):
+        get_batch.tqdm_imported = True
+
+    # Initialize data trackers
+    if not hasattr(get_batch, f'{split}_data'):
+        if split == 'train':
+            setattr(get_batch, f'{split}_data', torch.load(os.path.join(data_dir, 'train.pt')))
+        else:
+            setattr(get_batch, f'{split}_data', torch.load(os.path.join(data_dir, 'val.pt')))
+    
+    # Initialize position tracker
+    if not hasattr(get_batch, f'{split}_position'):
+        setattr(get_batch, f'{split}_position', 0)
+    
+    # Initialize progress bar
+    if not hasattr(get_batch, f'{split}_pbar') and getattr(get_batch, 'tqdm_imported', False):
+        data_len = len(getattr(get_batch, f'{split}_data'))
+        setattr(get_batch, f'{split}_pbar', tqdm(total=data_len, desc=f"Processing {split} data", 
+                                                position=0 if split=='train' else 1, leave=True))
+    
+    data = getattr(get_batch, f'{split}_data')
+    position = getattr(get_batch, f'{split}_position')
+    
+    # Get a batch
+    x_list = []
+    y_list = []
+    
+    for i in range(batch_size):
+        sample = data[position]
+        
+        # Flatte
+        if isinstance(sample, torch.Tensor) and len(sample.shape) == 2:
+            sample = sample.reshape(-1)
+        
+        # Get x and y sequences
+        x = sample[:block_size-1]
+        y = sample[1:block_size]
+        
+        x_list.append(x)
+        y_list.append(y)
+        
+        # Move to next position, wrapping around if needed
+        position = (position + 1) % len(data)
+    
+    # Update position for next call
+    setattr(get_batch, f'{split}_position', position)
+    
+    # Update progress bar
+    if hasattr(get_batch, f'{split}_pbar') and getattr(get_batch, 'tqdm_imported', False):
+        pbar = getattr(get_batch, f'{split}_pbar')
+        old_position = getattr(get_batch, f'{split}_old_position', position)
+        if not hasattr(get_batch, f'{split}_old_position'):
+            setattr(get_batch, f'{split}_old_position', position)
+            advance = batch_size
+        else:
+            if old_position > position:  # Wrapped around
+                advance = (len(data) - old_position) + position
+            else:
+                advance = position - old_position
+            setattr(get_batch, f'{split}_old_position', position)
+        
+        # Update the progress bar
+        pbar.update(advance)
+        # Reset if completed one full epoch
+        if pbar.n >= pbar.total:
+            pbar.reset()
+    
+    # Stack into tensors
+    x = torch.stack(x_list).long()
+    y = torch.stack(y_list).long()
+    
     if device_type == 'cuda':
-        # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
         x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
     else:
         x, y = x.to(device), y.to(device)
-    return x, y
-
+    
+    return x, y   
+ 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
 best_val_loss = 1e9
