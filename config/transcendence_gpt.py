@@ -31,8 +31,8 @@ warmup_iters = 100 # not super necessary potentially
 
 vocab_size = 17
 
-# on macbook also add
-device = 'cpu'  # run on cpu only
-compile = False # do not torch compile the model
+# # on macbook also add
+# device = 'cpu'  # run on cpu only
+# compile = False # do not torch compile the model
 
 dtype = "float32"
