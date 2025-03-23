@@ -6,13 +6,14 @@ from model import GPTConfig, GPT
 import numpy as np
 import matplotlib.pyplot as plt
 # PARAMS
-temperature = 0.2
-top_k=1
+temperature = 0.1
 seed = 1337
 device = 'cuda' 
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' 
 out_dir = 'out-transcendence-gpt'
 exec(open('configurator.py').read()) 
+
+torch.set_printoptions(precision=10, threshold=float('inf'))
 
 # Torch configs
 torch.manual_seed(seed)
@@ -62,8 +63,19 @@ with torch.no_grad():
 
             actual_next_token = test_data[i, -2]
             
-            predicted_next_token = model.generate(input_sequence, 1, temperature=temperature, top_k=top_k)[0][-1]
+            predicted_next_token = model.generate(input_sequence, 1, temperature=temperature, top_k=None)[0][-1]
             
+            if actual_next_token == SET_TOKEN:
+                actual_idx = 1
+            else:
+                actual_idx = 0
+
+            if predicted_next_token == SET_TOKEN:
+                pred_idx = 1
+            elif predicted_next_token == NO_SET_TOKEN:
+                pred_idx = 0
+            else:
+                print("other prediction ", predicted_next_token)
             actual_idx = 1 if actual_next_token == SET_TOKEN else 0
             pred_idx = 1 if predicted_next_token == SET_TOKEN else 0
             
