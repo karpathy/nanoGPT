@@ -6,7 +6,8 @@ from model import GPTConfig, GPT
 import numpy as np
 import matplotlib.pyplot as plt
 # PARAMS
-temperature = 0.1
+temperature = 0.0001
+top_k=5
 seed = 1337
 device = 'cuda' 
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' 
@@ -63,7 +64,7 @@ with torch.no_grad():
 
             actual_next_token = test_data[i, -2]
             
-            predicted_next_token = model.generate(input_sequence, 1, temperature=temperature, top_k=None)[0][-1]
+            predicted_next_token = model.generate(input_sequence, 1, temperature=temperature, top_k=top_k)[0][-1]
             
             if actual_next_token == SET_TOKEN:
                 actual_idx = 1
