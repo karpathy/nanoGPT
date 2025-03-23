@@ -3,10 +3,11 @@ import pickle
 from contextlib import nullcontext
 import torch
 from model import GPTConfig, GPT
-
+import numpy as np
+import matplotlib.pyplot as plt
 # PARAMS
-temperature = 0.1
-top_k=200
+temperature = 0.2
+top_k=1
 seed = 1337
 device = 'cuda' 
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' 
@@ -43,7 +44,13 @@ if compile:
 data_dir = os.path.join('data', dataset)
 
 test_data = torch.load(os.path.join(data_dir, 'test.pt'))[0]
+
 correct_predictions = 0
+
+SET_TOKEN = 3
+NO_SET_TOKEN = 4
+
+confusion_matrix = np.zeros((2, 2), dtype=int)
 
 # run generation
 with torch.no_grad():
@@ -56,10 +63,54 @@ with torch.no_grad():
             actual_next_token = test_data[i, -2]
             
             predicted_next_token = model.generate(input_sequence, 1, temperature=temperature, top_k=top_k)[0][-1]
-            if predicted_next_token == actual_next_token:
-                correct_predictions += 1
-    
+            
+            actual_idx = 1 if actual_next_token == SET_TOKEN else 0
+            pred_idx = 1 if predicted_next_token == SET_TOKEN else 0
+            
+            confusion_matrix[actual_idx, pred_idx] += 1
 
-accuracy = (correct_predictions / num_samples) * 100
+tn = confusion_matrix[0, 0]  # NO_SET correctly predicted as NO_SET
+fp = confusion_matrix[0, 1]  # NO_SET incorrectly predicted as SET
+fn = confusion_matrix[1, 0]  # SET incorrectly predicted as NO_SET
+tp = confusion_matrix[1, 1]  # SET correctly predicted as SET
 
-print(f"Accuracy over {num_samples} samples: {accuracy}")
+
+accuracy = (tp + tn) / (tp + tn + fp + fn) * 100
+precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+
+print(f"Confusion Matrix:")
+print(f"TN={tn} (Token {NO_SET_TOKEN} predicted as {NO_SET_TOKEN})")
+print(f"FP={fp} (Token {NO_SET_TOKEN} predicted as {SET_TOKEN})")
+print(f"FN={fn} (Token {SET_TOKEN} predicted as {NO_SET_TOKEN})")
+print(f"TP={tp} (Token {SET_TOKEN} predicted as {SET_TOKEN})")
+print(f"Accuracy: {accuracy:.2f}%")
+print(f"Precision: {precision:.4f}")
+print(f"Recall: {recall:.4f}")
+print(f"F1 Score: {f1:.4f}")
+
+# Plot confusion matrix
+plt.figure(figsize=(8, 6))
+plt.imshow(confusion_matrix, interpolation='nearest', cmap=plt.cm.Blues)
+plt.title('Confusion Matrix')
+plt.colorbar()
+tick_marks = [0, 1]
+plt.xticks(tick_marks, ["NO_SET", "SET"])
+plt.yticks(tick_marks, ["NO_SET", "SET"])
+plt.xlabel('Predicted Token')
+plt.ylabel('Actual Token')
+
+thresh = confusion_matrix.max() / 2
+for i in range(2):
+    for j in range(2):
+        plt.text(j, i, format(confusion_matrix[i, j], 'd'),
+                horizontalalignment="center",
+                color="white" if confusion_matrix[i, j] > thresh else "black")
+
+plt.tight_layout()
+# Uncomment below to save image on disk
+# plt.savefig(os.path.join(out_dir, 'confusion_matrix.png'))
+# print(f"Confusion matrix saved to {os.path.join(out_dir, 'confusion_matrix.png')}")
+
+
