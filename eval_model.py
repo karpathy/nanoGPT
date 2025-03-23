@@ -51,9 +51,9 @@ with torch.no_grad():
         num_samples = len(test_data)
 
         for i in range(num_samples):
-            input_sequence = test_data[i, :16].unsqueeze(0).to(device)
+            input_sequence = test_data[i, :-2].unsqueeze(0).to(device)
 
-            actual_next_token = test_data[i, 16]
+            actual_next_token = test_data[i, -2]
             
             predicted_next_token = model.generate(input_sequence, 1, temperature=temperature, top_k=top_k)[0][-1]
             if predicted_next_token == actual_next_token:
