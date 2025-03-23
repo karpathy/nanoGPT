@@ -133,74 +133,33 @@ data_dir = os.path.join('data', dataset)
 #     return x, y
 
 def get_batch(split):
-    if not hasattr(get_batch, 'tqdm_imported'):
-        get_batch.tqdm_imported = True
-
-    # Initialize data trackers
     if not hasattr(get_batch, f'{split}_data'):
         if split == 'train':
             setattr(get_batch, f'{split}_data', torch.load(os.path.join(data_dir, 'train.pt')))
         else:
             setattr(get_batch, f'{split}_data', torch.load(os.path.join(data_dir, 'val.pt')))
     
-    # Initialize position tracker
-    if not hasattr(get_batch, f'{split}_position'):
-        setattr(get_batch, f'{split}_position', 0)
-    
-    # Initialize progress bar
-    if not hasattr(get_batch, f'{split}_pbar') and getattr(get_batch, 'tqdm_imported', False):
-        data_len = len(getattr(get_batch, f'{split}_data'))
-        setattr(get_batch, f'{split}_pbar', tqdm(total=data_len, desc=f"Processing {split} data", 
-                                                position=0 if split=='train' else 1, leave=True))
-    
     data = getattr(get_batch, f'{split}_data')
-    position = getattr(get_batch, f'{split}_position')
     
-    # Get a batch
+    # Use random sampling for training to prevent overfitting
+    ix = torch.randint(len(data), (batch_size,))
+    
     x_list = []
     y_list = []
-    
-    for i in range(batch_size):
-        sample = data[position]
+    for i in ix:
+        sample = data[i]
         
-        # Flatte
+
         if isinstance(sample, torch.Tensor) and len(sample.shape) == 2:
             sample = sample.reshape(-1)
         
-        # Get x and y sequences
-        x = sample[:block_size-1]
-        y = sample[1:block_size]
-        
-        x_list.append(x)
-        y_list.append(y)
-        
-        # Move to next position, wrapping around if needed
-        position = (position + 1) % len(data)
+        if len(sample) >= block_size:
+            x = sample[:block_size-1]
+            y = sample[1:block_size]
+            x_list.append(x)
+            y_list.append(y)
     
-    # Update position for next call
-    setattr(get_batch, f'{split}_position', position)
-    
-    # Update progress bar
-    if hasattr(get_batch, f'{split}_pbar') and getattr(get_batch, 'tqdm_imported', False):
-        pbar = getattr(get_batch, f'{split}_pbar')
-        old_position = getattr(get_batch, f'{split}_old_position', position)
-        if not hasattr(get_batch, f'{split}_old_position'):
-            setattr(get_batch, f'{split}_old_position', position)
-            advance = batch_size
-        else:
-            if old_position > position:  # Wrapped around
-                advance = (len(data) - old_position) + position
-            else:
-                advance = position - old_position
-            setattr(get_batch, f'{split}_old_position', position)
-        
-        # Update the progress bar
-        pbar.update(advance)
-        # Reset if completed one full epoch
-        if pbar.n >= pbar.total:
-            pbar.reset()
-    
-    # Stack into tensors
+
     x = torch.stack(x_list).long()
     y = torch.stack(y_list).long()
     
@@ -209,7 +168,7 @@ def get_batch(split):
     else:
         x, y = x.to(device), y.to(device)
     
-    return x, y   
+    return x, y
  
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
