@@ -26,6 +26,7 @@ import numpy as np
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
+from torch.utils.tensorboard import SummaryWriter
 
 from model import GPTConfig, GPT
 
@@ -33,7 +34,6 @@ from model import GPTConfig, GPT
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
 out_dir = 'out'
-checkpoint_dir = '' # directory containing checkpoint to resume from, if using init_from='resume'
 eval_interval = 2000
 log_interval = 1
 eval_iters = 200
@@ -45,7 +45,6 @@ wandb_log = False # disabled by default
 wandb_project = 'owt'
 wandb_run_name = 'gpt2' # 'run' + str(time.time())
 # data
-dataset_dir = ''
 dataset = 'openwebtext'
 gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
 batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
@@ -114,9 +113,7 @@ ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torc
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 # poor man's data loader
-data_dir = os.path.join('/input', dataset_dir, dataset)
-if not os.path.exists(data_dir):
-    data_dir = os.path.join('data', dataset)
+data_dir = os.path.join('data', dataset)
 def get_batch(split):
     # We recreate np.memmap every batch to avoid a memory leak, as per
     # https://stackoverflow.com/questions/45132940/numpy-memmap-memory-usage-want-to-iterate-once/61472122#61472122
@@ -160,11 +157,9 @@ if init_from == 'scratch':
     gptconf = GPTConfig(**model_args)
     model = GPT(gptconf)
 elif init_from == 'resume':
-    # Use checkpoint_dir if specified, otherwise use out_dir
-    resume_dir = checkpoint_dir if checkpoint_dir != '' else out_dir
-    print(f"Resuming training from {resume_dir}")
-    # resume training from a checkpoint
-    ckpt_path = os.path.join(resume_dir, 'ckpt.pt')
+    print(f"Resuming training from {out_dir}")
+    # resume training from a checkpoint.
+    ckpt_path = os.path.join(out_dir, 'ckpt.pt')
     checkpoint = torch.load(ckpt_path, map_location=device)
     checkpoint_model_args = checkpoint['model_args']
     # force these config attributes to be equal otherwise we can't even resume training
@@ -252,6 +247,16 @@ if wandb_log and master_process:
     import wandb
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
+# Only initialize TensorBoard logging on the master process.
+# If `FLEXAI_TENSORBOARD_LOG_DIR` is not set, skip logging entirely.
+if master_process:
+    log_dir = os.environ.get("FLEXAI_TENSORBOARD_LOG_DIR")
+    if log_dir:
+        writer = SummaryWriter(log_dir)
+    else:
+        print("FLEXAI_TENSORBOARD_LOG_DIR is not set. TensorBoard logging is disabled.")
+        writer = None
+
 # training loop
 X, Y = get_batch('train') # fetch the very first batch
 t0 = time.time()
@@ -277,6 +282,14 @@ while True:
                 "lr": lr,
                 "mfu": running_mfu*100, # convert to percentage
             })
+
+        # Log training metrics to TensorBoard if enabled.
+        if writer:
+            writer.add_scalar("train/loss", losses["train"], iter_num)
+            writer.add_scalar("val/loss", losses["val"], iter_num)
+            writer.add_scalar("lr", lr, iter_num)
+            writer.add_scalar("mfu", running_mfu * 100, iter_num)
+
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
             if iter_num > 0:
@@ -331,6 +344,12 @@ while True:
             mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
         print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+
+        # Log per-step metrics to TensorBoard if enabled.
+        if writer:
+            writer.add_scalar("train/loss", lossf, iter_num)
+            writer.add_scalar("train/step_time", dt, iter_num)
+
     iter_num += 1
     local_iter_num += 1
 
@@ -340,3 +359,7 @@ while True:
 
 if ddp:
     destroy_process_group()
+
+if writer:
+    writer.close()
+    writer = None

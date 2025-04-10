@@ -1,4 +1,5 @@
 torch
+tensorboard
 numpy
 transformers
 datasets
