@@ -49,18 +49,56 @@ class CausalSelfAttention(nn.Module):
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
 
-        self.register_buffer("cache_k", torch.zeros((config.block_size, self.n_head, config.n_embd // self.n_head)))
-        self.register_buffer("cache_v", torch.zeros((config.block_size, self.n_head, config.n_embd // self.n_head)))
+        # -- KV Cache attr --
+        batch_size = config.batch_size if config.batch_size else None
+        self.register_buffer("k_cache", torch.zeros((batch_size, self.n_head, self.config.block_size, config.n_embd // self.n_head)))
+        self.register_buffer("v_cache", torch.zeros((batch_size, self.n_head, self.config.block_size, config.n_embd // self.n_head)))
+        self.cache_pos = 0 # Tracks the number of tokens currently stored in the cache for the *current* sequence
+        self.cache_batch_size = batch_size # batch size for the cache
+        self.config = config
+
+    def clear_cache(self):
+        """clears the kv cache, resets attributes"""
+        self.k_cache = None
+        self.v_cache = None
+        self.cache_pos = 0
+        self.cache_batch_size = 0
+
 
     def forward(self, x, use_cache=False):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+        head_size = C // self.n_head
+        device = x.device
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         qkv = self.c_attn(x)
         q, k, v  = qkv.split(self.n_embd, dim=2)
-        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        k = k.view(B, T, self.n_head, head_size).transpose(1, 2) # (B, nh, T, hs)
+        q = q.view(B, T, self.n_head, head_size).transpose(1, 2) # (B, nh, T, hs)
+        v = v.view(B, T, self.n_head, head_size).transpose(1, 2) # (B, nh, T, hs)
+
+        ## KV caching
+
+        if use_cache:
+            if self.cache_pos == 0 or B != self.cache_batch_size:
+                self.k_cache = torch.zeros((B, self.n_head, self.config.block_size, head_size), dtype=k.dtype, device=device)
+                self.v_cache = torch.zeros((B, self.n_head, self.config.block_size, head_size), dtype=v.dtype, device=device)
+                self.cache_pos = 0
+                self.cache_batch_size = B
+            
+            # if exceed capacity:
+            if self.cache_pos + T >= self.config.block_size:
+                
+                # Truncation, loose oldest tokens
+                print(f"Warning: KV cache overflow imminent (pos={self.cache_pos}, new_T={T}, size={self.config.block_size}). Truncating cache.")
+                self.k_cache = self.k_cache[:, :, T:, :] # shift left
+                self.v_cache = self.v_cache[:, :, T:, :] # shift left
+                self.cache_pos -= T
+                # this shouldn't be needed really, with proper generation code of sequence len T
+                self.cache_pos = max(0, self.cache_pos)
+                
+
+
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
