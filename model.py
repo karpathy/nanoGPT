@@ -96,7 +96,21 @@ class CausalSelfAttention(nn.Module):
                 self.cache_pos -= T
                 # this shouldn't be needed really, with proper generation code of sequence len T
                 self.cache_pos = max(0, self.cache_pos)
-                
+                # add 0s in the end
+                self.k_cache = torch.cat((self.k_cache, torch.zeros((B, self.n_head, T, head_size), dtype=k.dtype, device=device)), dim=2)
+                self.v_cache = torch.cat((self.v_cache, torch.zeros((B, self.n_head, T, head_size), dtype=v.dtype, device=device)), dim=2)
+            
+            # add new tokens to the cache
+            self.k_cache[:, :, self.cache_pos:self.cache_pos + T, :] = k
+            self.v_cache[:, :, self.cache_pos:self.cache_pos + T, :] = v
+            self.cache_pos += T
+
+            # retrieve full k v sequences
+            k = self.k_cache[:, :, self.cache_pos, :]
+            v = self.v_cache[:, :, self.cache_pos, :]
+
+        # end k v cache logic
+        
 
 
 
