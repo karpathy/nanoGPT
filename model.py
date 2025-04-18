@@ -111,17 +111,21 @@ class CausalSelfAttention(nn.Module):
 
         # end k v cache logic
         
-
-
-
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
             # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
+            is_causal_flag = (T > 1 and not use_cache) # Only apply causal mask if T>1 and not using cache
+            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=is_causal_flag)
+
         else:
             # manual implementation of attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+            # Apply causal mask only if not using cache (cache implicitly handles causality for T=1 generation)
+            # Or if T > 1 even when caching (though typically T=1 for cached generation steps)
+            if not use_cache or T > 1:
+                current_k_len = k.size(-2)
+                att = att.masked_fill(self.bias[:,:,:T,:current_k_len] == 0, float('-inf'))
+
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
             y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
@@ -156,11 +160,14 @@ class Block(nn.Module):
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
-    def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
+    def forward(self, x, use_cache=False):
+        x = x + self.attn(self.ln_1(x), use_cache=use_cache)
         x = x + self.mlp(self.ln_2(x))
         return x
-
+    
+    def clear_cache(self):
+        """clears the kv cache, resets attributes"""
+        self.attn.clear_cache()
 @dataclass
 class GPTConfig:
     block_size: int = 1024
