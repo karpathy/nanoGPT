@@ -50,11 +50,11 @@ class CausalSelfAttention(nn.Module):
                                         .view(1, 1, config.block_size, config.block_size))
 
         # -- KV Cache attr --
-        batch_size = config.batch_size if config.batch_size else None
-        self.register_buffer("k_cache", torch.zeros((batch_size, self.n_head, self.config.block_size, config.n_embd // self.n_head)))
-        self.register_buffer("v_cache", torch.zeros((batch_size, self.n_head, self.config.block_size, config.n_embd // self.n_head)))
+        # batch_size = config.batch_size if config.batch_size else None
+        self.register_buffer("k_cache", None)
+        self.register_buffer("v_cache", None)
         self.cache_pos = 0 # Tracks the number of tokens currently stored in the cache for the *current* sequence
-        self.cache_batch_size = batch_size # batch size for the cache
+        # self.cache_batch_size = batch_size # batch size for the cache
         self.config = config
 
     def clear_cache(self):
@@ -80,7 +80,7 @@ class CausalSelfAttention(nn.Module):
         ## KV caching
 
         if use_cache:
-            if self.cache_pos == 0 or B != self.cache_batch_size:
+            if self.cache_pos == 0 or self.k_cache is None:
                 self.k_cache = torch.zeros((B, self.n_head, self.config.block_size, head_size), dtype=k.dtype, device=device)
                 self.v_cache = torch.zeros((B, self.n_head, self.config.block_size, head_size), dtype=v.dtype, device=device)
                 self.cache_pos = 0
@@ -230,7 +230,7 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None):
+    def forward(self, idx, targets=None, use_cache=False):
         device = idx.device
         b, t = idx.size()
         assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
@@ -241,7 +241,7 @@ class GPT(nn.Module):
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
         for block in self.transformer.h:
-            x = block(x)
+            x = block(x, use_cache=use_cache)
         x = self.transformer.ln_f(x)
 
         if targets is not None:
@@ -366,17 +366,31 @@ class GPT(nn.Module):
         return mfu
 
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
+    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, use_cache=False):
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
         Most likely you'll want to make sure to be in model.eval() mode of operation for this.
         """
+        self.eval()
+        B,T = idx.size()
+
+        for block in self.transformer.h:
+            block.attn.clear_cache() # clear the cache for each block
+
+        idx_next = idx
         for _ in range(max_new_tokens):
+            
+            # use next token only if using kv caching
+            idx_cond = idx_next if use_cache else idx
+            
             # if the sequence context is growing too long we must crop it at block_size
-            idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
+            if idx_cond.size(1) > self.config.block_size:
+                # crop the leftmost tokens
+                idx_cond = idx_cond[:, -self.config.block_size:]
             # forward the model to get the logits for the index in the sequence
-            logits, _ = self(idx_cond)
+            logits, _ = self(idx_cond, use_cache=use_cache)
+
             # pluck the logits at the final step and scale by desired temperature
             logits = logits[:, -1, :] / temperature
             # optionally crop the logits to only the top k options
