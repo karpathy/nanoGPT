@@ -110,10 +110,11 @@ class Block(nn.Module):
         self.attn = CausalSelfAttention(config)
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
+        self.res_scaling = 1/(config.depth_multiplier ** config.depth_alpha_exp) if config.depth_alpha_enabled else 1.0
 
     def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
-        x = x + self.mlp(self.ln_2(x))
+        x = x + self.res_scaling * self.attn(self.ln_1(x))
+        x = x + self.res_scaling * self.mlp(self.ln_2(x))
         return x
 
 @dataclass
@@ -132,6 +133,9 @@ class GPTConfig:
     mup_width_multiplier: float = 1 # `mup_width_multiplier = width / base_width` where base_width is typically 256
     mup_input_alpha: float = 1 # Optional tunable multiplier applied to input embedding forward pass output
     mup_output_alpha: float = 1 # Optional tunable multiplier applied to output unembedding forward pass output
+    depth_alpha_enabled: bool = False 
+    depth_multiplier: float = 1.0 # depth_multiplier = depth / base_depth` where base_width is typically 256
+    depth_alpha_exp: float = 1.0 # a float in the range [0.5, 1] that control how the branches are downscaled as a function of depth. This results in residual connections of the type x = x + 1/(L**alpha) branch(x)  
 
 class GPT(nn.Module):
 
@@ -140,6 +144,8 @@ class GPT(nn.Module):
         assert config.vocab_size is not None
         assert config.block_size is not None
         self.config = config
+        
+        self.depth_forward_scaling = (self.config.depth_multiplier)**(1-self.config.depth_alpha_exp) if self.config.depth_alpha_enabled else 1.0
 
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
@@ -159,16 +165,18 @@ class GPT(nn.Module):
         self.apply(self._init_weights)
         # apply special scaled init to the residual projections, per GPT-2 paper
         for pn, p in self.named_parameters():
-            if config.mup_enabled:
+            if config.mup_enabled or config.depth_alpha_enabled:
                 ### Begin muP code ###
                 # Adjust hidden weight initialization variance by 1 / mup_width_multiplier
                 if pn.endswith('c_attn.weight') or pn.endswith('c_fc.weight'):
                     torch.nn.init.normal_(p, mean=0.0, std=config.init_std / math.sqrt(config.mup_width_multiplier))
                 elif pn.endswith('c_proj.weight'):
-                    torch.nn.init.normal_(p, mean=0.0, std=config.init_std / math.sqrt(2 * config.n_layer * config.mup_width_multiplier))
+                    # torch.nn.init.normal_(p, mean=0.0, std=config.init_std / math.sqrt(2 * config.n_layer * config.mup_width_multiplier))
+                    torch.nn.init.normal_(p, mean=0.0, std=config.init_std / math.sqrt(config.mup_width_multiplier))
                 ### End muP code ###
             elif pn.endswith('c_proj.weight'):
                 torch.nn.init.normal_(p, mean=0.0, std=config.init_std / math.sqrt(2 * config.n_layer))
+                
 
         # report number of parameters
         print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
@@ -191,7 +199,7 @@ class GPT(nn.Module):
             if module.bias is not None:
                 torch.nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=self.config.init_std)
+            torch.nn.init.normal_(module.weight, mean=0.0, std=self.config.init_std / self.depth_forward_scaling)
 
     def forward(self, idx, targets=None):
         device = idx.device
@@ -202,7 +210,7 @@ class GPT(nn.Module):
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
-        x = self.transformer.drop(tok_emb + pos_emb)
+        x = self.transformer.drop((tok_emb + pos_emb) * self.depth_forward_scaling)
         if self.config.mup_enabled:
             ### Begin muP code ###
             x *= self.config.mup_input_alpha
@@ -218,11 +226,11 @@ class GPT(nn.Module):
                 # Scaling `x` instead of `logits` allows coord check to log change
                 x *= self.config.mup_output_alpha / self.config.mup_width_multiplier
                 ### End muP code ###
-            logits = self.lm_head(x)
+            logits = self.lm_head(x) * self.depth_forward_scaling
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
-            logits = self.lm_head(x[:, [-1], :]) # note: using list [-1] to preserve the time dim
+            logits = self.lm_head(x[:, [-1], :]) * self.depth_forward_scaling # note: using list [-1] to preserve the time dim
             loss = None
 
         return logits, loss
@@ -295,7 +303,7 @@ class GPT(nn.Module):
 
         return model
 
-    def configure_optimizers(self, weight_decay, learning_rate, betas, device_type):
+    def configure_optimizers(self, weight_decay, learning_rate, betas, adam_eps, device_type):
         # start with all of the candidate parameters
         param_dict = {pn: p for pn, p in self.named_parameters()}
         # filter out those that do not require grad
@@ -342,7 +350,7 @@ class GPT(nn.Module):
         fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
         use_fused = fused_available and device_type == 'cuda'
         extra_args = dict(fused=True) if use_fused else dict()
-        optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
+        optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, eps=adam_eps, **extra_args)
         print(f"using fused AdamW: {use_fused}")
 
         return optimizer
