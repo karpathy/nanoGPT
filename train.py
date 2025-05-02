@@ -342,6 +342,7 @@ while True:
             'attn': [],
             'mlp': [],
             'lm_head': [],
+            'last_layer': []
         }
         def hook(module, input, output, key):
             with torch.no_grad():
@@ -356,6 +357,8 @@ while True:
                 coord_check_handles.append(module.register_forward_hook(partial(hook, key='mlp')))
             elif module_name == 'lm_head':
                 coord_check_handles.append(module.register_forward_hook(partial(hook, key='lm_head')))
+            elif module_name == f'transformer.h.{n_layer - 1}':
+                coord_check_handles.append(module.register_forward_hook(partial(hook, key='last_layer')))
     else:
         coord_check_dict = None
 
@@ -410,3 +413,5 @@ while True:
 
 if ddp:
     destroy_process_group()
+            # elif module_name == 'lm_head':
+            #     coord_check_handles.append(module.register_forward_hook(partial(hook, key='lm_head')))
