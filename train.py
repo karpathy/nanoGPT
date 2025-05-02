@@ -226,7 +226,8 @@ scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
 # optimizer
 depth_scale_lr = (depth_multiplier)**(depth_alpha_exp-1) if depth_alpha_enabled else 1.0
-optimizer = model.configure_optimizers(weight_decay, learning_rate * depth_scale_lr, (beta1, beta2), adam_eps, device_type)
+learning_rate *= depth_scale_lr
+optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), adam_eps, device_type)
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory
@@ -296,6 +297,7 @@ while True:
 
     # determine and set the learning rate for this iteration
     lr = get_lr(iter_num) if decay_lr else learning_rate
+    print(lr)
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr * param_group.get('lr_scale', 1.0)
 

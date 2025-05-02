@@ -9,7 +9,7 @@ do
     mup_base_depth=2
     mup_depth_multiplier=$(echo "scale=8; $depth/$mup_base_depth" | bc -l)
     out_dir="mup_examples/coord_check_shakespeare_char/depth_alpha_05/out/depth${depth}_width256_seed${seed}"
-    python train.py \
+    CUDA_VISIBLE_DEVICES='4' python train.py \
         --out_dir=$out_dir \
         --eval_interval=1 \
         --log_interval=1 \
