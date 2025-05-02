@@ -1,5 +1,68 @@
 
-# nanoGPT
+# nanoGPT-mup
+
+This repository is a fork of [nanoGPT](https://github.com/karpathy/nanoGPT) that provides a minimal implementation of the [maximal update parameterization](https://arxiv.org/abs/2203.03466) ([muP](https://github.com/microsoft/mup)).
+
+Branches
+- The [master branch](https://github.com/EleutherAI/nanoGPT-mup) acts as supplementary material for ["The Practitioner’s Guide to the Maximal Update Parameterization"](https://www.cerebras.ai/blog/the-practitioners-guide-to-the-maximal-update-parameterization).
+- The [supar branch](https://github.com/EleutherAI/nanoGPT-mup/tree/supar) contains a minimal implementation of sparse maximal update parameterization (SuPar) introduced in [Sparse maximal update parameterization: A holistic approach to sparse training dynamics](https://arxiv.org/abs/2405.15743).
+
+The [mup_examples](https://github.com/EleutherAI/nanoGPT-mup/tree/master/mup_examples) folder contains scripts to reproduce the plots in ["The Practitioner’s Guide to the Maximal Update Parameterization"](https://www.cerebras.ai/blog/the-practitioners-guide-to-the-maximal-update-parameterization) (see [mup_examples/README.md](https://github.com/EleutherAI/nanoGPT-mup/blob/master/mup_examples/README.md) for instructions to reproduce). 
+
+Each of the critical muP changes are marked with
+```
+### Begin muP code ###
+<code for mup change>
+### End muP code ###
+```
+to make everything easily searchable.
+
+| Parameterization | SP | **μP** | Code |
+|------------------|----|----|----|
+| Embedding Init. Var. | $σ_{base}^2$ | $σ_{base}^2$ |    |
+| Embedding LR | $η_{base}$ | $η_{base}$ |    |
+| Embedding Fwd. | $x W_{\text{emb}}$ | $\mathbf{α_{input}} · x W_{\text{emb}}$ |  [Code](https://github.com/EleutherAI/nanoGPT-mup/blob/bcadbc3c7a44138525eca8a799764afba7dca2b3/model.py#L208)  |
+| Hidden Init. Var. | $σ_{base}^2$ | $σ_{base}^2 / \mathbf{m_d}$ |  [Code](https://github.com/EleutherAI/nanoGPT-mup/blob/bcadbc3c7a44138525eca8a799764afba7dca2b3/model.py#L163-L169)  |
+| Hidden LR (Adam) | $η_{base}$ | $η_{base} / \mathbf{m_d}$ |  [Code](https://github.com/EleutherAI/nanoGPT-mup/blob/bcadbc3c7a44138525eca8a799764afba7dca2b3/model.py#L306-L329)  |
+| Output Logit Fwd. | $x W_{\text{emb}}^\top$ | $\mathbf{α_{output}} · x W_{\text{emb}}^\top / \mathbf{m_d}$ |  [Code](https://github.com/EleutherAI/nanoGPT-mup/blob/bcadbc3c7a44138525eca8a799764afba7dca2b3/model.py#L219)  |
+| Attention logits | $Q^\top K / \sqrt{d_{\text{head}}}$ | $Q^\top K / \mathbf{d_{\text{head}}}$ |  [Code](https://github.com/EleutherAI/nanoGPT-mup/blob/bcadbc3c7a44138525eca8a799764afba7dca2b3/model.py#L65)  |
+
+
+## Implementation Validation
+
+### Coordinate Checks
+
+Standard Parameterization:
+
+<img src="assets/coord_check_sp.png" alt="SP">
+
+muTransfer:
+
+<img src="assets/coord_check_mup.png" alt="muP">
+
+
+### Learning Rate muTransfer
+
+**Tiny Shakespeare**    |    **OpenWebText**
+:-------------------------:|:-------------------------:
+<img src="assets/mutransfer_lr_shakespeare_char.png" alt="mup-shakespeare">     |  <img src="assets/mutransfer_lr_owt.png" alt="mup-owt"> 
+
+
+## Citation
+
+If ["The Practitioner’s Guide to the Maximal Update Parameterization"](https://www.cerebras.ai/blog/the-practitioners-guide-to-the-maximal-update-parameterization) or this repository was useful to you, please cite:
+```
+@misc{cerebras2024mupguide,
+author = {Dey, Nolan and Anthony, Quentin and Hestness, Joel},
+title = {{The practitioner’s guide to the maximal update parameterization}},
+month = September,
+year = 2024,
+howpublished = {\url{https://www.cerebras.ai/blog/the-practitioners-guide-to-the-maximal-update-parameterization}},
+url = \url{https://www.cerebras.ai/blog/the-practitioners-guide-to-the-maximal-update-parameterization},
+}
+```
+
+# nanoGPT (Original README)
 
 ![nanoGPT](assets/nanogpt.jpg)
 
