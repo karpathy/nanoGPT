@@ -73,6 +73,7 @@ class CausalSelfAttention(nn.Module):
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         qkv = self.c_attn(x)
         q, k, v  = qkv.split(self.n_embd, dim=2)
+        # print(k.size(), v.size(), "This is k and v initially")
         k = k.view(B, T, self.n_head, head_size).transpose(1, 2) # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, head_size).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, head_size).transpose(1, 2) # (B, nh, T, hs)
@@ -81,11 +82,13 @@ class CausalSelfAttention(nn.Module):
 
         if use_cache:
             if self.cache_pos == 0 or self.k_cache is None:
-                self.k_cache = torch.zeros((B, self.n_head, self.config.block_size, head_size), dtype=k.dtype, device=device)
-                self.v_cache = torch.zeros((B, self.n_head, self.config.block_size, head_size), dtype=v.dtype, device=device)
+                self.k_cache = torch.zeros(B, self.n_head, self.config.block_size, head_size, dtype=k.dtype, device=device)
+                self.v_cache = torch.zeros(B, self.n_head, self.config.block_size, head_size, dtype=v.dtype, device=device)
                 self.cache_pos = 0
                 self.cache_batch_size = B
             
+            # if T != 1:
+            #     print(self.cache_pos, self.config.block_size, T, " This is T")
             # if exceed capacity:
             if self.cache_pos + T >= self.config.block_size:
                 
@@ -106,10 +109,12 @@ class CausalSelfAttention(nn.Module):
             self.cache_pos += T
 
             # retrieve full k v sequences
-            k = self.k_cache[:, :, self.cache_pos, :]
-            v = self.v_cache[:, :, self.cache_pos, :]
+            k = self.k_cache[:, :, :self.cache_pos, :]
+            v = self.v_cache[:, :, :self.cache_pos, :]
+            # print(k.size(), v.size(), "This is k and v")
 
         # end k v cache logic
+        # print(k.size(), v.size(), "This is k and v after cache")
         
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
@@ -233,8 +238,20 @@ class GPT(nn.Module):
     def forward(self, idx, targets=None, use_cache=False):
         device = idx.device
         b, t = idx.size()
+
+        # update positional embeddings when using cache
+        if use_cache:
+            pos_start = self.transformer.h[0].attn.cache_pos
+        else:
+            pos_start = 0
+        pos_end = min(pos_start + t, self.config.block_size)
+
+        # handle cases when cahce is full or generation exceeds block size
+        # TODO
+
+        pos = torch.arange(pos_start, pos_end, dtype=torch.long, device=device) # shape (t)
+
         assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
-        pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
 
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
@@ -295,7 +312,7 @@ class GPT(nn.Module):
         model = GPT(config)
         sd = model.state_dict()
         sd_keys = sd.keys()
-        sd_keys = [k for k in sd_keys if not k.endswith('.attn.bias')] # discard this mask / buffer, not a param
+        sd_keys = [k for k in sd_keys if not k.endswith('.attn.bias') and not k.endswith('_cache') and not k.endswith('cache_pos')] # discard this mask / buffer, not a param
 
         # init a huggingface/transformers model
         model_hf = GPT2LMHeadModel.from_pretrained(model_type)
@@ -373,7 +390,6 @@ class GPT(nn.Module):
         Most likely you'll want to make sure to be in model.eval() mode of operation for this.
         """
         self.eval()
-        B,T = idx.size()
 
         for block in self.transformer.h:
             block.attn.clear_cache() # clear the cache for each block
