@@ -21,6 +21,9 @@ import time
 import math
 import pickle
 from contextlib import nullcontext
+import psutil
+import torch.cuda as cuda
+from tqdm import tqdm
 
 import numpy as np
 import torch
@@ -103,6 +106,12 @@ print(f"tokens per iteration will be: {tokens_per_iter:,}")
 
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
+    
+    # Create logs directory with the same structure as lozo script
+    log_dir = os.path.join("logs", os.path.basename(out_dir))
+    os.makedirs(log_dir, exist_ok=True)
+    print(f"Logs will be stored in: {log_dir}")
+    
 torch.manual_seed(1337 + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
@@ -113,6 +122,8 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 # poor man's data loader
 data_dir = os.path.join('data', dataset)
+if not os.path.exists(os.path.join(data_dir, 'train.bin')):
+    data_dir = '/nobackups/allanath/data-nanogpt'  # fallback location
 def get_batch(split):
     # We recreate np.memmap every batch to avoid a memory leak, as per
     # https://stackoverflow.com/questions/45132940/numpy-memmap-memory-usage-want-to-iterate-once/61472122#61472122
@@ -252,6 +263,10 @@ t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
+
+# Create progress bar
+pbar = tqdm(total=max_iters, desc='Training', disable=not master_process)
+
 while True:
 
     # determine and set the learning rate for this iteration
@@ -262,7 +277,7 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
-        print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        print(f"\nstep {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
@@ -324,13 +339,33 @@ while True:
         if local_iter_num >= 5: # let the training loop settle a bit
             mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+        
+        # Get memory usage
+        if device_type == 'cuda':
+            memory_allocated = cuda.memory_allocated() / 1e9  # Convert to GB
+            memory_reserved = cuda.memory_reserved() / 1e9    # Convert to GB
+        else:
+            process = psutil.Process()
+            memory_allocated = process.memory_info().rss / 1e9  # Convert to GB
+            memory_reserved = 0
+            
+        # Update progress bar
+        pbar.set_postfix({
+            'loss': f'{lossf:.4f}', 
+            'lr': f'{lr:.2e}',
+            'mem': f'{memory_allocated:.1f}GB',
+            'mfu': f'{running_mfu*100:.1f}%'
+        })
+        pbar.update(1)
+        
     iter_num += 1
     local_iter_num += 1
 
     # termination conditions
     if iter_num > max_iters:
         break
+
+pbar.close()
 
 if ddp:
     destroy_process_group()
