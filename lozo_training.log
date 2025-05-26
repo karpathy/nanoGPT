@@ -1,0 +1,530 @@
+Overriding config with config/train_lozo_gpt2.py:
+# Config for LOZO pretraining of GPT-2 (124M) model
+
+# Output directory
+out_dir = 'out-lozo-gpt2'
+
+# Logging settings
+eval_interval = 1000
+log_interval = 1
+eval_iters = 200
+eval_only = False
+
+# Training data
+dataset = 'openwebtext'
+gradient_accumulation_steps = 5 * 8  # simulate larger batch sizes
+batch_size = 32  # micro-batch size
+block_size = 1024  # context length
+
+# Model configuration (standard GPT-2 124M)
+n_layer = 12
+n_head = 12
+n_embd = 768
+dropout = 0.0
+bias = False  # don't use bias in LayerNorm and Linear layers
+
+# Learning rate settings
+learning_rate = 1e-3  # increased from 6e-4
+max_iters = 100000  # total number of training iterations
+weight_decay = 1e-1
+beta1 = 0.9
+beta2 = 0.95
+
+# Learning rate schedule
+decay_lr = True
+warmup_iters = 4000  # increased from 2000 for better stability
+lr_decay_iters = 600000
+min_lr = 1e-4  # increased from 6e-5
+
+# LOZO specific parameters
+zo_eps = 5e-4  # decreased from 1e-3 for more stable training
+rank_r = 1  # increased from 1 to capture more gradient dimensions
+step_interval = 20  # decreased from 50 for more frequent updates
+
+# System settings
+device = 'cuda'
+dtype = 'bfloat16'
+compile = True 
+Overriding config with config/train_lozo_gpt2.py:
+# Config for LOZO pretraining of GPT-2 (124M) model
+
+# Output directory
+out_dir = 'out-lozo-gpt2'
+
+# Logging settings
+eval_interval = 1000
+log_interval = 1
+eval_iters = 200
+eval_only = False
+
+# Training data
+dataset = 'openwebtext'
+gradient_accumulation_steps = 5 * 8  # simulate larger batch sizes
+batch_size = 32  # micro-batch size
+block_size = 1024  # context length
+
+# Model configuration (standard GPT-2 124M)
+n_layer = 12
+n_head = 12
+n_embd = 768
+dropout = 0.0
+bias = False  # don't use bias in LayerNorm and Linear layers
+
+# Learning rate settings
+learning_rate = 1e-3  # increased from 6e-4
+max_iters = 100000  # total number of training iterations
+weight_decay = 1e-1
+beta1 = 0.9
+beta2 = 0.95
+
+# Learning rate schedule
+decay_lr = True
+warmup_iters = 4000  # increased from 2000 for better stability
+lr_decay_iters = 600000
+min_lr = 1e-4  # increased from 6e-5
+
+# LOZO specific parameters
+zo_eps = 5e-4  # decreased from 1e-3 for more stable training
+rank_r = 1  # increased from 1 to capture more gradient dimensions
+step_interval = 20  # decreased from 50 for more frequent updates
+
+# System settings
+device = 'cuda'
+dtype = 'bfloat16'
+compile = True 
+Overriding config with config/train_lozo_gpt2.py:
+# Config for LOZO pretraining of GPT-2 (124M) model
+
+# Output directory
+out_dir = 'out-lozo-gpt2'
+
+# Logging settings
+eval_interval = 1000
+log_interval = 1
+eval_iters = 200
+eval_only = False
+
+# Training data
+dataset = 'openwebtext'
+gradient_accumulation_steps = 5 * 8  # simulate larger batch sizes
+batch_size = 32  # micro-batch size
+block_size = 1024  # context length
+
+# Model configuration (standard GPT-2 124M)
+n_layer = 12
+n_head = 12
+n_embd = 768
+dropout = 0.0
+bias = False  # don't use bias in LayerNorm and Linear layers
+
+# Learning rate settings
+learning_rate = 1e-3  # increased from 6e-4
+max_iters = 100000  # total number of training iterations
+weight_decay = 1e-1
+beta1 = 0.9
+beta2 = 0.95
+
+# Learning rate schedule
+decay_lr = True
+warmup_iters = 4000  # increased from 2000 for better stability
+lr_decay_iters = 600000
+min_lr = 1e-4  # increased from 6e-5
+
+# LOZO specific parameters
+zo_eps = 5e-4  # decreased from 1e-3 for more stable training
+rank_r = 1  # increased from 1 to capture more gradient dimensions
+step_interval = 20  # decreased from 50 for more frequent updates
+
+# System settings
+device = 'cuda'
+dtype = 'bfloat16'
+compile = True 
+Overriding config with config/train_lozo_gpt2.py:
+# Config for LOZO pretraining of GPT-2 (124M) model
+
+# Output directory
+out_dir = 'out-lozo-gpt2'
+
+# Logging settings
+eval_interval = 1000
+log_interval = 1
+eval_iters = 200
+eval_only = False
+
+# Training data
+dataset = 'openwebtext'
+gradient_accumulation_steps = 5 * 8  # simulate larger batch sizes
+batch_size = 32  # micro-batch size
+block_size = 1024  # context length
+
+# Model configuration (standard GPT-2 124M)
+n_layer = 12
+n_head = 12
+n_embd = 768
+dropout = 0.0
+bias = False  # don't use bias in LayerNorm and Linear layers
+
+# Learning rate settings
+learning_rate = 1e-3  # increased from 6e-4
+max_iters = 100000  # total number of training iterations
+weight_decay = 1e-1
+beta1 = 0.9
+beta2 = 0.95
+
+# Learning rate schedule
+decay_lr = True
+warmup_iters = 4000  # increased from 2000 for better stability
+lr_decay_iters = 600000
+min_lr = 1e-4  # increased from 6e-5
+
+# LOZO specific parameters
+zo_eps = 5e-4  # decreased from 1e-3 for more stable training
+rank_r = 1  # increased from 1 to capture more gradient dimensions
+step_interval = 20  # decreased from 50 for more frequent updates
+
+# System settings
+device = 'cuda'
+dtype = 'bfloat16'
+compile = True 
+Overriding config with config/train_lozo_gpt2.py:
+# Config for LOZO pretraining of GPT-2 (124M) model
+
+# Output directory
+out_dir = 'out-lozo-gpt2'
+
+# Logging settings
+eval_interval = 1000
+log_interval = 1
+eval_iters = 200
+eval_only = False
+
+# Training data
+dataset = 'openwebtext'
+gradient_accumulation_steps = 5 * 8  # simulate larger batch sizes
+batch_size = 32  # micro-batch size
+block_size = 1024  # context length
+
+# Model configuration (standard GPT-2 124M)
+n_layer = 12
+n_head = 12
+n_embd = 768
+dropout = 0.0
+bias = False  # don't use bias in LayerNorm and Linear layers
+
+# Learning rate settings
+learning_rate = 1e-3  # increased from 6e-4
+max_iters = 100000  # total number of training iterations
+weight_decay = 1e-1
+beta1 = 0.9
+beta2 = 0.95
+
+# Learning rate schedule
+decay_lr = True
+warmup_iters = 4000  # increased from 2000 for better stability
+lr_decay_iters = 600000
+min_lr = 1e-4  # increased from 6e-5
+
+# LOZO specific parameters
+zo_eps = 5e-4  # decreased from 1e-3 for more stable training
+rank_r = 1  # increased from 1 to capture more gradient dimensions
+step_interval = 20  # decreased from 50 for more frequent updates
+
+# System settings
+device = 'cuda'
+dtype = 'bfloat16'
+compile = True 
+tokens per iteration will be: 1,310,720
+Initializing a new model from scratch
+defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)
+Overriding config with config/train_lozo_gpt2.py:
+# Config for LOZO pretraining of GPT-2 (124M) model
+
+# Output directory
+out_dir = 'out-lozo-gpt2'
+
+# Logging settings
+eval_interval = 1000
+log_interval = 1
+eval_iters = 200
+eval_only = False
+
+# Training data
+dataset = 'openwebtext'
+gradient_accumulation_steps = 5 * 8  # simulate larger batch sizes
+batch_size = 32  # micro-batch size
+block_size = 1024  # context length
+
+# Model configuration (standard GPT-2 124M)
+n_layer = 12
+n_head = 12
+n_embd = 768
+dropout = 0.0
+bias = False  # don't use bias in LayerNorm and Linear layers
+
+# Learning rate settings
+learning_rate = 1e-3  # increased from 6e-4
+max_iters = 100000  # total number of training iterations
+weight_decay = 1e-1
+beta1 = 0.9
+beta2 = 0.95
+
+# Learning rate schedule
+decay_lr = True
+warmup_iters = 4000  # increased from 2000 for better stability
+lr_decay_iters = 600000
+min_lr = 1e-4  # increased from 6e-5
+
+# LOZO specific parameters
+zo_eps = 5e-4  # decreased from 1e-3 for more stable training
+rank_r = 1  # increased from 1 to capture more gradient dimensions
+step_interval = 20  # decreased from 50 for more frequent updates
+
+# System settings
+device = 'cuda'
+dtype = 'bfloat16'
+compile = True 
+Overriding config with config/train_lozo_gpt2.py:
+# Config for LOZO pretraining of GPT-2 (124M) model
+
+# Output directory
+out_dir = 'out-lozo-gpt2'
+
+# Logging settings
+eval_interval = 1000
+log_interval = 1
+eval_iters = 200
+eval_only = False
+
+# Training data
+dataset = 'openwebtext'
+gradient_accumulation_steps = 5 * 8  # simulate larger batch sizes
+batch_size = 32  # micro-batch size
+block_size = 1024  # context length
+
+# Model configuration (standard GPT-2 124M)
+n_layer = 12
+n_head = 12
+n_embd = 768
+dropout = 0.0
+bias = False  # don't use bias in LayerNorm and Linear layers
+
+# Learning rate settings
+learning_rate = 1e-3  # increased from 6e-4
+max_iters = 100000  # total number of training iterations
+weight_decay = 1e-1
+beta1 = 0.9
+beta2 = 0.95
+
+# Learning rate schedule
+decay_lr = True
+warmup_iters = 4000  # increased from 2000 for better stability
+lr_decay_iters = 600000
+min_lr = 1e-4  # increased from 6e-5
+
+# LOZO specific parameters
+zo_eps = 5e-4  # decreased from 1e-3 for more stable training
+rank_r = 1  # increased from 1 to capture more gradient dimensions
+step_interval = 20  # decreased from 50 for more frequent updates
+
+# System settings
+device = 'cuda'
+dtype = 'bfloat16'
+compile = True 
+tokens per iteration will be: 1,310,720
+Initializing a new model from scratch
+defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)
+tokens per iteration will be: 1,310,720
+Initializing a new model from scratch
+defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)
+tokens per iteration will be: 1,310,720
+Initializing a new model from scratch
+defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)
+tokens per iteration will be: 1,310,720
+Initializing a new model from scratch
+defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)
+tokens per iteration will be: 1,310,720
+Initializing a new model from scratch
+defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)
+tokens per iteration will be: 1,310,720
+Initializing a new model from scratch
+defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)
+number of parameters: 123.59M
+num decayed parameter tensors: 50, with 124,354,560 parameters
+num non-decayed parameter tensors: 25, with 19,200 parameters
+number of parameters: 123.59M
+number of parameters: 123.59M
+number of parameters: 123.59M
+num decayed parameter tensors: 50, with 124,354,560 parameters
+num non-decayed parameter tensors: 25, with 19,200 parameters
+number of parameters: 123.59M
+number of parameters: 123.59M
+num decayed parameter tensors: 50, with 124,354,560 parameters
+num non-decayed parameter tensors: 25, with 19,200 parameters
+number of parameters: 123.59M
+num decayed parameter tensors: 50, with 124,354,560 parameters
+num non-decayed parameter tensors: 25, with 19,200 parameters
+num decayed parameter tensors: 50, with 124,354,560 parameters
+num non-decayed parameter tensors: 25, with 19,200 parameters
+num decayed parameter tensors: 50, with 124,354,560 parameters
+num non-decayed parameter tensors: 25, with 19,200 parameters
+num decayed parameter tensors: 50, with 124,354,560 parameters
+num non-decayed parameter tensors: 25, with 19,200 parameters
+Overriding config with config/train_lozo_gpt2.py:
+# Config for LOZO pretraining of GPT-2 (124M) model
+
+# Output directory
+out_dir = 'out-lozo-gpt2'
+
+# Logging settings
+eval_interval = 1000
+log_interval = 1
+eval_iters = 200
+eval_only = False
+
+# Training data
+dataset = 'openwebtext'
+gradient_accumulation_steps = 5 * 8  # simulate larger batch sizes
+batch_size = 32  # micro-batch size
+block_size = 1024  # context length
+
+# Model configuration (standard GPT-2 124M)
+n_layer = 12
+n_head = 12
+n_embd = 768
+dropout = 0.0
+bias = False  # don't use bias in LayerNorm and Linear layers
+
+# Learning rate settings
+learning_rate = 1e-3  # increased from 6e-4
+max_iters = 100000  # total number of training iterations
+weight_decay = 1e-1
+beta1 = 0.9
+beta2 = 0.95
+
+# Learning rate schedule
+decay_lr = True
+warmup_iters = 4000  # increased from 2000 for better stability
+lr_decay_iters = 600000
+min_lr = 1e-4  # increased from 6e-5
+
+# LOZO specific parameters
+zo_eps = 5e-4  # decreased from 1e-3 for more stable training
+rank_r = 1  # increased from 1 to capture more gradient dimensions
+step_interval = 20  # decreased from 50 for more frequent updates
+
+# System settings
+device = 'cuda'
+dtype = 'bfloat16'
+compile = True 
+using fused AdamW: True
+compiling the model... (takes a ~minute)
+tokens per iteration will be: 1,310,720
+Initializing a new model from scratch
+defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)
+using fused AdamW: True
+compiling the model... (takes a ~minute)
+using fused AdamW: True
+compiling the model... (takes a ~minute)
+using fused AdamW: True
+compiling the model... (takes a ~minute)
+using fused AdamW: True
+compiling the model... (takes a ~minute)
+using fused AdamW: True
+compiling the model... (takes a ~minute)
+using fused AdamW: True
+compiling the model... (takes a ~minute)
+number of parameters: 123.59M
+num decayed parameter tensors: 50, with 124,354,560 parameters
+num non-decayed parameter tensors: 25, with 19,200 parameters
+using fused AdamW: True
+compiling the model... (takes a ~minute)
+Training:   0%|          | 0/100000 [00:00<?, ?it/s][rank1]: Traceback (most recent call last):
+[rank1]:   File "/home/allanath/Bureau/ZO_journal/nanoGPT/lozo_train.py", line 413, in <module>
+[rank1]:     lowrank_zo_update(raw_model, optimizer, accumulated_grad, zo_random_seed, v_dict, step, lr)
+[rank1]:   File "/home/allanath/Bureau/ZO_journal/nanoGPT/lozo_train.py", line 212, in lowrank_zo_update
+[rank1]:     v = v_dict[name]
+[rank1]:         ~~~~~~^^^^^^
+[rank1]: KeyError: '_orig_mod.transformer.wte.weight'
+[rank7]: Traceback (most recent call last):
+[rank7]:   File "/home/allanath/Bureau/ZO_journal/nanoGPT/lozo_train.py", line 413, in <module>
+[rank7]:     lowrank_zo_update(raw_model, optimizer, accumulated_grad, zo_random_seed, v_dict, step, lr)
+[rank7]:   File "/home/allanath/Bureau/ZO_journal/nanoGPT/lozo_train.py", line 212, in lowrank_zo_update
+[rank7]:     v = v_dict[name]
+[rank7]:         ~~~~~~^^^^^^
+[rank7]: KeyError: '_orig_mod.transformer.wte.weight'
+[rank4]: Traceback (most recent call last):
+[rank4]:   File "/home/allanath/Bureau/ZO_journal/nanoGPT/lozo_train.py", line 413, in <module>
+[rank4]:     lowrank_zo_update(raw_model, optimizer, accumulated_grad, zo_random_seed, v_dict, step, lr)
+[rank4]:   File "/home/allanath/Bureau/ZO_journal/nanoGPT/lozo_train.py", line 212, in lowrank_zo_update
+[rank4]:     v = v_dict[name]
+[rank4]:         ~~~~~~^^^^^^
+[rank4]: KeyError: '_orig_mod.transformer.wte.weight'
+[rank5]: Traceback (most recent call last):
+[rank5]:   File "/home/allanath/Bureau/ZO_journal/nanoGPT/lozo_train.py", line 413, in <module>
+[rank5]:     lowrank_zo_update(raw_model, optimizer, accumulated_grad, zo_random_seed, v_dict, step, lr)
+[rank5]:   File "/home/allanath/Bureau/ZO_journal/nanoGPT/lozo_train.py", line 212, in lowrank_zo_update
+[rank5]:     v = v_dict[name]
+[rank5]:         ~~~~~~^^^^^^
+[rank5]: KeyError: '_orig_mod.transformer.wte.weight'
+[rank6]: Traceback (most recent call last):
+[rank6]:   File "/home/allanath/Bureau/ZO_journal/nanoGPT/lozo_train.py", line 413, in <module>
+[rank6]:     lowrank_zo_update(raw_model, optimizer, accumulated_grad, zo_random_seed, v_dict, step, lr)
+[rank6]:   File "/home/allanath/Bureau/ZO_journal/nanoGPT/lozo_train.py", line 212, in lowrank_zo_update
+[rank6]:     v = v_dict[name]
+[rank6]:         ~~~~~~^^^^^^
+[rank6]: KeyError: '_orig_mod.transformer.wte.weight'
+[rank2]: Traceback (most recent call last):
+[rank2]:   File "/home/allanath/Bureau/ZO_journal/nanoGPT/lozo_train.py", line 413, in <module>
+[rank2]:     lowrank_zo_update(raw_model, optimizer, accumulated_grad, zo_random_seed, v_dict, step, lr)
+[rank2]:   File "/home/allanath/Bureau/ZO_journal/nanoGPT/lozo_train.py", line 212, in lowrank_zo_update
+[rank2]:     v = v_dict[name]
+[rank2]:         ~~~~~~^^^^^^
+[rank2]: KeyError: '_orig_mod.transformer.wte.weight'
+[rank3]: Traceback (most recent call last):
+[rank3]:   File "/home/allanath/Bureau/ZO_journal/nanoGPT/lozo_train.py", line 413, in <module>
+[rank3]:     lowrank_zo_update(raw_model, optimizer, accumulated_grad, zo_random_seed, v_dict, step, lr)
+[rank3]:   File "/home/allanath/Bureau/ZO_journal/nanoGPT/lozo_train.py", line 212, in lowrank_zo_update
+[rank3]:     v = v_dict[name]
+[rank3]:         ~~~~~~^^^^^^
+[rank3]: KeyError: '_orig_mod.transformer.wte.weight'
+W0517 19:46:55.069000 1305857 nanogpt_venv/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 1305873 closing signal SIGTERM
+W0517 19:46:55.072000 1305857 nanogpt_venv/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 1305874 closing signal SIGTERM
+W0517 19:46:55.073000 1305857 nanogpt_venv/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 1305875 closing signal SIGTERM
+W0517 19:46:55.082000 1305857 nanogpt_venv/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 1305876 closing signal SIGTERM
+W0517 19:46:55.083000 1305857 nanogpt_venv/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 1305877 closing signal SIGTERM
+W0517 19:46:55.093000 1305857 nanogpt_venv/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 1305879 closing signal SIGTERM
+W0517 19:46:55.095000 1305857 nanogpt_venv/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py:900] Sending process 1305880 closing signal SIGTERM
+E0517 19:46:56.230000 1305857 nanogpt_venv/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py:874] failed (exitcode: 1) local_rank: 5 (pid: 1305878) of binary: /home/allanath/Bureau/ZO_journal/nanoGPT/nanogpt_venv/bin/python
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/allanath/Bureau/ZO_journal/nanoGPT/nanogpt_venv/lib/python3.12/site-packages/torch/distributed/run.py", line 896, in <module>
+    main()
+  File "/home/allanath/Bureau/ZO_journal/nanoGPT/nanogpt_venv/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 355, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/allanath/Bureau/ZO_journal/nanoGPT/nanogpt_venv/lib/python3.12/site-packages/torch/distributed/run.py", line 892, in main
+    run(args)
+  File "/home/allanath/Bureau/ZO_journal/nanoGPT/nanogpt_venv/lib/python3.12/site-packages/torch/distributed/run.py", line 883, in run
+    elastic_launch(
+  File "/home/allanath/Bureau/ZO_journal/nanoGPT/nanogpt_venv/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 139, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/allanath/Bureau/ZO_journal/nanoGPT/nanogpt_venv/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 270, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+lozo_train.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2025-05-17_19:46:55
+  host      : atlas.gerad.lan
+  rank      : 5 (local_rank: 5)
+  exitcode  : 1 (pid: 1305878)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

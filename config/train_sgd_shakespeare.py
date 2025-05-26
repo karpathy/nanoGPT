@@ -1,0 +1,48 @@
+# Config for SGD optimizer training on Shakespeare dataset
+# This is a smaller model configuration for quick testing
+
+# Output directory
+out_dir = 'out-sgd-shakespeare'
+
+# Logging settings
+eval_interval = 1000
+log_interval = 1
+eval_iters = 50
+eval_only = False
+
+# Training data
+dataset = 'shakespeare'
+gradient_accumulation_steps = 1  # must be divisible by number of GPUs
+batch_size = 64
+block_size = 256  # context length
+
+# Model configuration (small GPT)
+n_layer = 6
+n_head = 6
+n_embd = 384  # embedding dimension
+dropout = 0.1
+bias = False
+
+# Learning rate settings
+learning_rate = 1e-3  # standard learning rate for SGD
+max_iters = 5000
+weight_decay = 1e-1
+grad_clip = 1.0  # clip gradients at this value
+
+# Set beta1 and beta2 (not used by SGD, but needed for compatibility)
+beta1 = 0.9
+beta2 = 0.99
+
+# Learning rate schedule
+decay_lr = True
+warmup_iters = 500
+lr_decay_iters = 5000
+min_lr = 1e-4
+
+# Training method
+train_method = 'sgd'  # Use SGD optimizer
+
+# System settings
+device = 'cuda'  # use 'cpu' or 'mps' if needed
+dtype = 'bfloat16'  # bfloat16 might not be available on all devices
+compile = True  # set to False for CPU training 
