@@ -1,0 +1,82 @@
+META: [CALL_START]
+
+OPERATOR: I'm sorry, actually I wanted to for a climb and I want to tell myself.
+
+CALLER: You wanted for what happened with crime sir.
+
+OPERATOR: I could be honest with you. I don't know what they're calling it. I got strong and I attacked somebody.
+
+CALLER: What time is it period?
+
+OPERATOR: I'm sorry, what?
+
+CALLER: What town?
+
+OPERATOR: It was done.
+
+CALLER: You know, there's a one-off here rest there.
+
+OPERATOR: I honestly, I don't know.
+
+CALLER: You're looking at it right now.
+
+OPERATOR: Right now, I'm at the cell gas station.
+
+CALLER: I don't know the name of the street.
+
+OPERATOR: It's free by Ricardo's little mini market right down the road here.
+
+CALLER: This is Joe's quick market.
+
+OPERATOR: Here in the 1200-block, will we ever have enough?
+
+CALLER: I believe so, yeah, right down the road from the aisle.
+
+OPERATOR: 12-19, right?
+
+CALLER: 12-19 will ever have enough.
+
+OPERATOR: I believe so, yeah.
+
+CALLER: What's your last name?
+
+OPERATOR: It's L.E.
+
+CALLER: What did this happen to?
+
+OPERATOR: I'm in Dunmore.
+
+CALLER: What's your first name?
+
+OPERATOR: It's 12.
+
+CALLER: Here at the cell station.
+
+OPERATOR: Yes.
+
+CALLER: Follow your car from his 96-21-08.
+
+OPERATOR: On Broadway.
+
+CALLER: 96-21-08 is the 400-kilite from.
+
+OPERATOR: Well, actually I'm going to follow the quick-mort.
+
+CALLER: The bill is quick-mort.
+
+OPERATOR: All right, glad you're the police.
+
+CALLER: We'll send him over.
+
+OPERATOR: All right, well, I'm going to walk over upon the cell.
+
+CALLER: I let there's no remote signal to hear if they're close and open.
+
+OPERATOR: Still on whatever they got to do in this one.
+
+CALLER: All right, glad you're the police.
+
+OPERATOR: All right.
+
+META: [CALL_END]
+

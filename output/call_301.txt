@@ -1,0 +1,140 @@
+META: [CALL_START]
+
+OPERATOR: What's your opinion on the one?
+
+CALLER: If I get a push call right now, not 504 days free.
+
+OPERATOR: 504, what?
+
+CALLER: Can I help?
+
+OPERATOR: He ran my call on.
+
+CALLER: He's right.
+
+OPERATOR: What's your address, sir?
+
+CALLER: My name is Horst.
+
+OPERATOR: Your address.
+
+CALLER: 504 days free.
+
+OPERATOR: What's your phone number that you call them?
+
+CALLER: I'm my phone number, Sam O.C.
+
+OPERATOR: 217.
+
+CALLER: 505.
+
+OPERATOR: He's right.
+
+CALLER: So he's doing anything.
+
+OPERATOR: Horst Morgan.
+
+CALLER: Okay, Sam, man.
+
+OPERATOR: You get that.
+
+CALLER: You get that.
+
+OPERATOR: You think I'm going to go?
+
+CALLER: So what's going on?
+
+OPERATOR: Yes, sir.
+
+CALLER: Tell me here.
+
+OPERATOR: Ladies and gentlemen, I'm smoking my Sam.
+
+CALLER: I'm not going to go, man.
+
+OPERATOR: He's going to listen.
+
+CALLER: He's going to listen.
+
+OPERATOR: He's going to listen.
+
+CALLER: He's going to listen.
+
+OPERATOR: All right, who's he?
+
+CALLER: Oh.
+
+OPERATOR: Right away.
+
+CALLER: Are you a day street gay?
+
+OPERATOR: Why are you?
+
+CALLER: See you.
+
+OPERATOR: See you.
+
+CALLER: Okay.
+
+OPERATOR: Okay.
+
+CALLER: Okay.
+
+OPERATOR: Okay, what's this over?
+
+CALLER: Over.
+
+OPERATOR: I go.
+
+CALLER: Hey, did you still have your problem?
+
+OPERATOR: Huh?
+
+CALLER: Did you still have your problem?
+
+OPERATOR: No, sorry.
+
+CALLER: I have that.
+
+OPERATOR: Sir, I just heard you say you were going to get a problem.
+
+CALLER: Huh?
+
+OPERATOR: I just heard you say you were going to be getting a problem.
+
+CALLER: Hey, you said you were going to get a bit of a gig.
+
+OPERATOR: You tell me, telling me that you're calling the police.
+
+CALLER: I've got a picture of him.
+
+OPERATOR: I'm a serious officer.
+
+CALLER: I've got a picture of him.
+
+OPERATOR: Sir.
+
+CALLER: Oh, God, sir.
+
+OPERATOR: Sir.
+
+CALLER: Hello, sir.
+
+OPERATOR: Sir.
+
+CALLER: Sir.
+
+OPERATOR: Sir.
+
+CALLER: Sir.
+
+OPERATOR: Sir.
+
+CALLER: Sir.
+
+OPERATOR: Sir.
+
+CALLER: Sir.
+
+META: [CALL_END]
+

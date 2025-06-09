@@ -1,0 +1,246 @@
+META: [CALL_START]
+
+OPERATOR: I'm going to get some help in the way to you, but I'm going to stay on the phone with you for a moment, okay?
+
+CALLER: How old are you?
+
+OPERATOR: 20 jigs.
+
+CALLER: Are you home alone?
+
+OPERATOR: Yes.
+
+CALLER: Okay, down the line with me.
+
+OPERATOR: Are you climbing, man?
+
+CALLER: I'm going.
+
+OPERATOR: Are you climbing?
+
+CALLER: This is all right, really.
+
+OPERATOR: Okay, down the line with me.
+
+CALLER: All right, I do have help in route to you right now.
+
+OPERATOR: I don't want to have anything to eat or drink.
+
+CALLER: I might think you'd pick or cause problems for the doctor.
+
+OPERATOR: What we need to do is rest in the health company position.
+
+CALLER: Wait for the help to arrive, okay?
+
+OPERATOR: Do you have any catheter to help them to help?
+
+CALLER: No, no, no, no, no.
+
+OPERATOR: Okay, are you able to get to the door and unlock it?
+
+CALLER: Here.
+
+OPERATOR: Okay, I want you to do that before we get out the phone.
+
+CALLER: Let me know in it online.
+
+OPERATOR: I have a game that is not locked.
+
+CALLER: Here, here.
+
+OPERATOR: Who that's the memory?
+
+CALLER: I'm letting them know if they take it here that much.
+
+OPERATOR: Let me know in that door is unlocked, okay?
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here's the phone.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+CALLER: Here we go.
+
+OPERATOR: Here we go.
+
+META: [CALL_END]
+

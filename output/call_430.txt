@@ -1,0 +1,340 @@
+META: [CALL_START]
+
+OPERATOR: I'm here.
+
+CALLER: I'm here.
+
+OPERATOR: What city are you in?
+
+CALLER: Damn point!
+
+OPERATOR: You don't have to get all this out.
+
+CALLER: How's that stair?
+
+OPERATOR: What's going on?
+
+CALLER: What's going on?
+
+OPERATOR: The bedroom is on fire.
+
+CALLER: I have to go upstairs.
+
+OPERATOR: Okay, we're on the way.
+
+CALLER: Just calm down.
+
+OPERATOR: Is anybody upstairs?
+
+CALLER: I don't know.
+
+OPERATOR: Can't get down.
+
+CALLER: Can't get down?
+
+OPERATOR: No.
+
+CALLER: Okay.
+
+OPERATOR: Anybody up in the house?
+
+CALLER: No.
+
+OPERATOR: No.
+
+CALLER: I don't know where they're at right now.
+
+OPERATOR: Okay.
+
+CALLER: I'll go ahead.
+
+OPERATOR: Okay.
+
+CALLER: The room you're in is it on fire?
+
+OPERATOR: No.
+
+CALLER: It's the other end of the house.
+
+OPERATOR: Okay.
+
+CALLER: If you cannot, can you call and get down any way at all?
+
+OPERATOR: I'm outside on the deck.
+
+CALLER: You're outside on the deck.
+
+OPERATOR: Okay.
+
+CALLER: Can you put anything like anything out there?
+
+OPERATOR: Any calories?
+
+CALLER: Make sure to shut the door.
+
+OPERATOR: I can't get the door shut.
+
+CALLER: This thing's blown out.
+
+OPERATOR: I have got my hair fried.
+
+CALLER: Okay.
+
+OPERATOR: It's what floor you want?
+
+CALLER: I'm on the second floor.
+
+OPERATOR: Is the deck in the front of the house?
+
+CALLER: I'm back in the house upstairs.
+
+OPERATOR: Okay.
+
+CALLER: The back of the house.
+
+OPERATOR: You got the sheriff?
+
+CALLER: I got it.
+
+OPERATOR: Okay.
+
+CALLER: Just stay with me.
+
+OPERATOR: Okay.
+
+CALLER: I want you to get a spa away from that door as you can.
+
+OPERATOR: Use the valve.
+
+CALLER: Okay.
+
+OPERATOR: Use the valve that protects it.
+
+CALLER: Use the waffle protection.
+
+OPERATOR: Use the waffle protection.
+
+CALLER: I want you to get down.
+
+OPERATOR: Use the waffle protection.
+
+CALLER: Okay.
+
+OPERATOR: Hold on a second.
+
+CALLER: Holy shit.
+
+OPERATOR: That's me.
+
+CALLER: Okay, man, it's hold on one second, okay?
+
+OPERATOR: Okay.
+
+CALLER: Okay.
+
+OPERATOR: All right, man.
+
+CALLER: Man, man, listen to what I'm saying.
+
+OPERATOR: Man.
+
+CALLER: What?
+
+OPERATOR: Tell me what's going on.
+
+CALLER: It's murder.
+
+OPERATOR: I craved.
+
+CALLER: Is there anybody there that has a ladder that's a thing?
+
+OPERATOR: Anybody out of there?
+
+CALLER: There's a thing that's a lot of right now.
+
+OPERATOR: Okay, stay away from where that is blown through.
+
+CALLER: Okay.
+
+OPERATOR: Okay.
+
+CALLER: If you can get down, if you can get down, I want you to get down from there.
+
+OPERATOR: Okay.
+
+CALLER: Can you down?
+
+OPERATOR: Okay, she's coming down now.
+
+CALLER: Okay, thank you, sir.
+
+OPERATOR: The fire department and the sheriff are both in route.
+
+CALLER: Okay.
+
+OPERATOR: Did anybody else down stairs?
+
+CALLER: Yeah, there's some people on stairs.
+
+OPERATOR: Are they able to get out?
+
+CALLER: Yeah, I think it's her husband or male.
+
+OPERATOR: He's here.
+
+CALLER: He let me in.
+
+OPERATOR: I'm just the neighbor.
+
+CALLER: Okay.
+
+OPERATOR: All right.
+
+CALLER: So just if you can just confirm if everybody else
+
+OPERATOR: from downstairs is out.
+
+CALLER: Everybody else out of the house?
+
+OPERATOR: Okay.
+
+CALLER: Let's get out of the house.
+
+OPERATOR: Okay.
+
+CALLER: Did she get down?
+
+OPERATOR: This is wrong, man.
+
+CALLER: Man?
+
+OPERATOR: Okay.
+
+CALLER: So you got down safely?
+
+OPERATOR: I am.
+
+CALLER: I'm going to open the side gate.
+
+OPERATOR: Okay.
+
+CALLER: Stay out front.
+
+OPERATOR: Okay.
+
+CALLER: Because you may have gotten burned a little bit.
+
+OPERATOR: You said we're your hair, right?
+
+CALLER: Okay.
+
+OPERATOR: Just sit down and just try to relax.
+
+CALLER: And you got your cat.
+
+OPERATOR: You said?
+
+CALLER: I don't know where the cat is.
+
+OPERATOR: Okay.
+
+CALLER: Don't worry about the cat.
+
+OPERATOR: The cat will find his way out.
+
+CALLER: All right.
+
+OPERATOR: We're up.
+
+CALLER: Okay.
+
+OPERATOR: How old are you?
+
+CALLER: How old are you?
+
+OPERATOR: Okay.
+
+CALLER: Okay.
+
+OPERATOR: Okay.
+
+CALLER: Okay.
+
+OPERATOR: Okay.
+
+CALLER: Okay.
+
+OPERATOR: Okay.
+
+CALLER: Okay.
+
+OPERATOR: Okay.
+
+CALLER: Okay.
+
+OPERATOR: Okay.
+
+CALLER: Okay.
+
+OPERATOR: Let them know that you got down, that you were the one.
+
+CALLER: Pretty ugly.
+
+OPERATOR: Let them know that you were the one on the balcony and that you got, you might be a little burn.
+
+CALLER: No.
+
+OPERATOR: No.
+
+CALLER: Are they, is that the fair medical insurance?
+
+OPERATOR: No.
+
+CALLER: Okay.
+
+OPERATOR: How about your house?
+
+CALLER: Your house?
+
+OPERATOR: Yeah.
+
+CALLER: Perfect.
+
+OPERATOR: No problem.
+
+CALLER: Just tell me.
+
+OPERATOR: Man.
+
+CALLER: All right.
+
+OPERATOR: Let's just take everybody.
+
+CALLER: All right.
+
+OPERATOR: Watch for the front of the back.
+
+CALLER: Okay.
+
+OPERATOR: Okay.
+
+CALLER: Okay.
+
+OPERATOR: Okay.
+
+CALLER: Now I'm gonna let you go, okay?
+
+OPERATOR: I'm, I'm very glad you got down, okay?
+
+CALLER: All right.
+
+OPERATOR: All right.
+
+CALLER: Bye.
+
+OPERATOR: Okay.
+
+CALLER: Thanks.
+
+META: [CALL_END]
+
