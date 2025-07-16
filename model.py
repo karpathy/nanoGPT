@@ -5,6 +5,10 @@ References:
 https://github.com/openai/gpt-2/blob/master/src/model.py
 2) huggingface/transformers PyTorch implementation:
 https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
+3) ALiBi (Attention with Linear Biases) paper:
+"Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation"
+by Ofir Press, Noah Smith, and Mike Lewis (2022)
+https://arxiv.org/abs/2108.12409
 """
 
 import math
@@ -43,12 +47,14 @@ class CausalSelfAttention(nn.Module):
         self.dropout = config.dropout
         self.use_alibi = config.use_alibi
         
-        # ALiBi (Attention with Linear Biases) setup
+        # Paper Section 3: ALiBi (Attention with Linear Biases) setup
+        # "ALiBi does not add positional embeddings to word embeddings"
         if self.use_alibi:
-            self.alibi_slopes = self._get_alibi_slopes(config.n_head)
-            # Note: ALiBi bias will be generated dynamically based on sequence length
+            self.alibi_slopes = self._get_alibi_slopes(config.n_head)  # Paper Eq. 6: m_h slopes
+            # Paper Section 3.1: ALiBi bias will be generated dynamically based on sequence length
         
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
+        # Paper implementation note: ALiBi requires manual attention computation
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention') and not self.use_alibi
         if not self.flash:
             if self.use_alibi:
@@ -56,6 +62,7 @@ class CausalSelfAttention(nn.Module):
             else:
                 print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
             # causal mask to ensure that attention is only applied to the left in the input sequence
+            # Paper Section 3.1: ALiBi generates bias dynamically, no need for static causal mask
             if not self.use_alibi:
                 self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                             .view(1, 1, config.block_size, config.block_size))
@@ -66,16 +73,21 @@ class CausalSelfAttention(nn.Module):
         Based on the paper "Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation"
         """
         def get_slopes_power_of_2(n):
-            start = (2**(-2**-(math.log2(n)-3)))
+            # Paper Section 3.3: "we set m_h = 2^(−8h/H) for h ∈ {1, 2, ..., H}"
+            # This corresponds to geometric sequence with ratio 2^(-8/H)
+            start = (2**(-2**-(math.log2(n)-3)))  # Paper Eq. 6: m_h = 2^(−8h/H)
             ratio = start
             return [start*ratio**i for i in range(n)]
         
         if math.log2(n_heads).is_integer():
+            # Paper Section 3.3: For powers of 2, use geometric sequence directly
             return get_slopes_power_of_2(n_heads)
         else:
-            # If n_heads is not a power of 2, we use the closest power of 2
+            # Paper Section 3.3: For non-powers of 2, interpolate slopes
+            # "For models with a number of heads that is not a power of 2, we use the slopes for the largest power of 2 less than the number of heads"
             closest_power_of_2 = 2**math.floor(math.log2(n_heads))
             slopes = get_slopes_power_of_2(closest_power_of_2)
+            # Paper Section 3.3: "then use every other slope from the sequence that has twice as many slopes"
             slopes.extend(get_slopes_power_of_2(2*closest_power_of_2)[0::2][:n_heads-closest_power_of_2])
             return slopes
     
@@ -84,16 +96,19 @@ class CausalSelfAttention(nn.Module):
         Generate ALiBi bias matrix for the given sequence length.
         Returns a tensor of shape (n_heads, seq_len, seq_len)
         """
-        # Create distance matrix: distance[i][j] = i - j
-        context_position = torch.arange(seq_len, device=device)[:, None]
-        memory_position = torch.arange(seq_len, device=device)[None, :]
-        relative_position = memory_position - context_position  # (seq_len, seq_len)
+        # Paper Section 3.1: Create relative position matrix where distance[i][j] = j - i
+        # "we add a constant bias to each query-key pair before the softmax"
+        context_position = torch.arange(seq_len, device=device)[:, None]  # Paper: position i
+        memory_position = torch.arange(seq_len, device=device)[None, :]   # Paper: position j
+        relative_position = memory_position - context_position  # Paper Eq. 5: (j - i)
         
-        # Apply ALiBi slopes to get biases for each head
+        # Paper Eq. 5: Apply ALiBi slopes m_h to relative positions
+        # "ALiBi adds the bias −m_h · |i − j| to the attention score"
         slopes = torch.tensor(self.alibi_slopes, device=device, dtype=torch.float32).view(-1, 1, 1)
-        alibi_bias = slopes * relative_position.unsqueeze(0)  # (n_heads, seq_len, seq_len)
+        alibi_bias = slopes * relative_position.unsqueeze(0)  # Paper Eq. 5: m_h * (j - i)
         
-        # Apply causal mask (set future positions to -inf)
+        # Paper Section 3.1: Apply causal mask for autoregressive models
+        # "we mask out the attention to future positions"
         causal_mask = torch.tril(torch.ones(seq_len, seq_len, device=device)).bool()
         alibi_bias = alibi_bias.masked_fill(~causal_mask, float('-inf'))
         
@@ -117,9 +132,10 @@ class CausalSelfAttention(nn.Module):
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
             
             if self.use_alibi:
-                # Add ALiBi bias instead of using causal mask
+                # Paper Section 3.1: Add ALiBi bias instead of using causal mask
+                # "we add a constant bias to each query-key pair before the softmax"
                 alibi_bias = self._get_alibi_bias(T, q.device)  # (n_heads, T, T)
-                att = att + alibi_bias.unsqueeze(0)  # (B, nh, T, T) + (1, nh, T, T)
+                att = att + alibi_bias.unsqueeze(0)  # Paper Eq. 5: attention_scores + ALiBi_bias
             else:
                 # Use traditional causal mask
                 att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
@@ -172,7 +188,7 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
-    use_alibi: bool = False # True: use ALiBi (Attention with Linear Biases) instead of positional embeddings
+    use_alibi: bool = False # Paper: True: use ALiBi (Attention with Linear Biases) instead of positional embeddings
 
 class GPT(nn.Module):
 
@@ -189,6 +205,7 @@ class GPT(nn.Module):
             ln_f = LayerNorm(config.n_embd, bias=config.bias),
         )
         
+        # Paper Section 3: "ALiBi does not add positional embeddings to word embeddings"
         # Only add positional embeddings if not using ALiBi
         if not config.use_alibi:
             transformer_modules['wpe'] = nn.Embedding(config.block_size, config.n_embd)
@@ -237,12 +254,14 @@ class GPT(nn.Module):
         b, t = idx.size()
         if not self.config.use_alibi:
             assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
-        # Note: With ALiBi, we can handle sequences longer than block_size at inference time
+        # Paper Section 4.2: "ALiBi can extrapolate to longer sequences than it was trained on"
+        # With ALiBi, we can handle sequences longer than block_size at inference time
 
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
         
         if self.config.use_alibi:
+            # Paper Section 3: "ALiBi does not add positional embeddings to word embeddings"
             # ALiBi: use only token embeddings (no positional embeddings)
             x = self.transformer.drop(tok_emb)
         else:
@@ -388,13 +407,14 @@ class GPT(nn.Module):
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
         Most likely you'll want to make sure to be in model.eval() mode of operation for this.
         
-        With ALiBi, this method can handle sequences longer than the training block_size.
+        Paper Section 4.2: With ALiBi, this method can handle sequences longer than the training block_size.
         """
         for _ in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
+            # Paper Section 4.2: "ALiBi can extrapolate to sequences that are longer than those seen during training"
             # Note: ALiBi can handle longer sequences, but for memory efficiency we still crop
             if self.config.use_alibi:
-                # ALiBi can extrapolate to longer sequences, but we may still want to crop for efficiency
+                # Paper Section 4.2: ALiBi can extrapolate to longer sequences, but we may still want to crop for efficiency
                 # You can increase this multiplier (e.g., 2.0) to test longer sequence extrapolation
                 max_length = int(self.config.block_size * 1.0)  # Can be increased for testing
                 idx_cond = idx if idx.size(1) <= max_length else idx[:, -max_length:]
