@@ -21,7 +21,7 @@ with open(input_file_path, 'r') as f:
 print(f"length of dataset in characters: {len(data):,}")
 
 # get all the unique characters that occur in this text
-chars = sorted(list(set(data)))
+chars = sorted(set(data))
 vocab_size = len(chars)
 print("all the unique characters:", ''.join(chars))
 print(f"vocab size: {vocab_size:,}")
@@ -36,7 +36,7 @@ def decode(l):
 
 # create the train and test splits
 n = len(data)
-train_data = data[:int(n*0.9)]
+train_data = data[:int(n*0.9)] 
 val_data = data[int(n*0.9):]
 
 # encode both to integers
