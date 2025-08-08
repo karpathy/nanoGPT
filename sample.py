@@ -4,7 +4,9 @@ Sample from a trained model
 import os
 import pickle
 import torch
-import tiktoken
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from lib.tokenizer_utils import get_tokenizer
 from lib.get_autocast import get_autocast_context
 from model import GPTConfig, GPT
 
@@ -69,7 +71,7 @@ if load_meta:
 else:
     # ok let's assume gpt-2 encodings by default
     print("No meta.pkl found, assuming GPT-2 encodings...")
-    enc = tiktoken.get_encoding("gpt2")
+    enc = get_tokenizer("gpt2")
     encode = lambda s: enc.encode(s, allowed_special={"<|endoftext|>"})
     decode = lambda l: enc.decode(l)
 

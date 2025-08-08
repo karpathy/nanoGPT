@@ -4,7 +4,9 @@
 import os
 from tqdm import tqdm
 import numpy as np
-import tiktoken
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from lib.tokenizer_utils import get_tokenizer
 from datasets import load_dataset # huggingface datasets
 
 # number of workers in .map() call
@@ -16,7 +18,7 @@ num_proc = 8
 # it is better than 1 usually though
 num_proc_load_dataset = num_proc
 
-enc = tiktoken.get_encoding("gpt2")
+enc = get_tokenizer("gpt2")
 
 if __name__ == '__main__':
     # takes 54GB in huggingface .cache dir, about 8M documents (8,013,769)
