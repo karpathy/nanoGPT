@@ -22,8 +22,7 @@ import math
 import pickle
 import numpy as np
 import torch
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.distributed import init_process_group, destroy_process_group
+from lib.get_ddp import DDP, init_process_group, destroy_process_group
 from lib.get_autocast import get_autocast_context
 
 from model import GPTConfig, GPT
