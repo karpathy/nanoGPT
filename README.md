@@ -11,6 +11,28 @@ Because the code is so simple, it is very easy to hack to your needs, train new 
 
 ## install
 
+Option A: Using uv (recommended)
+
+- Install uv: https://docs.astral.sh/uv/getting-started/installation/
+- From the repo root:
+
+```
+uv venv
+uv sync
+```
+
+This will create a .venv and install all required dependencies declared in pyproject.toml. Then you can run commands like:
+
+```
+uv run python data/shakespeare/prepare.py
+uv run python train.py config/train_shakespeare_char.py
+uv run python sample.py --out_dir=out-shakespeare-char
+```
+
+Note: This repository is configured as a non-package app (tool.uv.package=false), so uv will not attempt to build/install the project itself; it only manages dependencies.
+
+Option B: Using pip
+
 ```
 pip install torch numpy transformers datasets tiktoken wandb tqdm
 ```
