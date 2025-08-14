@@ -13,7 +13,7 @@ import numpy as np
 input_file_path = os.path.join(os.path.dirname(__file__), 'page1.txt')
 
 
-with open(input_file_path, 'r') as f:
+with open(file=input_file_path, encoding='UTF-8') as f:
     data = f.read()
 print(f"length of dataset in characters: {len(data):,}")
 
