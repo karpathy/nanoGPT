@@ -24,7 +24,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-wandb = ["wandb>=0.15"]
 notebooks = [
   "matplotlib>=3.7",
   "pandas>=1.5",
