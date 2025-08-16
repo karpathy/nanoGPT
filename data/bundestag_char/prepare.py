@@ -6,7 +6,6 @@ encoder and decoder and some other related info.
 """
 import os
 import pickle
-import requests
 import numpy as np
 
 # download the tiny shakespeare dataset

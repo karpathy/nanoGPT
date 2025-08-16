@@ -22,10 +22,14 @@ def main() -> None:
         # Auto-seed from bundled resource if the input file is missing
         bundled = Path(__file__).parent / "resources" / "bundestag_char" / "page1.txt"
         if bundled.exists():
-            input_file_path.write_text(bundled.read_text(encoding="utf-8"), encoding="utf-8")
+            input_file_path.write_text(
+                bundled.read_text(encoding="utf-8"), encoding="utf-8"
+            )
             print(f"Seeded {input_file_path} from bundled resource {bundled}.")
         else:
-            raise SystemExit(f"Expected input text at {input_file_path}, and no bundled resource was found at {bundled}.")
+            raise SystemExit(
+                f"Expected input text at {input_file_path}, and no bundled resource was found at {bundled}."
+            )
 
     data = input_file_path.read_text(encoding="utf-8")
     print(f"length of dataset in characters: {len(data):,}")
