@@ -9,7 +9,9 @@ def register(name: str):
     def _wrap(fn: Callable[[], None]) -> Callable[[], None]:
         PREPARERS[name] = fn
         return fn
+
     return _wrap
+
 
 # Import submodules to populate PREPARERS via the @register decorator
 from . import shakespeare  # noqa: F401
