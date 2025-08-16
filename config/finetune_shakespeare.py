@@ -1,4 +1,3 @@
-import time
 
 out_dir = 'out-shakespeare'
 eval_interval = 5

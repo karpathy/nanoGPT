@@ -6,6 +6,7 @@ Usage examples:
   python -m _next.cli train _next/configs/shakespeare_cpu.toml
   python -m _next.cli sample _next/configs/shakespeare_cpu.toml
 """
+
 from __future__ import annotations
 
 __all__ = [
