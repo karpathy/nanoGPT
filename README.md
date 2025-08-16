@@ -238,3 +238,35 @@ For more questions/discussions feel free to stop by **#nanoGPT** on Discord:
 ## acknowledgements
 
 All nanoGPT experiments are powered by GPUs on [Lambda labs](https://lambdalabs.com), my favorite Cloud GPU provider. Thank you Lambda labs for sponsoring nanoGPT!
+
+
+---
+
+New: strict, uv-first module under `_next`
+
+We now provide a strictly typed, one-way workflow under the `_next` folder. It uses TOML configs and uv for all commands (prepare/train/sample/tests). See `_next/README.md`.
+
+Quick uv-only examples:
+
+```
+# environment
+uv venv
+uv sync
+
+# prepare datasets
+uv run python -m _next.cli prepare shakespeare
+uv run python -m _next.cli prepare bundestag_char
+
+# train (CPU defaults)
+uv run python -m _next.cli train _next/configs/shakespeare_cpu.toml
+uv run python -m _next.cli train _next/configs/bundestag_char_cpu.toml
+
+# sample
+uv run python -m _next.cli sample _next/configs/shakespeare_cpu.toml
+uv run python -m _next.cli sample _next/configs/bundestag_char_cpu.toml
+
+# tests
+uvx pytest -q _next/tests
+```
+
+The legacy scripts (train.py, sample.py) remain for backward compatibility, but the `_next` module is the single recommended path going forward and uses uv exclusively.
