@@ -4,8 +4,7 @@ from _next.config import load_toml, AppConfig
 
 
 def test_load_toml_roundtrip(tmp_path: Path) -> None:
-    toml_text = (
-        """
+    toml_text = """
 [train.model]
 n_layer=1
 n_head=1
@@ -33,7 +32,6 @@ out_dir = "out/test_next"
 
 [sample.sample]
 """
-    )
     cfg_path = tmp_path / "cfg.toml"
     cfg_path.write_text(toml_text)
 

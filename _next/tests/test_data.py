@@ -5,7 +5,6 @@ from _next.data import SimpleBatches
 from _next.config import DataConfig
 
 
-
 def test_batches(tmp_path: Path) -> None:
     ddir = tmp_path
     arr = (np.arange(200) % 256).astype("uint16")
