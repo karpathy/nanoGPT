@@ -75,7 +75,9 @@ class _EMA:
 
 
 @torch.no_grad()
-def _estimate_loss(model: GPT, batches: SimpleBatches, eval_iters: int, ctx, device: str) -> Dict[str, float]:
+def _estimate_loss(
+    model: GPT, batches: SimpleBatches, eval_iters: int, ctx, device: str
+) -> Dict[str, float]:
     model.eval()
     losses: Dict[str, float] = {}
     for split in ("train", "val"):
@@ -90,7 +92,9 @@ def _estimate_loss(model: GPT, batches: SimpleBatches, eval_iters: int, ctx, dev
     return losses
 
 
-def _get_lr(it: int, *, warmup: int, decay_iters: int, min_lr: float, base_lr: float) -> float:
+def _get_lr(
+    it: int, *, warmup: int, decay_iters: int, min_lr: float, base_lr: float
+) -> float:
     if it < warmup:
         return base_lr * (it + 1) / (warmup + 1)
     if it > decay_iters:
@@ -123,7 +127,9 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
     # Determine vocab size (from config or dataset meta)
     vocab_size = model_cfg.vocab_size
     if vocab_size is None and exp.data.meta_pkl is not None:
-        vocab_size = _load_meta_vocab_size(exp.data.dataset_dir / exp.data.meta_pkl) or 50304
+        vocab_size = (
+            _load_meta_vocab_size(exp.data.dataset_dir / exp.data.meta_pkl) or 50304
+        )
     if vocab_size is None:
         vocab_size = 50304
 
@@ -146,7 +152,15 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
         checkpoint = torch.load(ckpt_path, map_location=device_type)
         # Override model_args with those from checkpoint for strictness
         ckpt_model_args = checkpoint.get("model_args", {})
-        for k in ["n_layer", "n_head", "n_embd", "block_size", "bias", "vocab_size", "dropout"]:
+        for k in [
+            "n_layer",
+            "n_head",
+            "n_embd",
+            "block_size",
+            "bias",
+            "vocab_size",
+            "dropout",
+        ]:
             if k in ckpt_model_args:
                 model_args[k] = ckpt_model_args[k]
 
@@ -159,7 +173,7 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
         unwanted_prefix = "_orig_mod."
         for k in list(state_dict.keys()):
             if k.startswith(unwanted_prefix):
-                state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+                state_dict[k[len(unwanted_prefix) :]] = state_dict.pop(k)
         model.load_state_dict(state_dict)
     else:
         # Fresh run; optionally crop block size down if requested smaller than default
@@ -167,7 +181,9 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
             model.crop_block_size(model_cfg.block_size)
 
     # Optimizer and scaler
-    scaler = torch.amp.GradScaler(enabled=(rt.dtype == "float16" and device_type == "cuda"))
+    scaler = torch.amp.GradScaler(
+        enabled=(rt.dtype == "float16" and device_type == "cuda")
+    )
     optim = model.configure_optimizers(
         weight_decay=exp.optim.weight_decay,
         learning_rate=exp.optim.learning_rate,
@@ -193,7 +209,7 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
                 torch.cuda.set_rng_state_all(checkpoint["rng"].get("cuda"))
         except Exception:
             pass
-        
+
     # free memory ASAP for state dicts loaded
     state_dict = None  # type: ignore
 
@@ -226,7 +242,9 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
     X, Y = batches.get_batch("train")
     t0 = time.time()
 
-    tokens_per_iter = exp.data.grad_accum_steps * exp.data.batch_size * exp.data.block_size
+    tokens_per_iter = (
+        exp.data.grad_accum_steps * exp.data.batch_size * exp.data.block_size
+    )
     print(f"tokens per iteration: {tokens_per_iter:,}")
 
     while iter_num <= rt.max_iters:
@@ -261,7 +279,11 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
             else:
                 decision_metric = metric
 
-            is_improved = (decision_metric > best_metric) if rt.ckpt_greater_is_better else (decision_metric < best_metric)
+            is_improved = (
+                (decision_metric > best_metric)
+                if rt.ckpt_greater_is_better
+                else (decision_metric < best_metric)
+            )
 
             # Construct base checkpoint payload
             ckpt_base = {
@@ -270,7 +292,9 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
                 "scaler": scaler.state_dict(),
                 "rng": {
                     "torch": torch.get_rng_state(),
-                    "cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
+                    "cuda": torch.cuda.get_rng_state_all()
+                    if torch.cuda.is_available()
+                    else None,
                 },
                 "model_args": {
                     "n_layer": model_cfg.n_layer,
@@ -289,10 +313,18 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
             last_path = rt.out_dir / rt.ckpt_last_filename
             _atomic_save(ckpt_base, last_path, rt.ckpt_atomic)
             if rt.ckpt_write_metadata:
-                _write_sidecar(last_path.with_suffix(".json"), metric=metric, iter_num=iter_num, filename=last_path.name)
+                _write_sidecar(
+                    last_path.with_suffix(".json"),
+                    metric=metric,
+                    iter_num=iter_num,
+                    filename=last_path.name,
+                )
 
             # Optional time-based safety checkpoint (updates timer after save)
-            if rt.ckpt_time_interval_minutes > 0 and (time.time() - last_time_ckpt) >= rt.ckpt_time_interval_minutes * 60:
+            if (
+                rt.ckpt_time_interval_minutes > 0
+                and (time.time() - last_time_ckpt) >= rt.ckpt_time_interval_minutes * 60
+            ):
                 last_time_ckpt = time.time()
 
             # Save/update the "best" checkpoint when improved or per policy
@@ -306,16 +338,25 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
                     best_path = rt.out_dir / rt.ckpt_best_filename
                     _atomic_save(payload, best_path, rt.ckpt_atomic)
                     if rt.ckpt_write_metadata:
-                        _write_sidecar(best_path.with_suffix(".json"), metric=metric, iter_num=iter_num, filename=best_path.name)
+                        _write_sidecar(
+                            best_path.with_suffix(".json"),
+                            metric=metric,
+                            iter_num=iter_num,
+                            filename=best_path.name,
+                        )
 
                     # Optional top-k archive of best checkpoints
                     if rt.ckpt_top_k > 0:
                         stamp = int(time.time())
                         numbered = rt.out_dir / f"ckpt_best-{stamp}.pt"
                         _atomic_save(payload, numbered, rt.ckpt_atomic)
-                        best_ckpts.append(_CkptInfo(numbered, metric, iter_num, time.time()))
+                        best_ckpts.append(
+                            _CkptInfo(numbered, metric, iter_num, time.time())
+                        )
                         # prune worst beyond k
-                        best_ckpts.sort(key=lambda x: x.metric, reverse=rt.ckpt_greater_is_better)
+                        best_ckpts.sort(
+                            key=lambda x: x.metric, reverse=rt.ckpt_greater_is_better
+                        )
                         while len(best_ckpts) > rt.ckpt_top_k:
                             old = best_ckpts.pop()
                             try:
@@ -324,12 +365,16 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
                                 if side.exists():
                                     side.unlink()
                             except Exception as e:
-                                print(f"[ckpt] warning: failed to delete {old.path}: {e}")
+                                print(
+                                    f"[ckpt] warning: failed to delete {old.path}: {e}"
+                                )
                 no_improve_evals = 0
             else:
                 no_improve_evals += 1
                 if 0 < rt.early_stop_patience <= no_improve_evals:
-                    print(f"[train] early stopping after {no_improve_evals} evals without improvement")
+                    print(
+                        f"[train] early stopping after {no_improve_evals} evals without improvement"
+                    )
                     break
 
         if iter_num == 0 and rt.eval_only:
@@ -359,7 +404,9 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
             dt = time.time() - t0
             t0 = time.time()
             total_loss = float(loss.item()) * exp.data.grad_accum_steps
-            print(f"iter {iter_num}: loss {total_loss:.4f}, step_time {dt*1000:.1f}ms")
+            print(
+                f"iter {iter_num}: loss {total_loss:.4f}, step_time {dt * 1000:.1f}ms"
+            )
 
         iter_num += 1
 

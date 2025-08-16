@@ -9,7 +9,11 @@ from .device import setup
 
 
 def _load_checkpoint(out_dir: Path, device: str) -> Tuple[GPT, dict]:
-    candidates = [out_dir / "ckpt_best.pt", out_dir / "ckpt_last.pt", out_dir / "ckpt.pt"]
+    candidates = [
+        out_dir / "ckpt_best.pt",
+        out_dir / "ckpt_last.pt",
+        out_dir / "ckpt.pt",
+    ]
     ckpt_path = next((p for p in candidates if p.exists()), None)
     if ckpt_path is None:
         tried = ", ".join(str(p) for p in candidates)
@@ -21,12 +25,14 @@ def _load_checkpoint(out_dir: Path, device: str) -> Tuple[GPT, dict]:
     up = "_orig_mod."
     for k in list(sd.keys()):
         if k.startswith(up):
-            sd[k[len(up):]] = sd.pop(k)
+            sd[k[len(up) :]] = sd.pop(k)
     model.load_state_dict(sd)
     return model, ckpt
 
 
-def _codec_from_meta(meta_path: Path | None) -> Tuple[Callable[[str], list[int]], Callable[[list[int]], str]]:
+def _codec_from_meta(
+    meta_path: Path | None,
+) -> Tuple[Callable[[str], list[int]], Callable[[list[int]], str]]:
     if meta_path is not None and meta_path.exists():
         with meta_path.open("rb") as f:
             d = pickle.load(f)
@@ -35,16 +41,20 @@ def _codec_from_meta(meta_path: Path | None) -> Tuple[Callable[[str], list[int]]
     # Try GPT-2 BPE via tiktoken; if unavailable, fallback to UTF-8 byte codec
     try:
         import tiktoken  # type: ignore
+
         enc = tiktoken.get_encoding("gpt2")
         return (
             lambda s: enc.encode(s, allowed_special={"<|endoftext|>"}),
             lambda l: enc.decode(l),
         )
     except Exception:
+
         def encode_bytes(s: str) -> list[int]:
             return list(s.encode("utf-8", errors="ignore"))
+
         def decode_bytes(l: list[int]) -> str:
             return bytes(int(x) & 0xFF for x in l).decode("utf-8", errors="ignore")
+
         return encode_bytes, decode_bytes
 
 
