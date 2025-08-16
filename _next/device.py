@@ -27,7 +27,7 @@ class AmpContext:
         if device_type == "cpu":
             enable = dtype != torch.float32
             # CPU autocast supports bfloat16 in recent torch versions, but we allow both bf16/fp16
-            self._ctx = torch.amp.autocast('cpu', enabled=enable, dtype=dtype)
+            self._ctx = torch.amp.autocast("cpu", enabled=enable, dtype=dtype)
         elif device_type == "cuda":
             self._ctx = torch.amp.autocast(device_type="cuda", dtype=dtype)
         else:  # mps
@@ -44,7 +44,9 @@ class AmpContext:
         return self._ctx.__exit__(exc_type, exc, tb)
 
 
-def setup(device: DeviceKind, dtype: DTypeKind, seed: int) -> Tuple[str, torch.dtype, AmpContext]:
+def setup(
+    device: DeviceKind, dtype: DTypeKind, seed: int
+) -> Tuple[str, torch.dtype, AmpContext]:
     """Set seeds, select available device, enable TF32 on CUDA, and return autocast ctx.
 
     Returns (device_type, ptdtype, ctx)
@@ -60,7 +62,11 @@ def setup(device: DeviceKind, dtype: DTypeKind, seed: int) -> Tuple[str, torch.d
     # Resolve device availability
     if device == "cuda" and torch.cuda.is_available():
         device_type: DeviceKind = "cuda"
-    elif device == "mps" and getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+    elif (
+        device == "mps"
+        and getattr(torch.backends, "mps", None)
+        and torch.backends.mps.is_available()
+    ):
         device_type = "mps"
     else:
         device_type = "cpu"

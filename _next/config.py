@@ -71,10 +71,10 @@ class RuntimeConfig:
     ckpt_write_metadata: bool = True
     ckpt_time_interval_minutes: int = 0  # 0 disables time-based saves
     # Smoothed improvement + early stopping
-    best_smoothing_alpha: float = 0.0     # 0 disables EMA smoothing
-    early_stop_patience: int = 0          # 0 disables patience-based early stopping
+    best_smoothing_alpha: float = 0.0  # 0 disables EMA smoothing
+    early_stop_patience: int = 0  # 0 disables patience-based early stopping
     # Exponential moving average of weights (for evaluation/best saves)
-    ema_decay: float = 0.0                # 0 disables EMA
+    ema_decay: float = 0.0  # 0 disables EMA
 
 
 @dataclass(frozen=True)
