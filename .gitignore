@@ -9,4 +9,11 @@ __pycache__/
 *.pyc
 input.txt
 env/
-.venv
+.venv/
+
+# Project artifacts and caches
+out/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
