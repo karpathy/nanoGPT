@@ -10,23 +10,37 @@ def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser("_next")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    pprep = sub.add_parser("prepare", help="Prepare dataset by name (internal preparers)")
-    pprep.add_argument("dataset", choices=["shakespeare", "bundestag_char"], help="Dataset name")
+    pprep = sub.add_parser(
+        "prepare", help="Prepare dataset by name (internal preparers)"
+    )
+    pprep.add_argument(
+        "dataset", choices=["shakespeare", "bundestag_char"], help="Dataset name"
+    )
 
     ptrain = sub.add_parser("train", help="Train from TOML config")
     ptrain.add_argument("config", type=Path)
 
-    psample = sub.add_parser("sample", help="Sample using TOML config (tries ckpt_best.pt, ckpt_last.pt, then legacy ckpt.pt in out_dir)")
+    psample = sub.add_parser(
+        "sample",
+        help="Sample using TOML config (tries ckpt_best.pt, ckpt_last.pt, then legacy ckpt.pt in out_dir)",
+    )
     psample.add_argument("config", type=Path)
 
     ploop = sub.add_parser("loop", help="Run prepare -> train -> sample in one go")
-    ploop.add_argument("dataset", choices=["shakespeare", "bundestag_char"], help="Dataset name")
-    ploop.add_argument("config", type=Path, help="TOML config path containing [train] and [sample] blocks")
+    ploop.add_argument(
+        "dataset", choices=["shakespeare", "bundestag_char"], help="Dataset name"
+    )
+    ploop.add_argument(
+        "config",
+        type=Path,
+        help="TOML config path containing [train] and [sample] blocks",
+    )
 
     args = p.parse_args(argv)
 
     if args.cmd == "prepare":
         from .datasets import PREPARERS  # type: ignore
+
         fn = PREPARERS.get(args.dataset)
         if fn is None:
             raise SystemExit(f"Unknown dataset: {args.dataset}")
@@ -36,6 +50,7 @@ def main(argv: list[str] | None = None) -> None:
     if args.cmd == "loop":
         from .datasets import PREPARERS  # type: ignore
         import shutil
+
         fn = PREPARERS.get(args.dataset)
         if fn is None:
             raise SystemExit(f"Unknown dataset: {args.dataset}")
@@ -44,7 +59,9 @@ def main(argv: list[str] | None = None) -> None:
         # 2) train
         cfg: AppConfig = load_toml(args.config)
         if cfg.train is None or cfg.sample is None:
-            raise SystemExit("Config for loop must contain both [train] and [sample] blocks")
+            raise SystemExit(
+                "Config for loop must contain both [train] and [sample] blocks"
+            )
         train(cfg.train)
         # Copy dataset meta.pkl into out_dir for correct sampling (especially for char-level datasets)
         try:
