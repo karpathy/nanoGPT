@@ -1,21 +1,29 @@
-_next: strict, typed, uv-first training/sampling module
+_next: strict, typed, UV-only training/sampling module
 
-This folder provides a single, “one way only” interface to prepare data, train, and sample.
+This folder provides a single, one-way interface to prepare data, train, and sample.
 It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 
-We use uv for everything (virtualenv, dependency sync, running tools).
+Policy
+- UV is mandatory for all workflows (venv, dependency sync, running tools). Do not use pip, requirements.txt, or uvx.
+- Never set PYTHONPATH. Running inside the project venv ensures _next is importable.
+- Quality tooling is mandatory before commit (ruff, mypy, pyright) and tests must pass.
 
 Prerequisites
-- Install uv: https://docs.astral.sh/uv/
+- Install UV: https://docs.astral.sh/uv/
 
-Setup
-- Create & activate a venv and sync dependencies from pyproject.toml:
+Setup (required)
+- Create a venv and sync all dependency groups (runtime + dev):
   uv venv
-  uv sync
+  uv sync --all-groups
 
-- Run tests to verify:
-  uvx pytest -q _next/tests
-  # or if added to project deps: uv run pytest -q _next/tests
+Quality gates (required before commit/PR)
+- Lint/format/imports:
+  uv run ruff check --fix . && uv run ruff format .
+- Static analysis and typing:
+  uv run pyright
+  uv run mypy _next
+- Tests:
+  uv run python -m pytest -q
 
 Datasets
 - Shakespeare (GPT-2 BPE; prepared via internal _next.datasets.shakespeare)
@@ -46,10 +54,9 @@ Notes
 - Checkpoints: trainer writes ckpt_last.pt on every eval and updates ckpt_best.pt when improved (or when always_save_checkpoint is true). Training auto-resumes from ckpt_last.pt if it exists; to start fresh, delete ckpt_last.pt (and ckpt_best.pt optionally) or use a new out_dir. On resume, the checkpointed model_args (n_layer, n_head, n_embd, block_size, bias, vocab_size, dropout) take precedence over TOML values to ensure compatibility.
 - For small local runs, tune batch_size, block_size, and grad_accum_steps in the [train.data] section.
 
-
 Loop
 - End-to-end in one command (bundestag_char):
   uv run python -m _next.cli loop bundestag_char _next/configs/bundestag_char_cpu.toml
 
-- (Optional) Shakespeare end-to-end:
+- Shakespeare end-to-end:
   uv run python -m _next.cli loop shakespeare _next/configs/shakespeare_cpu.toml
