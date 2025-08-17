@@ -56,6 +56,6 @@ def main() -> None:
 
     meta = {"vocab_size": vocab_size, "itos": itos, "stoi": stoi}
     with (ds_dir / "meta.pkl").open("wb") as f:
-        pickle.dump(meta, f)
+        pickle.dump(meta, f)  # type: ignore[arg-type]
 
     print("Wrote:", ds_dir / "train.bin", ds_dir / "val.bin", ds_dir / "meta.pkl")
