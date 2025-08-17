@@ -47,6 +47,8 @@ packages = ["ml_playground"]
 dev = [
   "pytest>=8",
   "pytest-xdist>=3",
+  "pytest-cov>=6",
+  "coverage[toml]>=7",
   "ruff>=0.6",
   "mypy>=1.11",
   "pyright>=1.1.380",
@@ -93,6 +95,36 @@ norecursedirs = [
   ".mypy_cache",
   ".ruff_cache",
 ]
+markers = [
+  "slow: marks tests as slow (deselected by default)",
+  "integration: marks tests as integration tests",
+  "perf: marks tests as performance tests (deselected by default)",
+]
+
+[tool.coverage.run]
+source = ["ml_playground"]
+branch = true
+parallel = true
+omit = [
+  "tests/*",
+  "*/conftest.py",
+]
+
+[tool.coverage.report]
+# ULTRA-STRICT: 100% coverage required, no exceptions
+exclude_lines = [
+  # Only allow exclusion for truly impossible-to-test code
+  "if 0:",
+  "if __name__ == .__main__.:",
+]
+show_missing = true
+skip_covered = false
+# STRICT REQUIREMENT: 100% coverage, no compromises
+fail_under = 100
+precision = 2
+
+[tool.coverage.html]
+directory = "htmlcov"
 
 [tool.pyright]
 include = ["ml_playground"]
