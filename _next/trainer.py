@@ -40,15 +40,53 @@ def _sha256_of_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def _write_sidecar(path: Path, *, metric: float, iter_num: int, filename: str) -> None:
+def _write_sidecar(
+    *,
+    sidecar_path: Path,
+    pt_path: Path,
+    kind: str,
+    iter_num: int,
+    tokens_seen: int,
+    lr: float,
+    eval_iters: int,
+    metric_name: str,
+    greater_is_better: bool,
+    metric_raw: float,
+    smoothing_alpha: float,
+    decision_metric: float,
+    ema_used_for_saved_model: bool,
+    eval_metric_on_ema: float | None,
+    device: str,
+    dtype: str,
+) -> None:
+    created_at = time.time()
+    sha256 = _sha256_of_file(pt_path)
     meta = {
-        "metric": metric,
+        "kind": kind,
+        "created_at": created_at,
+        "sha256": sha256,
         "iter_num": iter_num,
-        "filename": filename,
-        "created_at": time.time(),
-        "sha256": _sha256_of_file(path.with_name(filename)),
+        "tokens_seen": tokens_seen,
+        "lr": lr,
+        "eval": {
+            "iters": eval_iters,
+            "metric_name": metric_name,
+            "greater_is_better": greater_is_better,
+            "metric_raw": metric_raw,
+            "smoothing_alpha": smoothing_alpha,
+            "decision_metric": decision_metric,
+        },
+        "ema": {
+            "used_for_saved_model": ema_used_for_saved_model,
+            **({"eval_metric_on_ema": eval_metric_on_ema} if eval_metric_on_ema is not None else {}),
+        },
+        "env": {
+            "device": device,
+            "dtype": dtype,
+        },
+        "metric": decision_metric,
     }
-    path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    sidecar_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
 
 class _EMA:
@@ -314,10 +352,22 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
             _atomic_save(ckpt_base, last_path, rt.ckpt_atomic)
             if rt.ckpt_write_metadata:
                 _write_sidecar(
-                    last_path.with_suffix(".json"),
-                    metric=metric,
+                    sidecar_path=last_path.with_suffix(".json"),
+                    pt_path=last_path,
+                    kind="last",
                     iter_num=iter_num,
-                    filename=last_path.name,
+                    tokens_seen=tokens_per_iter * iter_num,
+                    lr=lr,
+                    eval_iters=rt.eval_iters,
+                    metric_name=("val_loss" if rt.ckpt_metric == "val_loss" else "ppl"),
+                    greater_is_better=rt.ckpt_greater_is_better,
+                    metric_raw=metric,
+                    smoothing_alpha=rt.best_smoothing_alpha,
+                    decision_metric=decision_metric,
+                    ema_used_for_saved_model=False,
+                    eval_metric_on_ema=None,
+                    device=device_type,
+                    dtype=rt.dtype,
                 )
 
             # Optional time-based safety checkpoint (updates timer after save)
@@ -339,10 +389,22 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
                     _atomic_save(payload, best_path, rt.ckpt_atomic)
                     if rt.ckpt_write_metadata:
                         _write_sidecar(
-                            best_path.with_suffix(".json"),
-                            metric=metric,
+                            sidecar_path=best_path.with_suffix(".json"),
+                            pt_path=best_path,
+                            kind="best",
                             iter_num=iter_num,
-                            filename=best_path.name,
+                            tokens_seen=tokens_per_iter * iter_num,
+                            lr=lr,
+                            eval_iters=rt.eval_iters,
+                            metric_name=("val_loss" if rt.ckpt_metric == "val_loss" else "ppl"),
+                            greater_is_better=rt.ckpt_greater_is_better,
+                            metric_raw=metric,
+                            smoothing_alpha=rt.best_smoothing_alpha,
+                            decision_metric=decision_metric,
+                            ema_used_for_saved_model=(ema is not None),
+                            eval_metric_on_ema=None,
+                            device=device_type,
+                            dtype=rt.dtype,
                         )
 
                     # Optional top-k archive of best checkpoints
