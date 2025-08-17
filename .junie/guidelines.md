@@ -254,16 +254,16 @@ This is a prescriptive, low‑choice standard for all Python imports in the code
    - If refactor is not immediately feasible, a single, narrowly-scoped local import is permitted inside the function that needs it, with a code comment "Cycle break: <short rationale>". Track a task to remove the cycle.
 
 10. Type-only imports
-   - Use typing.TYPE_CHECKING guards for heavy or optional typing dependencies.
-   - Prefer postponed evaluation of annotations (default in modern Python) to avoid runtime import costs.
+11. Use typing.TYPE_CHECKING guards for heavy or optional typing dependencies.
+12. Prefer postponed evaluation of annotations (default in modern Python) to avoid runtime import costs.
 
-11. Lazy imports
-   - Not allowed by default.
-   - Allowed only when both conditions hold: breaks a hard import cycle or defers a large, cold-path dependency with measurable startup benefit. Must be documented with a comment "Lazy import: <reason + expected impact>".
+13. Lazy imports
+14. Not allowed by default.
+15. Allowed only when both conditions hold: breaks a hard import cycle or defers a large, cold-path dependency with measurable startup benefit. Must be documented with a comment "Lazy import: <reason + expected impact>".
 
-12. __init__.py usage
-   - May exist for package recognition or minimal metadata only.
-   - Prohibited: symbol re-exports, wildcard exports, or public API surfaces.
+16. __init__.py usage
+17. May exist for package recognition or minimal metadata only.
+18. Prohibited: symbol re-exports, wildcard exports, or public API surfaces.
 
 ## Canonical Patterns
 
