@@ -57,25 +57,25 @@ def main(argv: list[str] | None = None) -> None:
         # 1) prepare
         fn()
         # 2) train
-        cfg: AppConfig = load_toml(args.config)
-        if cfg.train is None or cfg.sample is None:
+        loop_cfg: AppConfig = load_toml(args.config)
+        if loop_cfg.train is None or loop_cfg.sample is None:
             raise SystemExit(
                 "Config for loop must contain both [train] and [sample] blocks"
             )
-        train(cfg.train)
+        train(loop_cfg.train)
         # Copy dataset meta.pkl into out_dir for correct sampling (especially for char-level datasets)
         try:
-            data_cfg = cfg.train.data
+            data_cfg = loop_cfg.train.data
             if data_cfg.meta_pkl is not None:
                 src_meta = data_cfg.dataset_dir / data_cfg.meta_pkl
-                dst_meta = cfg.train.runtime.out_dir / "meta.pkl"
+                dst_meta = loop_cfg.train.runtime.out_dir / "meta.pkl"
                 if src_meta.exists():
                     shutil.copy2(src_meta, dst_meta)
         except Exception as e:
             # non-fatal; sampling will fallback if meta not present
             print(f"[loop] Warning: could not copy meta.pkl: {e}")
         # 3) sample
-        sample(cfg.sample)
+        sample(loop_cfg.sample)
         return
 
     cfg: AppConfig = load_toml(args.config)
