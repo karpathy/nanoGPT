@@ -1,0 +1,74 @@
+[train.model]
+n_layer = 2
+n_head = 2
+n_embd = 64
+block_size = 64
+dropout = 0.0
+bias = false
+
+[train.data]
+dataset_dir = "ml_playground/datasets/shakespeare"
+train_bin = "train.bin"
+val_bin = "val.bin"
+meta_pkl = "meta.pkl"
+batch_size = 8
+block_size = 64
+grad_accum_steps = 2
+
+[train.optim]
+learning_rate = 0.0006
+weight_decay = 0.1
+beta1 = 0.9
+beta2 = 0.95
+grad_clip = 1.0
+
+[train.schedule]
+decay_lr = true
+warmup_iters = 100
+lr_decay_iters = 2000
+min_lr = 0.00006
+
+[train.runtime]
+out_dir = "out/shakespeare_next"
+max_iters = 10000
+eval_interval = 20
+eval_iters = 10
+log_interval = 10
+eval_only = false
+always_save_checkpoint = true
+seed = 1337
+device = "cpu"
+dtype = "float32"
+compile = false
+# checkpoint policy
+ckpt_last_filename = "ckpt_last.pt"
+ckpt_best_filename = "ckpt_best.pt"
+ckpt_top_k = 0
+ckpt_metric = "val_loss"
+ckpt_greater_is_better = false
+ckpt_atomic = true
+ckpt_write_metadata = true
+ckpt_time_interval_minutes = 0
+best_smoothing_alpha = 0.0
+early_stop_patience = 0
+ema_decay = 0.0
+
+[sample.runtime]
+out_dir = "out/shakespeare_next"
+max_iters = 0
+eval_interval = 1
+eval_iters = 1
+log_interval = 1
+eval_only = false
+always_save_checkpoint = false
+seed = 1337
+device = "cpu"
+dtype = "float32"
+compile = false
+
+[sample.sample]
+start = "\n"
+num_samples = 2
+max_new_tokens = 64
+temperature = 0.8
+top_k = 200
