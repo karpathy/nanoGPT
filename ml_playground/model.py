@@ -12,8 +12,8 @@ class LayerNorm(nn.Module):
         self.weight = nn.Parameter(torch.ones(ndim))
         self.bias = nn.Parameter(torch.zeros(ndim)) if bias else None
 
-    def forward(self, input):
-        return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
+    def forward(self, x):
+        return F.layer_norm(x, self.weight.shape, self.weight, self.bias, 1e-5)
 
 
 class CausalSelfAttention(nn.Module):
@@ -145,7 +145,8 @@ class GPT(nn.Module):
             n_params -= self.transformer.wte.weight.numel()  # type: ignore[attr-defined]
         return n_params
 
-    def _init_weights(self, module):
+    @staticmethod
+    def _init_weights(module):
         if isinstance(module, nn.Linear):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
             if module.bias is not None:
@@ -189,7 +190,7 @@ class GPT(nn.Module):
         self.lm_head = nn.Linear(self.config.n_embd, self.config.vocab_size, bias=False)
 
     @classmethod
-    def from_pretrained(cls, model_type, override_args=None):
+    def from_pretrained(cls):
         assert False, "from_pretrained is not supported in this minimal port"
 
     def configure_optimizers(self, weight_decay, learning_rate, betas, device_type):
