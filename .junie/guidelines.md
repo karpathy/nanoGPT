@@ -10,9 +10,9 @@ Key policies (non-negotiable)
 
 
 ## Environment & Configuration (required)
-- Python version: see pyproject.toml (currently ">=3.9,<3.13").
-- Create venv and sync all dependency groups (runtime + dev):
-  - uv venv
+- Python version: see pyproject.toml (currently "<3.13").
+- Create a new venv and sync all dependency groups (runtime + dev):
+  - uv venv --clear
   - uv sync --all-groups
 
 Runtime entry points (no build step)
@@ -46,6 +46,43 @@ Configuration model (TOML-only)
   - uv run python -m pytest -q
 
 All four gates must pass. Do not open a PR otherwise.
+
+## Granular commits policy (strict)
+- Make small, focused commits. Each commit should contain exactly one logical change (e.g., fix a test, adjust a config, refactor a function). Avoid mixing refactors with feature changes or formatting.
+- Commit frequency: prefer several small commits over one large one. As a rough guide, keep commits under ~200 changed lines unless unavoidable.
+- Always run quality gates before each commit (not just before PR):
+  - uv run ruff check --fix . && uv run ruff format .
+  - uv run pyright
+  - uv run mypy _next
+  - uv run pytest -q (or filtered with -k when iterating)
+- Practical tips to keep commits granular:
+  - Stage hunks selectively: git add -p (or use your IDE’s chunk staging).
+  - Separate purely mechanical formatting/import changes from semantic changes.
+  - If you touch many files, consider splitting by concern (e.g., “rename module”, then “update imports”, then “fix types”).
+  - For large features, land in small reviewable increments that keep tests passing at every step.
+
+### Commit message format (Conventional Commits)
+Use Conventional Commits for all commit messages:
+- Format: <type>(<scope>): <subject>
+- Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+- Scope: a module or area, e.g., trainer, config, guidelines, tests
+- Subject: imperative, concise, lowercase (no trailing period)
+- Body (optional): wrap at ~72 chars; explain the why when useful
+
+Examples:
+- feat(trainer): write checkpoint sidecar JSON with decision inputs/outputs
+- test(trainer): add tests for checkpoint sidecar schema and behavior
+- chore(config): centralize tooling settings in pyproject.toml and exclude ignored dirs
+- docs(guidelines): document pyproject-only config, granular commits, and Conventional Commits
+
+Tool configuration policy (single-source)
+- All tool configuration must live in pyproject.toml only. Do not add standalone config files (no .ruff.toml, mypy.ini, pyrightconfig.json, pytest.ini, setup.cfg, etc.).
+- Centralized sections used:
+  - [tool.ruff] for lint/format settings.
+  - [tool.mypy] for type checker settings.
+  - [tool.pyright] for static analysis include/exclude.
+  - [tool.pytest.ini_options] for pytest testpaths and options.
+- If you need to change tool settings, edit pyproject.toml accordingly.
 
 
 ## Testing Workflow (authoritative)
@@ -119,6 +156,16 @@ Adding a new test
 
 
 ## Troubleshooting (strict)
+- `uv venv` hangs or appears to stall:
+  - Cause: You likely invoked `uv venv` from within an already-activated virtual environment (including conda), which can interfere with environment creation.
+  - Quick fixes (POSIX shells):
+    - Start a fresh shell, or run `deactivate` (or `conda deactivate`) first, then retry `uv venv`.
+    - Run without inherited venv/conda variables: `env -u VIRTUAL_ENV -u CONDA_PREFIX uv venv`.
+    - Select a specific interpreter to avoid confusion: `uv venv --python $(command -v python3)` (or an absolute path like `/usr/bin/python3`).
+  - Windows/PowerShell:
+    - Close the activated shell or run `deactivate` (or `conda deactivate`) and retry `uv venv`.
+    - Optionally select interpreter: `uv venv --python py -3` (or a full path to python.exe).
+  - If a previous `.venv` exists and is corrupted, remove it before recreating: `rm -rf .venv` (use with care).
 - Tests cannot import `_next`:
   - You are not running inside the project venv. Run `uv venv` then `uv sync --all-groups` and execute commands with `uv run` from the project root.
 - `uv run pytest` fails due to missing pytest:
