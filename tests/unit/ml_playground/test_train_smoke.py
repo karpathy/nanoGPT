@@ -13,7 +13,7 @@ from ml_playground.trainer import train
 
 
 def test_train_smoke(tmp_path: Path) -> None:
-    # Create tiny dataset
+    # Create a tiny dataset
     arr = (np.arange(1024) % 256).astype("uint16")
     (tmp_path / "train.bin").write_bytes(arr.tobytes())
     (tmp_path / "val.bin").write_bytes(arr.tobytes())

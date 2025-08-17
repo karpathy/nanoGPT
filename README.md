@@ -5,8 +5,8 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 
 Policy
 - UV is mandatory for all workflows (venv, dependency sync, running tools). Do not use pip, requirements.txt, or uvx.
-- Never set PYTHONPATH. Running inside the project venv ensures ml_playground is importable.
-- Quality tooling is mandatory before commit (ruff, mypy, pyright) and tests must pass.
+- Never set PYTHONPATH. Running inside the project, venv ensures ml_playground is importable.
+- Quality tooling is mandatory before commit (ruff, mypy, pyright), and tests must pass.
 
 Prerequisites
 - Install UV: https://docs.astral.sh/uv/
@@ -49,7 +49,7 @@ Sample
   uv run python -m ml_playground.cli sample ml_playground/configs/bundestag_char_cpu.toml
 
 Notes
-- Configuration is strictly via TOML dataclasses (see ml_playground/config.py). No CLI overrides.
+- Configuration is done strictly via TOML dataclasses (see ml_playground/config.py). No CLI overrides.
 - CPU/MPS are first-class. CUDA can be selected in the TOML if available.
 - Checkpoints: trainer writes ckpt_last.pt on every eval and updates ckpt_best.pt when improved (or when always_save_checkpoint is true). Training auto-resumes from ckpt_last.pt if it exists; to start fresh, delete ckpt_last.pt (and ckpt_best.pt optionally) or use a new out_dir. On resume, the checkpointed model_args (n_layer, n_head, n_embd, block_size, bias, vocab_size, dropout) take precedence over TOML values to ensure compatibility.
 - For small local runs, tune batch_size, block_size, and grad_accum_steps in the [train.data] section.
