@@ -50,6 +50,7 @@ dev = [
   "ruff>=0.6",
   "mypy>=1.11",
   "pyright>=1.1.380",
+  "types-requests>=2.32",
 ]
 
 
