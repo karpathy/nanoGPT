@@ -118,16 +118,16 @@ class _EMA:
 
 @torch.no_grad()
 def _estimate_loss(
-    model: GPT, batches: SimpleBatches, eval_iters: int, ctx, device: str
+    model: GPT, batches: SimpleBatches, eval_iters: int, ctx
 ) -> Dict[str, float]:
     model.eval()
     losses: Dict[str, float] = {}
     for split in ("train", "val"):
         acc = 0.0
         for _ in range(eval_iters):
-            X, Y = batches.get_batch(split)
+            x, y = batches.get_batch(split)
             with ctx:
-                _, loss = model(X, Y)
+                _, loss = model(x, y)
             acc += float(loss.item())
         losses[split] = acc / float(eval_iters)
     model.train()
@@ -237,23 +237,22 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
     if checkpoint is not None and "scaler" in checkpoint:
         try:
             scaler.load_state_dict(checkpoint["scaler"])  # resume scaler state
-        except Exception:
+        except (KeyError, RuntimeError, TypeError):
             pass
 
     # Restore RNG states if available
     if checkpoint is not None and "rng" in checkpoint:
         try:
             torch.set_rng_state(checkpoint["rng"].get("torch"))
-        except Exception:
+        except (KeyError, TypeError, RuntimeError):
             pass
         try:
             if torch.cuda.is_available() and checkpoint["rng"].get("cuda") is not None:
                 torch.cuda.set_rng_state_all(checkpoint["rng"].get("cuda"))
-        except Exception:
+        except (KeyError, TypeError, RuntimeError):
             pass
 
     # free memory ASAP for state dicts loaded
-    state_dict = None  # type: ignore
 
     raw_model = model
     run_model: GPT = model
@@ -282,7 +281,7 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
         # Do not clear checkpoint yet; it may be needed for best_metric seed; but we proceed
         checkpoint = None
 
-    X, Y = batches.get_batch("train")
+    x, y = batches.get_batch("train")
     t0 = time.time()
 
     tokens_per_iter = (
@@ -306,7 +305,7 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
             g["lr"] = lr
 
         if iter_num % rt.eval_interval == 0:
-            losses = _estimate_loss(run_model, batches, rt.eval_iters, ctx, device_type)
+            losses = _estimate_loss(run_model, batches, rt.eval_iters, ctx)
             val_loss = float(losses["val"])  # canonical source
             print(f"step {iter_num}: train {losses['train']:.4f}, val {val_loss:.4f}")
             metric = val_loss if rt.ckpt_metric == "val_loss" else math.exp(val_loss)
@@ -433,7 +432,7 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
                                 side = old.path.with_suffix(".json")
                                 if side.exists():
                                     side.unlink()
-                            except Exception as e:
+                            except (OSError, FileNotFoundError, PermissionError) as e:
                                 print(
                                     f"[ckpt] warning: failed to delete {old.path}: {e}"
                                 )
@@ -455,9 +454,9 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
         )  # Initialize to avoid unbound variable
         for _ in range(exp.data.grad_accum_steps):
             with ctx:
-                _, loss_t = run_model(X, Y)
+                _, loss_t = run_model(x, y)
                 loss = loss_t / exp.data.grad_accum_steps  # type: ignore[operator]
-            X, Y = batches.get_batch("train")
+            x, y = batches.get_batch("train")
             scaler.scale(loss).backward()
 
         if exp.optim.grad_clip > 0:
