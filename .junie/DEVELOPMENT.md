@@ -41,38 +41,195 @@ uv run pytest -n auto -W error --strict-markers --strict-config -v
 - `chore(config): centralize tooling settings in pyproject.toml`
 - `docs(guidelines): document pyproject-only config and granular commits`
 
-## Testing Standards
+## Testing Standards (ULTRA-STRICT POLICY - 100% SUCCESS REQUIRED)
 
-### Test Organization
-- **Structure**: `tests/unit/{module_name}/test_{module_name}.py`
-- **One test file per module** for clear separation of concerns
-- **100% test coverage** for stable modules with strict quality gates
+### 1. Test Framework and Runner
+- **Framework**: pytest only. Do not use unittest or nose.
+- **Runner**: `uv run pytest`
+- **Coverage**: `uv run coverage run -m pytest; uv run coverage report; uv run coverage xml`
+- **Random seed**: Enforced determinism via `tests/conftest.py` with fixed seed.
 
-### Test Quality Requirements
-- All warnings treated as errors
-- Comprehensive type hints in all test files
-- Pure pytest style (no unittest legacy patterns)
-- Strict markers and config validation
+**Rationale**: One toolchain avoids fragmentation and flakiness.
+
+### 2. Test Levels (ULTRA-STRICT Performance Requirements)
+- **Unit tests** (required): LIGHTNING FAST (<10ms each), isolated, no network, no filesystem writes. One spec per behavior. MUST achieve 100% success rate.
+- **Integration tests** (allowed/required): Minimal real integration across 2–3 components, no live external services. Use in-memory or ephemeral resources. Must complete in <100ms each.
+- **End-to-end tests** (discouraged): Only when explicitly approved; must run in CI under 30s total with recorded/replayed I/O.
+
+**Rationale**: Speed is critical for developer productivity; any slow test breaks the flow.
+
+### 3. Directory Layout and Naming
+- **Structure**: `tests/unit/ml_playground/test_<module>.py`
+- **Test functions**: `test_<behavior>_<condition>_<expected>()`
+- **Test classes** (if grouping needed): `Test<Subject>` only; no `__init__` in test classes.
+- **Docstrings**: Each test function must have a one-line docstring stating the behavior it covers.
+
+**Rationale**: Predictable discovery and easy navigation.
+
+### 4. What to Test (Scope Rules)
+- **Public API**: Must be covered.
+- **Bug fixes**: Add failing test first; keep it.
+- **Branches**: Each logical branch, error path, and exception message for public functions.
+- **Types and contracts**: If type hints exist, test boundary values and None handling.
+
+**Rationale**: Tests document contracts and prevent regressions.
+
+### 5. Test Writing Style
+- **AAA structure**: Arrange, Act, Assert; one assert type per test unless parametrized.
+- **Parametrize**: Use `@pytest.mark.parametrize` instead of loops/if-else in tests.
+- **No logic**: Beyond simple comprehensions and literals.
+- **Explicit values**: Avoid magic numbers—name them.
+
+**Rationale**: Readable tests fail clearly and localize faults.
+
+### 6. Fixtures (Strict Usage)
+- **Scope**: Prefer function-scoped; module/session only for expensive immutable data.
+- **Location**: All shared setup in `tests/conftest.py`.
+- **Purity**: Fixtures must be pure and return simple objects; avoid side effects.
+- **I/O fixtures**: If writing to disk/network, must be session-scoped, opt-in, behind marker.
+
+**Rationale**: Contained, fast, and reproducible tests.
+
+### 7. Mocking and Fakes (Hard Limits)
+- **Mock only external boundaries**: network (requests), filesystem, time, randomness, environment, subprocess.
+- **Do not mock internal code**: Test behavior through public API.
+- **Prefer fakes**: Over mocks where feasible (in-memory repositories, stub services).
+- **No live HTTP**: All network calls must be mocked or faked.
+
+**Rationale**: Stability and meaningful coverage.
+
+### 8. Data and I/O
+- **Default**: No filesystem writes. If necessary, use `tmp_path` fixture only.
+- **Test data**: Lives in `tests/data/`; small, versioned, deterministic. Use CSV/JSON/YAML.
+- **Data creation**: For pandas/numpy, create inline for clarity unless size requires files.
+
+**Rationale**: Deterministic, reviewable inputs.
+
+### 9. Randomness, Time, and Concurrency
+- **Randomness**: Seeded via `conftest.py`; inject seeds via parameters where possible.
+- **Time**: Freeze time via monkeypatching; never rely on real clocks for assertions.
+- **Concurrency**: Avoid sleeps. Use synchronization primitives or polling with short timeout.
+
+**Rationale**: Flakes come from nondeterminism and timing.
+
+### 10. Test Markers and Selection
+- **Allowed markers**: `slow`, `integration`, `perf`
+- **CI default**: Exclude `slow` and `perf`; include `integration`
+- **Developer default**: Run everything except `perf`
+
+**Rationale**: Fast feedback loop with targeted opt-ins.
+
+### 11. Coverage Requirements (ULTRA-STRICT CI Gates)
+- **Global line coverage**: 100% (NO EXCEPTIONS)
+- **Per-module line coverage**: 100% for ALL `ml_playground/*` modules
+- **Branch coverage**: 100% for ALL modules (NO COMPROMISES)
+- **New/changed code**: Must achieve 100% coverage before merge
+- **No pragma comments**: ABSOLUTELY FORBIDDEN except for impossible-to-test code (if 0:, if __name__ == __main__:)
+
+**Rationale**: Complete test coverage ensures zero blind spots and maximum confidence in code quality.
+
+### 12. Flaky Test Policy (IMMEDIATE ACTION REQUIRED)
+**ABSOLUTE ZERO TOLERANCE**: Any flaky test is IMMEDIATELY removed from the suite. NO 24h grace period. NO xfail exceptions. NO second chances.
+
+**Enforcement**: First flake = immediate deletion. Tests must be 100% deterministic and reliable.
+
+**Rationale**: Even a single flaky test destroys developer confidence and wastes precious development time.
 
 ### Running Tests
-```bash
-# Full suite
-uv run pytest -n auto -W error --strict-markers --strict-config -v
 
-# Filtered tests
-uv run pytest -n auto -W error --strict-markers --strict-config -v -k "config or data"
+#### Local Development
+```bash
+# Fast check
+uv run pytest -q
+
+# With markers (exclude slow/perf)
+uv run pytest -m "not slow and not perf" -q
+
+# Full suite with coverage
+uv run coverage run -m pytest -m "not perf"
+uv run coverage report -m
+```
+
+#### CI Commands
+```bash
+# Coverage check (CI)
+uv run coverage run -m pytest -m "not perf"
+uv run coverage report -m
+uv run coverage xml
+```
+
+### Example Test Patterns
+
+#### Parametrized Unit Test
+```python
+from __future__ import annotations
+import pytest
+from pathlib import Path
+from ml_playground.config import load_toml
+
+@pytest.mark.parametrize(
+    "block_size,expected_valid",
+    [
+        (16, True),
+        (32, True),
+        (0, False),
+        (-1, False),
+    ],
+)
+def test_config_validates_block_size(tmp_path: Path, block_size: int, expected_valid: bool) -> None:
+    """Test that config validation handles different block_size values correctly."""
+    # Arrange
+    config_content = f"""
+[model]
+block_size = {block_size}
+n_layer = 1
+n_head = 1
+n_embd = 32
+vocab_size = 256
+"""
+    config_path = tmp_path / "test.toml"
+    config_path.write_text(config_content, encoding="utf-8")
+    
+    # Act / Assert
+    if expected_valid:
+        config = load_toml(config_path)
+        assert config.model.block_size == block_size
+    else:
+        with pytest.raises(ValueError):
+            load_toml(config_path)
+```
+
+#### Fixture with tmp_path
+```python
+import json
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def config_file(tmp_path: Path) -> Path:
+    """Create a temporary config file for testing."""
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"enabled": True}), encoding="utf-8")
+    return path
 ```
 
 ### Adding New Tests
-Create files under `tests/unit/ml_playground/test_<name>.py`:
+Create files under `tests/unit/ml_playground/test_<module>.py`:
 
 ```python
+from __future__ import annotations
 from pathlib import Path
-from ml_playground.config import load_toml, AppConfig
+import pytest
+from ml_playground.config import load_toml, TrainExperiment
 
-def test_example(tmp_path: Path) -> None:
-    # Test implementation
-    pass
+def test_config_loading_handles_missing_file(tmp_path: Path) -> None:
+    """Test that config loading raises appropriate error for missing files."""
+    # Arrange
+    missing_path = tmp_path / "missing.toml"
+    
+    # Act / Assert
+    with pytest.raises(FileNotFoundError):
+        load_toml(missing_path)
 ```
 
 ## Code Style Standards
