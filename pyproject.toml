@@ -3,7 +3,7 @@ requires = ["hatchling>=1.25.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "nanogpt"
+name = "ml-playground"
 version = "0.0.0"
 description = "A minimal GPT training repo (uv-integrated)"
 readme = "README.md"
@@ -39,13 +39,14 @@ package = true
 # allow system-specific torch wheels to be resolved from PyPI
 
 [tool.hatch.build.targets.wheel]
-packages = ["_next"]
+packages = ["ml_playground"]
 
 [dependency-groups]
 # Mandatory dev tooling available in the project venv
 # Sync with: uv sync --all-groups (required for development)
 dev = [
   "pytest>=8",
+  "pytest-xdist>=3",
   "ruff>=0.6",
   "mypy>=1.11",
   "pyright>=1.1.380",
@@ -69,16 +70,16 @@ extend-exclude = [
 
 [tool.mypy]
 # When invoked without explicit targets, analyze only the project code.
-files = ["_next"]
+files = ["ml_playground"]
 # Also exclude common ignored/artifact directories if mypy is invoked without args.
 exclude = '^(out/|\.idea/|\.vscode/|\.venv/|env/|\.pytest_cache/|\.mypy_cache/|\.ruff_cache/|\.git/)'
 
 
 [tool.pytest.ini_options]
-# Mirror previous pytest.ini settings
-addopts = "-q"
+# Updated pytest settings for ml_playground
+addopts = "-n auto -W error --strict-markers --strict-config -v"
 testpaths = [
-  "_next/tests",
+  "tests",
 ]
 norecursedirs = [
   ".git",
@@ -93,7 +94,7 @@ norecursedirs = [
 ]
 
 [tool.pyright]
-include = ["_next"]
+include = ["ml_playground"]
 exclude = [
   ".git",
   ".idea",

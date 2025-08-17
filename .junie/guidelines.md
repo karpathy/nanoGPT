@@ -1,4 +1,4 @@
-# _next Developer Guidelines (STRICT UV-ONLY)
+# ml_playground Developer Guidelines (STRICT UV-ONLY)
 
 Audience: Advanced contributors working exclusively on the `_next` module. These rules are binding. Follow them exactly.
 
@@ -43,7 +43,7 @@ Configuration model (TOML-only)
 - Type checking:
   - uv run mypy _next
 - Tests:
-  - uv run python -m pytest -q
+  - uv run pytest -n auto -W error --strict-markers --strict-config -v
 
 All four gates must pass. Do not open a PR otherwise.
 
@@ -54,7 +54,7 @@ All four gates must pass. Do not open a PR otherwise.
   - uv run ruff check --fix . && uv run ruff format .
   - uv run pyright
   - uv run mypy _next
-  - uv run pytest -q (or filtered with -k when iterating)
+  - uv run pytest -n auto -W error --strict-markers --strict-config -v (or filtered with -k when iterating)
 - Practical tips to keep commits granular:
   - Stage hunks selectively: git add -p (or use your IDE’s chunk staging).
   - Separate purely mechanical formatting/import changes from semantic changes.
@@ -75,6 +75,16 @@ Examples:
 - chore(config): centralize tooling settings in pyproject.toml and exclude ignored dirs
 - docs(guidelines): document pyproject-only config, granular commits, and Conventional Commits
 
+### Automatic Fixes Applied
+
+Ruff automatically applies modern Python best practices:
+
+- **Type annotations**: `typing.List` → `list`, `typing.Dict` → `dict`
+- **Union syntax**: `Optional[str]` → `str | None`, `Union[A, B]` → `A | B`
+- **Import organization**: Sorted and cleaned automatically
+- **Code formatting**: Black-compatible formatting
+- **Whitespace cleanup**: Trailing whitespace removal
+
 Tool configuration policy (single-source)
 - All tool configuration must live in pyproject.toml only. Do not add standalone config files (no .ruff.toml, mypy.ini, pyrightconfig.json, pytest.ini, setup.cfg, etc.).
 - Centralized sections used:
@@ -88,11 +98,45 @@ Tool configuration policy (single-source)
 ## Testing Workflow (authoritative)
 Baseline: After `uv sync --all-groups`, runtime deps (numpy, torch, etc.) and dev tools (pytest, ruff, mypy, pyright) are available in the project venv.
 
+**Test Execution:**
+- Always run tests from the project root using UV:
+  ```bash
+  uv run pytest -n auto -W error --strict-markers --strict-config -v
+  ```
+- Use `pytest-xdist` for parallel execution (`-n auto`).
+- Always run tests from the root folder and never set `PYTHONPATH` manually.
+- All tests must pass with warnings treated as errors. Fix all warnings before merging.
+
 Run tests from project root only:
 - Full suite:
-  - uv run pytest -q
+  - uv run pytest -n auto -W error --strict-markers --strict-config -v
 - Filtered (example):
-  - uv run pytest -q -k "config or data"
+  - uv run pytest -n auto -W error --strict-markers --strict-config -v -k "config or data"
+
+### Test Organization Philosophy
+
+**Decision**: One test file per module, organized by unit under test
+**Rationale**: 
+- Clear separation of concerns
+- Easy to locate and run specific tests
+- Better maintainability and debugging
+- Follows modern pytest best practices
+
+**Structure**:
+```
+tests/unit/{module_name}/test_{module_name}.py
+```
+
+### Test Quality Standards
+
+**Decision**: 100% test coverage for stable modules with strict quality gates
+**Implementation**:
+- All warnings treated as errors
+- Strict markers and config validation
+- Comprehensive type hints in all test files
+- No unittest legacy patterns (pure pytest style)
+
+**Rationale**: Ensures high code quality and catches issues early in development
 
 Adding a new test
 - Create a file under `_next/tests/test_<name>.py`.
@@ -155,6 +199,139 @@ Adding a new test
   - Use device="cpu" for tests and local CI; MPS/CUDA may be used when explicitly configured and available.
 
 
+#  Import Guidelines: Strict Policy and Rationale
+
+This is a prescriptive, low‑choice standard for all Python imports in the codebase. Follow as written.
+
+## Core Principles
+- Single source of truth: import only from the definitive submodule that defines the symbol.
+- Zero ambiguity: one allowed way for each common scenario.
+- No hidden behavior: imports must be pure, cheap, and deterministic.
+
+## Mandatory Rules (No Exceptions Without Approval)
+
+1. Absolute, submodule-level imports only
+   - Use absolute project-rooted paths.
+   - Import directly from the concrete submodule that defines the symbol.
+   - Prohibited: relative imports, umbrella/facade imports, and re-exports.
+
+2. No star imports
+   - Prohibited: from module import *.
+
+3. Import location
+   - All imports at top-of-file, below the module docstring.
+   - Prohibited: local/function-scope imports, except for approved cycle breaks or optional deps (see rules 8–9).
+
+4. Ordering and grouping
+   - Exactly three groups, in order, one blank line between groups:
+     1) Standard library
+     2) Third-party
+     3) Local/project
+   - Alphabetize within each group.
+   - Use the project's formatter/import organizer to enforce this automatically.
+
+5. Aliasing
+   - Allowed only for the following well-known libraries:
+     - import numpy as np
+     - import pandas as pd
+   - Otherwise, no aliases. Use full module paths.
+
+6. Re-exports and facades
+   - Prohibited: exposing symbols via package-level __init__.py, "compat" modules, or import shims.
+   - Consumers must import from the canonical submodule.
+
+7. Side-effect free imports
+   - Importing must not perform I/O, network calls, logging configuration, global registrations, or mutate global state.
+   - If unavoidable for a plugin mechanism, move side effects behind an explicit function that callers invoke manually.
+
+8. Optional dependencies
+   - Import optional packages inside the narrowest function that needs them.
+   - On missing dependency, raise a clear error with installation guidance.
+   - Prohibited: optional deps at module top-level.
+
+9. Cycle handling
+   - First choice: refactor to remove the cycle (extract shared code to a lower-level module).
+   - If refactor is not immediately feasible, a single, narrowly-scoped local import is permitted inside the function that needs it, with a code comment "Cycle break: <short rationale>". Track a task to remove the cycle.
+
+10. Type-only imports
+   - Use typing.TYPE_CHECKING guards for heavy or optional typing dependencies.
+   - Prefer postponed evaluation of annotations (default in modern Python) to avoid runtime import costs.
+
+11. Lazy imports
+   - Not allowed by default.
+   - Allowed only when both conditions hold: breaks a hard import cycle or defers a large, cold-path dependency with measurable startup benefit. Must be documented with a comment "Lazy import: <reason + expected impact>".
+
+12. __init__.py usage
+   - May exist for package recognition or minimal metadata only.
+   - Prohibited: symbol re-exports, wildcard exports, or public API surfaces.
+
+## Canonical Patterns
+
+- Import few names from a concrete submodule:
+```python
+from project.module.submodule import Foo, Bar
+```
+
+
+- Import many names from one submodule:
+```python
+import project.module.submodule as submodule  # avoid custom aliases
+```
+
+
+- Optional dependency (function-scoped):
+```python
+def export_to_parquet(df, path):
+      try:
+          import pyarrow.parquet as pq
+      except ImportError as e:
+          raise RuntimeError("Parquet export requires 'pyarrow'. Install it to use this feature.") from e
+      pq.write_table(df, path)
+```
+
+
+- Type-only import for a heavy/optional type:
+```python
+from typing import TYPE_CHECKING
+  if TYPE_CHECKING:
+      from heavy_lib import HugeType
+```
+
+
+- Temporary cycle break (documented):
+```python
+def compute():
+      # Cycle break: runtime imports runner, runner imports compute
+      from project.core.runner import run
+      return run()
+```
+
+
+## Tooling Enforcement
+
+- Run the project's linter/formatter/import organizer before every commit to enforce ordering and grouping.
+- Type checkers must pass with type-only guards for heavy/optional types.
+
+## Review Checklist (Must Pass All)
+
+- Are all imports absolute and from definitive submodules?
+- Any star imports, umbrella paths, or re-exports? (Must be none.)
+- Import groups in order: stdlib, third-party, local? Alphabetized?
+- Any top-level side effects or logging config triggered by import?
+- Any function-scope imports? If yes, only for optional deps or documented cycle break?
+- Optional deps imported only where needed with a clear error message?
+- Heavy/optional type imports guarded with TYPE_CHECKING?
+
+## Rationale (Concise)
+
+- Explicitness improves searchability, refactoring safety, and API stability.
+- Deterministic, side-effect-free imports yield faster startup and more reliable tests.
+- Reduced choice minimizes bikeshedding and accelerates reviews.
+- Tight rules prevent accidental public APIs and long-lived cycles.
+
+Adhering to these rules ensures clarity, stability, and predictable behavior across the codebase.
+
+
 ## Troubleshooting (strict)
 - `uv venv` hangs or appears to stall:
   - Cause: You likely invoked `uv venv` from within an already-activated virtual environment (including conda), which can interfere with environment creation.
@@ -180,4 +357,4 @@ Adding a new test
 - uv run ruff check --fix . && uv run ruff format .
 - uv run pyright
 - uv run mypy _next
-- uv run pytest -q _next/tests
+- uv run pytest -n auto -W error --strict-markers --strict-config -v
