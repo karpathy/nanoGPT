@@ -51,3 +51,55 @@ dev = [
   "pyright>=1.1.380",
 ]
 
+
+
+[tool.ruff]
+respect-gitignore = true
+extend-exclude = [
+  ".idea",
+  ".vscode",
+  "out",
+  ".venv",
+  "env",
+  ".pytest_cache",
+  ".mypy_cache",
+  ".ruff_cache",
+  ".git",
+]
+
+[tool.mypy]
+# When invoked without explicit targets, analyze only the project code.
+files = ["_next"]
+# Also exclude common ignored/artifact directories if mypy is invoked without args.
+exclude = '^(out/|\.idea/|\.vscode/|\.venv/|env/|\.pytest_cache/|\.mypy_cache/|\.ruff_cache/|\.git/)'
+
+
+[tool.pytest.ini_options]
+# Mirror previous pytest.ini settings
+addopts = "-q"
+testpaths = [
+  "_next/tests",
+]
+norecursedirs = [
+  ".git",
+  ".idea",
+  ".vscode",
+  ".venv",
+  "env",
+  "out",
+  ".pytest_cache",
+  ".mypy_cache",
+  ".ruff_cache",
+]
+
+[tool.pyright]
+include = ["_next"]
+exclude = [
+  ".git",
+  ".idea",
+  ".vscode",
+  "out",
+  ".venv",
+  ".mypy_cache",
+  ".ruff_cache",
+]
