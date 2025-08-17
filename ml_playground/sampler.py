@@ -50,7 +50,7 @@ def _codec_from_meta(
             lambda s: enc.encode(s, allowed_special={"<|endoftext|>"}),
             lambda ids: enc.decode(ids),
         )
-    except Exception:
+    except ImportError:
 
         def encode_bytes(s: str) -> list[int]:
             return list(s.encode("utf-8", errors="ignore"))
@@ -69,7 +69,7 @@ def sample(exp: SampleExperiment) -> None:
     model.eval().to(device_type)
     run_model = model
     if rt.compile:
-        run_model = torch.compile(model)  # type: ignore[attr-defined]
+        run_model = torch.compile(model)  # type: ignore[attr-defined,assignment]
 
     # We default to GPT-2 BPE if no dataset meta is explicitly provided alongside outputs
     # If you store meta next to checkpoint in future, it will be picked up automatically
