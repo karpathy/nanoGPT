@@ -21,19 +21,43 @@ class _MemmapReader:
 def _sample_batch(
     reader: _MemmapReader, batch_size: int, block_size: int, device: str
 ) -> Tuple[torch.Tensor, torch.Tensor]:
-    # choose random start positions
-    idx = np.random.randint(
-        0, reader.length - block_size, size=(batch_size,), dtype=np.int64
-    )
-    x_np = np.stack(
-        [reader.arr[i : i + block_size].astype(np.int64, copy=False) for i in idx]
-    )
-    y_np = np.stack(
-        [
-            reader.arr[i + 1 : i + 1 + block_size].astype(np.int64, copy=False)
-            for i in idx
-        ]
-    )
+    L = int(reader.length)
+    if L == 0:
+        raise ValueError(
+            "Dataset is empty: no tokens available. Ensure the dataset preparation wrote non-empty train/val bins."
+        )
+
+    if L <= block_size:
+        # dataset shorter than (or equal to) block_size: wrap around to build sequences
+        idx = np.random.randint(0, L, size=(batch_size,), dtype=np.int64)
+        base = np.asarray(reader.arr)
+
+        def take_seq(start: int, length: int) -> np.ndarray:
+            offs = (start + np.arange(length, dtype=np.int64)) % L
+            return base[offs]
+
+        x_np = np.stack(
+            [take_seq(int(i), block_size).astype(np.int64, copy=False) for i in idx]
+        )
+        y_np = np.stack(
+            [
+                take_seq(int((i + 1) % L), block_size).astype(np.int64, copy=False)
+                for i in idx
+            ]
+        )
+    else:
+        # normal path: sample contiguous blocks without wrapping
+        idx = np.random.randint(0, L - block_size, size=(batch_size,), dtype=np.int64)
+        x_np = np.stack(
+            [reader.arr[i : i + block_size].astype(np.int64, copy=False) for i in idx]
+        )
+        y_np = np.stack(
+            [
+                reader.arr[i + 1 : i + 1 + block_size].astype(np.int64, copy=False)
+                for i in idx
+            ]
+        )
+
     x = torch.from_numpy(x_np).to(device)
     y = torch.from_numpy(y_np).to(device)
     return x, y
@@ -43,8 +67,14 @@ class SimpleBatches:
     def __init__(self, data: DataConfig, device: str) -> None:
         self.data = data
         self.device = device
-        self.train = _MemmapReader.open(data.dataset_dir / data.train_bin)
-        self.val = _MemmapReader.open(data.dataset_dir / data.val_bin)
+        train_path = data.dataset_dir / data.train_bin
+        val_path = data.dataset_dir / data.val_bin
+        if not train_path.exists() or not val_path.exists():
+            raise FileNotFoundError(
+                f"Training data not found at {train_path} and/or {val_path}"
+            )
+        self.train = _MemmapReader.open(train_path)
+        self.val = _MemmapReader.open(val_path)
 
     def get_batch(self, split: str) -> Tuple[torch.Tensor, torch.Tensor]:
         reader = self.train if split == "train" else self.val
