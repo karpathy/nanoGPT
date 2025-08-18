@@ -60,3 +60,16 @@ Loop
 
 - Shakespeare end-to-end:
   uv run python -m ml_playground.cli loop shakespeare ml_playground/configs/shakespeare_cpu.toml
+
+
+TensorBoard (auto-enabled)
+- Training automatically logs to TensorBoard for both the generic trainer and the HF+PEFT finetuning integration (no config flags needed).
+- Log directory: out_dir/logs/tb inside your configured out_dir.
+- Scalars:
+  - train/loss, val/loss
+  - train/lr
+  - train/tokens_per_sec
+  - train/step_time_ms (generic trainer only)
+- View the dashboard:
+  uv run tensorboard --logdir out/<your_out_dir>/logs/tb --port 6006
+  Then open http://localhost:6006

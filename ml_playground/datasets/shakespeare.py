@@ -18,7 +18,7 @@ def main() -> None:
     - Encodes with tiktoken GPT-2 BPE
     - Writes uint16 train.bin and val.bin
     """
-    ds_dir = Path("ml_playground") / "datasets" / "shakespeare"
+    ds_dir = Path("ml_playground/datasets/shakespeare")
     ds_dir.mkdir(parents=True, exist_ok=True)
     input_file_path = ds_dir / "input.txt"
 
