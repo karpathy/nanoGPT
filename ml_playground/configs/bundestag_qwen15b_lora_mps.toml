@@ -1,0 +1,137 @@
+# Bundestag Finetuning (Qwen2.5-1.5B + LoRA on MPS)
+# This config drives a 3-stage pipeline: prepare -> train -> sample.
+# Each option is annotated to explain its role and recommended values.
+
+[prepare]
+# Name of the dataset pipeline to use.
+dataset = "bundestag_finetuning_mps"
+# Path to a folder of raw .txt files (recursively scanned) or a single input.txt in this folder.
+raw_dir = "ml_playground/datasets/bundestag_finetuning_mps/plenarprotokolle"
+# Directory where the prepared dataset artifacts are written (tokenizer, train.jsonl, val.jsonl, meta.json).
+dataset_dir = "ml_playground/datasets/bundestag_finetuning_mps"
+# Whether to wrap speeches with structure tokens (SPEECH_START/END, SPEAKER, etc.) during preparation.
+add_structure_tokens = true
+# Token string used to separate concatenated documents during packing; ensure it’s present if you depend on it.
+doc_separator = "<DOC_SEP>"
+
+[train.hf_model]
+# Hugging Face base model to fine-tune with LoRA.
+model_name = "Qwen/Qwen2.5-1.5B"
+# Enable gradient checkpointing to reduce memory at the cost of additional compute.
+gradient_checkpointing = true
+# Logical sequence length for data packing/truncation during training (tokens per training block).
+block_size = 256
+
+[train.peft]
+# Toggle LoRA training. If false, trains full model (not recommended on consumer hardware).
+enabled = true
+# Intrinsic rank of LoRA matrices (capacity of the adapter).
+r = 8
+# Scaling factor for LoRA updates (effective update magnitude).
+lora_alpha = 16
+# Dropout applied to LoRA layers (regularization).
+lora_dropout = 0.05
+# Whether to learn bias terms: "none", "all", or "lora_only".
+bias = "none"
+# Target module names within the transformer blocks to apply LoRA to.
+target_modules = ["q_proj","v_proj","o_proj"]
+# If true, also apply LoRA to MLP projections (up_proj/down_proj/gate_proj).
+extend_mlp_targets = false
+
+[train.data]
+# Directory containing prepared dataset artifacts (tokenizer/, train.jsonl, val.jsonl, meta.json).
+dataset_dir = "ml_playground/datasets/bundestag_finetuning_mps"
+# Per-step batch size (before gradient accumulation).
+batch_size = 8
+# Number of micro-steps to accumulate gradients before an optimizer step.
+grad_accum_steps = 8
+# Token block length for training examples (should usually match hf_model.block_size).
+block_size = 256
+# Whether to shuffle training blocks each epoch (set false for reproducible debug runs).
+shuffle = false
+
+[train.optim]
+# Base learning rate for AdamW optimizer.
+learning_rate = 0.002
+# L2 weight decay strength (0 disables).
+weight_decay = 0.0
+# AdamW beta1 (momentum) coefficient.
+beta1 = 0.9
+# AdamW beta2 (variance) coefficient.
+beta2 = 0.95
+# Clip global gradient norm to this value (0 or null to disable).
+grad_clip = 1.0
+
+[train.schedule]
+# Enable cosine decay schedule (with warmup).
+decay_lr = true
+# Number of warmup iterations at the start of training.
+warmup_iters = 1
+# Iteration index at which LR decays to min_lr (spans warmup_iters..lr_decay_iters).
+lr_decay_iters = 200000
+# Minimum learning rate at the end of decay.
+min_lr = 0.0002
+
+[train.runtime]
+# Output directory for checkpoints, adapters, tokenizer copy, logs, and samples.
+out_dir = "out/bundestag_qwen15b_lora_mps"
+# Total number of optimizer steps to run (across all epochs/data passes).
+max_iters = 200000
+# Frequency (in steps) to run evaluation on the validation set.
+eval_interval = 1
+# Number of validation batches to evaluate per evaluation step.
+eval_iters = 10
+# Frequency (in steps) to print training logs.
+log_interval = 1
+# If true, run a single evaluation and exit (no training).
+eval_only = false
+# If true, always write checkpoints at evaluation steps (best/last pointers are maintained).
+always_save_checkpoint = true
+# Global random seed for Python and torch.
+seed = 1337
+# Compute device: "mps" (Apple), "cuda" (NVIDIA), or "cpu".
+device = "mps"
+# Compute dtype: "float16" recommended on mps/cuda for memory and speed; "float32" for numerical stability.
+dtype = "float16"
+# If true, compile the model (PyTorch 2.x) to potentially speed up training.
+compile = false
+# Also checkpoint periodically based on wall-clock minutes (0 to disable).
+ckpt_time_interval_minutes = 10
+# If true, write checkpoints atomically (temp dir then rename) to avoid partial writes.
+ckpt_atomic = true
+# Exponential smoothing factor for tracking "best" metric (0 disables smoothing).
+best_smoothing_alpha = 0.0
+# Early stopping patience in evaluations without improvement (<=0 disables early stopping).
+early_stop_patience = 5
+# Exponential moving average decay for model parameters (0 disables EMA).
+ema_decay = 0.0
+# If true, save a fully merged model when achieving best validation (in addition to adapters).
+save_merged_on_best = true
+# Keep only the latest N iter_* checkpoints (0 disables pruning).
+keep_last_n = 3
+
+[sample.runtime]
+# Directory from which to read adapters/tokenizer and where to write generated samples.
+out_dir = "out/bundestag_qwen15b_lora_mps"
+# Compute device for sampling: "mps", "cuda", or "cpu".
+device = "mps"
+# Compute dtype during sampling; "float16" is common for speed/memory.
+dtype = "float16"
+# If true, torch.compile the model before generation (may add startup overhead).
+compile = false
+# Random seed applied before sampling to make runs reproducible (when do_sample=true).
+seed = 1337
+
+[sample.sample]
+# Prompt text to start generation; can also be "FILE:/path/to/prompt.txt".
+start = "\nNächste Rednerin ist die Vorsitzende der AfD-Fraktion, Dr. Alice Weidel.\n(Beifall bei der AfD)\n  Dr. Alice Weidel (AfD): \n"
+# Number of samples to generate per run.
+num_samples = 1
+# Maximum number of new tokens to generate (beyond the prompt).
+max_new_tokens = 1024
+# Softness of sampling; higher -> more random (set 0 for greedy).
+temperature = 0.8
+# Top-k sampling: restrict next-token choices to the k most likely (0 disables).
+top_k = 200
+# Nucleus sampling: restrict to smallest set of tokens whose cumulative prob >= top_p (1.0 disables).
+top_p = 0.9
