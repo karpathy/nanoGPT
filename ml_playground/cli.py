@@ -1,5 +1,6 @@
 from __future__ import annotations
 import argparse
+import os
 from argparse import ArgumentParser
 from pathlib import Path
 from ml_playground.config import load_toml, AppConfig
@@ -7,7 +8,42 @@ from ml_playground.trainer import train
 from ml_playground.sampler import sample
 
 
+def _load_env_files() -> None:
+    """Load .env files from CWD and project root without extra dependencies.
+
+    - Does not override already-set environment variables.
+    - Supports simple KEY=VALUE lines; ignores comments and blank lines.
+    - Checks current working directory and the repository root derived from this file.
+    """
+    def _parse_set(path: Path) -> None:
+        try:
+            if not path.exists():
+                return
+            for line in path.read_text(encoding="utf-8").splitlines():
+                s = line.strip()
+                if not s or s.startswith("#"):
+                    continue
+                if "=" not in s:
+                    continue
+                key, val = s.split("=", 1)
+                key = key.strip()
+                val = val.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = val
+        except Exception:
+            # Best-effort only; silently ignore parsing errors
+            pass
+
+    # 1) CWD .env
+    _parse_set(Path.cwd() / ".env")
+    # 2) Project root .env (repo root is one level above the package directory)
+    repo_root = Path(__file__).resolve().parent.parent
+    _parse_set(repo_root / ".env")
+
+
 def main(argv: list[str] | None = None) -> None:
+    # Load .env variables early so downstream modules can see them
+    _load_env_files()
     parser: ArgumentParser = configureArguments()
     # Add --delete-existing (-D) to ArgumentParser directly
     parser.add_argument(
@@ -41,8 +77,31 @@ def main(argv: list[str] | None = None) -> None:
                 pass
         return False
 
+    # Special: If the dataset is "gemma_finetuning_mps" OR the config file contains the integration-specific block
+    def is_gemma_finetuning_mps(dataset: str | None, config: Path | None) -> bool:
+        if dataset == "gemma_finetuning_mps":
+            return True
+        if config is not None and config.exists():
+            import tomllib
+
+            try:
+                with open(config, "rb") as f:
+                    d = tomllib.load(f)
+                # Check for Gemma-specific config structure
+                if (
+                    "prepare" in d
+                    and "train" in d
+                    and ("hf_model" in d["train"] or "peft" in d["train"])
+                    and d.get("prepare", {}).get("dataset") == "gemma_finetuning_mps"
+                ):
+                    return True
+            except Exception:
+                pass
+        return False
+
     # Integration always handles bundestag_finetuning_mps configs
     from ml_playground.datasets import bundestag_finetuning_mps as integ
+    from ml_playground.datasets import gemma_finetuning_mps as gemma_integ
 
     import shutil
     import tomllib
@@ -79,6 +138,15 @@ def main(argv: list[str] | None = None) -> None:
             )
             raise SystemExit(
                 "The PEFT finetuning pipeline (bundestag_finetuning_mps) must be run via the 'loop' command."
+            )
+        if is_gemma_finetuning_mps(
+            getattr(args, "dataset", None), getattr(args, "config", None)
+        ):
+            print(
+                "[ml_playground] For Gemma finetuning configs, run with: ml_playground loop gemma_finetuning_mps CONFIG.toml"
+            )
+            raise SystemExit(
+                "The PEFT finetuning pipeline (gemma_finetuning_mps) must be run via the 'loop' command."
             )
         if args.delete_existing:
             out_dir = _find_out_dir(
@@ -123,6 +191,40 @@ def main(argv: list[str] | None = None) -> None:
                 "[ml_playground] Routing to integration: bundestag_finetuning_mps (sample only)"
             )
             integ.sample_from_toml(args.config)
+        else:
+            raise SystemExit(
+                f"[ml_playground] Unsupported command '{args.cmd}' for this integration."
+            )
+        return
+
+    # For Gemma integration commands: route each one to the proper integration entrypoint
+    if is_gemma_finetuning_mps(
+        getattr(args, "dataset", None), getattr(args, "config", None)
+    ):
+        if args.delete_existing:
+            out_dir = _find_out_dir(getattr(args, "config", None)) or getattr(
+                args, "out_dir", None
+            )
+            if out_dir and out_dir.exists():
+                print(
+                    f"[ml_playground] Deleting output directory {out_dir} as requested."
+                )
+                shutil.rmtree(out_dir)
+        if args.cmd == "loop":
+            print(
+                "[ml_playground] Routing to integration: gemma_finetuning_mps (PEFT pipeline: prepare → train → sample)"
+            )
+            gemma_integ.loop(args.config)
+        elif args.cmd == "train":
+            print(
+                "[ml_playground] Routing to integration: gemma_finetuning_mps (train only)"
+            )
+            gemma_integ.train_from_toml(args.config)
+        elif args.cmd == "sample":
+            print(
+                "[ml_playground] Routing to integration: gemma_finetuning_mps (sample only)"
+            )
+            gemma_integ.sample_from_toml(args.config)
         else:
             raise SystemExit(
                 f"[ml_playground] Unsupported command '{args.cmd}' for this integration."
@@ -211,6 +313,7 @@ def configureArguments():
             "bundestag_char",
             "bundestag_tiktoken",
             "bundestag_finetuning_mps",
+            "gemma_finetuning_mps",
         ],
         help="Dataset name",
     )
