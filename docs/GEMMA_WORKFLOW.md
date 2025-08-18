@@ -326,3 +326,21 @@ Notes:
 - You must have been granted access to the gated repo (visit the model page and request access if needed).
 - If you still see a 401, re-check your token and that it has the correct scope. The CLI will print a helpful hint.
 - To remove a persistent login: uv run huggingface-cli logout
+
+
+## Download caching (prevent repeated downloads)
+
+To avoid re-downloading Gemma weights and tokenizer files on each run, the workflow uses a persistent Hugging Face cache:
+
+- If you have any of these environment variables set, that location is used (first match wins):
+  - TRANSFORMERS_CACHE
+  - HUGGINGFACE_HUB_CACHE
+  - HF_HOME
+- Otherwise, a project-local cache directory is used by default: .hf_cache at the repository root.
+
+This cache is automatically passed to all model/tokenizer loading calls, so repeated runs won’t fetch the same tensors again.
+
+Tips:
+- To change the cache location, set TRANSFORMERS_CACHE=/path/to/cache (preferred), or HUGGINGFACE_HUB_CACHE/HF_HOME.
+- To clear the cache, delete the directory (e.g., rm -rf .hf_cache) or use huggingface-cli cache commands.
+- The cache directory .hf_cache is ignored by Git and safe to keep between runs.

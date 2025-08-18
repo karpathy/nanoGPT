@@ -27,3 +27,6 @@ ml_playground/datasets/**/val.jsonl
 ml_playground/datasets/**/tokenizer/
 .output.txt
 /.env
+
+# Local Hugging Face/Transformers cache for Gemma downloads
+/.hf_cache
