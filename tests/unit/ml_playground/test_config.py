@@ -40,3 +40,156 @@ out_dir = "out/test_next"
     assert cfg.sample is not None
     assert isinstance(cfg.train.runtime.out_dir, Path)
     assert isinstance(cfg.train.data.dataset_dir, Path)
+
+
+def test_load_toml_empty_config(tmp_path: Path) -> None:
+    """Test loading empty TOML config returns AppConfig with None values."""
+    toml_text = ""
+    cfg_path = tmp_path / "empty.toml"
+    cfg_path.write_text(toml_text)
+
+    cfg: AppConfig = load_toml(cfg_path)
+    assert cfg.train is None
+    assert cfg.sample is None
+
+
+def test_load_toml_incomplete_train_config(tmp_path: Path) -> None:
+    """Test loading TOML with incomplete train config returns None for train."""
+    # Missing required sections like model, data, optim, schedule, runtime
+    toml_text = """
+[train.model]
+n_layer=1
+
+# Missing other required sections
+"""
+    cfg_path = tmp_path / "incomplete.toml"
+    cfg_path.write_text(toml_text)
+
+    cfg: AppConfig = load_toml(cfg_path)
+    assert cfg.train is None
+    assert cfg.sample is None
+
+
+def test_load_toml_incomplete_sample_config(tmp_path: Path) -> None:
+    """Test loading TOML with incomplete sample config returns None for sample."""
+    toml_text = """
+[sample.runtime]
+out_dir = "out/test"
+# Missing sample.sample section
+"""
+    cfg_path = tmp_path / "incomplete_sample.toml"
+    cfg_path.write_text(toml_text)
+
+    cfg: AppConfig = load_toml(cfg_path)
+    assert cfg.train is None
+    assert cfg.sample is None
+
+
+def test_load_toml_no_train_section(tmp_path: Path) -> None:
+    """Test loading TOML without train section."""
+    toml_text = """
+[sample.runtime]
+out_dir = "out/test"
+
+[sample.sample]
+"""
+    cfg_path = tmp_path / "no_train.toml"
+    cfg_path.write_text(toml_text)
+
+    cfg: AppConfig = load_toml(cfg_path)
+    assert cfg.train is None
+    assert cfg.sample is not None
+
+
+def test_load_toml_no_sample_section(tmp_path: Path) -> None:
+    """Test loading TOML without sample section."""
+    toml_text = """
+[train.model]
+n_layer=1
+n_head=1
+n_embd=32
+block_size=16
+
+[train.data]
+dataset_dir = "data/shakespeare"
+
+[train.optim]
+learning_rate = 0.001
+
+[train.schedule]
+
+[train.runtime]
+out_dir = "out/test"
+"""
+    cfg_path = tmp_path / "no_sample.toml"
+    cfg_path.write_text(toml_text)
+
+    cfg: AppConfig = load_toml(cfg_path)
+    assert cfg.train is not None
+    assert cfg.sample is None
+
+
+def test_load_toml_train_missing_data_section(tmp_path: Path) -> None:
+    """Test loading TOML with train section but missing data subsection."""
+    toml_text = """
+[train.model]
+n_layer=1
+n_head=1
+n_embd=32
+block_size=16
+
+[train.optim]
+learning_rate = 0.001
+
+[train.schedule]
+
+[train.runtime]
+out_dir = "out/test"
+# Missing [train.data] section
+"""
+    cfg_path = tmp_path / "missing_data.toml"
+    cfg_path.write_text(toml_text)
+
+    cfg: AppConfig = load_toml(cfg_path)
+    assert cfg.train is None
+    assert cfg.sample is None
+
+
+def test_load_toml_train_missing_runtime_section(tmp_path: Path) -> None:
+    """Test loading TOML with train section but missing runtime subsection."""
+    toml_text = """
+[train.model]
+n_layer=1
+n_head=1
+n_embd=32
+block_size=16
+
+[train.data]
+dataset_dir = "data/shakespeare"
+
+[train.optim]
+learning_rate = 0.001
+
+[train.schedule]
+# Missing [train.runtime] section
+"""
+    cfg_path = tmp_path / "missing_runtime.toml"
+    cfg_path.write_text(toml_text)
+
+    cfg: AppConfig = load_toml(cfg_path)
+    assert cfg.train is None
+    assert cfg.sample is None
+
+
+def test_load_toml_sample_missing_runtime_section(tmp_path: Path) -> None:
+    """Test loading TOML with sample section but missing runtime subsection."""
+    toml_text = """
+[sample.sample]
+# Missing [sample.runtime] section
+"""
+    cfg_path = tmp_path / "sample_missing_runtime.toml"
+    cfg_path.write_text(toml_text)
+
+    cfg: AppConfig = load_toml(cfg_path)
+    assert cfg.train is None
+    assert cfg.sample is None
