@@ -17,3 +17,12 @@ out/
 .mypy_cache/
 .ruff_cache/
 .coverage
+# Prepared dataset artifacts
+ml_playground/datasets/**/train.bin
+ml_playground/datasets/**/val.bin
+ml_playground/datasets/**/meta.pkl
+ml_playground/datasets/**/meta.json
+ml_playground/datasets/**/train.jsonl
+ml_playground/datasets/**/val.jsonl
+ml_playground/datasets/**/tokenizer/
+.output.txt
