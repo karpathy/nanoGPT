@@ -15,6 +15,7 @@ def _load_env_files() -> None:
     - Supports simple KEY=VALUE lines; ignores comments and blank lines.
     - Checks current working directory and the repository root derived from this file.
     """
+
     def _parse_set(path: Path) -> None:
         try:
             if not path.exists():
@@ -55,7 +56,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     args = parser.parse_args(argv)
 
-    # Special: If the dataset is "bundestag_finetuning_mps" OR the config file contains the integration-specific block
+    # Special: If the dataset is "bundestag_finetuning_mps" OR the config explicitly declares that dataset in [prepare]
     def is_bundestag_finetuning_mps(dataset: str | None, config: Path | None) -> bool:
         if dataset == "bundestag_finetuning_mps":
             return True
@@ -65,14 +66,8 @@ def main(argv: list[str] | None = None) -> None:
             try:
                 with open(config, "rb") as f:
                     d = tomllib.load(f)
-                # Configs for PEFT finetuning always have "prepare", "train.hf_model", "train.peft" etc.
-                # Assume if it has these we should use integration.
-                if (
-                    "prepare" in d
-                    and "train" in d
-                    and ("hf_model" in d["train"] or "peft" in d["train"])
-                ):
-                    return True
+                # Only route to this integration if [prepare].dataset explicitly matches
+                return d.get("prepare", {}).get("dataset") == "bundestag_finetuning_mps"
             except Exception:
                 pass
         return False
@@ -180,16 +175,47 @@ def main(argv: list[str] | None = None) -> None:
             print(
                 "[ml_playground] Routing to integration: bundestag_finetuning_mps (PEFT pipeline: prepare → train → sample)"
             )
+            # Debug: show prepare.* inferred from TOML
+            try:
+                with open(args.config, "rb") as _f:
+                    _d = tomllib.load(_f)
+                _prep = _d.get("prepare", {})
+                print(
+                    f"[ml_playground][debug] prepare.dataset={_prep.get('dataset')}, "
+                    f"raw_dir={_prep.get('raw_dir')}, dataset_dir={_prep.get('dataset_dir')}"
+                )
+            except Exception:
+                pass
             integ.loop(args.config)
         elif args.cmd == "train":
             print(
                 "[ml_playground] Routing to integration: bundestag_finetuning_mps (train only)"
             )
+            try:
+                with open(args.config, "rb") as _f:
+                    _d = tomllib.load(_f)
+                _prep = _d.get("prepare", {})
+                print(
+                    f"[ml_playground][debug] prepare.dataset={_prep.get('dataset')}, "
+                    f"raw_dir={_prep.get('raw_dir')}, dataset_dir={_prep.get('dataset_dir')}"
+                )
+            except Exception:
+                pass
             integ.train_from_toml(args.config)
         elif args.cmd == "sample":
             print(
                 "[ml_playground] Routing to integration: bundestag_finetuning_mps (sample only)"
             )
+            try:
+                with open(args.config, "rb") as _f:
+                    _d = tomllib.load(_f)
+                _prep = _d.get("prepare", {})
+                print(
+                    f"[ml_playground][debug] prepare.dataset={_prep.get('dataset')}, "
+                    f"raw_dir={_prep.get('raw_dir')}, dataset_dir={_prep.get('dataset_dir')}"
+                )
+            except Exception:
+                pass
             integ.sample_from_toml(args.config)
         else:
             raise SystemExit(
@@ -214,16 +240,47 @@ def main(argv: list[str] | None = None) -> None:
             print(
                 "[ml_playground] Routing to integration: gemma_finetuning_mps (PEFT pipeline: prepare → train → sample)"
             )
+            # Debug: show prepare.* inferred from TOML
+            try:
+                with open(args.config, "rb") as _f:
+                    _d = tomllib.load(_f)
+                _prep = _d.get("prepare", {})
+                print(
+                    f"[ml_playground][debug] prepare.dataset={_prep.get('dataset')}, "
+                    f"raw_dir={_prep.get('raw_dir')}, dataset_dir={_prep.get('dataset_dir')}"
+                )
+            except Exception:
+                pass
             gemma_integ.loop(args.config)
         elif args.cmd == "train":
             print(
                 "[ml_playground] Routing to integration: gemma_finetuning_mps (train only)"
             )
+            try:
+                with open(args.config, "rb") as _f:
+                    _d = tomllib.load(_f)
+                _prep = _d.get("prepare", {})
+                print(
+                    f"[ml_playground][debug] prepare.dataset={_prep.get('dataset')}, "
+                    f"raw_dir={_prep.get('raw_dir')}, dataset_dir={_prep.get('dataset_dir')}"
+                )
+            except Exception:
+                pass
             gemma_integ.train_from_toml(args.config)
         elif args.cmd == "sample":
             print(
                 "[ml_playground] Routing to integration: gemma_finetuning_mps (sample only)"
             )
+            try:
+                with open(args.config, "rb") as _f:
+                    _d = tomllib.load(_f)
+                _prep = _d.get("prepare", {})
+                print(
+                    f"[ml_playground][debug] prepare.dataset={_prep.get('dataset')}, "
+                    f"raw_dir={_prep.get('raw_dir')}, dataset_dir={_prep.get('dataset_dir')}"
+                )
+            except Exception:
+                pass
             gemma_integ.sample_from_toml(args.config)
         else:
             raise SystemExit(

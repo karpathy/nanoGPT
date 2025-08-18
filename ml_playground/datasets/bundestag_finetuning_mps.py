@@ -8,7 +8,7 @@ import time
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple, Literal, cast, Any
+from typing import List, Optional, Tuple, Literal, cast
 
 import torch
 from torch import nn
@@ -330,6 +330,7 @@ def _decorate_texts(texts: List[str], add_tokens: bool) -> List[str]:
 def prepare_from_toml(config_path: Path) -> None:
     cfg = _parse_app(config_path)
     p = cfg.prepare
+    print(f"[prepare] {p}")
     p.dataset_dir.mkdir(parents=True, exist_ok=True)
 
     # Tokenizer
