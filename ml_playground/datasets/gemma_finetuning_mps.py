@@ -603,6 +603,36 @@ def _autocast_ctx(device_str: str, dtype: torch.dtype):
         return torch.cpu.amp.autocast(dtype=dtype)
 
 
+def _hf_cache_dir() -> Path:
+    """Return a persistent cache directory for HF/Transformers downloads.
+
+    Resolution order (first present wins):
+    - TRANSFORMERS_CACHE
+    - HUGGINGFACE_HUB_CACHE
+    - HF_HOME
+    - Project-local ".hf_cache" at repository root (default)
+    """
+    for key in ("TRANSFORMERS_CACHE", "HUGGINGFACE_HUB_CACHE", "HF_HOME"):
+        val = os.environ.get(key)
+        if val and str(val).strip():
+            p = Path(val).expanduser()
+            try:
+                p.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                # best-effort
+                pass
+            return p
+    # fallback to project-local cache
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    default = repo_root / ".hf_cache"
+    try:
+        default.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        # best-effort
+        pass
+    return default
+
+
 def _get_hf_token() -> Optional[str]:
     """Return an HF token from env or fallback .env files when needed.
 
@@ -747,7 +777,11 @@ def train_from_toml(config_path: Path) -> None:
     # Load tokenizer and model
     print("[gemma_finetuning_mps] Loading tokenizer and model...")
     try:
-        tokenizer = AutoTokenizer.from_pretrained(train_cfg.hf_model.model_name, **_auth_kwargs())
+        tokenizer = AutoTokenizer.from_pretrained(
+            train_cfg.hf_model.model_name,
+            cache_dir=_hf_cache_dir(),
+            **_auth_kwargs(),
+        )
     except Exception as e:
         _raise_gated_help(e, train_cfg.hf_model.model_name)
         raise
@@ -761,6 +795,7 @@ def train_from_toml(config_path: Path) -> None:
             train_cfg.hf_model.model_name,
             torch_dtype=dtype,
             device_map={"": device} if device.type != "cpu" else None,
+            cache_dir=_hf_cache_dir(),
             **_auth_kwargs(),
         )
     except Exception as e:
@@ -993,7 +1028,11 @@ def sample_from_toml(config_path: Path) -> None:
     else:
         # Fallback to base model tokenizer
         try:
-            tokenizer = AutoTokenizer.from_pretrained(cfg.train.hf_model.model_name, **_auth_kwargs())
+            tokenizer = AutoTokenizer.from_pretrained(
+                cfg.train.hf_model.model_name,
+                cache_dir=_hf_cache_dir(),
+                **_auth_kwargs(),
+            )
         except Exception as e:
             _raise_gated_help(e, cfg.train.hf_model.model_name)
             raise
@@ -1008,6 +1047,7 @@ def sample_from_toml(config_path: Path) -> None:
             cfg.train.hf_model.model_name,
             torch_dtype=dtype,
             device_map={"": device} if device.type != "cpu" else None,
+            cache_dir=_hf_cache_dir(),
             **_auth_kwargs(),
         )
     except Exception as e:
