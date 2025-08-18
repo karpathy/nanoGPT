@@ -8,7 +8,7 @@ import time
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple, Literal, cast
+from typing import List, Optional, Tuple, Literal, cast, Any
 
 import torch
 from torch import nn
@@ -16,6 +16,34 @@ from torch.utils.data import DataLoader, Dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from typing import TYPE_CHECKING
+
+# Add TensorBoard (best-effort)
+try:
+    from torch.utils.tensorboard import SummaryWriter  # type: ignore
+except Exception:  # pragma: no cover - allow training without tensorboard installed
+
+    class SummaryWriter:  # type: ignore
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def add_scalar(self, *args, **kwargs) -> None:
+            pass
+
+        def add_histogram(self, *args, **kwargs) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
+
+# PyTorch profiler → TensorBoard (lightweight, scheduled)
+from datetime import datetime
+from torch.profiler import (
+    profile,
+    schedule,
+    ProfilerActivity,
+    tensorboard_trace_handler,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from peft import LoraConfig, PeftModel  # noqa: F401
@@ -431,7 +459,12 @@ def _save_adapters(model: nn.Module, save_dir: Path, atomic: bool = False) -> No
     # For PeftModel.save_pretrained: save into directory
     save_fn = getattr(model, "save_pretrained", None)
     if callable(save_fn):
-        save_fn(str(tmp))
+        # If PEFT is present and embeddings were resized, avoid warning by being explicit.
+        try:
+            save_fn(str(tmp), save_embedding_layers=True)  # type: ignore[call-arg]
+        except TypeError:
+            # Fallback for save_pretrained signatures that don't accept this kwarg
+            save_fn(str(tmp))
     if atomic:
         # Ensure destination directory exists before moving files from tmp
         os.makedirs(save_dir, exist_ok=True)
@@ -446,6 +479,7 @@ def _save_adapters(model: nn.Module, save_dir: Path, atomic: bool = False) -> No
                 dst.unlink()
             src.replace(dst)
         tmp.rmdir()
+
 
 def _prune_old_iters(adapters_root: Path, keep_last_n: int, current_dir: Path) -> None:
     """
@@ -483,7 +517,6 @@ def _prune_old_iters(adapters_root: Path, keep_last_n: int, current_dir: Path) -
         pass
 
 
-
 # -----------------------------
 # Train step (HF + PEFT on MPS)
 # -----------------------------
@@ -506,6 +539,44 @@ def train_from_toml(config_path: Path) -> None:
     (out_dir / "adapters").mkdir(parents=True, exist_ok=True)
     (out_dir / "samples").mkdir(parents=True, exist_ok=True)
     (out_dir / "logs").mkdir(parents=True, exist_ok=True)
+
+    # TensorBoard writer
+    tb_dir = out_dir / "logs" / "tb"
+    writer = SummaryWriter(log_dir=str(tb_dir))
+
+    # Lightweight PyTorch profiler -> TensorBoard (CPU-only on MPS)
+    prof = None  # type: Optional[Any]
+    try:
+        # Profiling directory under existing logs
+        prof_dir = (
+            out_dir / "logs" / "profiler" / datetime.now().strftime("%Y%m%d-%H%M%S")
+        )
+        prof_dir.mkdir(parents=True, exist_ok=True)
+
+        # Scheduler: wait 1 step, warmup 1 step, active 3 steps, repeat once
+        prof_schedule = schedule(wait=1, warmup=1, active=3, repeat=1)
+
+        # Activities for MPS: CPU only.
+        prof_activities = [ProfilerActivity.CPU]
+        # If running on CUDA, you can enable kernel-level tracing by including CUDA:
+        # prof_activities = [ProfilerActivity.CPU, ProfilerActivity.CUDA]
+
+        # NOTES:
+        # - On MPS (macOS), CUDA kernels are not present; ProfilerActivity.CUDA is unsupported.
+        # - For multi-GPU/distributed, ensure unique directories per rank,
+        #   e.g., prof_dir = prof_dir / f"rank_{os.environ.get('RANK','0')}"
+        prof = profile(
+            activities=prof_activities,
+            schedule=prof_schedule,
+            on_trace_ready=tensorboard_trace_handler(str(prof_dir)),
+            record_shapes=True,
+            profile_memory=True,
+            with_stack=True,
+        )
+        if prof is not None:
+            prof.start()  # start now; schedule controls active windows
+    except Exception:
+        prof = None  # best-effort profiling only
 
     # Tokenizer: load from dataset and copy to out_dir
     tok_dir = app.prepare.dataset_dir / "tokenizer"
@@ -556,6 +627,18 @@ def train_from_toml(config_path: Path) -> None:
             target_modules=peft_targets,
         )
         model = get_peft_model(model, lora_cfg)
+        # When using gradient checkpointing with PEFT, ensure inputs require grad
+        if t.hf_model.gradient_checkpointing:
+            try:
+                if hasattr(model, "enable_input_require_grads"):
+                    model.enable_input_require_grads()  # type: ignore[attr-defined]
+            except Exception:
+                try:
+                    cast(nn.Module, model).get_input_embeddings().requires_grad_(True)  # type: ignore[attr-defined, operator]
+                except Exception:
+                    pass
+            if hasattr(model, "gradient_checkpointing_enable"):
+                model.gradient_checkpointing_enable()  # type: ignore[attr-defined]
 
     cast(nn.Module, model).to(device)  # type: ignore[arg-type]
 
@@ -660,6 +743,20 @@ def train_from_toml(config_path: Path) -> None:
                 model, "gradient_checkpointing_enable"
             ):
                 model.gradient_checkpointing_enable()  # type: ignore[attr-defined]
+            if t.hf_model.gradient_checkpointing:
+                try:
+                    if hasattr(model, "enable_input_require_grads"):
+                        model.enable_input_require_grads()  # type: ignore[attr-defined]
+                except Exception:
+                    try:
+                        emb_mod = cast(nn.Module, model).get_input_embeddings()  # type: ignore[attr-defined, operator]
+                        try:
+                            # Enable grads on embedding weights explicitly
+                            emb_mod.weight.requires_grad_(True)  # type: ignore[attr-defined]
+                        except Exception:
+                            pass
+                    except Exception:
+                        pass
             print(f"[train] Resumed from iter {it}, best_val={best_val}")
         except Exception as e:  # pragma: no cover - best effort resume
             print(f"[train] Warning: resume failed: {e}")
@@ -701,6 +798,13 @@ def train_from_toml(config_path: Path) -> None:
                 optim.step()
                 optim.zero_grad(set_to_none=True)
                 it += 1
+                # Advance profiler schedule once per optimizer step
+                try:
+                    if prof is not None:
+                        prof.step()
+                except Exception:
+                    # Best-effort profiling; never interrupt training
+                    pass
 
                 if it % log_every == 0:
                     dt = time.time() - t0
@@ -709,12 +813,20 @@ def train_from_toml(config_path: Path) -> None:
                     print(
                         f"iter {it} | loss {float(loss.detach().cpu()) * accum:.4f} | lr {lr:.3e} | tok/s {tokens_sec:.0f}"
                     )
+                    # TensorBoard scalars
+                    writer.add_scalar(
+                        "train/loss", float(loss.detach().cpu()) * accum, it
+                    )
+                    writer.add_scalar("train/lr", lr, it)
+                    writer.add_scalar("train/tokens_per_sec", tokens_sec, it)
                     t0 = time.time()
 
                 # Eval + checkpoint
                 if (it % rt.eval_interval == 0) or (rt.eval_only):
                     val = evaluate()
                     print(f"[eval] iter {it} | val_loss {val:.4f}")
+                    # TensorBoard val loss
+                    writer.add_scalar("val/loss", val, it)
                     # Save last adapters
                     adapters_iter_dir = out_dir / "adapters" / f"iter_{it}"
                     _save_adapters(model, adapters_iter_dir, atomic=rt.ckpt_atomic)
@@ -739,7 +851,9 @@ def train_from_toml(config_path: Path) -> None:
 
                     # Retention: keep only the latest N iter_* checkpoints if configured
                     if rt.keep_last_n and rt.keep_last_n > 0:
-                        _prune_old_iters(out_dir / "adapters", rt.keep_last_n, adapters_iter_dir)
+                        _prune_old_iters(
+                            out_dir / "adapters", rt.keep_last_n, adapters_iter_dir
+                        )
 
                     # Track best
                     improved = val < best_val
@@ -761,6 +875,12 @@ def train_from_toml(config_path: Path) -> None:
                     )
 
                     if rt.eval_only:
+                        try:
+                            if prof is not None:
+                                prof.stop()
+                        except Exception:
+                            pass
+                        writer.close()
                         return
 
                 # Time-based checkpointing
@@ -782,6 +902,12 @@ def train_from_toml(config_path: Path) -> None:
             break
 
     print("[train] finished training")
+    try:
+        if prof is not None:
+            prof.stop()
+    except Exception:
+        pass
+    writer.close()
 
 
 # -----------------------------
@@ -835,12 +961,14 @@ def sample_from_toml(config_path: Path) -> None:
 
     # Ensure final embedding size matches tokenizer (handles both larger/smaller cases safely).
     try:
-        current_vocab = cast(nn.Module, model).get_input_embeddings().weight.shape[0]  # type: ignore[attr-defined]
+        emb = cast(nn.Embedding, cast(nn.Module, model).get_input_embeddings())  # type: ignore[attr-defined, operator]
+        current_vocab = emb.weight.shape[0]
     except Exception:
-        current_vocab = base.get_input_embeddings().weight.shape[0]  # type: ignore[attr-defined]
+        emb_base = cast(nn.Embedding, base.get_input_embeddings())  # type: ignore[attr-defined]
+        current_vocab = emb_base.weight.shape[0]
     target_vocab = len(tokenizer)
     if target_vocab != current_vocab:
-        cast(nn.Module, model).resize_token_embeddings(target_vocab)  # type: ignore[attr-defined]
+        cast(nn.Module, model).resize_token_embeddings(target_vocab)  # type: ignore[attr-defined, operator]
 
     cast(nn.Module, model).to(device)  # type: ignore[arg-type]
     model.eval()

@@ -15,7 +15,7 @@ def main(argv: list[str] | None = None) -> None:
         "-D",
         action="store_true",
         default=False,
-        help="Delete the output directory (out_dir) before starting (prepare/train/loop commands only)."
+        help="Delete the output directory (out_dir) before starting (prepare/train/loop commands only).",
     )
     args = parser.parse_args(argv)
 
@@ -25,14 +25,17 @@ def main(argv: list[str] | None = None) -> None:
             return True
         if config is not None and config.exists():
             import tomllib
+
             try:
                 with open(config, "rb") as f:
                     d = tomllib.load(f)
                 # Configs for PEFT finetuning always have "prepare", "train.hf_model", "train.peft" etc.
                 # Assume if it has these we should use integration.
-                if ("prepare" in d and "train" in d and (
-                    "hf_model" in d["train"] or "peft" in d["train"]
-                )):
+                if (
+                    "prepare" in d
+                    and "train" in d
+                    and ("hf_model" in d["train"] or "peft" in d["train"])
+                ):
                     return True
             except Exception:
                 pass
@@ -68,13 +71,23 @@ def main(argv: list[str] | None = None) -> None:
         # "prepare" does NOT support the integration pipeline (always route to PREPARERS)
         from ml_playground.datasets import PREPARERS  # type: ignore
 
-        if is_bundestag_finetuning_mps(getattr(args, "dataset", None), getattr(args, "config", None)):
-            print("[ml_playground] For finetuning configs, run with: ml_playground loop bundestag_finetuning_mps CONFIG.toml")
-            raise SystemExit("The PEFT finetuning pipeline (bundestag_finetuning_mps) must be run via the 'loop' command.")
+        if is_bundestag_finetuning_mps(
+            getattr(args, "dataset", None), getattr(args, "config", None)
+        ):
+            print(
+                "[ml_playground] For finetuning configs, run with: ml_playground loop bundestag_finetuning_mps CONFIG.toml"
+            )
+            raise SystemExit(
+                "The PEFT finetuning pipeline (bundestag_finetuning_mps) must be run via the 'loop' command."
+            )
         if args.delete_existing:
-            out_dir = _find_out_dir(getattr(args, "config", None), section="runtime") or getattr(args, "out_dir", None)
+            out_dir = _find_out_dir(
+                getattr(args, "config", None), section="runtime"
+            ) or getattr(args, "out_dir", None)
             if out_dir and out_dir.exists():
-                print(f"[ml_playground] Deleting output directory {out_dir} as requested.")
+                print(
+                    f"[ml_playground] Deleting output directory {out_dir} as requested."
+                )
                 shutil.rmtree(out_dir)
         prepare = PREPARERS.get(args.dataset)
         if prepare is None:
@@ -83,23 +96,37 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     # For integration commands: route each one to the proper integration entrypoint
-    if is_bundestag_finetuning_mps(getattr(args, "dataset", None), getattr(args, "config", None)):
+    if is_bundestag_finetuning_mps(
+        getattr(args, "dataset", None), getattr(args, "config", None)
+    ):
         if args.delete_existing:
-            out_dir = _find_out_dir(getattr(args, "config", None)) or getattr(args, "out_dir", None)
+            out_dir = _find_out_dir(getattr(args, "config", None)) or getattr(
+                args, "out_dir", None
+            )
             if out_dir and out_dir.exists():
-                print(f"[ml_playground] Deleting output directory {out_dir} as requested.")
+                print(
+                    f"[ml_playground] Deleting output directory {out_dir} as requested."
+                )
                 shutil.rmtree(out_dir)
         if args.cmd == "loop":
-            print("[ml_playground] Routing to integration: bundestag_finetuning_mps (PEFT pipeline: prepare → train → sample)")
+            print(
+                "[ml_playground] Routing to integration: bundestag_finetuning_mps (PEFT pipeline: prepare → train → sample)"
+            )
             integ.loop(args.config)
         elif args.cmd == "train":
-            print("[ml_playground] Routing to integration: bundestag_finetuning_mps (train only)")
+            print(
+                "[ml_playground] Routing to integration: bundestag_finetuning_mps (train only)"
+            )
             integ.train_from_toml(args.config)
         elif args.cmd == "sample":
-            print("[ml_playground] Routing to integration: bundestag_finetuning_mps (sample only)")
+            print(
+                "[ml_playground] Routing to integration: bundestag_finetuning_mps (sample only)"
+            )
             integ.sample_from_toml(args.config)
         else:
-            raise SystemExit(f"[ml_playground] Unsupported command '{args.cmd}' for this integration.")
+            raise SystemExit(
+                f"[ml_playground] Unsupported command '{args.cmd}' for this integration."
+            )
         return
 
     # Generic pipeline (default)
@@ -107,9 +134,13 @@ def main(argv: list[str] | None = None) -> None:
         from ml_playground.datasets import PREPARERS  # type: ignore
 
         if args.delete_existing:
-            out_dir = _find_out_dir(getattr(args, "config", None)) or getattr(args, "out_dir", None)
+            out_dir = _find_out_dir(getattr(args, "config", None)) or getattr(
+                args, "out_dir", None
+            )
             if out_dir and out_dir.exists():
-                print(f"[ml_playground] Deleting output directory {out_dir} as requested.")
+                print(
+                    f"[ml_playground] Deleting output directory {out_dir} as requested."
+                )
                 shutil.rmtree(out_dir)
         prepare = PREPARERS.get(args.dataset)
         if prepare is None:
@@ -160,7 +191,7 @@ def configureArguments():
         "prepare", help="Prepare dataset by name (internal preparers)"
     ).add_argument(
         "dataset",
-            # No choices arg here: accept any, check later
+        # No choices arg here: accept any, check later
         help="Dataset name",
     )
     sub.add_parser("train", help="Train from TOML config").add_argument(

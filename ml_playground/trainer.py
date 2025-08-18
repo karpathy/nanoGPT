@@ -14,6 +14,24 @@ from ml_playground.config import TrainExperiment
 from ml_playground.device import setup
 from ml_playground.data import SimpleBatches
 
+# Add TensorBoard (best-effort)
+try:
+    from torch.utils.tensorboard import SummaryWriter  # type: ignore
+except Exception:  # pragma: no cover - allow training without tensorboard installed
+
+    class SummaryWriter:  # type: ignore
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def add_scalar(self, *args, **kwargs) -> None:
+            pass
+
+        def add_histogram(self, *args, **kwargs) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
 
 @dataclass
 class _CkptInfo:
@@ -160,6 +178,9 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
     model_cfg = exp.model
 
     rt.out_dir.mkdir(parents=True, exist_ok=True)
+    # Initialize TensorBoard
+    tb_dir = rt.out_dir / "logs" / "tb"
+    writer = SummaryWriter(log_dir=str(tb_dir))
 
     device_type, ptdtype, ctx = setup(rt.device, rt.dtype, rt.seed)
 
@@ -308,6 +329,10 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
             losses = _estimate_loss(run_model, batches, rt.eval_iters, ctx)
             val_loss = float(losses["val"])  # canonical source
             print(f"step {iter_num}: train {losses['train']:.4f}, val {val_loss:.4f}")
+            # TensorBoard: eval scalars
+            writer.add_scalar("train/loss", float(losses["train"]), iter_num)
+            writer.add_scalar("val/loss", val_loss, iter_num)
+            writer.add_scalar("train/lr", lr, iter_num)
             metric = val_loss if rt.ckpt_metric == "val_loss" else math.exp(val_loss)
 
             # Optional smoothing (EMA of metric values)
@@ -478,7 +503,17 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
             print(
                 f"iter {iter_num}: loss {total_loss:.4f}, step_time {dt * 1000:.1f}ms"
             )
+            # TensorBoard: train scalars per log interval
+            tokens_per_iter = (
+                exp.data.grad_accum_steps * exp.data.batch_size * exp.data.block_size
+            )
+            tokens_per_sec = tokens_per_iter / max(1e-6, dt)
+            writer.add_scalar("train/loss_iter", total_loss, iter_num)
+            writer.add_scalar("train/tokens_per_sec", tokens_per_sec, iter_num)
+            writer.add_scalar("train/step_time_ms", dt * 1000.0, iter_num)
 
         iter_num += 1
 
+    # Ensure the TB writer is closed before returning
+    writer.close()
     return iter_num, best_val

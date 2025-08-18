@@ -11,7 +11,7 @@ authors = [
   { name = "Andrej Karpathy" },
 ]
 license = { file = "LICENSE" }
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
 dependencies = [
   "numpy>=2",
   "requests>=2.32",
@@ -23,6 +23,8 @@ dependencies = [
   "beautifulsoup4>=4.12",
   "torch>=2.4",
   "pip==25.2",
+  "tensorboard>=2.20.0",
+  "torch-tb-profiler>=0.4.3",
 ]
 
 [project.optional-dependencies]
@@ -43,6 +45,7 @@ package = true
 [tool.hatch.build.targets.wheel]
 packages = ["ml_playground"]
 
+
 [dependency-groups]
 # Mandatory dev tooling available in the project venv
 # Sync with: uv sync --all-groups (required for development)
@@ -57,7 +60,6 @@ dev = [
   "pyright>=1.1.380",
   "types-requests>=2.32",
 ]
-
 
 
 [tool.ruff]
