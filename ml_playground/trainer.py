@@ -257,7 +257,7 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
     raw_model = model
     run_model: GPT = model
     if rt.compile:
-        run_model = cast(GPT, torch.compile(model))  # type: ignore[attr-defined]
+        run_model = cast(GPT, torch.compile(model, options={"max_autotune": False}))  # type: ignore[attr-defined]
 
     # Initialize EMA/retention/smoothing state
     ema = _EMA(raw_model, rt.ema_decay, device_type) if rt.ema_decay > 0.0 else None
@@ -432,7 +432,7 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
                                 side = old.path.with_suffix(".json")
                                 if side.exists():
                                     side.unlink()
-                            except (OSError, FileNotFoundError, PermissionError) as e:
+                            except OSError as e:
                                 print(
                                     f"[ckpt] warning: failed to delete {old.path}: {e}"
                                 )
