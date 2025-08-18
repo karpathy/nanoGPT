@@ -19,8 +19,10 @@ dependencies = [
   "tqdm>=4.66",
   "datasets>=2.20",
   "transformers>=4.44",
+  "peft>=0.12",
   "beautifulsoup4>=4.12",
   "torch>=2.4",
+  "pip==25.2",
 ]
 
 [project.optional-dependencies]
@@ -48,6 +50,7 @@ dev = [
   "pytest>=8",
   "pytest-xdist>=3",
   "pytest-cov>=6",
+  "pytest-mock>=3",
   "coverage[toml]>=7",
   "ruff>=0.6",
   "mypy>=1.11",
