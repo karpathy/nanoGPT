@@ -26,3 +26,4 @@ ml_playground/datasets/**/train.jsonl
 ml_playground/datasets/**/val.jsonl
 ml_playground/datasets/**/tokenizer/
 .output.txt
+/.env
