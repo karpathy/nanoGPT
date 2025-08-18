@@ -16,3 +16,4 @@ def register(name: str):
 # Import submodules to populate PREPARERS via the @register decorator
 from ml_playground.datasets import shakespeare  # noqa: F401, E402
 from ml_playground.datasets import bundestag_char  # noqa: F401, E402
+from ml_playground.datasets import bundestag_tiktoken  # noqa: F401, E402
