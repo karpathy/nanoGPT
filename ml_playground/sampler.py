@@ -45,7 +45,7 @@ def _codec_from_meta(
     try:
         import tiktoken  # type: ignore
 
-        enc = tiktoken.get_encoding("gpt2")
+        enc = tiktoken.get_encoding("cl100k_base")
         return (
             lambda s: enc.encode(s, allowed_special={"<|endoftext|>"}),
             lambda ids: enc.decode(ids),
