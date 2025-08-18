@@ -28,7 +28,7 @@ model_name = "google/gemma-3-270m-it"
 gradient_checkpointing = true
 # Logical sequence length for data packing/truncation during training (tokens per training block).
 # Conservative setting for 32GB RAM.
-block_size = 256
+block_size = 128
 
 [train.peft]
 # Toggle LoRA training. If false, trains full model (not recommended on consumer hardware).
@@ -55,7 +55,7 @@ batch_size = 6
 # Number of micro-steps to accumulate gradients before an optimizer step.
 grad_accum_steps = 10
 # Token block length for training examples (should usually match hf_model.block_size).
-block_size = 256
+block_size = 128
 # Whether to shuffle training blocks each epoch (set false for reproducible debug runs).
 shuffle = true
 
@@ -86,13 +86,13 @@ min_lr = 0.00015
 # Output directory for checkpoints, adapters, tokenizer copy, logs, and samples.
 out_dir = "out/speakger_gemma3_270m_lora_mps"
 # Total number of optimizer steps to run. Conservative for local training.
-max_iters = 10000
+max_iters = 1600
 # Frequency (in steps) to run evaluation on the validation set.
-eval_interval = 250
+eval_interval = 5
 # Number of validation batches to evaluate per evaluation step.
 eval_iters = 50
 # Frequency (in steps) to print training logs.
-log_interval = 25
+log_interval = 5
 # If true, run a single evaluation and exit (no training).
 eval_only = false
 # If true, always write checkpoints at evaluation steps (best/last pointers are maintained).
