@@ -1,5 +1,6 @@
 from __future__ import annotations
 import argparse
+from argparse import ArgumentParser
 from pathlib import Path
 from ml_playground.config import load_toml, AppConfig
 from ml_playground.trainer import train
@@ -7,55 +8,114 @@ from ml_playground.sampler import sample
 
 
 def main(argv: list[str] | None = None) -> None:
-    p = argparse.ArgumentParser("ml_playground")
-    sub = p.add_subparsers(dest="cmd", required=True)
-
-    pprep = sub.add_parser(
-        "prepare", help="Prepare dataset by name (internal preparers)"
+    parser: ArgumentParser = configureArguments()
+    # Add --delete-existing (-D) to ArgumentParser directly
+    parser.add_argument(
+        "--delete-existing",
+        "-D",
+        action="store_true",
+        default=False,
+        help="Delete the output directory (out_dir) before starting (prepare/train/loop commands only)."
     )
-    pprep.add_argument(
-        "dataset", choices=["shakespeare", "bundestag_char"], help="Dataset name"
-    )
+    args = parser.parse_args(argv)
 
-    ptrain = sub.add_parser("train", help="Train from TOML config")
-    ptrain.add_argument("config", type=Path)
+    # Special: If the dataset is "bundestag_finetuning_mps" OR the config file contains the integration-specific block
+    def is_bundestag_finetuning_mps(dataset: str | None, config: Path | None) -> bool:
+        if dataset == "bundestag_finetuning_mps":
+            return True
+        if config is not None and config.exists():
+            import tomllib
+            try:
+                with open(config, "rb") as f:
+                    d = tomllib.load(f)
+                # Configs for PEFT finetuning always have "prepare", "train.hf_model", "train.peft" etc.
+                # Assume if it has these we should use integration.
+                if ("prepare" in d and "train" in d and (
+                    "hf_model" in d["train"] or "peft" in d["train"]
+                )):
+                    return True
+            except Exception:
+                pass
+        return False
 
-    psample = sub.add_parser(
-        "sample",
-        help="Sample using TOML config (tries ckpt_best.pt, ckpt_last.pt, then legacy ckpt.pt in out_dir)",
-    )
-    psample.add_argument("config", type=Path)
+    # Integration always handles bundestag_finetuning_mps configs
+    from ml_playground.datasets import bundestag_finetuning_mps as integ
 
-    ploop = sub.add_parser("loop", help="Run prepare -> train -> sample in one go")
-    ploop.add_argument(
-        "dataset", choices=["shakespeare", "bundestag_char"], help="Dataset name"
-    )
-    ploop.add_argument(
-        "config",
-        type=Path,
-        help="TOML config path containing [train] and [sample] blocks",
-    )
+    import shutil
+    import tomllib
 
-    args = p.parse_args(argv)
+    # Helper to find out_dir from config TOML file, with fallback to runtime fields
+    def _find_out_dir(config_path, section=None):
+        if config_path is None:
+            return None
+        try:
+            with open(config_path, "rb") as f:
+                data = tomllib.load(f)
+            if section and section in data and "out_dir" in data[section]:
+                return Path(data[section]["out_dir"])
+            # Try [train][runtime][out_dir] if present
+            if "train" in data and "runtime" in data["train"]:
+                if "out_dir" in data["train"]["runtime"]:
+                    return Path(data["train"]["runtime"]["out_dir"])
+            if "sample" in data and "runtime" in data["sample"]:
+                if "out_dir" in data["sample"]["runtime"]:
+                    return Path(data["sample"]["runtime"]["out_dir"])
+        except Exception:
+            pass
+        return None
 
     if args.cmd == "prepare":
+        # "prepare" does NOT support the integration pipeline (always route to PREPARERS)
         from ml_playground.datasets import PREPARERS  # type: ignore
 
-        fn = PREPARERS.get(args.dataset)
-        if fn is None:
+        if is_bundestag_finetuning_mps(getattr(args, "dataset", None), getattr(args, "config", None)):
+            print("[ml_playground] For finetuning configs, run with: ml_playground loop bundestag_finetuning_mps CONFIG.toml")
+            raise SystemExit("The PEFT finetuning pipeline (bundestag_finetuning_mps) must be run via the 'loop' command.")
+        if args.delete_existing:
+            out_dir = _find_out_dir(getattr(args, "config", None), section="runtime") or getattr(args, "out_dir", None)
+            if out_dir and out_dir.exists():
+                print(f"[ml_playground] Deleting output directory {out_dir} as requested.")
+                shutil.rmtree(out_dir)
+        prepare = PREPARERS.get(args.dataset)
+        if prepare is None:
             raise SystemExit(f"Unknown dataset: {args.dataset}")
-        fn()
+        prepare()
         return
 
+    # For integration commands: route each one to the proper integration entrypoint
+    if is_bundestag_finetuning_mps(getattr(args, "dataset", None), getattr(args, "config", None)):
+        if args.delete_existing:
+            out_dir = _find_out_dir(getattr(args, "config", None)) or getattr(args, "out_dir", None)
+            if out_dir and out_dir.exists():
+                print(f"[ml_playground] Deleting output directory {out_dir} as requested.")
+                shutil.rmtree(out_dir)
+        if args.cmd == "loop":
+            print("[ml_playground] Routing to integration: bundestag_finetuning_mps (PEFT pipeline: prepare → train → sample)")
+            integ.loop(args.config)
+        elif args.cmd == "train":
+            print("[ml_playground] Routing to integration: bundestag_finetuning_mps (train only)")
+            integ.train_from_toml(args.config)
+        elif args.cmd == "sample":
+            print("[ml_playground] Routing to integration: bundestag_finetuning_mps (sample only)")
+            integ.sample_from_toml(args.config)
+        else:
+            raise SystemExit(f"[ml_playground] Unsupported command '{args.cmd}' for this integration.")
+        return
+
+    # Generic pipeline (default)
     if args.cmd == "loop":
         from ml_playground.datasets import PREPARERS  # type: ignore
-        import shutil
 
-        fn = PREPARERS.get(args.dataset)
-        if fn is None:
+        if args.delete_existing:
+            out_dir = _find_out_dir(getattr(args, "config", None)) or getattr(args, "out_dir", None)
+            if out_dir and out_dir.exists():
+                print(f"[ml_playground] Deleting output directory {out_dir} as requested.")
+                shutil.rmtree(out_dir)
+        prepare = PREPARERS.get(args.dataset)
+        if prepare is None:
             raise SystemExit(f"Unknown dataset: {args.dataset}")
         # 1) prepare
-        fn()
+        prepare()
         # 2) train
         loop_cfg: AppConfig = load_toml(args.config)
         if loop_cfg.train is None or loop_cfg.sample is None:
@@ -91,6 +151,44 @@ def main(argv: list[str] | None = None) -> None:
             raise SystemExit("Config must contain [sample] block")
         sample(cfg.sample)
         return
+
+
+def configureArguments():
+    p = argparse.ArgumentParser("ml_playground")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    sub.add_parser(
+        "prepare", help="Prepare dataset by name (internal preparers)"
+    ).add_argument(
+        "dataset",
+            # No choices arg here: accept any, check later
+        help="Dataset name",
+    )
+    sub.add_parser("train", help="Train from TOML config").add_argument(
+        "config", type=Path
+    )
+    sub.add_parser(
+        "sample",
+        help="Sample using TOML config (tries ckpt_best.pt, ckpt_last.pt, then legacy ckpt.pt in out_dir)",
+    ).add_argument("config", type=Path)
+    loop_parser = sub.add_parser(
+        "loop", help="Run prepare -> train -> sample in one go"
+    )
+    loop_parser.add_argument(
+        "dataset",
+        choices=[
+            "shakespeare",
+            "bundestag_char",
+            "bundestag_tiktoken",
+            "bundestag_finetuning_mps",
+        ],
+        help="Dataset name",
+    )
+    loop_parser.add_argument(
+        "config",
+        type=Path,
+        help="TOML config path containing [train] and [sample] blocks",
+    )
+    return p
 
 
 if __name__ == "__main__":

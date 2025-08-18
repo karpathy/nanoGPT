@@ -433,6 +433,8 @@ def _save_adapters(model: nn.Module, save_dir: Path, atomic: bool = False) -> No
     if callable(save_fn):
         save_fn(str(tmp))
     if atomic:
+        # Ensure destination directory exists before moving files from tmp
+        os.makedirs(save_dir, exist_ok=True)
         if save_dir.exists():
             for p in save_dir.iterdir():
                 if p.is_file():
