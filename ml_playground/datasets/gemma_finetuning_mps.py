@@ -839,6 +839,13 @@ def train_from_toml(config_path: Path) -> None:
     )
     
     print(f"[gemma_finetuning_mps] Train samples: {len(train_dataset)}, Val samples: {len(val_dataset)}")
+
+    # Preflight dataset checks to avoid empty loaders
+    if len(train_dataset) == 0:
+        raise SystemExit(
+            f"[train] No training samples available. The tokenized corpus is shorter than block_size+1 (block_size={train_cfg.data.block_size}). "
+            f"Consider reducing train.data.block_size in the TOML (e.g., 128 or 256) or adding more raw text to {train_cfg.data.dataset_dir}."
+        )
     
     # Create data loaders
     train_loader = DataLoader(
@@ -953,8 +960,12 @@ def train_from_toml(config_path: Path) -> None:
                         
                         val_steps += 1
                 
-                val_loss /= val_steps
-                print(f"iter {iter_num:6d}: val loss {val_loss:.4f}")
+                if val_steps == 0:
+                    print("[gemma_finetuning_mps] Warning: no validation batches; skipping eval stats")
+                    val_loss = float("inf")
+                else:
+                    val_loss /= val_steps
+                    print(f"iter {iter_num:6d}: val loss {val_loss:.4f}")
                 
                 if tb_writer is not None:
                     tb_writer.add_scalar('val/loss', val_loss, iter_num)
