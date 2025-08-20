@@ -1,16 +1,30 @@
 from __future__ import annotations
 from typing import Callable, Dict
 
-# Compatibility shim for legacy tests and CLI imports.
-# Delegate to experiment-level preparers so real runs use the new experiment logic.
-from ml_playground.experiments.shakespeare.prepare import main as _exp_shakespeare  # noqa: E402
-from ml_playground.experiments.bundestag_char.prepare import main as _exp_bundestag_char  # noqa: E402
-from ml_playground.experiments.bundestag_tiktoken.prepare import (
-    main as _exp_bundestag_tiktoken,
-)  # noqa: E402
+# Registry of dataset preparers used by CLI and tests.
+# This module must remain cheap to import and side-effect free.
+PREPARERS: Dict[str, Callable[[], None]] = {}
 
-PREPARERS: Dict[str, Callable[[], None]] = {
-    "shakespeare": _exp_shakespeare,
-    "bundestag_char": _exp_bundestag_char,
-    "bundestag_tiktoken": _exp_bundestag_tiktoken,
-}
+
+def load_preparers() -> None:
+    """Populate PREPARERS by importing experiment prepare modules on demand.
+
+    Lazy import: avoids side effects and heavy imports at module import time,
+    complying with Import Guidelines (rules 7 and 11).
+    """
+    if PREPARERS:
+        return
+    # Local imports justified as plugin loading entry point
+    from ml_playground.experiments.shakespeare.prepare import main as _shakespeare  # noqa: F401
+    from ml_playground.experiments.bundestag_char.prepare import main as _bundestag_char  # noqa: F401
+    from ml_playground.experiments.bundestag_tiktoken.prepare import (
+        main as _bundestag_tiktoken,
+    )  # noqa: F401
+
+    PREPARERS.update(
+        {
+            "shakespeare": _shakespeare,
+            "bundestag_char": _bundestag_char,
+            "bundestag_tiktoken": _bundestag_tiktoken,
+        }
+    )
