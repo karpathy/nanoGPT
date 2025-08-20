@@ -57,23 +57,19 @@ Example config (edit to your paths/model):
 
 End-to-end pipeline (prepare → train → sample):
 ```bash
-uv run python -m ml_playground.cli loop gemma_finetuning_mps \
-  ml_playground/experiments/speakger/config.toml
+uv run python -m ml_playground.cli loop speakger
 ```
 
 Run individual steps:
 ```bash
 # Prepare dataset
-uv run python -m ml_playground.cli prepare gemma_finetuning_mps \
-  ml_playground/experiments/speakger/config.toml
+uv run python -m ml_playground.cli prepare speakger
 
 # Train
-uv run python -m ml_playground.cli train \
-  ml_playground/experiments/speakger/config.toml
+uv run python -m ml_playground.cli train speakger
 
 # Sample
-uv run python -m ml_playground.cli sample \
-  ml_playground/experiments/speakger/config.toml
+uv run python -m ml_playground.cli sample speakger
 ```
 
 ## Configuration Highlights

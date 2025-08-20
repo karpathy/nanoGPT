@@ -15,17 +15,17 @@ Why self‑contained?
 
 Conventions
 - Registration: experiment preparers register via ml_playground.experiments.register. The CLI discovers them automatically.
-- Names: the dataset argument to `prepare`/`loop` equals the experiment’s registered name.
+- Names: the experiment argument to `prepare`/`loop` equals the experiment’s registered name.
 - Config location: TOML lives at the experiment root (no configs/ subfolder).
 - Data location: experiment‑local prepared data lives under `<experiment>/datasets/`.
 - Outputs: example configs write to `<experiment>/out/<run_name>`.
 - Typing/UV: everything follows the project’s strict typing and UV‑only workflow (see repo README for commands).
 
 Common CLI patterns
-- Prepare: `uv run python -m ml_playground.cli prepare <dataset_name>`
-- Train: `uv run python -m ml_playground.cli train <path/to/config.toml>`
-- Sample: `uv run python -m ml_playground.cli sample <path/to/config.toml>`
-- End‑to‑end: `uv run python -m ml_playground.cli loop <dataset_name> <path/to/config.toml>`
+- Prepare: `uv run python -m ml_playground.cli prepare <experiment_name>`
+- Train: `uv run python -m ml_playground.cli train <experiment_name>`
+- Sample: `uv run python -m ml_playground.cli sample <experiment_name>`
+- End‑to‑end: `uv run python -m ml_playground.cli loop <experiment_name>`
 
 Implemented experiments (current)
 - shakespeare — Tiny Shakespeare with GPT‑2 BPE (tiktoken)
@@ -125,17 +125,17 @@ uv run python -m ml_playground.cli prepare &lt;dataset_name&gt;
 
 Train:
 ```bash
-uv run python -m ml_playground.cli train ml_playground/experiments/&lt;name&gt;/config.toml
+uv run python -m ml_playground.cli train <dataset_name>
 ```
 
 Sample:
 ```bash
-uv run python -m ml_playground.cli sample ml_playground/experiments/&lt;name&gt;/config.toml
+uv run python -m ml_playground.cli sample <dataset_name>
 ```
 
 End-to-end loop:
 ```bash
-uv run python -m ml_playground.cli loop &lt;dataset_name&gt; ml_playground/experiments/&lt;name&gt;/config.toml
+uv run python -m ml_playground.cli loop <dataset_name>
 ```
 
 ## Configuration Highlights
