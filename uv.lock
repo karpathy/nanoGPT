@@ -1166,6 +1166,7 @@ source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "datasets" },
+    { name = "notebook" },
     { name = "numpy" },
     { name = "peft" },
     { name = "pip" },
@@ -1205,6 +1206,7 @@ requires-dist = [
     { name = "datasets", specifier = ">=2.20" },
     { name = "jupyter", marker = "extra == 'notebooks'", specifier = ">=1.0" },
     { name = "matplotlib", marker = "extra == 'notebooks'", specifier = ">=3.7" },
+    { name = "notebook", specifier = ">=7.4.5" },
     { name = "numpy", specifier = ">=2" },
     { name = "pandas", marker = "extra == 'notebooks'", specifier = ">=1.5" },
     { name = "peft", specifier = ">=0.12" },
