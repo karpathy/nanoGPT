@@ -9,11 +9,10 @@ from ml_playground.sampler import sample
 
 
 def _load_env_files() -> None:
-    """Load .env files from CWD and project root without extra dependencies.
+    """Load .env files from CWD without extra dependencies.
 
     - Does not override already-set environment variables.
     - Supports simple KEY=VALUE lines; ignores comments and blank lines.
-    - Checks current working directory and the repository root derived from this file.
     """
 
     def _parse_set(path: Path) -> None:
@@ -35,11 +34,7 @@ def _load_env_files() -> None:
             # Best-effort only; silently ignore parsing errors
             pass
 
-    # 1) CWD .env
     _parse_set(Path.cwd() / ".env")
-    # 2) Project root .env (repo root is one level above the package directory)
-    repo_root = Path(__file__).resolve().parent.parent
-    _parse_set(repo_root / ".env")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -95,8 +90,10 @@ def main(argv: list[str] | None = None) -> None:
         return False
 
     # Integration always handles bundestag_finetuning_mps configs
-    from ml_playground.datasets import bundestag_finetuning_mps as integ
-    from ml_playground.datasets import gemma_finetuning_mps as gemma_integ
+    from ml_playground.experiments.bundestag_finetuning_mps import (
+        bundestag_finetuning_mps as integ,
+    )
+    from ml_playground.experiments.speakger import gemma_finetuning_mps as gemma_integ
 
     import shutil
     import tomllib
@@ -122,27 +119,59 @@ def main(argv: list[str] | None = None) -> None:
         return None
 
     if args.cmd == "prepare":
-        # "prepare" does NOT support the integration pipeline (always route to PREPARERS)
-        from ml_playground.datasets import PREPARERS  # type: ignore
+        # Unified prepare: supports both legacy PREPARERS and integration TOML-based pipelines
+        try:
+            from ml_playground.datasets import PREPARERS as _PREPARERS  # type: ignore
+        except Exception:  # pragma: no cover - allow running without datasets package
+            from ml_playground.experiments import PREPARERS as _PREPARERS  # type: ignore
 
-        if is_bundestag_finetuning_mps(
-            getattr(args, "dataset", None), getattr(args, "config", None)
+        # If a config is provided and matches an integration, call its prepare_from_toml
+        if (
+            getattr(args, "config", None) is not None
+            and isinstance(args.config, Path)
+            and args.config.exists()
         ):
-            print(
-                "[ml_playground] For finetuning configs, run with: ml_playground loop bundestag_finetuning_mps CONFIG.toml"
-            )
-            raise SystemExit(
-                "The PEFT finetuning pipeline (bundestag_finetuning_mps) must be run via the 'loop' command."
-            )
-        if is_gemma_finetuning_mps(
-            getattr(args, "dataset", None), getattr(args, "config", None)
-        ):
-            print(
-                "[ml_playground] For Gemma finetuning configs, run with: ml_playground loop gemma_finetuning_mps CONFIG.toml"
-            )
-            raise SystemExit(
-                "The PEFT finetuning pipeline (gemma_finetuning_mps) must be run via the 'loop' command."
-            )
+            if is_bundestag_finetuning_mps(
+                getattr(args, "dataset", None), getattr(args, "config", None)
+            ):
+                # delete dataset_dir for prepare if requested
+                if args.delete_existing:
+                    try:
+                        with open(args.config, "rb") as f:
+                            d = tomllib.load(f)
+                        ds_dir = d.get("prepare", {}).get("dataset_dir")
+                        if ds_dir:
+                            p = Path(ds_dir)
+                            if p.exists():
+                                print(
+                                    f"[ml_playground] Deleting dataset_dir {p} as requested."
+                                )
+                                shutil.rmtree(p)
+                    except Exception:
+                        pass
+                integ.prepare_from_toml(args.config)
+                return
+            if is_gemma_finetuning_mps(
+                getattr(args, "dataset", None), getattr(args, "config", None)
+            ):
+                if args.delete_existing:
+                    try:
+                        with open(args.config, "rb") as f:
+                            d = tomllib.load(f)
+                        ds_dir = d.get("prepare", {}).get("dataset_dir")
+                        if ds_dir:
+                            p = Path(ds_dir)
+                            if p.exists():
+                                print(
+                                    f"[ml_playground] Deleting dataset_dir {p} as requested."
+                                )
+                                shutil.rmtree(p)
+                    except Exception:
+                        pass
+                gemma_integ.prepare_from_toml(args.config)
+                return
+
+        # Legacy path: use registered preparers by dataset name
         if args.delete_existing:
             out_dir = _find_out_dir(
                 getattr(args, "config", None), section="runtime"
@@ -152,9 +181,11 @@ def main(argv: list[str] | None = None) -> None:
                     f"[ml_playground] Deleting output directory {out_dir} as requested."
                 )
                 shutil.rmtree(out_dir)
-        prepare = PREPARERS.get(args.dataset)
+        prepare = _PREPARERS.get(args.dataset)
         if prepare is None:
-            raise SystemExit(f"Unknown dataset: {args.dataset}")
+            raise SystemExit(
+                f"Unknown dataset: {getattr(args, 'dataset', None)}. Provide a known dataset name or a TOML config for an integration dataset."
+            )
         prepare()
         return
 
@@ -290,7 +321,10 @@ def main(argv: list[str] | None = None) -> None:
 
     # Generic pipeline (default)
     if args.cmd == "loop":
-        from ml_playground.datasets import PREPARERS  # type: ignore
+        try:
+            from ml_playground.datasets import PREPARERS as _PREPARERS  # type: ignore
+        except Exception:  # pragma: no cover
+            from ml_playground.experiments import PREPARERS as _PREPARERS  # type: ignore
 
         if args.delete_existing:
             out_dir = _find_out_dir(getattr(args, "config", None)) or getattr(
@@ -301,7 +335,7 @@ def main(argv: list[str] | None = None) -> None:
                     f"[ml_playground] Deleting output directory {out_dir} as requested."
                 )
                 shutil.rmtree(out_dir)
-        prepare = PREPARERS.get(args.dataset)
+        prepare = _PREPARERS.get(args.dataset)
         if prepare is None:
             raise SystemExit(f"Unknown dataset: {args.dataset}")
         # 1) prepare
@@ -346,12 +380,19 @@ def main(argv: list[str] | None = None) -> None:
 def configureArguments():
     p = argparse.ArgumentParser("ml_playground")
     sub = p.add_subparsers(dest="cmd", required=True)
-    sub.add_parser(
-        "prepare", help="Prepare dataset by name (internal preparers)"
-    ).add_argument(
+    prep_parser = sub.add_parser(
+        "prepare",
+        help="Prepare dataset by name (legacy) or via TOML for integration datasets",
+    )
+    prep_parser.add_argument(
         "dataset",
-        # No choices arg here: accept any, check later
-        help="Dataset name",
+        help="Dataset name (e.g., shakespeare, bundestag_char, bundestag_tiktoken, bundestag_finetuning_mps, gemma_finetuning_mps)",
+    )
+    prep_parser.add_argument(
+        "config",
+        type=Path,
+        nargs="?",
+        help="Optional TOML config path for integration datasets (bundestag_finetuning_mps, gemma_finetuning_mps)",
     )
     sub.add_parser("train", help="Train from TOML config").add_argument(
         "config", type=Path
