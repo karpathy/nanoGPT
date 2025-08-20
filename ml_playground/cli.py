@@ -362,6 +362,7 @@ def main(argv: list[str] | None = None) -> None:
         sample(loop_cfg.sample)
         return
 
+
     cfg: AppConfig = load_toml(args.config)
 
     if args.cmd == "train":
@@ -375,6 +376,7 @@ def main(argv: list[str] | None = None) -> None:
             raise SystemExit("Config must contain [sample] block")
         sample(cfg.sample)
         return
+
 
 
 def configureArguments():
@@ -420,6 +422,8 @@ def configureArguments():
         type=Path,
         help="TOML config path containing [train] and [sample] blocks",
     )
+
+
     return p
 
 
