@@ -25,6 +25,7 @@ dependencies = [
   "pip==25.2",
   "tensorboard>=2.20.0",
   "torch-tb-profiler>=0.4.3",
+  "pydantic>=2",
 ]
 
 [project.optional-dependencies]

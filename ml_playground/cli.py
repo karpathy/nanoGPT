@@ -7,16 +7,10 @@ from typing import Any, Mapping, get_origin, get_args, Union, Literal
 from ml_playground.config import (
     TrainExperiment,
     SampleExperiment,
-    ModelConfig,
-    DataConfig,
-    OptimConfig,
-    LRSchedule,
-    RuntimeConfig,
-    SampleConfig,
-    PrepareConfig,
 )
 from ml_playground.trainer import train
 from ml_playground.sampler import sample
+from ml_playground.cli_config import load_config
 
 
 # -----------------------------
@@ -100,103 +94,19 @@ def _assert_types(tbl: Mapping[str, Any], cls: Any, where: str) -> None:
 
 
 def load_train_config(path: Path) -> TrainExperiment:
-    base_dir = path.parent.resolve()
-    data = _read_toml(path)
-    train_tbl = _ensure_section(data, "train", str(path))
-
-    # enforce only known subtables
-    allowed_top = {"model", "data", "optim", "schedule", "runtime"}
-    _fail_unknown_keys(train_tbl, allowed_top, "[train]")
-
-    # model
-    model_tbl = _ensure_section(train_tbl, "model", "[train]")
-    _fail_unknown_keys(model_tbl, set(ModelConfig.__dataclass_fields__.keys()), "[train.model]")
-    _assert_types(model_tbl, ModelConfig, "[train.model]")
-    model = ModelConfig(**model_tbl)
-
-    # data
-    data_tbl = _ensure_section(train_tbl, "data", "[train]")
-    # Path resolution for dataset_dir
-    if "dataset_dir" not in data_tbl:
-        raise ValueError("Missing required key 'dataset_dir' in [train.data]")
-    data_tbl = dict(data_tbl)
-    data_tbl["dataset_dir"] = _coerce_and_norm_path(data_tbl["dataset_dir"], base_dir, "[train.data].dataset_dir")
-    _fail_unknown_keys(data_tbl, set(DataConfig.__dataclass_fields__.keys()), "[train.data]")
-    _assert_types(data_tbl, DataConfig, "[train.data]")
-    dcfg = DataConfig(**data_tbl)
-    # sanity checks
-    _require_positive("[train.data].batch_size", dcfg.batch_size)
-    _require_positive("[train.data].block_size", dcfg.block_size)
-    _require_positive("[train.data].grad_accum_steps", dcfg.grad_accum_steps)
-
-    # optim
-    optim_tbl = _ensure_section(train_tbl, "optim", "[train]")
-    _fail_unknown_keys(optim_tbl, set(OptimConfig.__dataclass_fields__.keys()), "[train.optim]")
-    _assert_types(optim_tbl, OptimConfig, "[train.optim]")
-    optim = OptimConfig(**optim_tbl)
-
-    # schedule
-    sched_tbl = _ensure_section(train_tbl, "schedule", "[train]")
-    _fail_unknown_keys(sched_tbl, set(LRSchedule.__dataclass_fields__.keys()), "[train.schedule]")
-    _assert_types(sched_tbl, LRSchedule, "[train.schedule]")
-    schedule = LRSchedule(**sched_tbl)
-
-    # runtime
-    rt_tbl = _ensure_section(train_tbl, "runtime", "[train]")
-    rt_tbl = dict(rt_tbl)
-    if "out_dir" not in rt_tbl:
-        raise ValueError("Missing required key 'out_dir' in [train.runtime]")
-    rt_tbl["out_dir"] = _coerce_and_norm_path(rt_tbl["out_dir"], base_dir, "[train.runtime].out_dir")
-    _fail_unknown_keys(rt_tbl, set(RuntimeConfig.__dataclass_fields__.keys()), "[train.runtime]")
-    _assert_types(rt_tbl, RuntimeConfig, "[train.runtime]")
-    runtime = RuntimeConfig(**rt_tbl)
-
-    return TrainExperiment(model=model, data=dcfg, optim=optim, schedule=schedule, runtime=runtime)
+    cfg = load_config(path)
+    if cfg.train is None:
+        raise Exception("Config must contain [train] block")
+    return cfg.train
 
 
 def load_sample_config(path: Path) -> SampleExperiment:
-    base_dir = path.parent.resolve()
-    data = _read_toml(path)
-    sample_tbl = _ensure_section(data, "sample", str(path))
-    allowed_top = {"runtime", "sample"}
-    _fail_unknown_keys(sample_tbl, allowed_top, "[sample]")
-
-    # runtime
-    rt_tbl = _ensure_section(sample_tbl, "runtime", "[sample]")
-    rt_tbl = dict(rt_tbl)
-    if "out_dir" not in rt_tbl:
-        raise ValueError("Missing required key 'out_dir' in [sample.runtime]")
-    rt_tbl["out_dir"] = _coerce_and_norm_path(rt_tbl["out_dir"], base_dir, "[sample.runtime].out_dir")
-    _fail_unknown_keys(rt_tbl, set(RuntimeConfig.__dataclass_fields__.keys()), "[sample.runtime]")
-    _assert_types(rt_tbl, RuntimeConfig, "[sample.runtime]")
-    runtime = RuntimeConfig(**rt_tbl)
-
-    # sample
-    smp_tbl = _ensure_section(sample_tbl, "sample", "[sample]")
-    _fail_unknown_keys(smp_tbl, set(SampleConfig.__dataclass_fields__.keys()), "[sample.sample]")
-    _assert_types(smp_tbl, SampleConfig, "[sample.sample]")
-    sample_cfg = SampleConfig(**smp_tbl)
-    _require_positive("[sample.sample].num_samples", sample_cfg.num_samples)
-    _require_positive("[sample.sample].max_new_tokens", sample_cfg.max_new_tokens)
-    if sample_cfg.temperature <= 0:
-        raise ValueError("[sample.sample].temperature must be > 0")
-    if sample_cfg.top_k < 0:
-        raise ValueError("[sample.sample].top_k must be >= 0")
-
-    return SampleExperiment(runtime=runtime, sample=sample_cfg)
+    cfg = load_config(path)
+    if cfg.sample is None:
+        raise Exception("Config must contain [sample] block")
+    return cfg.sample
 
 
-def load_prepare_config(path: Path) -> PrepareConfig:
-    base_dir = path.parent.resolve()
-    data = _read_toml(path)
-    prep_tbl = _ensure_section(data, "prepare", str(path))
-    # minimal: only dataset_dir for now
-    allowed = {"dataset_dir"}
-    _fail_unknown_keys(prep_tbl, allowed, "[prepare]")
-    if "dataset_dir" not in prep_tbl:
-        raise ValueError("Missing required key 'dataset_dir' in [prepare]")
-    ds = _coerce_and_norm_path(prep_tbl["dataset_dir"], base_dir, "[prepare].dataset_dir")
-    return PrepareConfig(dataset_dir=ds)
 
 
 
