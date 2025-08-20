@@ -1,5 +1,7 @@
 from __future__ import annotations
 from pathlib import Path
+import pytest
+from pydantic import ValidationError
 from ml_playground.config import load_toml, AppConfig
 
 
@@ -54,7 +56,7 @@ def test_load_toml_empty_config(tmp_path: Path) -> None:
 
 
 def test_load_toml_incomplete_train_config(tmp_path: Path) -> None:
-    """Test loading TOML with incomplete train config returns None for train."""
+    """Strict: incomplete [train] should raise ValidationError."""
     # Missing required sections like model, data, optim, schedule, runtime
     toml_text = """
 [train.model]
@@ -65,13 +67,12 @@ n_layer=1
     cfg_path = tmp_path / "incomplete.toml"
     cfg_path.write_text(toml_text)
 
-    cfg: AppConfig = load_toml(cfg_path)
-    assert cfg.train is None
-    assert cfg.sample is None
+    with pytest.raises(ValidationError):
+        load_toml(cfg_path)
 
 
 def test_load_toml_incomplete_sample_config(tmp_path: Path) -> None:
-    """Test loading TOML with incomplete sample config returns None for sample."""
+    """Strict: incomplete [sample] should raise ValidationError."""
     toml_text = """
 [sample.runtime]
 out_dir = "out/test"
@@ -80,9 +81,8 @@ out_dir = "out/test"
     cfg_path = tmp_path / "incomplete_sample.toml"
     cfg_path.write_text(toml_text)
 
-    cfg: AppConfig = load_toml(cfg_path)
-    assert cfg.train is None
-    assert cfg.sample is None
+    with pytest.raises(ValidationError):
+        load_toml(cfg_path)
 
 
 def test_load_toml_no_train_section(tmp_path: Path) -> None:
@@ -130,59 +130,57 @@ out_dir = "out/test"
 
 
 def test_load_toml_train_missing_data_section(tmp_path: Path) -> None:
-    """Test loading TOML with train section but missing data subsection."""
+    """Strict: [train] missing required data subsection must raise ValidationError."""
     toml_text = """
 [train.model]
-n_layer=1
-n_head=1
-n_embd=32
-block_size=16
-
-[train.optim]
-learning_rate = 0.001
-
-[train.schedule]
-
-[train.runtime]
-out_dir = "out/test"
-# Missing [train.data] section
-"""
+ n_layer=1
+ n_head=1
+ n_embd=32
+ block_size=16
+ 
+ [train.optim]
+ learning_rate = 0.001
+ 
+ [train.schedule]
+ 
+ [train.runtime]
+ out_dir = "out/test"
+ # Missing [train.data] section
+ """
     cfg_path = tmp_path / "missing_data.toml"
     cfg_path.write_text(toml_text)
 
-    cfg: AppConfig = load_toml(cfg_path)
-    assert cfg.train is None
-    assert cfg.sample is None
+    with pytest.raises(ValidationError):
+        load_toml(cfg_path)
 
 
 def test_load_toml_train_missing_runtime_section(tmp_path: Path) -> None:
-    """Test loading TOML with train section but missing runtime subsection."""
+    """Strict: [train] missing required runtime subsection must raise ValidationError."""
     toml_text = """
 [train.model]
-n_layer=1
-n_head=1
-n_embd=32
-block_size=16
-
-[train.data]
-dataset_dir = "data/shakespeare"
-
-[train.optim]
-learning_rate = 0.001
-
-[train.schedule]
-# Missing [train.runtime] section
-"""
+ n_layer=1
+ n_head=1
+ n_embd=32
+ block_size=16
+ 
+ [train.data]
+ dataset_dir = "data/shakespeare"
+ 
+ [train.optim]
+ learning_rate = 0.001
+ 
+ [train.schedule]
+ # Missing [train.runtime] section
+ """
     cfg_path = tmp_path / "missing_runtime.toml"
     cfg_path.write_text(toml_text)
 
-    cfg: AppConfig = load_toml(cfg_path)
-    assert cfg.train is None
-    assert cfg.sample is None
+    with pytest.raises(ValidationError):
+        load_toml(cfg_path)
 
 
 def test_load_toml_sample_missing_runtime_section(tmp_path: Path) -> None:
-    """Test loading TOML with sample section but missing runtime subsection."""
+    """Strict: [sample] missing required runtime subsection must raise ValidationError."""
     toml_text = """
 [sample.sample]
 # Missing [sample.runtime] section
@@ -190,6 +188,5 @@ def test_load_toml_sample_missing_runtime_section(tmp_path: Path) -> None:
     cfg_path = tmp_path / "sample_missing_runtime.toml"
     cfg_path.write_text(toml_text)
 
-    cfg: AppConfig = load_toml(cfg_path)
-    assert cfg.train is None
-    assert cfg.sample is None
+    with pytest.raises(ValidationError):
+        load_toml(cfg_path)
