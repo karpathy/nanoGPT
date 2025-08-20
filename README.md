@@ -26,8 +26,9 @@ Quality gates (required before commit/PR)
   uv run pytest -n auto -W error --strict-markers --strict-config -v
 
 Datasets
-- Shakespeare (GPT-2 BPE; prepared via internal ml_playground.datasets.shakespeare)
-- Bundestag (char-level; prepared via internal ml_playground.datasets.bundestag_char; auto-seeds data/bundestag_char/page1.txt from a bundled sample if missing — replace it with your own text for real runs)
+- Shakespeare (GPT-2 BPE; prepared via internal ml_playground.experiments.shakespeare)
+- Bundestag (char-level; prepared via internal ml_playground.experiments.bundestag_char; auto-seeds ml_playground/experiments/bundestag_char/datasets/page1.txt from a bundled sample if missing — replace it with your own text for real runs)
+- Bundestag (tiktoken BPE; prepared via internal ml_playground.experiments.bundestag_tiktoken)
 
 Prepare
 - Shakespeare:
@@ -35,6 +36,9 @@ Prepare
 
 - Bundestag (char-level):
   uv run python -m ml_playground.cli prepare bundestag_char
+
+- Bundestag (tiktoken BPE):
+  uv run python -m ml_playground.cli prepare bundestag_tiktoken
 
 Train
 - Shakespeare (example config):
@@ -49,6 +53,7 @@ Sample
   uv run python -m ml_playground.cli sample ml_playground/configs/bundestag_char_cpu.toml
 
 Notes
+- Dataset preparers are registered from ml_playground/experiments and the CLI discovers them automatically. The ml_playground/datasets package is optional and may be absent.
 - Configuration is done strictly via TOML dataclasses (see ml_playground/config.py). No CLI overrides.
 - CPU/MPS are first-class. CUDA can be selected in the TOML if available.
 - Checkpoints: trainer writes ckpt_last.pt on every eval and updates ckpt_best.pt when improved (or when always_save_checkpoint is true). Training auto-resumes from ckpt_last.pt if it exists; to start fresh, delete ckpt_last.pt (and ckpt_best.pt optionally) or use a new out_dir. On resume, the checkpointed model_args (n_layer, n_head, n_embd, block_size, bias, vocab_size, dropout) take precedence over TOML values to ensure compatibility.
