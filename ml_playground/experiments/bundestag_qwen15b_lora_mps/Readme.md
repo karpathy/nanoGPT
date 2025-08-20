@@ -34,22 +34,22 @@ This preset uses the `bundestag_finetuning_mps` integration under the hood.
 End‑to‑end loop:
 ```bash
 uv run python -m ml_playground.cli loop bundestag_finetuning_mps \
-  ml_playground/experiments/bundestag_qwen15b_lora_mps/configs/bundestag_qwen15b_lora_mps.toml
+  ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 ```
 
 Individual steps:
 ```bash
 # Prepare
 uv run python -m ml_playground.cli prepare bundestag_finetuning_mps \
-  ml_playground/experiments/bundestag_qwen15b_lora_mps/configs/bundestag_qwen15b_lora_mps.toml
+  ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 
 # Train
 uv run python -m ml_playground.cli train \
-  ml_playground/experiments/bundestag_qwen15b_lora_mps/configs/bundestag_qwen15b_lora_mps.toml
+  ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 
 # Sample
 uv run python -m ml_playground.cli sample \
-  ml_playground/experiments/bundestag_qwen15b_lora_mps/configs/bundestag_qwen15b_lora_mps.toml
+  ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 ```
 
 ## Configuration Highlights

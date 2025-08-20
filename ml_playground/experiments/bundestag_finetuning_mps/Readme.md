@@ -35,22 +35,22 @@ This integration is selected when `dataset == "bundestag_finetuning_mps"` or the
 End-to-end loop (example using the Qwen preset config):
 ```bash
 uv run python -m ml_playground.cli loop bundestag_finetuning_mps \
-  ml_playground/experiments/bundestag_qwen15b_lora_mps/bundestag_qwen15b_lora_mps.toml
+  ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 ```
 
 Individual steps:
 ```bash
 # Prepare
 uv run python -m ml_playground.cli prepare bundestag_finetuning_mps \
-  ml_playground/experiments/bundestag_qwen15b_lora_mps/bundestag_qwen15b_lora_mps.toml
+  ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 
 # Train
 uv run python -m ml_playground.cli train \
-  ml_playground/experiments/bundestag_qwen15b_lora_mps/bundestag_qwen15b_lora_mps.toml
+  ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 
 # Sample
 uv run python -m ml_playground.cli sample \
-  ml_playground/experiments/bundestag_qwen15b_lora_mps/bundestag_qwen15b_lora_mps.toml
+  ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 ```
 
 ## Configuration Highlights
@@ -88,4 +88,4 @@ out/<your_run_name>/
 - MPS memory: reduce `batch_size`, increase `grad_accum_steps`, lower `block_size`, keep `gradient_checkpointing=true`
 
 ## Notes
-- This directory contains the integration code. Example configs are currently provided in `bundestag_qwen15b_lora_mps/configs/` and `speakger/configs/` for different base models.
+- This directory contains the integration code. Example configs are provided in the experiment roots: `bundestag_qwen15b_lora_mps/config.toml` and `speakger/config.toml` for different base models.

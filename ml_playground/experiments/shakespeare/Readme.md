@@ -26,7 +26,7 @@ uv sync --all-groups
 ```
 
 ## How to Run
-- Config example: ml_playground/experiments/shakespeare/shakespeare_cpu.toml
+- Config example: ml_playground/experiments/shakespeare/config.toml
 
 Prepare dataset:
 ```bash
@@ -35,17 +35,17 @@ uv run python -m ml_playground.cli prepare shakespeare
 
 Train:
 ```bash
-uv run python -m ml_playground.cli train ml_playground/experiments/shakespeare/shakespeare_cpu.toml
+uv run python -m ml_playground.cli train ml_playground/experiments/shakespeare/config.toml
 ```
 
 Sample:
 ```bash
-uv run python -m ml_playground.cli sample ml_playground/experiments/shakespeare/shakespeare_cpu.toml
+uv run python -m ml_playground.cli sample ml_playground/experiments/shakespeare/config.toml
 ```
 
 End-to-end loop:
 ```bash
-uv run python -m ml_playground.cli loop shakespeare ml_playground/experiments/shakespeare/shakespeare_cpu.toml
+uv run python -m ml_playground.cli loop shakespeare ml_playground/experiments/shakespeare/config.toml
 ```
 
 ## Configuration Highlights

@@ -53,27 +53,27 @@ uv add peft transformers torch tensorboard
 
 ## How to Run
 Example config (edit to your paths/model):
-- `ml_playground/experiments/speakger/configs/speakger_gemma3_270m_lora_mps.toml`
+- `ml_playground/experiments/speakger/config.toml`
 
 End-to-end pipeline (prepare → train → sample):
 ```bash
 uv run python -m ml_playground.cli loop gemma_finetuning_mps \
-  ml_playground/experiments/speakger/configs/speakger_gemma3_270m_lora_mps.toml
+  ml_playground/experiments/speakger/config.toml
 ```
 
 Run individual steps:
 ```bash
 # Prepare dataset
 uv run python -m ml_playground.cli prepare gemma_finetuning_mps \
-  ml_playground/experiments/speakger/configs/speakger_gemma3_270m_lora_mps.toml
+  ml_playground/experiments/speakger/config.toml
 
 # Train
 uv run python -m ml_playground.cli train \
-  ml_playground/experiments/speakger/configs/speakger_gemma3_270m_lora_mps.toml
+  ml_playground/experiments/speakger/config.toml
 
 # Sample
 uv run python -m ml_playground.cli sample \
-  ml_playground/experiments/speakger/configs/speakger_gemma3_270m_lora_mps.toml
+  ml_playground/experiments/speakger/config.toml
 ```
 
 ## Configuration Highlights

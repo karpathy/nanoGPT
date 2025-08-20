@@ -15,7 +15,7 @@ def main() -> None:
     - If the configured raw_dir is a directory and has no .txt files, seed a tiny
       example text file so the integration can run out of the box.
     """
-    config_path: Path = Path(__file__).parent / "speakger_gemma3_270m_lora_mps.toml"
+    config_path: Path = Path(__file__).parent / "config.toml"
     if not config_path.exists():
         raise SystemExit(
             f"Default config not found for speakger experiment: {config_path}"
