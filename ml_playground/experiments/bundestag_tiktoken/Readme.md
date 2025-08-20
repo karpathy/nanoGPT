@@ -37,17 +37,17 @@ uv run python -m ml_playground.cli prepare bundestag_tiktoken
 
 Train:
 ```bash
-uv run python -m ml_playground.cli train ml_playground/experiments/bundestag_tiktoken/config.toml
+uv run python -m ml_playground.cli train bundestag_tiktoken
 ```
 
 Sample:
 ```bash
-uv run python -m ml_playground.cli sample ml_playground/experiments/bundestag_tiktoken/config.toml
+uv run python -m ml_playground.cli sample bundestag_tiktoken
 ```
 
 End-to-end loop:
 ```bash
-uv run python -m ml_playground.cli loop bundestag_tiktoken ml_playground/experiments/bundestag_tiktoken/config.toml
+uv run python -m ml_playground.cli loop bundestag_tiktoken
 ```
 
 ## Configuration Highlights

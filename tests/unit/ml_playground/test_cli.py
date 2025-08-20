@@ -26,20 +26,19 @@ def test_main_prepare_unknown_dataset_fails(mocker: MockerFixture) -> None:
     """Test prepare command with valid choice but missing preparer raises SystemExit."""
     # Use a valid argparse choice but empty PREPARERS to test our custom logic
     mocker.patch("ml_playground.datasets.PREPARERS", {})
-    with pytest.raises(SystemExit, match="Unknown dataset: shakespeare"):
+    with pytest.raises(SystemExit, match="Unknown experiment: shakespeare"):
         main(["prepare", "shakespeare"])
 
 
 def test_main_train_success(tmp_path: Path, mocker: MockerFixture) -> None:
-    """Test train command loads config and calls train function."""
-    config_path = tmp_path / "config.toml"
+    """Test train command auto-resolves config for experiment and calls train."""
     mock_config = AppConfig(train=mocker.Mock(spec=TrainExperiment))
 
     mock_load = mocker.patch("ml_playground.cli.load_toml", return_value=mock_config)
     mock_train = mocker.patch("ml_playground.cli.train")
-    main(["train", str(config_path)])
+    main(["train", "shakespeare"]) 
 
-    mock_load.assert_called_once_with(config_path)
+    mock_load.assert_called_once()
     mock_train.assert_called_once_with(mock_config.train)
 
 
@@ -50,19 +49,18 @@ def test_main_train_no_train_block_fails(tmp_path: Path, mocker: MockerFixture) 
 
     mocker.patch("ml_playground.cli.load_toml", return_value=mock_config)
     with pytest.raises(SystemExit, match="Config must contain \\[train\\] block"):
-        main(["train", str(config_path)])
+        main(["train", "shakespeare"])
 
 
 def test_main_sample_success(tmp_path: Path, mocker: MockerFixture) -> None:
-    """Test sample command loads config and calls sample function."""
-    config_path = tmp_path / "config.toml"
+    """Test sample command auto-resolves config and calls sample function."""
     mock_config = AppConfig(sample=mocker.Mock(spec=SampleExperiment))
 
     mock_load = mocker.patch("ml_playground.cli.load_toml", return_value=mock_config)
     mock_sample = mocker.patch("ml_playground.cli.sample")
-    main(["sample", str(config_path)])
+    main(["sample", "shakespeare"]) 
 
-    mock_load.assert_called_once_with(config_path)
+    mock_load.assert_called_once()
     mock_sample.assert_called_once_with(mock_config.sample)
 
 
@@ -75,7 +73,7 @@ def test_main_sample_no_sample_block_fails(
 
     mocker.patch("ml_playground.cli.load_toml", return_value=mock_config)
     with pytest.raises(SystemExit, match="Config must contain \\[sample\\] block"):
-        main(["sample", str(config_path)])
+        main(["sample", "shakespeare"])
 
 
 def test_main_loop_success(tmp_path: Path, mocker: MockerFixture) -> None:
@@ -109,7 +107,7 @@ def test_main_loop_success(tmp_path: Path, mocker: MockerFixture) -> None:
     mock_sample = mocker.patch("ml_playground.cli.sample")
     mock_copy = mocker.patch("shutil.copy2")
 
-    main(["loop", "shakespeare", str(config_path)])
+    main(["loop", "shakespeare"])
 
     mock_preparer.assert_called_once()
     mock_train.assert_called_once_with(mock_train_config)
@@ -122,8 +120,8 @@ def test_main_loop_unknown_dataset_fails(tmp_path: Path, mocker: MockerFixture) 
     config_path = tmp_path / "config.toml"
 
     mocker.patch("ml_playground.datasets.PREPARERS", {})
-    with pytest.raises(SystemExit, match="Unknown dataset: shakespeare"):
-        main(["loop", "shakespeare", str(config_path)])
+    with pytest.raises(SystemExit, match="Unknown experiment: shakespeare"):
+        main(["loop", "shakespeare"])
 
 
 def test_main_loop_missing_train_block_fails(
@@ -137,7 +135,7 @@ def test_main_loop_missing_train_block_fails(
     mocker.patch("ml_playground.datasets.PREPARERS", {"shakespeare": mock_preparer})
     mocker.patch("ml_playground.cli.load_toml", return_value=mock_config)
     with pytest.raises(SystemExit, match="Config for loop must contain both"):
-        main(["loop", "shakespeare", str(config_path)])
+        main(["loop", "shakespeare"])
 
 
 def test_main_loop_missing_sample_block_fails(
@@ -151,7 +149,7 @@ def test_main_loop_missing_sample_block_fails(
     mocker.patch("ml_playground.datasets.PREPARERS", {"shakespeare": mock_preparer})
     mocker.patch("ml_playground.cli.load_toml", return_value=mock_config)
     with pytest.raises(SystemExit, match="Config for loop must contain both"):
-        main(["loop", "shakespeare", str(config_path)])
+        main(["loop", "shakespeare"])
 
 
 def test_main_loop_meta_copy_exception_handled(
@@ -188,7 +186,7 @@ def test_main_loop_meta_copy_exception_handled(
     mocker.patch("shutil.copy2", side_effect=Exception("Copy failed"))
     mock_print = mocker.patch("builtins.print")
 
-    main(["loop", "shakespeare", str(config_path)])
+    main(["loop", "shakespeare"])
 
     mock_preparer.assert_called_once()
     mock_train.assert_called_once_with(mock_train_config)
@@ -219,7 +217,7 @@ def test_main_loop_no_meta_pkl_skips_copy(
     mock_sample = mocker.patch("ml_playground.cli.sample")
     mock_copy = mocker.patch("shutil.copy2")
 
-    main(["loop", "shakespeare", str(config_path)])
+    main(["loop", "shakespeare"])
 
     mock_preparer.assert_called_once()
     mock_train.assert_called_once_with(mock_train_config)

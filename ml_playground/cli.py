@@ -51,9 +51,31 @@ def main(argv: list[str] | None = None) -> None:
     )
     args = parser.parse_args(argv)
 
-    # Special: If the dataset is "bundestag_finetuning_mps" OR the config explicitly declares that dataset in [prepare]
-    def is_bundestag_finetuning_mps(dataset: str | None, config: Path | None) -> bool:
-        if dataset == "bundestag_finetuning_mps":
+    # Resolve config.toml from experiment where applicable
+    def _resolve_config_from_experiment(experiment: str) -> Path:
+        base = Path(__file__).resolve().parent / "experiments" / experiment / "config.toml"
+        return base
+
+    # If command provides an experiment, resolve its config.toml automatically
+    if hasattr(args, "experiment"):
+        exp = getattr(args, "experiment")
+        if isinstance(exp, str):
+            cfg_path = _resolve_config_from_experiment(exp)
+            # For train/sample/loop: config is required and must exist
+            if args.cmd in {"train", "sample", "loop"}:
+                if not cfg_path.exists():
+                    raise SystemExit(
+                        f"Config not found for experiment '{exp}'. Expected at: {cfg_path}"
+                    )
+                setattr(args, "config", cfg_path)
+            else:
+                # For prepare: config is optional; set if exists
+                if cfg_path.exists():
+                    setattr(args, "config", cfg_path)
+
+    # Special: If the experiment is "bundestag_finetuning_mps" OR the config explicitly declares that dataset in [prepare]
+    def is_bundestag_finetuning_mps(experiment: str | None, config: Path | None) -> bool:
+        if experiment == "bundestag_finetuning_mps":
             return True
         if config is not None and config.exists():
             import tomllib
@@ -67,9 +89,9 @@ def main(argv: list[str] | None = None) -> None:
                 pass
         return False
 
-    # Special: If the dataset is "gemma_finetuning_mps" OR the config file contains the integration-specific block
-    def is_gemma_finetuning_mps(dataset: str | None, config: Path | None) -> bool:
-        if dataset == "gemma_finetuning_mps":
+    # Special: If the experiment is "gemma_finetuning_mps" OR the config file contains the integration-specific block
+    def is_gemma_finetuning_mps(experiment: str | None, config: Path | None) -> bool:
+        if experiment == "gemma_finetuning_mps":
             return True
         if config is not None and config.exists():
             import tomllib
@@ -132,7 +154,7 @@ def main(argv: list[str] | None = None) -> None:
             and args.config.exists()
         ):
             if is_bundestag_finetuning_mps(
-                getattr(args, "dataset", None), getattr(args, "config", None)
+                getattr(args, "experiment", None), getattr(args, "config", None)
             ):
                 # delete dataset_dir for prepare if requested
                 if args.delete_existing:
@@ -152,7 +174,7 @@ def main(argv: list[str] | None = None) -> None:
                 integ.prepare_from_toml(args.config)
                 return
             if is_gemma_finetuning_mps(
-                getattr(args, "dataset", None), getattr(args, "config", None)
+                getattr(args, "experiment", None), getattr(args, "config", None)
             ):
                 if args.delete_existing:
                     try:
@@ -181,17 +203,17 @@ def main(argv: list[str] | None = None) -> None:
                     f"[ml_playground] Deleting output directory {out_dir} as requested."
                 )
                 shutil.rmtree(out_dir)
-        prepare = _PREPARERS.get(args.dataset)
+        prepare = _PREPARERS.get(args.experiment)
         if prepare is None:
             raise SystemExit(
-                f"Unknown dataset: {getattr(args, 'dataset', None)}. Provide a known dataset name or a TOML config for an integration dataset."
+                f"Unknown experiment: {getattr(args, 'experiment', None)}. Provide a known experiment name or a TOML config for an integration dataset."
             )
         prepare()
         return
 
     # For integration commands: route each one to the proper integration entrypoint
     if is_bundestag_finetuning_mps(
-        getattr(args, "dataset", None), getattr(args, "config", None)
+        getattr(args, "experiment", None), getattr(args, "config", None)
     ):
         if args.delete_existing:
             out_dir = _find_out_dir(getattr(args, "config", None)) or getattr(
@@ -256,7 +278,7 @@ def main(argv: list[str] | None = None) -> None:
 
     # For Gemma integration commands: route each one to the proper integration entrypoint
     if is_gemma_finetuning_mps(
-        getattr(args, "dataset", None), getattr(args, "config", None)
+        getattr(args, "experiment", None), getattr(args, "config", None)
     ):
         if args.delete_existing:
             out_dir = _find_out_dir(getattr(args, "config", None)) or getattr(
@@ -335,9 +357,9 @@ def main(argv: list[str] | None = None) -> None:
                     f"[ml_playground] Deleting output directory {out_dir} as requested."
                 )
                 shutil.rmtree(out_dir)
-        prepare = _PREPARERS.get(args.dataset)
+        prepare = _PREPARERS.get(args.experiment)
         if prepare is None:
-            raise SystemExit(f"Unknown dataset: {args.dataset}")
+            raise SystemExit(f"Unknown experiment: {args.experiment}")
         # 1) prepare
         prepare()
         # 2) train
@@ -382,47 +404,35 @@ def main(argv: list[str] | None = None) -> None:
 def configureArguments():
     p = argparse.ArgumentParser("ml_playground")
     sub = p.add_subparsers(dest="cmd", required=True)
+
+    # Prepare now always takes an experiment name; integration configs are auto-resolved
     prep_parser = sub.add_parser(
         "prepare",
-        help="Prepare dataset by name (legacy) or via TOML for integration datasets",
+        help="Prepare experiment by name (or via integration config resolved from experiments/<experiment>/config.toml)",
     )
     prep_parser.add_argument(
-        "dataset",
-        help="Dataset name (e.g., shakespeare, bundestag_char, bundestag_tiktoken, bundestag_finetuning_mps, gemma_finetuning_mps)",
-    )
-    prep_parser.add_argument(
-        "config",
-        type=Path,
-        nargs="?",
-        help="Optional TOML config path for integration datasets (bundestag_finetuning_mps, gemma_finetuning_mps)",
-    )
-    sub.add_parser("train", help="Train from TOML config").add_argument(
-        "config", type=Path
-    )
-    sub.add_parser(
-        "sample",
-        help="Sample using TOML config (tries ckpt_best.pt, ckpt_last.pt, then legacy ckpt.pt in out_dir)",
-    ).add_argument("config", type=Path)
-    loop_parser = sub.add_parser(
-        "loop", help="Run prepare -> train -> sample in one go"
-    )
-    loop_parser.add_argument(
-        "dataset",
-        choices=[
-            "shakespeare",
-            "bundestag_char",
-            "bundestag_tiktoken",
-            "bundestag_finetuning_mps",
-            "gemma_finetuning_mps",
-        ],
-        help="Dataset name",
-    )
-    loop_parser.add_argument(
-        "config",
-        type=Path,
-        help="TOML config path containing [train] and [sample] blocks",
+        "experiment",
+        help="Experiment name (e.g., shakespeare, bundestag_char, bundestag_tiktoken, speakger, bundestag_qwen15b_lora_mps)",
     )
 
+    # Train and sample now take only an experiment; config is auto-resolved
+    train_parser = sub.add_parser("train", help="Train for the given experiment (config.toml auto-resolved)")
+    train_parser.add_argument("experiment", help="Experiment name")
+
+    sample_parser = sub.add_parser(
+        "sample",
+        help="Sample for the given experiment (config.toml auto-resolved; tries best/last checkpoints)",
+    )
+    sample_parser.add_argument("experiment", help="Experiment name")
+
+    # Loop takes only an experiment
+    loop_parser = sub.add_parser(
+        "loop", help="Run prepare -> train -> sample for the given experiment (config.toml auto-resolved)"
+    )
+    loop_parser.add_argument(
+        "experiment",
+        help="Experiment name",
+    )
 
     return p
 
