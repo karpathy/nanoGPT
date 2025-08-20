@@ -61,7 +61,7 @@ shuffle = true
 
 [train.optim]
 # Base learning rate for AdamW optimizer. Slightly lower for Gemma than Qwen.
-learning_rate = 0.0015
+learning_rate = 0.015
 # L2 weight decay strength (0 disables).
 weight_decay = 0.0
 # AdamW beta1 (momentum) coefficient.
@@ -80,7 +80,7 @@ warmup_iters = 100
 # Conservative for local training.
 lr_decay_iters = 10000
 # Minimum learning rate at the end of decay.
-min_lr = 0.00015
+min_lr = 0.0015
 
 [train.runtime]
 # Output directory for checkpoints, adapters, tokenizer copy, logs, and samples.

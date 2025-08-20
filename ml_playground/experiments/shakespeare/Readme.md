@@ -10,8 +10,7 @@ Minimal experiment to prepare, train, and sample on the Tiny Shakespeare corpus 
 
 ## Data
 - The preparer downloads input.txt if missing.
-- Prepared binary files are written to:
-  - datasets/shakespeare/train.bin, val.bin (for convenience)
+- Prepared files are written to:
   - ml_playground/experiments/shakespeare/datasets/{input.txt, train.bin, val.bin}
 
 ## Method/Model
@@ -61,12 +60,12 @@ uv run python -m ml_playground.cli loop shakespeare ml_playground/experiments/sh
 
 ## Outputs
 - Training: out_dir contains ckpt_best.pt, ckpt_last.pt, logs/tb
-- Data: datasets/shakespeare/{train.bin,val.bin} and experiment-local datasets/
+- Data: ml_playground/experiments/shakespeare/datasets/{train.bin, val.bin}
 
 ## Troubleshooting
-- If download fails, check internet connection or provide input.txt manually under datasets/shakespeare/
+- If download fails, check internet connection or provide input.txt manually under ml_playground/experiments/shakespeare/datasets/
 - If sampling shows tokenization issues, ensure tiktoken is installed and accessible in the environment
 
 ## Notes
 - Dataset preparer for this experiment is registered in ml_playground.experiments.
-- The CLI attempts best-effort mirroring of artifacts to aid testing and examples.
+- Prepared data is written only to this experiment's datasets/ directory.

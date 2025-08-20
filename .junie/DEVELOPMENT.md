@@ -82,6 +82,15 @@ uv run pytest -n auto -W error --strict-markers --strict-config -v
 
 **Rationale**: Readable tests fail clearly and localize faults.
 
+### 5.1 No Test-Specific Code Paths in Production (Non-Negotiable)
+- Production code must never contain branches, flags, or behavior that exists only to satisfy tests.
+  - Examples of forbidden patterns: `if TESTING: ...`, checking `PYTEST_CURRENT_TEST`, special test-only parameters, alternate I/O paths only under tests.
+- Tests must exercise the same public API and code paths used in production.
+- Make code testable via proper seams instead:
+  - Dependency injection with sensible production defaults (e.g., pass Path, clock, RNG, HTTP client).
+  - Use pytest fixtures and mocks/monkeypatch for external boundaries (network, filesystem, time, env).
+- Idempotency and determinism are product qualities, not test toggles. Implement them unconditionally where applicable.
+
 ### 6. Fixtures (Strict Usage)
 - **Scope**: Prefer function-scoped; module/session only for expensive immutable data.
 - **Location**: All shared setup in `tests/conftest.py`.

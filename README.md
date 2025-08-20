@@ -42,15 +42,15 @@ Prepare
 
 Train
 - Shakespeare (example config):
-  uv run python -m ml_playground.cli train ml_playground/configs/shakespeare_cpu.toml
+  uv run python -m ml_playground.cli train ml_playground/experiments/shakespeare/shakespeare_cpu.toml
 
 - Bundestag (char-level example):
-  uv run python -m ml_playground.cli train ml_playground/configs/bundestag_char_cpu.toml
+  uv run python -m ml_playground.cli train ml_playground/experiments/bundestag_char/bundestag_char_cpu.toml
 
 Sample
 - Using the same TOML (sampler tries ckpt_best.pt, then ckpt_last.pt, then legacy ckpt.pt in out_dir):
-  uv run python -m ml_playground.cli sample ml_playground/configs/shakespeare_cpu.toml
-  uv run python -m ml_playground.cli sample ml_playground/configs/bundestag_char_cpu.toml
+  uv run python -m ml_playground.cli sample ml_playground/experiments/shakespeare/shakespeare_cpu.toml
+  uv run python -m ml_playground.cli sample ml_playground/experiments/bundestag_char/bundestag_char_cpu.toml
 
 Notes
 - Dataset preparers are registered from ml_playground/experiments and the CLI discovers them automatically. The ml_playground/datasets package is optional and may be absent.
@@ -61,10 +61,10 @@ Notes
 
 Loop
 - End-to-end in one command (bundestag_char):
-  uv run python -m ml_playground.cli loop bundestag_char ml_playground/configs/bundestag_char_cpu.toml
+  uv run python -m ml_playground.cli loop bundestag_char ml_playground/experiments/bundestag_char/bundestag_char_cpu.toml
 
 - Shakespeare end-to-end:
-  uv run python -m ml_playground.cli loop shakespeare ml_playground/configs/shakespeare_cpu.toml
+  uv run python -m ml_playground.cli loop shakespeare ml_playground/experiments/shakespeare/shakespeare_cpu.toml
 
 
 TensorBoard (auto-enabled)
