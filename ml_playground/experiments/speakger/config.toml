@@ -61,7 +61,7 @@ shuffle = true
 
 [train.optim]
 # Base learning rate for AdamW optimizer. Slightly lower for Gemma than Qwen.
-learning_rate = 0.15
+learning_rate = 0.015
 # L2 weight decay strength (0 disables).
 weight_decay = 0.0
 # AdamW beta1 (momentum) coefficient.
@@ -80,7 +80,7 @@ warmup_iters = 100
 # Conservative for local training.
 lr_decay_iters = 10000
 # Minimum learning rate at the end of decay.
-min_lr = 0.015
+min_lr = 0.0015
 
 [train.runtime]
 # Output directory for checkpoints, adapters, tokenizer copy, logs, and samples.
@@ -88,11 +88,11 @@ out_dir = "ml_playground/experiments/speakger/out/speakger_gemma3_270m_lora_mps"
 # Total number of optimizer steps to run. Conservative for local training.
 max_iters = 160000
 # Frequency (in steps) to run evaluation on the validation set.
-eval_interval = 20
+eval_interval = 100
 # Number of validation batches to evaluate per evaluation step.
 eval_iters = 50
 # Frequency (in steps) to print training logs.
-log_interval = 5
+log_interval = 10
 # If true, run a single evaluation and exit (no training).
 eval_only = false
 # If true, always write checkpoints at evaluation steps (best/last pointers are maintained).

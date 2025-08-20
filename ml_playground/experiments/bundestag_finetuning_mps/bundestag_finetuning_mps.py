@@ -8,7 +8,7 @@ import time
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple, Literal, cast, Any
+from typing import List, Optional, Tuple, Literal, cast
 
 import torch
 from torch import nn
