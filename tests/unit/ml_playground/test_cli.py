@@ -6,6 +6,7 @@ from ml_playground.cli import main
 from ml_playground.config import TrainExperiment, SampleExperiment
 from ml_playground.cli import load_train_config, load_sample_config
 
+
 def test_main_prepare_shakespeare_success(mocker: MockerFixture) -> None:
     """Test prepare command with shakespeare dataset succeeds."""
     mock_preparer = mocker.Mock()
@@ -34,9 +35,11 @@ def test_main_train_success(tmp_path: Path, mocker: MockerFixture) -> None:
     """Test train command auto-resolves config for experiment and calls train (strict loader)."""
     mock_train_cfg = mocker.Mock(spec=TrainExperiment)
 
-    mock_load = mocker.patch("ml_playground.cli.load_train_config", return_value=mock_train_cfg)
+    mock_load = mocker.patch(
+        "ml_playground.cli.load_train_config", return_value=mock_train_cfg
+    )
     mock_train = mocker.patch("ml_playground.cli.train")
-    main(["train", "shakespeare"]) 
+    main(["train", "shakespeare"])
 
     mock_load.assert_called_once()
     mock_train.assert_called_once_with(mock_train_cfg)
@@ -44,7 +47,10 @@ def test_main_train_success(tmp_path: Path, mocker: MockerFixture) -> None:
 
 def test_main_train_no_train_block_fails(tmp_path: Path, mocker: MockerFixture) -> None:
     """Test train command fails when strict loader raises."""
-    mocker.patch("ml_playground.cli.load_train_config", side_effect=Exception("Config must contain [train] block"))
+    mocker.patch(
+        "ml_playground.cli.load_train_config",
+        side_effect=Exception("Config must contain [train] block"),
+    )
     with pytest.raises(SystemExit, match="Config must contain \\[train\\] block"):
         main(["train", "shakespeare"])
 
@@ -53,9 +59,11 @@ def test_main_sample_success(tmp_path: Path, mocker: MockerFixture) -> None:
     """Test sample command auto-resolves config and calls sample function (strict loader)."""
     mock_sample_cfg = mocker.Mock(spec=SampleExperiment)
 
-    mock_load = mocker.patch("ml_playground.cli.load_sample_config", return_value=mock_sample_cfg)
+    mock_load = mocker.patch(
+        "ml_playground.cli.load_sample_config", return_value=mock_sample_cfg
+    )
     mock_sample = mocker.patch("ml_playground.cli.sample")
-    main(["sample", "shakespeare"]) 
+    main(["sample", "shakespeare"])
 
     mock_load.assert_called_once()
     mock_sample.assert_called_once_with(mock_sample_cfg)
@@ -65,7 +73,10 @@ def test_main_sample_no_sample_block_fails(
     tmp_path: Path, mocker: MockerFixture
 ) -> None:
     """Test sample command fails when strict loader raises."""
-    mocker.patch("ml_playground.cli.load_sample_config", side_effect=Exception("Config must contain [sample] block"))
+    mocker.patch(
+        "ml_playground.cli.load_sample_config",
+        side_effect=Exception("Config must contain [sample] block"),
+    )
     with pytest.raises(SystemExit, match="Config must contain \\[sample\\] block"):
         main(["sample", "shakespeare"])
 
@@ -94,7 +105,9 @@ def test_main_loop_success(tmp_path: Path, mocker: MockerFixture) -> None:
 
     mocker.patch("ml_playground.datasets.PREPARERS", {"shakespeare": mock_preparer})
     mocker.patch("ml_playground.cli.load_train_config", return_value=mock_train_config)
-    mocker.patch("ml_playground.cli.load_sample_config", return_value=mock_sample_config)
+    mocker.patch(
+        "ml_playground.cli.load_sample_config", return_value=mock_sample_config
+    )
     mock_train = mocker.patch("ml_playground.cli.train")
     mock_sample = mocker.patch("ml_playground.cli.sample")
     mock_copy = mocker.patch("shutil.copy2")
@@ -121,7 +134,9 @@ def test_main_loop_missing_train_block_fails(
     mock_preparer = mocker.Mock()
 
     mocker.patch("ml_playground.datasets.PREPARERS", {"shakespeare": mock_preparer})
-    mocker.patch("ml_playground.cli.load_train_config", side_effect=Exception("bad train"))
+    mocker.patch(
+        "ml_playground.cli.load_train_config", side_effect=Exception("bad train")
+    )
     with pytest.raises(SystemExit):
         main(["loop", "shakespeare"])
 
@@ -133,8 +148,13 @@ def test_main_loop_missing_sample_block_fails(
     mock_preparer = mocker.Mock()
 
     mocker.patch("ml_playground.datasets.PREPARERS", {"shakespeare": mock_preparer})
-    mocker.patch("ml_playground.cli.load_train_config", return_value=mocker.Mock(spec=TrainExperiment))
-    mocker.patch("ml_playground.cli.load_sample_config", side_effect=Exception("bad sample"))
+    mocker.patch(
+        "ml_playground.cli.load_train_config",
+        return_value=mocker.Mock(spec=TrainExperiment),
+    )
+    mocker.patch(
+        "ml_playground.cli.load_sample_config", side_effect=Exception("bad sample")
+    )
     with pytest.raises(SystemExit):
         main(["loop", "shakespeare"])
 
@@ -165,7 +185,9 @@ def test_main_loop_meta_copy_exception_handled(
 
     mocker.patch("ml_playground.datasets.PREPARERS", {"shakespeare": mock_preparer})
     mocker.patch("ml_playground.cli.load_train_config", return_value=mock_train_config)
-    mocker.patch("ml_playground.cli.load_sample_config", return_value=mock_sample_config)
+    mocker.patch(
+        "ml_playground.cli.load_sample_config", return_value=mock_sample_config
+    )
     mock_train = mocker.patch("ml_playground.cli.train")
     mock_sample = mocker.patch("ml_playground.cli.sample")
     mocker.patch("shutil.copy2", side_effect=Exception("Copy failed"))
@@ -195,7 +217,9 @@ def test_main_loop_no_meta_pkl_skips_copy(
 
     mocker.patch("ml_playground.datasets.PREPARERS", {"shakespeare": mock_preparer})
     mocker.patch("ml_playground.cli.load_train_config", return_value=mock_train_config)
-    mocker.patch("ml_playground.cli.load_sample_config", return_value=mock_sample_config)
+    mocker.patch(
+        "ml_playground.cli.load_sample_config", return_value=mock_sample_config
+    )
     mock_train = mocker.patch("ml_playground.cli.train")
     mock_sample = mocker.patch("ml_playground.cli.sample")
     mock_copy = mocker.patch("shutil.copy2")
@@ -241,8 +265,7 @@ out_dir = "out"
 
 
 def test_train_missing_runtime_section_strict(tmp_path: Path) -> None:
-    toml_text = (
-        """
+    toml_text = """
 [train.model]
 
 [train.data]
@@ -252,7 +275,6 @@ dataset_dir = "data"
 
 [train.schedule]
 """
-    )
     cfg_dir = tmp_path / "exp"
     cfg_dir.mkdir()
     cfg_path = cfg_dir / "config.toml"
@@ -264,8 +286,7 @@ dataset_dir = "data"
 
 
 def test_unknown_key_in_train_data_strict(tmp_path: Path) -> None:
-    toml_text = (
-        """
+    toml_text = """
 [train.model]
 
 [train.data]
@@ -279,7 +300,6 @@ unknown_key = 123
 [train.runtime]
 out_dir = "out"
 """
-    )
     cfg_path = tmp_path / "cfg.toml"
     cfg_path.write_text(toml_text)
 
@@ -300,8 +320,7 @@ def test_relative_path_resolution_train_strict(tmp_path: Path) -> None:
 
 
 def test_sanity_check_batch_size_strict(tmp_path: Path) -> None:
-    toml_text = (
-        """
+    toml_text = """
 [train.model]
 
 [train.data]
@@ -315,7 +334,6 @@ batch_size = 0
 [train.runtime]
 out_dir = "out"
 """
-    )
     cfg_path = tmp_path / "bad.toml"
     cfg_path.write_text(toml_text)
 
@@ -325,11 +343,9 @@ out_dir = "out"
 
 
 def test_sample_missing_runtime_strict(tmp_path: Path) -> None:
-    toml_text = (
-        """
+    toml_text = """
 [sample.sample]
 """
-    )
     cfg_path = tmp_path / "sample_missing_runtime.toml"
     cfg_path.write_text(toml_text)
 
