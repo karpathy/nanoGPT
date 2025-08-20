@@ -1,43 +1,12 @@
 from __future__ import annotations
 
-from typing import Tuple, Protocol
 from pathlib import Path
 import numpy as np
 import requests
 import tiktoken
+
 from ml_playground.experiments import register
-
-
-class Encoder(Protocol):
-    def encode_ordinary(self, text: str) -> list[int]: ...
-
-
-def encode_split_with_encoder(
-    train_data: str, val_data: str, enc: Encoder
-) -> Tuple[np.ndarray, np.ndarray]:
-    """Encode provided train/val splits using a provided encoder.
-
-    Returns two numpy arrays of dtype uint16.
-    """
-    train_ids = enc.encode_ordinary(train_data)
-    val_ids = enc.encode_ordinary(val_data)
-    train_arr = np.array(train_ids, dtype=np.uint16)
-    val_arr = np.array(val_ids, dtype=np.uint16)
-    return train_arr, val_arr
-
-
-def prepare_with_encoder(text: str, enc: Encoder) -> Tuple[np.ndarray, np.ndarray]:
-    """Split text 90/10 and encode with a provided encoder."""
-    n = len(text)
-    train_data = text[: int(n * 0.9)]
-    val_data = text[int(n * 0.9) :]
-    return encode_split_with_encoder(train_data, val_data, enc)
-
-
-def prepare_from_text(text: str) -> Tuple[np.ndarray, np.ndarray]:
-    """Split text 90/10 and encode with GPT-2 BPE (self-contained usage)."""
-    enc = tiktoken.get_encoding("gpt2")
-    return prepare_with_encoder(text, enc)
+from ml_playground.prepare import split_train_val, write_bin_and_meta
 
 
 DATA_URL = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
@@ -45,14 +14,13 @@ DATA_URL = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tiny
 
 @register("shakespeare")
 def main() -> None:
-    """Prepare Tiny Shakespeare via GPT-2 BPE.
+    """Prepare Tiny Shakespeare via GPT-2 BPE with strict meta and centralized helpers.
 
     Writes only to the experiment-local datasets directory:
-    ml_playground/experiments/shakespeare/datasets/{input.txt, train.bin, val.bin}
-    (no writes to legacy ./datasets or repo root files)
-    
+    ml_playground/experiments/shakespeare/datasets/{input.txt, train.bin, val.bin, meta.pkl}
+
     Idempotent behavior: if train.bin and val.bin exist and are newer than input.txt,
-    preparation is skipped and a message is printed indicating data is up-to-date.
+    preparation is skipped.
     """
     # Resolve experiment-local datasets directory
     exp_ds_dir = Path(__file__).resolve().parent / "datasets"
@@ -80,13 +48,24 @@ def main() -> None:
         # If any stat fails, proceed to regenerate
         pass
 
-    # Read, encode, and split
+    # Read, split, and encode with tiktoken (GPT-2)
     data = f_input.read_text(encoding="utf-8")
-    enc = tiktoken.get_encoding("gpt2")
-    train_arr, val_arr = prepare_with_encoder(data, enc)
+    enc_name = "gpt2"
+    enc = tiktoken.get_encoding(enc_name)
 
-    # Write train/val arrays to experiment-local datasets directory
-    f_train.write_bytes(train_arr.tobytes())
-    f_val.write_bytes(val_arr.tobytes())
+    train_text, val_text = split_train_val(data, 0.9)
+    train_ids = enc.encode(train_text, allowed_special={"<|endoftext|>"})
+    val_ids = enc.encode(val_text, allowed_special={"<|endoftext|>"})
 
-    print("Wrote:", f_train, f_val)
+    train_arr = np.array(train_ids, dtype=np.uint32)
+    val_arr = np.array(val_ids, dtype=np.uint32)
+
+    meta = {
+        "meta_version": 1,
+        "kind": "tiktoken",
+        "dtype": "uint32",
+        "encoding": enc_name,
+    }
+
+    # Write arrays and strict meta
+    write_bin_and_meta(exp_ds_dir, train_arr, val_arr, meta)

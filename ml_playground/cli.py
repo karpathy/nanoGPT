@@ -369,7 +369,7 @@ def main(argv: list[str] | None = None) -> None:
                 "Config for loop must contain both [train] and [sample] blocks"
             )
         train(loop_cfg.train)
-        # Copy dataset meta.pkl into out_dir for correct sampling (especially for char-level datasets)
+        # Copy dataset meta.pkl into out_dir to satisfy strict sampling requirements
         try:
             data_cfg = loop_cfg.train.data
             if data_cfg.meta_pkl is not None:
@@ -378,8 +378,8 @@ def main(argv: list[str] | None = None) -> None:
                 if src_meta.exists():
                     shutil.copy2(src_meta, dst_meta)
         except Exception as e:
-            # non-fatal; sampling will fallback if meta not present
-            print(f"[loop] Warning: could not copy meta.pkl: {e}")
+            # Non-fatal for loop flow, but note that sampling will fail without meta.pkl
+            print(f"[loop] Warning: failed to copy required meta.pkl into out_dir: {e}")
         # 3) sample
         sample(loop_cfg.sample)
         return

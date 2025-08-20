@@ -22,10 +22,7 @@ def _load_checkpoint(out_dir: Path, device: str) -> Tuple[GPT, dict]:
     conf: GPTConfig = GPTConfig(**ckpt["model_args"])
     model: GPT = GPT(conf)
     sd = ckpt["model"]
-    up = "_orig_mod."
-    for k in list(sd.keys()):
-        if k.startswith(up):
-            sd[k[len(up) :]] = sd.pop(k)
+    # no legacy prefix rewriting; fail fast if keys don't match model
     model.load_state_dict(sd)
     return model, ckpt
 
@@ -33,32 +30,37 @@ def _load_checkpoint(out_dir: Path, device: str) -> Tuple[GPT, dict]:
 def _codec_from_meta(
     meta_path: Path | None,
 ) -> Tuple[Callable[[str], list[int]], Callable[[list[int]], str]]:
-    if meta_path is not None and meta_path.exists():
-        with meta_path.open("rb") as f:
-            d = pickle.load(f)
-        stoi, itos = d["stoi"], d["itos"]
+    if meta_path is None or not meta_path.exists():
+        raise FileNotFoundError("meta.pkl is required for sampling but was not found")
+    with meta_path.open("rb") as f:
+        meta = pickle.load(f)
+
+    # Validate common fields
+    mv = meta.get("meta_version")
+    if mv is None:
+        raise ValueError("Missing required 'meta_version' in meta.pkl")
+    kind = meta.get("kind")
+    dtype = meta.get("dtype")
+    if dtype not in {"uint16", "uint32"}:
+        raise ValueError(f"Unsupported or missing meta 'dtype': {dtype!r}")
+
+    if kind == "char":
+        stoi = meta["stoi"]
+        itos = meta["itos"]
         return (
             lambda s: [stoi[c] for c in s],
-            lambda ids: "".join(itos[i] for i in ids),
+            lambda ids: "".join(itos[int(i)] for i in ids),
         )
-    # Try GPT-2 BPE via tiktoken; if unavailable, fallback to UTF-8 byte codec
-    try:
+    elif kind == "tiktoken":
+        enc_name = meta["encoding"]
         import tiktoken  # type: ignore
-
-        enc = tiktoken.get_encoding("cl100k_base")
+        enc = tiktoken.get_encoding(enc_name)
         return (
             lambda s: enc.encode(s, allowed_special={"<|endoftext|>"}),
-            lambda ids: enc.decode(ids),
+            lambda ids: enc.decode(list(ids)),
         )
-    except ImportError:
-
-        def encode_bytes(s: str) -> list[int]:
-            return list(s.encode("utf-8", errors="ignore"))
-
-        def decode_bytes(ids: list[int]) -> str:
-            return bytes(int(x) & 0xFF for x in ids).decode("utf-8", errors="ignore")
-
-        return encode_bytes, decode_bytes
+    else:
+        raise ValueError(f"Unsupported or missing meta 'kind': {kind!r}")
 
 
 def sample(exp: SampleExperiment) -> None:
@@ -71,10 +73,9 @@ def sample(exp: SampleExperiment) -> None:
     if rt.compile:
         run_model = torch.compile(model)  # type: ignore[attr-defined,assignment]
 
-    # We default to GPT-2 BPE if no dataset meta is explicitly provided alongside outputs
-    # If you store meta next to checkpoint in future, it will be picked up automatically
+    # Require dataset meta next to checkpoint outputs
     meta_path = rt.out_dir / "meta.pkl"
-    encode, decode = _codec_from_meta(meta_path if meta_path.exists() else None)
+    encode, decode = _codec_from_meta(meta_path)
 
     start = exp.sample.start
     if start.startswith("FILE:"):

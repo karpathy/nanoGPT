@@ -7,6 +7,7 @@ import hashlib
 from pathlib import Path
 from typing import Dict, Tuple, List, cast
 import pickle
+import shutil
 import torch
 from dataclasses import dataclass
 from ml_playground.model import GPTConfig, GPT
@@ -182,6 +183,16 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
     tb_dir = rt.out_dir / "logs" / "tb"
     writer = SummaryWriter(log_dir=str(tb_dir))
 
+    # Propagate dataset meta.pkl to out_dir for strict sampling-compatible sampling
+    try:
+        if exp.data.meta_pkl is not None:
+            src_meta = exp.data.dataset_dir / exp.data.meta_pkl
+            if src_meta.exists():
+                shutil.copy2(src_meta, rt.out_dir / "meta.pkl")
+    except Exception:
+        # Non-fatal during training; sampling will require meta.pkl and enforce strictly
+        pass
+
     device_type, ptdtype, ctx = setup(rt.device, rt.dtype, rt.seed)
 
     # Data
@@ -233,10 +244,6 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
 
     if checkpoint is not None:
         state_dict = checkpoint["model"]
-        unwanted_prefix = "_orig_mod."
-        for k in list(state_dict.keys()):
-            if k.startswith(unwanted_prefix):
-                state_dict[k[len(unwanted_prefix) :]] = state_dict.pop(k)
         model.load_state_dict(state_dict)
     else:
         # Fresh run; optionally crop block size down if requested smaller than default
