@@ -28,7 +28,11 @@ def main() -> None:
     # Seed input file from first available candidate; fail fast if none.
     bundled = Path(__file__).parent / "input.txt"
     candidates = [
-        Path("ml_playground") / "experiments" / "bundestag_tiktoken" / "datasets" / "input.txt",
+        Path("ml_playground")
+        / "experiments"
+        / "bundestag_tiktoken"
+        / "datasets"
+        / "input.txt",
         Path("ml_playground") / "experiments" / "bundestag_tiktoken" / "input.txt",
         bundled,
     ]

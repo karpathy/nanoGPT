@@ -23,9 +23,16 @@ def test_sample_smoke(tmp_path: Path) -> None:
 
     # write strict meta required by sampler
     import pickle
+
     stoi = {chr(i): i for i in range(256)}
     itos = {i: chr(i) for i in range(256)}
-    meta = {"meta_version": 1, "kind": "char", "dtype": "uint16", "stoi": stoi, "itos": itos}
+    meta = {
+        "meta_version": 1,
+        "kind": "char",
+        "dtype": "uint16",
+        "stoi": stoi,
+        "itos": itos,
+    }
     with (out_dir / "meta.pkl").open("wb") as f:
         pickle.dump(meta, f)
 

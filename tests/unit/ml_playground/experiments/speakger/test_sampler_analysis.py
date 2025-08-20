@@ -20,17 +20,26 @@ class DummyTokenizer:
         self.pad_token = None
 
     @classmethod
-    def from_pretrained(cls, path: str | Path, use_fast: bool | None = None, **_: Any) -> "DummyTokenizer":
+    def from_pretrained(
+        cls, path: str | Path, use_fast: bool | None = None, **_: Any
+    ) -> "DummyTokenizer":
         return cls()
 
-    def __call__(self, prompt: str, return_tensors: str = "pt") -> dict[str, torch.Tensor]:
+    def __call__(
+        self, prompt: str, return_tensors: str = "pt"
+    ) -> dict[str, torch.Tensor]:
         # fixed 2-token prompt
         return {
             "input_ids": torch.tensor([[3, 4]], dtype=torch.long),
             "attention_mask": torch.tensor([[1, 1]], dtype=torch.long),
         }
 
-    def decode(self, ids: list[int] | torch.Tensor, skip_special_tokens: bool = True, clean_up_tokenization_spaces: bool = False) -> str:  # noqa: E501
+    def decode(
+        self,
+        ids: list[int] | torch.Tensor,
+        skip_special_tokens: bool = True,
+        clean_up_tokenization_spaces: bool = False,
+    ) -> str:  # noqa: E501
         # return controlled generated text including header-like lines and repetitions
         return (
             "Sprecher: Max Mustermann\n"
@@ -55,7 +64,12 @@ class DummyModel:
     def eval(self) -> None:
         return None
 
-    def generate(self, input_ids: torch.Tensor, attention_mask: torch.Tensor | None = None, **kwargs: Any) -> torch.Tensor:
+    def generate(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor | None = None,
+        **kwargs: Any,
+    ) -> torch.Tensor:
         # Produce output with +5 new tokens beyond the prompt length
         bsz, in_len = input_ids.shape
         total_len = in_len + 5
@@ -81,14 +95,14 @@ def write_minimal_config(tmp_path: Path, out_dir: Path) -> Path:
     cfg = f"""
 [prepare]
 dataset = "gemma_finetuning_mps"
-raw_dir = "{(tmp_path / 'raw').as_posix()}"
-dataset_dir = "{(tmp_path / 'dataset').as_posix()}"
+raw_dir = "{(tmp_path / "raw").as_posix()}"
+dataset_dir = "{(tmp_path / "dataset").as_posix()}"
 
 [train.hf_model]
 model_name = "dummy"
 
 [train.data]
-dataset_dir = "{(tmp_path / 'dataset').as_posix()}"
+dataset_dir = "{(tmp_path / "dataset").as_posix()}"
 
 [train.runtime]
 out_dir = "{out_dir.as_posix()}"
@@ -117,7 +131,9 @@ num_samples = 1
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_sampler_writes_json_stats_and_prints_analysis(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: Any) -> None:
+def test_sampler_writes_json_stats_and_prints_analysis(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
     # Arrange directories
     out_dir = tmp_path / "out"
     adapters_dir = out_dir / "adapters" / "best"
@@ -125,10 +141,16 @@ def test_sampler_writes_json_stats_and_prints_analysis(tmp_path: Path, monkeypat
     (out_dir / "tokenizer").mkdir(parents=True, exist_ok=True)
     # Write state/best.pt to influence filename
     (out_dir / "state").mkdir(parents=True, exist_ok=True)
-    torch.save({"best_val_loss": 3.4015, "iter_num": 100}, out_dir / "state" / "best.pt")
+    torch.save(
+        {"best_val_loss": 3.4015, "iter_num": 100}, out_dir / "state" / "best.pt"
+    )
 
     # Monkeypatch heavy deps to dummy ones
-    monkeypatch.setattr(gm, "AutoTokenizer", SimpleNamespace(from_pretrained=DummyTokenizer.from_pretrained))
+    monkeypatch.setattr(
+        gm,
+        "AutoTokenizer",
+        SimpleNamespace(from_pretrained=DummyTokenizer.from_pretrained),
+    )
     monkeypatch.setattr(gm, "AutoModelForCausalLM", DummyBaseModel)
     monkeypatch.setattr(gm, "PeftModel", DummyPeftModel)
 

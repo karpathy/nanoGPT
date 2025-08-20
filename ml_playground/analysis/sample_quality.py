@@ -117,7 +117,9 @@ def _ngram_stats(lines: list[str], n: int) -> NgramStats:
         counts[gram] += 1
     # Prepare top repeated ngrams (joined by space) and counts
     top = [
-        (" ".join(g), c) for g, c in sorted(counts.items(), key=lambda x: x[1], reverse=True)[:15] if c > 1
+        (" ".join(g), c)
+        for g, c in sorted(counts.items(), key=lambda x: x[1], reverse=True)[:15]
+        if c > 1
     ]
     return NgramStats(n=n, unique_ngrams=len(counts), top_repeated_ngrams=top)
 
@@ -127,7 +129,9 @@ def _find_anomalies(lines: list[str]) -> Anomalies:
     if lines:
         last = lines[-1]
         # Heuristic: a very short final line without punctuation may be truncated
-        trailing_incomplete = bool(last.strip()) and not re.search(r"[.!?…]$", last.strip())
+        trailing_incomplete = bool(last.strip()) and not re.search(
+            r"[.!?…]$", last.strip()
+        )
 
     # Look for standalone 4-digit years in body (not header lines)
     year_pat = re.compile(r"(?<!\d)(19|20)\d{2}(?!\d)")
@@ -141,7 +145,10 @@ def _find_anomalies(lines: list[str]) -> Anomalies:
             for full in re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", s):
                 stray.append(full)
             break
-    return Anomalies(trailing_incomplete_line=trailing_incomplete, stray_year_tokens=sorted(set(stray)))
+    return Anomalies(
+        trailing_incomplete_line=trailing_incomplete,
+        stray_year_tokens=sorted(set(stray)),
+    )
 
 
 def analyze_sample_text(text: str, ngram_n: int = 3) -> SampleAnalysis:
@@ -150,7 +157,9 @@ def analyze_sample_text(text: str, ngram_n: int = 3) -> SampleAnalysis:
     lstats = _line_stats(lines)
     nstats = _ngram_stats(lines, ngram_n)
     anomalies = _find_anomalies(lines)
-    return SampleAnalysis(header=header, lines=lstats, ngrams=nstats, anomalies=anomalies)
+    return SampleAnalysis(
+        header=header, lines=lstats, ngrams=nstats, anomalies=anomalies
+    )
 
 
 def analyze_sample_file(path: Path, ngram_n: int = 3) -> SampleAnalysis:
