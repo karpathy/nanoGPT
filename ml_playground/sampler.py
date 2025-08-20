@@ -19,8 +19,8 @@ def _load_checkpoint(out_dir: Path, device: str) -> Tuple[GPT, dict]:
         tried = ", ".join(str(p) for p in candidates)
         raise FileNotFoundError(f"No checkpoint found in {out_dir} (tried: {tried})")
     ckpt = torch.load(ckpt_path, map_location=device)
-    conf = GPTConfig(**ckpt["model_args"])
-    model = GPT(conf)
+    conf: GPTConfig = GPTConfig(**ckpt["model_args"])
+    model: GPT = GPT(conf)
     sd = ckpt["model"]
     up = "_orig_mod."
     for k in list(sd.keys()):
