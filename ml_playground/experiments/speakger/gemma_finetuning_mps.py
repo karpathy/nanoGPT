@@ -1857,6 +1857,153 @@ def train_from_toml(config_path: Path) -> None:
         tb_writer.close()
 
 
+# -----------------------------
+# Lightweight inlined analysis helpers (no external dependency)
+# -----------------------------
+import re as _re
+from collections import Counter as _Counter, defaultdict as _defaultdict
+
+def _analyze_text(text: str, ngram_n: int = 3) -> dict[str, object]:
+    lines = text.splitlines()
+    # Header
+    speaker = topic = year = None
+    year_count = 0
+    for s in lines[:10]:
+        st = s.strip()
+        if st.startswith("Sprecher:") and speaker is None:
+            speaker = st.split("Sprecher:", 1)[1].strip() or None
+        elif st.startswith("Thema:") and topic is None:
+            topic = st.split("Thema:", 1)[1].strip() or None
+        elif st.startswith("Jahr:"):
+            year_count += 1
+            if year is None:
+                year = st.split("Jahr:", 1)[1].strip() or None
+    # Line stats
+    non_empty = [ln for ln in lines if ln.strip()]
+    counts = _Counter(non_empty)
+    unique_lines = len(counts)
+    ne = len(non_empty)
+    unique_ratio = (unique_lines / ne) if ne else 0.0
+    longest = 0
+    cur = 0
+    last = None
+    for ln in non_empty:
+        if ln == last:
+            cur += 1
+        else:
+            cur = 1
+            last = ln
+        if cur > longest:
+            longest = cur
+    top_repeated_lines = [(s, c) for s, c in counts.most_common(10) if c > 1]
+    # N-grams
+    tok_re = _re.compile(r"\w+|[^\w\s]")
+    tokens: list[str] = []
+    for ln in lines:
+        tokens.extend(tok_re.findall(ln))
+    if ngram_n <= 0:
+        ngram_n = 3
+    ncounts: dict[tuple[str, ...], int] = _defaultdict(int)
+    for i in range(len(tokens) - ngram_n + 1):
+        gram = tuple(tokens[i:i+ngram_n])
+        ncounts[gram] += 1
+    top_repeated_ngrams = [
+        (" ".join(g), c)
+        for g, c in sorted(ncounts.items(), key=lambda x: x[1], reverse=True)[:15]
+        if c > 1
+    ]
+    # Anomalies
+    trailing_incomplete = False
+    if lines:
+        last_line = lines[-1].strip()
+        if last_line and not _re.search(r"[.!?…]$", last_line):
+            trailing_incomplete = True
+    stray_years: list[str] = []
+    year_body_pat = _re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
+    for s in lines:
+        st = s.strip()
+        if st.startswith("Jahr:"):
+            continue
+        stray_years.extend(year_body_pat.findall(st))
+    stray_years = sorted(set(stray_years))
+    return {
+        "header": {
+            "speaker": speaker,
+            "topic": topic,
+            "year": year,
+            "year_count": year_count,
+        },
+        "lines": {
+            "total_lines": len(lines),
+            "non_empty_lines": ne,
+            "unique_lines": unique_lines,
+            "unique_ratio": unique_ratio,
+            "longest_identical_run": longest,
+            "top_repeated_lines": top_repeated_lines,
+        },
+        "ngrams": {
+            "n": ngram_n,
+            "unique_ngrams": len(ncounts),
+            "top_repeated_ngrams": top_repeated_ngrams,
+        },
+        "anomalies": {
+            "trailing_incomplete_line": trailing_incomplete,
+            "stray_year_tokens": stray_years,
+        },
+    }
+
+
+def _format_analysis(stats: dict[str, object]) -> str:
+    h = stats["header"]  # type: ignore[index]
+    ls = stats["lines"]  # type: ignore[index]
+    ng = stats["ngrams"]  # type: ignore[index]
+    an = stats["anomalies"]  # type: ignore[index]
+    parts: list[str] = []
+    parts.append("== Header ==")
+    parts.append(f"Sprecher: {h.get('speaker') or '-'}")
+    parts.append(f"Thema:    {h.get('topic') or '-'}")
+    parts.append(f"Jahr:     {h.get('year') or '-'} (occurrences: {h.get('year_count')})")
+    parts.append("")
+    parts.append("== Lines ==")
+    parts.append(
+        f"lines: total={ls.get('total_lines')}, non_empty={ls.get('non_empty_lines')}, "
+        f"unique={ls.get('unique_lines')}, unique_ratio={ls.get('unique_ratio'):.2f}"
+    )
+    parts.append(f"longest_identical_run: {ls.get('longest_identical_run')}")
+    trl = ls.get('top_repeated_lines') or []
+    if trl:
+        parts.append("top_repeated_lines:")
+        for s, c in trl:  # type: ignore[misc]
+            preview = str(s).strip()
+            if len(preview) > 80:
+                preview = preview[:77] + "..."
+            parts.append(f"  - ({c}x) {preview}")
+    else:
+        parts.append("top_repeated_lines: -")
+    parts.append("")
+    parts.append("== N-grams ==")
+    parts.append(f"n={ng.get('n')}, unique_ngrams={ng.get('unique_ngrams')}")
+    trn = ng.get('top_repeated_ngrams') or []
+    if trn:
+        parts.append("top_repeated_ngrams:")
+        for g, c in trn:  # type: ignore[misc]
+            preview = str(g)
+            if len(preview) > 80:
+                preview = preview[:77] + "..."
+            parts.append(f"  - ({c}x) {preview}")
+    else:
+        parts.append("top_repeated_ngrams: -")
+    parts.append("")
+    parts.append("== Anomalies ==")
+    parts.append(f"trailing_incomplete_line: {an.get('trailing_incomplete_line')}")
+    syt = an.get('stray_year_tokens') or []
+    if syt:
+        parts.append("stray_year_tokens: " + ", ".join(map(str, syt)))
+    else:
+        parts.append("stray_year_tokens: -")
+    return "\n".join(parts)
+
+
 def sample_from_toml(config_path: Path) -> None:
     """Generate samples from trained Gemma model."""
     if PeftModel is None:
@@ -2000,9 +2147,24 @@ def sample_from_toml(config_path: Path) -> None:
         samples_dir = sample_cfg.runtime.out_dir / "samples"
         samples_dir.mkdir(exist_ok=True)
 
-        # Save sample
-        timestamp = int(time.time())
-        sample_file = samples_dir / f"sample-{timestamp}.txt"
+        # Save sample with new filename pattern: {dataset}-{best_val_loss}-{yyyyymmdd-hhmmss}.txt
+        # Determine dataset name (fixed for this integration)
+        dataset_name = "speakger"
+        # Load best validation loss from training state if available
+        best_val_loss_str = "unknown"
+        try:
+            state_best = sample_cfg.runtime.out_dir / "state" / "best.pt"
+            if state_best.exists():
+                state_obj = torch.load(state_best, map_location="cpu")
+                bvl = float(state_obj.get("best_val_loss", float("inf")))
+                if bvl != float("inf"):
+                    best_val_loss_str = f"{bvl:.4f}"
+        except Exception:
+            pass
+        from datetime import datetime
+
+        ts_label = datetime.now().strftime("%Y%m%d-%H%M%S")
+        sample_file = samples_dir / f"{dataset_name}-{best_val_loss_str}-{ts_label}.txt"
 
         with open(sample_file, "w", encoding="utf-8") as f:
             f.write(f"Prompt: {prompt}\n")
@@ -2014,6 +2176,29 @@ def sample_from_toml(config_path: Path) -> None:
 
         # Also print to console
         print(generated_text)
+
+        # Analyze the generated sample and output stats; also save JSON alongside
+        try:
+            analysis_text = f"Prompt: {prompt}\n" + ("=" * 50) + "\n" + generated_text + "\n"
+            stats = _analyze_text(analysis_text, ngram_n=3)
+            print("\n[gemma_finetuning_mps] Sample analysis:")
+            print(_format_analysis(stats))
+
+            # Prepare JSON stats with same basename
+            stats_path = sample_file.with_suffix(".json")
+            payload = {
+                "dataset": dataset_name,
+                "best_val_loss": (None if best_val_loss_str == "unknown" else float(best_val_loss_str)),
+                "timestamp": ts_label,
+                "sample_file": str(sample_file),
+                "prompt_preview": prompt[:200],
+                "analysis": stats,
+            }
+            with open(stats_path, "w", encoding="utf-8") as sf:
+                json.dump(payload, sf, ensure_ascii=False, indent=2)
+            print(f"[gemma_finetuning_mps] Analysis JSON saved to: {stats_path}")
+        except Exception as e:
+            print(f"[gemma_finetuning_mps] Warning: failed to analyze sample: {e}")
 
 
 def loop(config_path: Path) -> None:
