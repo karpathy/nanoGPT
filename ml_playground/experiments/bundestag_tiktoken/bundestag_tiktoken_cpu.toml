@@ -1,0 +1,74 @@
+[train.model]
+n_layer = 6
+n_head = 8
+n_embd = 384
+block_size = 512
+dropout = 0.0
+bias = false
+
+[train.data]
+dataset_dir = "ml_playground/experiments/bundestag_tiktoken/datasets"
+train_bin = "train.bin"
+val_bin = "val.bin"
+meta_pkl = "meta.pkl"
+batch_size = 64
+block_size = 128
+grad_accum_steps = 2
+
+[train.optim]
+learning_rate = 0.0006
+weight_decay = 0.1
+beta1 = 0.9
+beta2 = 0.95
+grad_clip = 1.0
+
+[train.schedule]
+decay_lr = true
+warmup_iters = 1000
+lr_decay_iters = 1000000
+min_lr = 0.00006
+
+[train.runtime]
+out_dir = "ml_playground/experiments/bundestag_tiktoken/out/bundestag_tiktoken"
+max_iters = 1000000
+eval_interval = 300
+eval_iters = 100
+log_interval = 100
+eval_only = false
+always_save_checkpoint = false
+seed = 1337
+device = "mps"
+dtype = "float32"
+compile = false
+# checkpoint policy
+ckpt_last_filename = "ckpt_last.pt"
+ckpt_best_filename = "ckpt_best.pt"
+ckpt_top_k = 0
+ckpt_metric = "val_loss"
+ckpt_greater_is_better = false
+ckpt_atomic = false
+ckpt_write_metadata = true
+ckpt_time_interval_minutes = 10
+best_smoothing_alpha = 0.0
+early_stop_patience = 0
+ema_decay = 0.0
+
+[sample.runtime]
+out_dir = "ml_playground/experiments/bundestag_tiktoken/out/bundestag_tiktoken"
+max_iters = 0
+eval_interval = 1
+eval_iters = 1
+log_interval = 1
+eval_only = false
+always_save_checkpoint = false
+seed = 1337
+device = "mps"
+dtype = "float32"
+compile = false
+
+[sample.sample]
+start = "\nNächste Rednerin ist die Vorsitzende der AfD-Fraktion, Dr. Alice Weidel.\n(Beifall bei der AfD)\n  Dr. Alice Weidel (AfD): \n"
+num_samples = 1
+max_new_tokens = 1024
+temperature = 0.8
+top_k = 200
