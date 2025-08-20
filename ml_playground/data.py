@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Tuple
 import numpy as np
 import torch
+import pickle
 from ml_playground.config import DataConfig
 
 
@@ -13,8 +14,8 @@ class _MemmapReader:
     length: int
 
     @classmethod
-    def open(cls, path: Path) -> "_MemmapReader":
-        arr = np.memmap(path, dtype=np.uint16, mode="r")
+    def open(cls, path: Path, *, dtype: np.dtype) -> "_MemmapReader":
+        arr = np.memmap(path, dtype=dtype, mode="r")
         return cls(arr=arr, length=int(arr.shape[0]))
 
 
@@ -73,8 +74,24 @@ class SimpleBatches:
             raise FileNotFoundError(
                 f"Training data not found at {train_path} and/or {val_path}"
             )
-        self.train = _MemmapReader.open(train_path)
-        self.val = _MemmapReader.open(val_path)
+        # Determine dtype from meta.pkl if available; default to uint16
+        dtype = np.uint16
+        try:
+            if data.meta_pkl is not None:
+                meta_path = data.dataset_dir / data.meta_pkl
+                if meta_path.exists():
+                    with meta_path.open("rb") as f:
+                        meta = pickle.load(f)
+                    dts = meta.get("dtype")
+                    if dts == "uint32":
+                        dtype = np.uint32
+                    elif dts == "uint16":
+                        dtype = np.uint16
+        except Exception:
+            # If meta cannot be read, default remains uint16
+            pass
+        self.train = _MemmapReader.open(train_path, dtype=dtype)
+        self.val = _MemmapReader.open(val_path, dtype=dtype)
 
     def get_batch(self, split: str) -> Tuple[torch.Tensor, torch.Tensor]:
         reader = self.train if split == "train" else self.val
