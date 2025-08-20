@@ -28,7 +28,7 @@ uv sync --all-groups
 ```
 
 ## How to Run
-- Config example: ml_playground/experiments/bundestag_tiktoken/bundestag_tiktoken_cpu.toml
+- Config example: ml_playground/experiments/bundestag_tiktoken/config.toml
 
 Prepare dataset:
 ```bash
@@ -37,17 +37,17 @@ uv run python -m ml_playground.cli prepare bundestag_tiktoken
 
 Train:
 ```bash
-uv run python -m ml_playground.cli train ml_playground/experiments/bundestag_tiktoken/bundestag_tiktoken_cpu.toml
+uv run python -m ml_playground.cli train ml_playground/experiments/bundestag_tiktoken/config.toml
 ```
 
 Sample:
 ```bash
-uv run python -m ml_playground.cli sample ml_playground/experiments/bundestag_tiktoken/bundestag_tiktoken_cpu.toml
+uv run python -m ml_playground.cli sample ml_playground/experiments/bundestag_tiktoken/config.toml
 ```
 
 End-to-end loop:
 ```bash
-uv run python -m ml_playground.cli loop bundestag_tiktoken ml_playground/experiments/bundestag_tiktoken/bundestag_tiktoken_cpu.toml
+uv run python -m ml_playground.cli loop bundestag_tiktoken ml_playground/experiments/bundestag_tiktoken/config.toml
 ```
 
 ## Configuration Highlights
