@@ -28,5 +28,11 @@ ml_playground/datasets/**/tokenizer/
 .output.txt
 /.env
 
-# Local Hugging Face/Transformers cache for Gemma downloads
-/.hf_cache
+# Local Hugging Face/Transformers cache directories (any location)
+.hf_cache/
+**/.hf_cache/
+
+# Experiment-specific generated data (do not version)
+ml_playground/experiments/**/datasets/
+ml_playground/experiments/**/raw/
+ml_playground/experiments/**/out/
