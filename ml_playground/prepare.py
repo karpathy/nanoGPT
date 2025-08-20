@@ -51,7 +51,9 @@ def seed_text_file(dest: Path, candidates: Iterable[Path]) -> Path:
     raise SystemExit(f"Expected input text at {dest}, and no resource was found.")
 
 
-def write_bin_and_meta(ds_dir: Path, train: np.ndarray, val: np.ndarray, meta: dict) -> None:
+def write_bin_and_meta(
+    ds_dir: Path, train: np.ndarray, val: np.ndarray, meta: dict
+) -> None:
     """Write train.bin, val.bin, and meta.pkl; fail if arrays have unexpected dtypes/shapes."""
     if train.dtype != val.dtype:
         raise ValueError("train and val arrays must have the same dtype")

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, Any
 import numpy as np
 import torch
 import pickle
@@ -75,7 +75,7 @@ class SimpleBatches:
                 f"Training data not found at {train_path} and/or {val_path}"
             )
         # Determine dtype from meta.pkl if available; default to uint16
-        dtype = np.uint16
+        dtype: np.dtype[Any] = np.dtype(np.uint16)
         try:
             if data.meta_pkl is not None:
                 meta_path = data.dataset_dir / data.meta_pkl
@@ -84,9 +84,9 @@ class SimpleBatches:
                         meta = pickle.load(f)
                     dts = meta.get("dtype")
                     if dts == "uint32":
-                        dtype = np.uint32
+                        dtype = np.dtype(np.uint32)
                     elif dts == "uint16":
-                        dtype = np.uint16
+                        dtype = np.dtype(np.uint16)
         except Exception:
             # If meta cannot be read, default remains uint16
             pass

@@ -54,6 +54,7 @@ def _codec_from_meta(
     elif kind == "tiktoken":
         enc_name = meta["encoding"]
         import tiktoken  # type: ignore
+
         enc = tiktoken.get_encoding(enc_name)
         return (
             lambda s: enc.encode(s, allowed_special={"<|endoftext|>"}),

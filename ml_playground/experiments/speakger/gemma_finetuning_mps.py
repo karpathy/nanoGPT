@@ -4,8 +4,10 @@ import json
 import math
 import os
 import random
+import re as _re
 import time
 import shutil
+from collections import Counter as _Counter, defaultdict as _defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple, Literal, cast, Any
@@ -1860,8 +1862,7 @@ def train_from_toml(config_path: Path) -> None:
 # -----------------------------
 # Lightweight inlined analysis helpers (no external dependency)
 # -----------------------------
-import re as _re
-from collections import Counter as _Counter, defaultdict as _defaultdict
+
 
 def _analyze_text(text: str, ngram_n: int = 3) -> dict[str, object]:
     lines = text.splitlines()
@@ -1905,7 +1906,7 @@ def _analyze_text(text: str, ngram_n: int = 3) -> dict[str, object]:
         ngram_n = 3
     ncounts: dict[tuple[str, ...], int] = _defaultdict(int)
     for i in range(len(tokens) - ngram_n + 1):
-        gram = tuple(tokens[i:i+ngram_n])
+        gram = tuple(tokens[i : i + ngram_n])
         ncounts[gram] += 1
     top_repeated_ngrams = [
         (" ".join(g), c)
@@ -1953,16 +1954,18 @@ def _analyze_text(text: str, ngram_n: int = 3) -> dict[str, object]:
     }
 
 
-def _format_analysis(stats: dict[str, object]) -> str:
-    h = stats["header"]  # type: ignore[index]
-    ls = stats["lines"]  # type: ignore[index]
-    ng = stats["ngrams"]  # type: ignore[index]
-    an = stats["anomalies"]  # type: ignore[index]
+def _format_analysis(stats: dict[str, Any]) -> str:
+    h = cast(dict[str, Any], stats["header"])
+    ls = cast(dict[str, Any], stats["lines"])
+    ng = cast(dict[str, Any], stats["ngrams"])
+    an = cast(dict[str, Any], stats["anomalies"])
     parts: list[str] = []
     parts.append("== Header ==")
     parts.append(f"Sprecher: {h.get('speaker') or '-'}")
     parts.append(f"Thema:    {h.get('topic') or '-'}")
-    parts.append(f"Jahr:     {h.get('year') or '-'} (occurrences: {h.get('year_count')})")
+    parts.append(
+        f"Jahr:     {h.get('year') or '-'} (occurrences: {h.get('year_count')})"
+    )
     parts.append("")
     parts.append("== Lines ==")
     parts.append(
@@ -1970,7 +1973,7 @@ def _format_analysis(stats: dict[str, object]) -> str:
         f"unique={ls.get('unique_lines')}, unique_ratio={ls.get('unique_ratio'):.2f}"
     )
     parts.append(f"longest_identical_run: {ls.get('longest_identical_run')}")
-    trl = ls.get('top_repeated_lines') or []
+    trl = ls.get("top_repeated_lines") or []
     if trl:
         parts.append("top_repeated_lines:")
         for s, c in trl:  # type: ignore[misc]
@@ -1983,7 +1986,7 @@ def _format_analysis(stats: dict[str, object]) -> str:
     parts.append("")
     parts.append("== N-grams ==")
     parts.append(f"n={ng.get('n')}, unique_ngrams={ng.get('unique_ngrams')}")
-    trn = ng.get('top_repeated_ngrams') or []
+    trn = ng.get("top_repeated_ngrams") or []
     if trn:
         parts.append("top_repeated_ngrams:")
         for g, c in trn:  # type: ignore[misc]
@@ -1996,7 +1999,7 @@ def _format_analysis(stats: dict[str, object]) -> str:
     parts.append("")
     parts.append("== Anomalies ==")
     parts.append(f"trailing_incomplete_line: {an.get('trailing_incomplete_line')}")
-    syt = an.get('stray_year_tokens') or []
+    syt = an.get("stray_year_tokens") or []
     if syt:
         parts.append("stray_year_tokens: " + ", ".join(map(str, syt)))
     else:
@@ -2179,7 +2182,9 @@ def sample_from_toml(config_path: Path) -> None:
 
         # Analyze the generated sample and output stats; also save JSON alongside
         try:
-            analysis_text = f"Prompt: {prompt}\n" + ("=" * 50) + "\n" + generated_text + "\n"
+            analysis_text = (
+                f"Prompt: {prompt}\n" + ("=" * 50) + "\n" + generated_text + "\n"
+            )
             stats = _analyze_text(analysis_text, ngram_n=3)
             print("\n[gemma_finetuning_mps] Sample analysis:")
             print(_format_analysis(stats))
@@ -2188,7 +2193,9 @@ def sample_from_toml(config_path: Path) -> None:
             stats_path = sample_file.with_suffix(".json")
             payload = {
                 "dataset": dataset_name,
-                "best_val_loss": (None if best_val_loss_str == "unknown" else float(best_val_loss_str)),
+                "best_val_loss": (
+                    None if best_val_loss_str == "unknown" else float(best_val_loss_str)
+                ),
                 "timestamp": ts_label,
                 "sample_file": str(sample_file),
                 "prompt_preview": prompt[:200],

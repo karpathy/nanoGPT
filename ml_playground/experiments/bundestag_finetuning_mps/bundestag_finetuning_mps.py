@@ -546,7 +546,7 @@ def train_from_toml(config_path: Path) -> None:
     writer = SummaryWriter(log_dir=str(tb_dir))
 
     # Lightweight PyTorch profiler -> TensorBoard (CPU-only on MPS)
-    prof = None  # type: Optional[Any]
+    prof: Optional[object] = None
     try:
         # Profiling directory under existing logs
         prof_dir = (
