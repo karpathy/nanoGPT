@@ -69,7 +69,7 @@ lr_decay_iters = 600000 # should be ~= max_iters per Chinchilla
 min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
-enable_fsbp = True
+enable_fsdb = True
 # system
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
@@ -205,8 +205,9 @@ if compile:
 
 # wrap model into DDP container
 if ddp:
-    if enable_fsbp:
+    if enable_fsdb:
         for layer in model.transformer.h:
+            # TODO: This should not be done with exceptions
             try:
                 fully_shard(layer)
                 # print(f"Sharded layer {layer}")
@@ -264,7 +265,7 @@ if wandb_log and master_process:
 X, Y = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
-raw_model = model.module if ddp and not enable_fsbp else model # unwrap DDP container if needed
+raw_model = model.module if ddp and not enable_fsdb else model # unwrap DDP container if needed
 running_mfu = -1.0
 ckpt_num = 0 
 while True:
