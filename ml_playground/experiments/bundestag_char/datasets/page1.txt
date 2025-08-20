@@ -1,1 +1,0 @@
-Deutscher Bundestag\nStenografischer Bericht\nKurzer Beispieldatensatz für Tests.\nDies ist nur ein kurzer Text, um das Datenpipeline-Setup zu prüfen.\n

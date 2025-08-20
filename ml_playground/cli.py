@@ -3,15 +3,17 @@ import argparse
 import os
 from argparse import ArgumentParser
 from pathlib import Path
+import shutil
+import tomllib
+
 from ml_playground.config import (
     TrainExperiment,
     SampleExperiment,
     DataConfig,
 )
-from ml_playground.trainer import train
+from ml_playground import datasets
 from ml_playground.sampler import sample
-
-
+from ml_playground.trainer import train
 
 
 def load_train_config(path: Path) -> TrainExperiment:
@@ -22,7 +24,6 @@ def load_train_config(path: Path) -> TrainExperiment:
     - Resolves relative dataset_dir and out_dir against the config file directory.
     - Delegates detailed value validation to Pydantic models.
     """
-    import tomllib
     base_dir = path.parent.resolve()
     with path.open("rb") as f:
         raw = tomllib.load(f)
@@ -75,7 +76,6 @@ def load_sample_config(path: Path) -> SampleExperiment:
     - Resolves relative out_dir against the config file directory.
     - Delegates detailed value validation to Pydantic models.
     """
-    import tomllib
     base_dir = path.parent.resolve()
     with path.open("rb") as f:
         raw = tomllib.load(f)
@@ -104,9 +104,6 @@ def load_sample_config(path: Path) -> SampleExperiment:
         return SampleExperiment.model_validate(d)
     except Exception as e:
         raise ValueError(str(e))
-
-
-
 
 
 def _load_env_files() -> None:
@@ -154,7 +151,9 @@ def main(argv: list[str] | None = None) -> None:
 
     # Resolve config.toml from experiment where applicable
     def _resolve_config_from_experiment(experiment: str) -> Path:
-        base = Path(__file__).resolve().parent / "experiments" / experiment / "config.toml"
+        base = (
+            Path(__file__).resolve().parent / "experiments" / experiment / "config.toml"
+        )
         return base
 
     # If command provides an experiment, resolve its config.toml automatically
@@ -175,12 +174,12 @@ def main(argv: list[str] | None = None) -> None:
                     setattr(args, "config", cfg_path)
 
     # Special: If the experiment is "bundestag_finetuning_mps" OR the config explicitly declares that dataset in [prepare]
-    def is_bundestag_finetuning_mps(experiment: str | None, config: Path | None) -> bool:
+    def is_bundestag_finetuning_mps(
+        experiment: str | None, config: Path | None
+    ) -> bool:
         if experiment == "bundestag_finetuning_mps":
             return True
         if config is not None and config.exists():
-            import tomllib
-
             try:
                 with open(config, "rb") as f:
                     d = tomllib.load(f)
@@ -195,8 +194,6 @@ def main(argv: list[str] | None = None) -> None:
         if experiment == "gemma_finetuning_mps":
             return True
         if config is not None and config.exists():
-            import tomllib
-
             try:
                 with open(config, "rb") as f:
                     d = tomllib.load(f)
@@ -212,14 +209,11 @@ def main(argv: list[str] | None = None) -> None:
                 pass
         return False
 
-    # Integration always handles bundestag_finetuning_mps configs
+    # Lazy import: heavy integration modules (transformers/torch/peft) loaded only when needed to reduce startup cost and avoid optional deps on unrelated commands.
     from ml_playground.experiments.bundestag_finetuning_mps import (
         bundestag_finetuning_mps as integ,
     )
     from ml_playground.experiments.speakger import gemma_finetuning_mps as gemma_integ
-
-    import shutil
-    import tomllib
 
     # Helper to find out_dir from config TOML file, with fallback to runtime fields
     def _find_out_dir(config_path, section=None):
@@ -243,10 +237,8 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.cmd == "prepare":
         # Unified prepare: supports both legacy PREPARERS and integration TOML-based pipelines
-        try:
-            from ml_playground.datasets import PREPARERS as _PREPARERS  # type: ignore
-        except Exception:  # pragma: no cover - allow running without datasets package
-            from ml_playground.experiments import PREPARERS as _PREPARERS  # type: ignore
+        # Use the PREPARERS registry as-is (tests patch this directly)
+        _PREPARERS = datasets.PREPARERS
 
         # If a config is provided and matches an integration, call its prepare_from_toml
         if (
@@ -444,10 +436,8 @@ def main(argv: list[str] | None = None) -> None:
 
     # Generic pipeline (default)
     if args.cmd == "loop":
-        try:
-            from ml_playground.datasets import PREPARERS as _PREPARERS  # type: ignore
-        except Exception:  # pragma: no cover
-            from ml_playground.experiments import PREPARERS as _PREPARERS  # type: ignore
+        # Use the PREPARERS registry as-is (tests patch this directly)
+        _PREPARERS = datasets.PREPARERS
 
         if args.delete_existing:
             out_dir = _find_out_dir(getattr(args, "config", None)) or getattr(
@@ -489,23 +479,21 @@ def main(argv: list[str] | None = None) -> None:
         sample(sample_cfg)
         return
 
-
     if args.cmd == "train":
         try:
-            train_cfg: TrainExperiment = load_train_config(args.config)
+            train_cfg_single: TrainExperiment = load_train_config(args.config)
         except Exception as e:
             raise SystemExit(str(e))
-        train(train_cfg)
+        train(train_cfg_single)
         return
 
     if args.cmd == "sample":
         try:
-            sample_cfg: SampleExperiment = load_sample_config(args.config)
+            sample_cfg_single: SampleExperiment = load_sample_config(args.config)
         except Exception as e:
             raise SystemExit(str(e))
-        sample(sample_cfg)
+        sample(sample_cfg_single)
         return
-
 
 
 def configureArguments():
@@ -523,7 +511,9 @@ def configureArguments():
     )
 
     # Train and sample now take only an experiment; config is auto-resolved
-    train_parser = sub.add_parser("train", help="Train for the given experiment (config.toml auto-resolved)")
+    train_parser = sub.add_parser(
+        "train", help="Train for the given experiment (config.toml auto-resolved)"
+    )
     train_parser.add_argument("experiment", help="Experiment name")
 
     sample_parser = sub.add_parser(
@@ -534,7 +524,8 @@ def configureArguments():
 
     # Loop takes only an experiment
     loop_parser = sub.add_parser(
-        "loop", help="Run prepare -> train -> sample for the given experiment (config.toml auto-resolved)"
+        "loop",
+        help="Run prepare -> train -> sample for the given experiment (config.toml auto-resolved)",
     )
     loop_parser.add_argument(
         "experiment",
