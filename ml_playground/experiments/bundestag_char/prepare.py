@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import Dict, Tuple
 from pathlib import Path
-import pickle
-import numpy as np
 
 from ml_playground.experiments import register
 from ml_playground.prepare import (

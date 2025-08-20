@@ -3,108 +3,107 @@ import argparse
 import os
 from argparse import ArgumentParser
 from pathlib import Path
-from typing import Any, Mapping, get_origin, get_args, Union, Literal
 from ml_playground.config import (
     TrainExperiment,
     SampleExperiment,
+    DataConfig,
 )
 from ml_playground.trainer import train
 from ml_playground.sampler import sample
-from ml_playground.cli_config import load_config
 
 
-# -----------------------------
-# Strict config loaders (TOML 1.0 via tomllib)
-# -----------------------------
-
-def _read_toml(path: Path) -> dict[str, Any]:
-    import tomllib
-
-    with path.open("rb") as f:
-        return tomllib.load(f)
-
-
-def _fail_unknown_keys(d: Mapping[str, Any], allowed: set[str], where: str) -> None:
-    unknown = set(d.keys()) - allowed
-    if unknown:
-        raise ValueError(f"Unknown key(s) in {where}: {sorted(unknown)}; allowed: {sorted(allowed)}")
-
-
-def _ensure_section(d: Mapping[str, Any], section: str, where: str) -> Mapping[str, Any]:
-    if section not in d:
-        raise ValueError(f"Missing required section [{section}] in {where}")
-    sec = d[section]
-    if not isinstance(sec, dict):
-        raise ValueError(f"Section [{section}] must be a table in {where}")
-    return sec
-
-
-def _coerce_and_norm_path(value: Any, base_dir: Path, where: str) -> Path:
-    if not isinstance(value, (str, Path)):
-        raise TypeError(f"Expected path-like for {where}, got {type(value).__name__}")
-    p = Path(value)
-    if not p.is_absolute():
-        p = (base_dir / p).resolve()
-    return p
-
-
-def _require_positive(name: str, val: int) -> None:
-    if not isinstance(val, int) or val <= 0:
-        raise ValueError(f"{name} must be a positive integer, got {val!r}")
-
-
-# Basic runtime type checks against dataclass field annotations
-
-def _is_instance_of(value: Any, typ: Any) -> bool:
-    origin = get_origin(typ)
-    if origin is Union:
-        return any(_is_instance_of(value, t) for t in get_args(typ))
-    if origin is Literal:
-        return value in get_args(typ)
-    # Primitive types
-    if typ is int:
-        return isinstance(value, int)
-    if typ is float:
-        return isinstance(value, (int, float))
-    if typ is bool:
-        return isinstance(value, bool)
-    if typ is str:
-        return isinstance(value, str)
-    if typ is Path:
-        return isinstance(value, (Path, str))
-    # Optional[...] already handled via Union
-    # For any other annotations, be permissive (dataclass constructor will likely accept correct mappings)
-    return True
-
-
-def _assert_types(tbl: Mapping[str, Any], cls: Any, where: str) -> None:
-    fields = getattr(cls, '__dataclass_fields__', {})
-    for name, f in fields.items():
-        if name in tbl:
-            typ = f.type
-            val = tbl[name]
-            # Special-case Literals
-            origin = get_origin(typ)
-            if origin is None and str(typ).startswith('typing.Literal'):
-                if val not in get_args(typ):
-                    raise TypeError(f"Invalid literal for {where}.{name}: {val!r}; allowed: {get_args(typ)}")
-            else:
-                if not _is_instance_of(val, typ):
-                    raise TypeError(f"Type mismatch for {where}.{name}: expected {typ}, got {type(val).__name__}")
 
 
 def load_train_config(path: Path) -> TrainExperiment:
-    cfg = load_config(path)
-    if cfg.train is None:
+    """Strict loader with minimal legacy checks and path resolution.
+
+    - Ensures required subsections exist ([model],[data],[optim],[schedule],[runtime]).
+    - Produces a friendly unknown-key error for [train.data].
+    - Resolves relative dataset_dir and out_dir against the config file directory.
+    - Delegates detailed value validation to Pydantic models.
+    """
+    import tomllib
+    base_dir = path.parent.resolve()
+    with path.open("rb") as f:
+        raw = tomllib.load(f)
+
+    train_tbl = raw.get("train")
+    if not isinstance(train_tbl, dict):
+        # Keep legacy top-level message used by CLI tests
         raise Exception("Config must contain [train] block")
-    return cfg.train
+
+    # Required subsections
+    for sec in ("model", "data", "optim", "schedule", "runtime"):
+        if not isinstance(train_tbl.get(sec), dict):
+            raise ValueError(f"Missing required section [{sec}]")
+
+    # Unknown keys in [train.data]
+    allowed_data_keys = set(DataConfig.model_fields.keys())
+    unknown = set(train_tbl["data"].keys()) - allowed_data_keys
+    if unknown:
+        raise ValueError("Unknown key(s) in [train.data]")
+
+    # Resolve relative paths
+    d = dict(train_tbl)
+    d_data = dict(d["data"])
+    dd = d_data.get("dataset_dir")
+    if isinstance(dd, (str, Path)):
+        p = Path(dd)
+        if not p.is_absolute():
+            d_data["dataset_dir"] = (base_dir / p).resolve()
+    d["data"] = d_data
+
+    d_runtime = dict(d["runtime"])
+    od = d_runtime.get("out_dir")
+    if isinstance(od, (str, Path)):
+        p = Path(od)
+        if not p.is_absolute():
+            d_runtime["out_dir"] = (base_dir / p).resolve()
+    d["runtime"] = d_runtime
+
+    try:
+        return TrainExperiment.model_validate(d)
+    except Exception as e:
+        # Normalize to ValueError for test expectations
+        raise ValueError(str(e))
 
 
 def load_sample_config(path: Path) -> SampleExperiment:
-    cfg = load_config(path)
-    if cfg.sample is None:
+    """Strict loader for sample section with minimal checks and path resolution.
+
+    - Ensures required subsections exist ([runtime], [sample]).
+    - Resolves relative out_dir against the config file directory.
+    - Delegates detailed value validation to Pydantic models.
+    """
+    import tomllib
+    base_dir = path.parent.resolve()
+    with path.open("rb") as f:
+        raw = tomllib.load(f)
+
+    sample_tbl = raw.get("sample")
+    if not isinstance(sample_tbl, dict):
+        # Keep top-level semantic but tests check for missing [runtime] when sample table exists,
+        # so only raise here if the entire [sample] table is missing.
         raise Exception("Config must contain [sample] block")
-    return cfg.sample
+
+    for sec in ("runtime", "sample"):
+        if not isinstance(sample_tbl.get(sec), dict):
+            raise ValueError(f"Missing required section [{sec}]")
+
+    # Resolve relative runtime.out_dir
+    d = dict(sample_tbl)
+    d_runtime = dict(d["runtime"])
+    od = d_runtime.get("out_dir")
+    if isinstance(od, (str, Path)):
+        p = Path(od)
+        if not p.is_absolute():
+            d_runtime["out_dir"] = (base_dir / p).resolve()
+    d["runtime"] = d_runtime
+
+    try:
+        return SampleExperiment.model_validate(d)
+    except Exception as e:
+        raise ValueError(str(e))
 
 
 
