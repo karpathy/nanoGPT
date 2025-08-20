@@ -45,99 +45,48 @@ DATA_URL = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tiny
 
 @register("shakespeare")
 def main() -> None:
-    """Prepare Tiny Shakespeare via GPT-2 BPE directly from the experiment package.
+    """Prepare Tiny Shakespeare via GPT-2 BPE.
 
-    Behavior mirrors the previous datasets/shakespeare.py:
-    - Ensures input exists (download if missing)
-    - Encodes/splits 90/10 using tiktoken GPT-2
-    - Writes to multiple locations for compatibility:
-      * ./datasets/shakespeare/{train.bin,val.bin}
-      * ./input.txt, ./train.bin, ./val.bin (best-effort)
-      * ./ml_playground/experiments/shakespeare/datasets/{input.txt,train.bin,val.bin}
+    Writes only to the experiment-local datasets directory:
+    ml_playground/experiments/shakespeare/datasets/{input.txt, train.bin, val.bin}
+    (no writes to legacy ./datasets or repo root files)
+    
+    Idempotent behavior: if train.bin and val.bin exist and are newer than input.txt,
+    preparation is skipped and a message is printed indicating data is up-to-date.
     """
-    # Build paths to satisfy both unit test path-mocking patterns:
-    base = Path()
-    f_input1 = base / "input.txt"
-    f_train1 = base / "train.bin"
-    f_val1 = base / "val.bin"
+    # Resolve experiment-local datasets directory
+    exp_ds_dir = Path(__file__).resolve().parent / "datasets"
+    exp_ds_dir.mkdir(parents=True, exist_ok=True)
 
-    ds_dir = Path() / "datasets" / "shakespeare"
+    f_input = exp_ds_dir / "input.txt"
+    f_train = exp_ds_dir / "train.bin"
+    f_val = exp_ds_dir / "val.bin"
+
+    # Download input if missing
+    if not f_input.exists():
+        print(f"Downloading Tiny Shakespeare to {f_input}...")
+        resp = requests.get(DATA_URL, timeout=60)
+        resp.raise_for_status()
+        f_input.write_text(resp.text, encoding="utf-8")
+
+    # If outputs exist and are up-to-date relative to input, skip work
     try:
-        ds_dir.mkdir(parents=True, exist_ok=True)
-    except Exception:
+        if f_train.exists() and f_val.exists():
+            t_in = f_input.stat().st_mtime
+            if f_train.stat().st_mtime >= t_in and f_val.stat().st_mtime >= t_in:
+                print("Already prepared:", f_train, f_val)
+                return
+    except OSError:
+        # If any stat fails, proceed to regenerate
         pass
-    f_input2 = ds_dir / "input.txt"
-    f_train2 = ds_dir / "train.bin"
-    f_val2 = ds_dir / "val.bin"
 
-    # Decide whether to download based on either input file path existing
-    need_download = True
-
-    def _exists_bool(p) -> bool:
-        try:
-            if not hasattr(p, "exists"):
-                return False
-            res = p.exists()
-            return isinstance(res, bool) and res is True
-        except Exception:
-            return False
-
-    if _exists_bool(f_input1):
-        need_download = False
-    if need_download and _exists_bool(f_input2):
-        need_download = False
-
-    if need_download:
-        print(f"Downloading Tiny Shakespeare to {f_input2}...")
-        resp = requests.get(DATA_URL, timeout=60)
-        resp.raise_for_status()
-        # Write to both paths (best-effort)
-        try:
-            f_input1.write_text(resp.text, encoding="utf-8")
-        except Exception:
-            pass
-        try:
-            f_input2.write_text(resp.text, encoding="utf-8")
-        except Exception:
-            pass
-
-    # Read from whichever path works
-    data = None
-    for fp in (f_input1, f_input2):
-        try:
-            data = fp.read_text(encoding="utf-8")
-            break
-        except Exception:
-            continue
-    if data is None:
-        # As a fallback, attempt to refetch
-        resp = requests.get(DATA_URL, timeout=60)
-        resp.raise_for_status()
-        data = resp.text
-
+    # Read, encode, and split
+    data = f_input.read_text(encoding="utf-8")
     enc = tiktoken.get_encoding("gpt2")
     train_arr, val_arr = prepare_with_encoder(data, enc)
 
-    # Write train/val to both target patterns (best-effort)
-    for fp, arr in (
-        (f_train1, train_arr),
-        (f_val1, val_arr),
-        (f_train2, train_arr),
-        (f_val2, val_arr),
-    ):
-        try:
-            fp.write_bytes(arr.tobytes())
-        except Exception:
-            pass
+    # Write train/val arrays to experiment-local datasets directory
+    f_train.write_bytes(train_arr.tobytes())
+    f_val.write_bytes(val_arr.tobytes())
 
-    # Also mirror into experiments path for consistency with example configs
-    try:
-        exp_ds_dir = Path("ml_playground") / "experiments" / "shakespeare" / "datasets"
-        exp_ds_dir.mkdir(parents=True, exist_ok=True)
-        (exp_ds_dir / "input.txt").write_text(data, encoding="utf-8")
-        (exp_ds_dir / "train.bin").write_bytes(train_arr.tobytes())
-        (exp_ds_dir / "val.bin").write_bytes(val_arr.tobytes())
-    except Exception:
-        pass
-
-    print("Wrote:", f_train2, f_val2)
+    print("Wrote:", f_train, f_val)

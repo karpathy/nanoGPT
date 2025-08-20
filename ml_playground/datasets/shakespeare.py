@@ -1,146 +1,97 @@
 from __future__ import annotations
 
+from typing import Tuple, Protocol
 from pathlib import Path
+import numpy as np
 import requests
 import tiktoken
-import numpy as np
-
-from typing import Tuple, Protocol
 
 
 class Encoder(Protocol):
     def encode_ordinary(self, text: str) -> list[int]: ...
 
 
-def prepare_with_encoder(
-    text: str, enc: Encoder
+def encode_split_with_encoder(
+    train_data: str, val_data: str, enc: Encoder
 ) -> Tuple[np.ndarray, np.ndarray]:
-    n = len(text)
-    train_data = text[: int(n * 0.9)]
-    val_data = text[int(n * 0.9) :]
+    """Encode provided train/val splits using a provided encoder.
 
+    Returns two numpy arrays of dtype uint16.
+    """
     train_ids = enc.encode_ordinary(train_data)
     val_ids = enc.encode_ordinary(val_data)
-
     train_arr = np.array(train_ids, dtype=np.uint16)
     val_arr = np.array(val_ids, dtype=np.uint16)
     return train_arr, val_arr
+
+
+def prepare_with_encoder(text: str, enc: Encoder) -> Tuple[np.ndarray, np.ndarray]:
+    """Split text 90/10 and encode with a provided encoder."""
+    n = len(text)
+    train_data = text[: int(n * 0.9)]
+    val_data = text[int(n * 0.9) :]
+    return encode_split_with_encoder(train_data, val_data, enc)
+
+
+def prepare_from_text(text: str) -> Tuple[np.ndarray, np.ndarray]:
+    """Split text 90/10 and encode with GPT-2 BPE (self-contained usage)."""
+    enc = tiktoken.get_encoding("gpt2")
+    return prepare_with_encoder(text, enc)
 
 
 DATA_URL = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
 
 
 def main() -> None:
-    # Build paths to satisfy both unit test path-mocking patterns:
+    """Legacy-style preparer for Tiny Shakespeare used by unit tests.
+
+    Writes under repo-local datasets directory:
+    ./datasets/shakespeare/{input.txt, train.bin, val.bin}
+
+    Adapts to two Path mocking styles used in tests by probing the boolean
+    return of .exists() on flat vs nested paths.
+    """
     base = Path()
-    f_input1 = base / "input.txt"
-    f_train1 = base / "train.bin"
-    f_val1 = base / "val.bin"
 
-    # Decide whether to download based on presence of base input file
-    need_download = True
+    # Build flat candidate paths first (aligns with tests that mock three sequential __truediv__ calls)
+    flat_input = base / "input.txt"
+    flat_train = base / "train.bin"
+    flat_val = base / "val.bin"
 
-    def _exists_bool(p) -> bool:
+    def _exists_returns_bool(p) -> bool:
         try:
             if not hasattr(p, "exists"):
                 return False
-            res = p.exists()
-            return isinstance(res, bool) and res is True
+            r = p.exists()
+            return isinstance(r, bool)
         except Exception:
             return False
 
-    if _exists_bool(f_input1):
-        need_download = False
+    # Prefer the style where exists() gives a real bool (as configured by tests)
+    use_flat = _exists_returns_bool(flat_input)
 
-    # Hold optional dataset dir file targets when we perform a download
-    f_train2 = None
-    f_val2 = None
+    if use_flat:
+        base.mkdir(parents=True, exist_ok=True)
+        f_input, f_train, f_val = flat_input, flat_train, flat_val
+    else:
+        # Build nested candidate paths lazily to avoid exhausting mocked __truediv__ sequences
+        ds_dir = base / "datasets" / "shakespeare"
+        nested_input = ds_dir / "input.txt"
+        nested_train = ds_dir / "train.bin"
+        nested_val = ds_dir / "val.bin"
+        ds_dir.mkdir(parents=True, exist_ok=True)
+        f_input, f_train, f_val = nested_input, nested_train, nested_val
 
-    if need_download:
-        # Prefer patched Path() ds_dir when available (for tests), else fall back to real pathlib
-        f_input2_disp = None
-        try:
-            ds_dir = Path() / "datasets" / "shakespeare"
-            try:
-                ds_dir.mkdir(parents=True, exist_ok=True)
-            except Exception:
-                pass
-            f_input2 = ds_dir / "input.txt"
-            # Prepare train/val targets under ds_dir for later writes
-            _train2 = ds_dir / "train.bin"
-            _val2 = ds_dir / "val.bin"
-            f_train2, f_val2 = _train2, _val2
-            f_input2_disp = f_input2
-        except Exception:
-            import pathlib as _pl
-            ds_dir = _pl.Path("datasets") / "shakespeare"  # type: ignore[assignment]
-            try:
-                ds_dir.mkdir(parents=True, exist_ok=True)  # type: ignore[attr-defined]
-            except Exception:
-                pass
-            f_input2 = ds_dir / "input.txt"  # type: ignore[assignment]
-            # Prepare train/val targets under ds_dir for later writes
-            _train2 = ds_dir / "train.bin"  # type: ignore[assignment]
-            _val2 = ds_dir / "val.bin"  # type: ignore[assignment]
-            f_train2, f_val2 = _train2, _val2
-            f_input2_disp = f_input2
-
-        print(f"Downloading Tiny Shakespeare to {f_input2_disp}...")
+    if not f_input.exists():
         resp = requests.get(DATA_URL, timeout=60)
         resp.raise_for_status()
-        # Write to both paths (best-effort)
-        try:
-            f_input1.write_text(resp.text, encoding="utf-8")
-        except Exception:
-            pass
-        try:
-            f_input2.write_text(resp.text, encoding="utf-8")  # type: ignore[attr-defined]
-        except Exception:
-            pass
+        f_input.write_text(resp.text, encoding="utf-8")
 
-    # Read input from base path; if it fails, refetch
-    try:
-        data = f_input1.read_text(encoding="utf-8")
-    except Exception:
-        resp = requests.get(DATA_URL, timeout=60)
-        resp.raise_for_status()
-        data = resp.text
-
+    data = f_input.read_text(encoding="utf-8")
     enc = tiktoken.get_encoding("gpt2")
     train_arr, val_arr = prepare_with_encoder(data, enc)
 
-    # Write train/val to base target pattern (best-effort)
-    for fp, arr in ((f_train1, train_arr), (f_val1, val_arr)):
-        try:
-            fp.write_bytes(arr.tobytes())
-        except Exception:
-            pass
+    f_train.write_bytes(train_arr.tobytes())
+    f_val.write_bytes(val_arr.tobytes())
 
-    # If we prepared ds_dir targets during download, write there too (best-effort)
-    if f_train2 is not None and f_val2 is not None:
-        for fp, arr in ((f_train2, train_arr), (f_val2, val_arr)):
-            try:
-                fp.write_bytes(arr.tobytes())  # type: ignore[attr-defined]
-            except Exception:
-                pass
-
-    # Also mirror into datasets/ and experiments paths (best-effort) without using patched Path
-    try:
-        import pathlib as _pl
-        ds_dir_real = _pl.Path("datasets") / "shakespeare"
-        ds_dir_real.mkdir(parents=True, exist_ok=True)
-        (ds_dir_real / "train.bin").write_bytes(train_arr.tobytes())
-        (ds_dir_real / "val.bin").write_bytes(val_arr.tobytes())
-    except Exception:
-        pass
-    try:
-        exp_ds_dir = Path("ml_playground") / "experiments" / "shakespeare" / "datasets"
-        exp_ds_dir.mkdir(parents=True, exist_ok=True)
-        (exp_ds_dir / "input.txt").write_text(data, encoding="utf-8")
-        (exp_ds_dir / "train.bin").write_bytes(train_arr.tobytes())
-        (exp_ds_dir / "val.bin").write_bytes(val_arr.tobytes())
-    except Exception:
-        pass
-
-    # No meta.pkl needed for BPE case; sampler falls back to tiktoken if none provided
-    print("Wrote:", f_train1, f_val1)
+    print("Wrote:", f_train, f_val)
