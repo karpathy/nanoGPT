@@ -47,6 +47,8 @@ target_modules = ["q_proj", "k_proj", "v_proj", "o_proj"]
 # If true, also apply LoRA to MLP projections (up_proj/down_proj/gate_proj).
 extend_mlp_targets = false
 
+[train.model]
+
 [train.data]
 # Directory containing prepared dataset artifacts (tokenizer/, train.jsonl, val.jsonl, meta.json).
 dataset_dir = "ml_playground/experiments/speakger/datasets"
@@ -57,11 +59,10 @@ grad_accum_steps = 10
 # Token block length for training examples (should usually match hf_model.block_size).
 block_size = 128
 # Whether to shuffle training blocks each epoch (set false for reproducible debug runs).
-shuffle = true
 
 [train.optim]
 # Base learning rate for AdamW optimizer. Slightly lower for Gemma than Qwen.
-learning_rate = 0.015
+learning_rate = 0.15
 # L2 weight decay strength (0 disables).
 weight_decay = 0.0
 # AdamW beta1 (momentum) coefficient.
@@ -80,11 +81,11 @@ warmup_iters = 100
 # Conservative for local training.
 lr_decay_iters = 10000
 # Minimum learning rate at the end of decay.
-min_lr = 0.0015
+min_lr = 0.015
 
 [train.runtime]
 # Output directory for checkpoints, adapters, tokenizer copy, logs, and samples.
-out_dir = "ml_playground/experiments/speakger/out/speakger_gemma3_270m_lora_mps"
+out_dir = "out/speakger_gemma3_270m_lora_mps"
 # Total number of optimizer steps to run. Conservative for local training.
 max_iters = 160000
 # Frequency (in steps) to run evaluation on the validation set.
@@ -123,7 +124,7 @@ keep_last_n = 2
 
 [sample.runtime]
 # Directory from which to read adapters/tokenizer and where to write generated samples.
-out_dir = "ml_playground/experiments/speakger/out/speakger_gemma3_270m_lora_mps"
+out_dir = "out/speakger_gemma3_270m_lora_mps"
 # Compute device for sampling: "mps", "cuda", or "cpu".
 device = "mps"
 # Compute dtype during sampling; "float16" is common for speed/memory.

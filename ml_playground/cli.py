@@ -1,6 +1,5 @@
 from __future__ import annotations
 import argparse
-import os
 from argparse import ArgumentParser
 from pathlib import Path
 import shutil
@@ -10,6 +9,7 @@ from ml_playground.config import (
     TrainExperiment,
     SampleExperiment,
     DataConfig,
+    RuntimeConfig,
 )
 from ml_playground import datasets
 from ml_playground.sampler import sample
@@ -44,8 +44,11 @@ def load_train_config(path: Path) -> TrainExperiment:
     if unknown:
         raise ValueError("Unknown key(s) in [train.data]")
 
-    # Resolve relative paths
-    d = dict(train_tbl)
+    # Resolve relative paths and prune unsupported sections/keys
+    allowed_sections = {"model", "data", "optim", "schedule", "runtime"}
+    d = {k: train_tbl[k] for k in allowed_sections}
+
+    # [train.data]: resolve dataset_dir relative to file and keep strict unknown-key check above
     d_data = dict(d["data"])
     dd = d_data.get("dataset_dir")
     if isinstance(dd, (str, Path)):
@@ -54,7 +57,10 @@ def load_train_config(path: Path) -> TrainExperiment:
             d_data["dataset_dir"] = (base_dir / p).resolve()
     d["data"] = d_data
 
-    d_runtime = dict(d["runtime"])
+    # [train.runtime]: drop unknown keys then resolve out_dir
+    allowed_runtime_keys = set(RuntimeConfig.model_fields.keys())
+    d_runtime_all = dict(d["runtime"])
+    d_runtime = {k: v for k, v in d_runtime_all.items() if k in allowed_runtime_keys}
     od = d_runtime.get("out_dir")
     if isinstance(od, (str, Path)):
         p = Path(od)
@@ -106,47 +112,8 @@ def load_sample_config(path: Path) -> SampleExperiment:
         raise ValueError(str(e))
 
 
-def _load_env_files() -> None:
-    """Load .env files from CWD without extra dependencies.
-
-    - Does not override already-set environment variables.
-    - Supports simple KEY=VALUE lines; ignores comments and blank lines.
-    """
-
-    def _parse_set(path: Path) -> None:
-        try:
-            if not path.exists():
-                return
-            for line in path.read_text(encoding="utf-8").splitlines():
-                s = line.strip()
-                if not s or s.startswith("#"):
-                    continue
-                if "=" not in s:
-                    continue
-                key, val = s.split("=", 1)
-                key = key.strip()
-                val = val.strip().strip('"').strip("'")
-                if key and key not in os.environ:
-                    os.environ[key] = val
-        except Exception:
-            # Best-effort only; silently ignore parsing errors
-            pass
-
-    _parse_set(Path.cwd() / ".env")
-
-
 def main(argv: list[str] | None = None) -> None:
-    # Load .env variables early so downstream modules can see them
-    _load_env_files()
     parser: ArgumentParser = configureArguments()
-    # Add --delete-existing (-D) to ArgumentParser directly
-    parser.add_argument(
-        "--delete-existing",
-        "-D",
-        action="store_true",
-        default=False,
-        help="Delete the output directory (out_dir) before starting (prepare/train/loop commands only).",
-    )
     args = parser.parse_args(argv)
 
     # Resolve config.toml from experiment where applicable
@@ -173,265 +140,12 @@ def main(argv: list[str] | None = None) -> None:
                 if cfg_path.exists():
                     setattr(args, "config", cfg_path)
 
-    # Special: If the experiment is "bundestag_finetuning_mps" OR the config explicitly declares that dataset in [prepare]
-    def is_bundestag_finetuning_mps(
-        experiment: str | None, config: Path | None
-    ) -> bool:
-        if experiment == "bundestag_finetuning_mps":
-            return True
-        if config is not None and config.exists():
-            try:
-                with open(config, "rb") as f:
-                    d = tomllib.load(f)
-                # Only route to this integration if [prepare].dataset explicitly matches
-                return d.get("prepare", {}).get("dataset") == "bundestag_finetuning_mps"
-            except Exception:
-                pass
-        return False
-
-    # Special: If the experiment is "gemma_finetuning_mps" OR the config file contains the integration-specific block
-    def is_gemma_finetuning_mps(experiment: str | None, config: Path | None) -> bool:
-        if experiment == "gemma_finetuning_mps":
-            return True
-        if config is not None and config.exists():
-            try:
-                with open(config, "rb") as f:
-                    d = tomllib.load(f)
-                # Check for Gemma-specific config structure
-                if (
-                    "prepare" in d
-                    and "train" in d
-                    and ("hf_model" in d["train"] or "peft" in d["train"])
-                    and d.get("prepare", {}).get("dataset") == "gemma_finetuning_mps"
-                ):
-                    return True
-            except Exception:
-                pass
-        return False
-
-    # Lazy import: heavy integration modules (transformers/torch/peft) loaded only when needed to reduce startup cost and avoid optional deps on unrelated commands.
-    from ml_playground.experiments.bundestag_finetuning_mps import (
-        bundestag_finetuning_mps as integ,
-    )
-    from ml_playground.experiments.speakger import gemma_finetuning_mps as gemma_integ
-
-    # Helper to find out_dir from config TOML file, with fallback to runtime fields
-    def _find_out_dir(config_path, section=None):
-        if config_path is None:
-            return None
-        try:
-            with open(config_path, "rb") as f:
-                data = tomllib.load(f)
-            if section and section in data and "out_dir" in data[section]:
-                return Path(data[section]["out_dir"])
-            # Try [train][runtime][out_dir] if present
-            if "train" in data and "runtime" in data["train"]:
-                if "out_dir" in data["train"]["runtime"]:
-                    return Path(data["train"]["runtime"]["out_dir"])
-            if "sample" in data and "runtime" in data["sample"]:
-                if "out_dir" in data["sample"]["runtime"]:
-                    return Path(data["sample"]["runtime"]["out_dir"])
-        except Exception:
-            pass
-        return None
-
     if args.cmd == "prepare":
-        # Unified prepare: supports both legacy PREPARERS and integration TOML-based pipelines
-        # Use the PREPARERS registry as-is (tests patch this directly)
         _PREPARERS = datasets.PREPARERS
-
-        # If a config is provided and matches an integration, call its prepare_from_toml
-        if (
-            getattr(args, "config", None) is not None
-            and isinstance(args.config, Path)
-            and args.config.exists()
-        ):
-            if is_bundestag_finetuning_mps(
-                getattr(args, "experiment", None), getattr(args, "config", None)
-            ):
-                # delete dataset_dir for prepare if requested
-                if args.delete_existing:
-                    try:
-                        with open(args.config, "rb") as f:
-                            d = tomllib.load(f)
-                        ds_dir = d.get("prepare", {}).get("dataset_dir")
-                        if ds_dir:
-                            p = Path(ds_dir)
-                            if p.exists():
-                                print(
-                                    f"[ml_playground] Deleting dataset_dir {p} as requested."
-                                )
-                                shutil.rmtree(p)
-                    except Exception:
-                        pass
-                integ.prepare_from_toml(args.config)
-                return
-            if is_gemma_finetuning_mps(
-                getattr(args, "experiment", None), getattr(args, "config", None)
-            ):
-                if args.delete_existing:
-                    try:
-                        with open(args.config, "rb") as f:
-                            d = tomllib.load(f)
-                        ds_dir = d.get("prepare", {}).get("dataset_dir")
-                        if ds_dir:
-                            p = Path(ds_dir)
-                            if p.exists():
-                                print(
-                                    f"[ml_playground] Deleting dataset_dir {p} as requested."
-                                )
-                                shutil.rmtree(p)
-                    except Exception:
-                        pass
-                gemma_integ.prepare_from_toml(args.config)
-                return
-
-        # Legacy path: use registered preparers by dataset name
-        if args.delete_existing:
-            out_dir = _find_out_dir(
-                getattr(args, "config", None), section="runtime"
-            ) or getattr(args, "out_dir", None)
-            if out_dir and out_dir.exists():
-                print(
-                    f"[ml_playground] Deleting output directory {out_dir} as requested."
-                )
-                shutil.rmtree(out_dir)
         prepare = _PREPARERS.get(args.experiment)
         if prepare is None:
-            raise SystemExit(
-                f"Unknown experiment: {getattr(args, 'experiment', None)}. Provide a known experiment name or a TOML config for an integration dataset."
-            )
+            raise SystemExit(f"Unknown experiment: {args.experiment}")
         prepare()
-        return
-
-    # For integration commands: route each one to the proper integration entrypoint
-    if is_bundestag_finetuning_mps(
-        getattr(args, "experiment", None), getattr(args, "config", None)
-    ):
-        if args.delete_existing:
-            out_dir = _find_out_dir(getattr(args, "config", None)) or getattr(
-                args, "out_dir", None
-            )
-            if out_dir and out_dir.exists():
-                print(
-                    f"[ml_playground] Deleting output directory {out_dir} as requested."
-                )
-                shutil.rmtree(out_dir)
-        if args.cmd == "loop":
-            print(
-                "[ml_playground] Routing to integration: bundestag_finetuning_mps (PEFT pipeline: prepare → train → sample)"
-            )
-            # Debug: show prepare.* inferred from TOML
-            try:
-                with open(args.config, "rb") as _f:
-                    _d = tomllib.load(_f)
-                _prep = _d.get("prepare", {})
-                print(
-                    f"[ml_playground][debug] prepare.dataset={_prep.get('dataset')}, "
-                    f"raw_dir={_prep.get('raw_dir')}, dataset_dir={_prep.get('dataset_dir')}"
-                )
-            except Exception:
-                pass
-            integ.loop(args.config)
-        elif args.cmd == "train":
-            print(
-                "[ml_playground] Routing to integration: bundestag_finetuning_mps (train only)"
-            )
-            try:
-                with open(args.config, "rb") as _f:
-                    _d = tomllib.load(_f)
-                _prep = _d.get("prepare", {})
-                print(
-                    f"[ml_playground][debug] prepare.dataset={_prep.get('dataset')}, "
-                    f"raw_dir={_prep.get('raw_dir')}, dataset_dir={_prep.get('dataset_dir')}"
-                )
-            except Exception:
-                pass
-            integ.train_from_toml(args.config)
-        elif args.cmd == "sample":
-            print(
-                "[ml_playground] Routing to integration: bundestag_finetuning_mps (sample only)"
-            )
-            try:
-                with open(args.config, "rb") as _f:
-                    _d = tomllib.load(_f)
-                _prep = _d.get("prepare", {})
-                print(
-                    f"[ml_playground][debug] prepare.dataset={_prep.get('dataset')}, "
-                    f"raw_dir={_prep.get('raw_dir')}, dataset_dir={_prep.get('dataset_dir')}"
-                )
-            except Exception:
-                pass
-            integ.sample_from_toml(args.config)
-        else:
-            raise SystemExit(
-                f"[ml_playground] Unsupported command '{args.cmd}' for this integration."
-            )
-        return
-
-    # For Gemma integration commands: route each one to the proper integration entrypoint
-    if is_gemma_finetuning_mps(
-        getattr(args, "experiment", None), getattr(args, "config", None)
-    ):
-        if args.delete_existing:
-            out_dir = _find_out_dir(getattr(args, "config", None)) or getattr(
-                args, "out_dir", None
-            )
-            if out_dir and out_dir.exists():
-                print(
-                    f"[ml_playground] Deleting output directory {out_dir} as requested."
-                )
-                shutil.rmtree(out_dir)
-        if args.cmd == "loop":
-            print(
-                "[ml_playground] Routing to integration: gemma_finetuning_mps (PEFT pipeline: prepare → train → sample)"
-            )
-            # Debug: show prepare.* inferred from TOML
-            try:
-                with open(args.config, "rb") as _f:
-                    _d = tomllib.load(_f)
-                _prep = _d.get("prepare", {})
-                print(
-                    f"[ml_playground][debug] prepare.dataset={_prep.get('dataset')}, "
-                    f"raw_dir={_prep.get('raw_dir')}, dataset_dir={_prep.get('dataset_dir')}"
-                )
-            except Exception:
-                pass
-            gemma_integ.loop(args.config)
-        elif args.cmd == "train":
-            print(
-                "[ml_playground] Routing to integration: gemma_finetuning_mps (train only)"
-            )
-            try:
-                with open(args.config, "rb") as _f:
-                    _d = tomllib.load(_f)
-                _prep = _d.get("prepare", {})
-                print(
-                    f"[ml_playground][debug] prepare.dataset={_prep.get('dataset')}, "
-                    f"raw_dir={_prep.get('raw_dir')}, dataset_dir={_prep.get('dataset_dir')}"
-                )
-            except Exception:
-                pass
-            gemma_integ.train_from_toml(args.config)
-        elif args.cmd == "sample":
-            print(
-                "[ml_playground] Routing to integration: gemma_finetuning_mps (sample only)"
-            )
-            try:
-                with open(args.config, "rb") as _f:
-                    _d = tomllib.load(_f)
-                _prep = _d.get("prepare", {})
-                print(
-                    f"[ml_playground][debug] prepare.dataset={_prep.get('dataset')}, "
-                    f"raw_dir={_prep.get('raw_dir')}, dataset_dir={_prep.get('dataset_dir')}"
-                )
-            except Exception:
-                pass
-            gemma_integ.sample_from_toml(args.config)
-        else:
-            raise SystemExit(
-                f"[ml_playground] Unsupported command '{args.cmd}' for this integration."
-            )
         return
 
     # Generic pipeline (default)
@@ -439,15 +153,6 @@ def main(argv: list[str] | None = None) -> None:
         # Use the PREPARERS registry as-is (tests patch this directly)
         _PREPARERS = datasets.PREPARERS
 
-        if args.delete_existing:
-            out_dir = _find_out_dir(getattr(args, "config", None)) or getattr(
-                args, "out_dir", None
-            )
-            if out_dir and out_dir.exists():
-                print(
-                    f"[ml_playground] Deleting output directory {out_dir} as requested."
-                )
-                shutil.rmtree(out_dir)
         prepare = _PREPARERS.get(args.experiment)
         if prepare is None:
             raise SystemExit(f"Unknown experiment: {args.experiment}")
@@ -480,6 +185,19 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     if args.cmd == "train":
+        # Route speakger to Gemma PEFT integration trainer (JSONL/PEFT pipeline)
+        if getattr(args, "experiment", None) == "speakger":
+            # Lazy import: heavy optional deps (transformers/peft) are only loaded on this path
+            from ml_playground.experiments.speakger import gemma_finetuning_mps as _sg
+
+            # Ensure dataset is prepared before training (idempotent)
+            try:
+                _sg.prepare_from_toml(args.config)
+            except Exception:
+                # Let the trainer surface a clearer error if preparation failed
+                pass
+            _sg.train_from_toml(args.config)
+            return
         try:
             train_cfg_single: TrainExperiment = load_train_config(args.config)
         except Exception as e:
@@ -488,10 +206,69 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     if args.cmd == "sample":
+        # Route speakger to Gemma PEFT integration sampler (JSONL/PEFT pipeline)
+        if getattr(args, "experiment", None) == "speakger":
+            # Lazy import: heavy optional deps (transformers/peft) are only loaded on this path
+            from ml_playground.experiments.speakger import gemma_finetuning_mps as _sg
+
+            _sg.sample_from_toml(args.config)
+            return
         try:
             sample_cfg_single: SampleExperiment = load_sample_config(args.config)
         except Exception as e:
             raise SystemExit(str(e))
+        # Best-effort: copy dataset meta.pkl into out_dir for strict sampling
+        try:
+            with args.config.open("rb") as f:
+                raw = tomllib.load(f)
+            data_tbl = raw.get("train", {}).get("data", {}) or {}
+            ds = data_tbl.get("dataset_dir")
+            meta_name = data_tbl.get("meta_pkl", "meta.pkl")
+            dst_meta = sample_cfg_single.runtime.out_dir / "meta.pkl"
+            if not dst_meta.exists() and isinstance(meta_name, (str, Path)):
+                # Ensure destination directory exists
+                sample_cfg_single.runtime.out_dir.mkdir(parents=True, exist_ok=True)
+                candidates: list[Path] = []
+                if isinstance(ds, (str, Path)):
+                    ds_path = Path(ds)
+                    # 1) Try dataset_dir as provided (absolute or CWD-relative)
+                    candidates.append(ds_path)
+                    # 2) If not absolute, also try relative to the config directory
+                    if not ds_path.is_absolute():
+                        candidates.append((args.config.parent / ds_path).resolve())
+                for cand in candidates:
+                    src_meta = Path(cand) / str(meta_name)
+                    if src_meta.exists():
+                        shutil.copy2(src_meta, dst_meta)
+                        break
+        except Exception:
+            # Non-fatal; sampler will enforce presence
+            pass
+        # Also best-effort: copy meta.json if present so sampler can use JSON hints
+        try:
+            with args.config.open("rb") as f:
+                raw = tomllib.load(f)
+            data_tbl = raw.get("train", {}).get("data", {}) or {}
+            ds = data_tbl.get("dataset_dir")
+            dst_json = sample_cfg_single.runtime.out_dir / "meta.json"
+            if not dst_json.exists():
+                json_candidates: list[Path] = []
+                if isinstance(ds, (str, Path)):
+                    ds_path = Path(ds)
+                    json_candidates.append(ds_path)
+                    if not ds_path.is_absolute():
+                        json_candidates.append((args.config.parent / ds_path).resolve())
+                for cand in json_candidates:
+                    src_json = Path(cand) / "meta.json"
+                    if src_json.exists():
+                        sample_cfg_single.runtime.out_dir.mkdir(
+                            parents=True, exist_ok=True
+                        )
+                        shutil.copy2(src_json, dst_json)
+                        break
+        except Exception:
+            # Non-fatal; sampler has a deterministic fallback
+            pass
         sample(sample_cfg_single)
         return
 

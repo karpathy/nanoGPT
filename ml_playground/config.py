@@ -173,6 +173,7 @@ class SampleConfig(_FrozenStrictModel):
     max_new_tokens: int = 200
     temperature: float = 0.8
     top_k: int = 200
+    top_p: Optional[float] = None
 
     @field_validator("num_samples", "max_new_tokens")
     @classmethod
@@ -193,6 +194,15 @@ class SampleConfig(_FrozenStrictModel):
     def _positive_float(cls, v: float) -> float:
         if v <= 0:
             raise ValueError("must be > 0")
+        return float(v)
+
+    @field_validator("top_p")
+    @classmethod
+    def _unit_range_exclusive_zero(cls, v: Optional[float]) -> Optional[float]:
+        if v is None:
+            return None
+        if not (0.0 < v <= 1.0):
+            raise ValueError("top_p must be in (0, 1]")
         return float(v)
 
 

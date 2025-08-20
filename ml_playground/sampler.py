@@ -10,6 +10,8 @@ from ml_playground.device import setup
 
 def _load_checkpoint(out_dir: Path, device: str) -> Tuple[GPT, dict]:
     candidates = [
+        out_dir / "state" / "best.pt",
+        out_dir / "state" / "last.pt",
         out_dir / "ckpt_best.pt",
         out_dir / "ckpt_last.pt",
         out_dir / "ckpt.pt",
@@ -19,49 +21,137 @@ def _load_checkpoint(out_dir: Path, device: str) -> Tuple[GPT, dict]:
         tried = ", ".join(str(p) for p in candidates)
         raise FileNotFoundError(f"No checkpoint found in {out_dir} (tried: {tried})")
     ckpt = torch.load(ckpt_path, map_location=device)
-    conf: GPTConfig = GPTConfig(**ckpt["model_args"])
+    if not isinstance(ckpt, dict):
+        raise TypeError(
+            f"Checkpoint at {ckpt_path} is not a dict; got {type(ckpt).__name__}. "
+            "Expected a trainer-produced checkpoint."
+        )
+    required = {"model", "model_args"}
+    missing = required - set(ckpt.keys())
+    if missing:
+        found = ", ".join(sorted(ckpt.keys()))
+        raise ValueError(
+            "Incompatible checkpoint format: missing required key(s) "
+            f"{sorted(missing)} at {ckpt_path}. "
+            "Expected a checkpoint produced by ml_playground.trainer with keys 'model' and 'model_args'. "
+            f"Found keys: [{found}]."
+        )
+    try:
+        conf: GPTConfig = GPTConfig(**ckpt["model_args"])  # type: ignore[arg-type]
+    except Exception as e:
+        raise ValueError(
+            f"Failed to construct GPTConfig from checkpoint model_args at {ckpt_path}: {e}"
+        ) from e
     model: GPT = GPT(conf)
     sd = ckpt["model"]
-    # no legacy prefix rewriting; fail fast if keys don't match model
-    model.load_state_dict(sd)
+    try:
+        # no legacy prefix rewriting; fail fast if keys don't match model
+        model.load_state_dict(sd)
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to load model state_dict from checkpoint at {ckpt_path}: {e}"
+        ) from e
     return model, ckpt
 
 
 def _codec_from_meta(
     meta_path: Path | None,
 ) -> Tuple[Callable[[str], list[int]], Callable[[list[int]], str]]:
-    if meta_path is None or not meta_path.exists():
-        raise FileNotFoundError("meta.pkl is required for sampling but was not found")
-    with meta_path.open("rb") as f:
-        meta = pickle.load(f)
+    """Derive encode/decode callables for sampling.
 
-    # Validate common fields
-    mv = meta.get("meta_version")
-    if mv is None:
-        raise ValueError("Missing required 'meta_version' in meta.pkl")
-    kind = meta.get("kind")
-    dtype = meta.get("dtype")
-    if dtype not in {"uint16", "uint32"}:
-        raise ValueError(f"Unsupported or missing meta 'dtype': {dtype!r}")
+    Preference order:
+    1) meta.pkl (strict, legacy format with kind/encoding)
+    2) meta.json (best-effort: may provide hints like kind/encoding)
+    3) Fallback to tiktoken 'gpt2' encoding (deterministic), with a clear error if tiktoken is unavailable
+    """
+    # 1) Try strict meta.pkl first
+    if meta_path is not None and meta_path.exists():
+        with meta_path.open("rb") as f:
+            meta = pickle.load(f)
 
-    if kind == "char":
-        stoi = meta["stoi"]
-        itos = meta["itos"]
-        return (
-            lambda s: [stoi[c] for c in s],
-            lambda ids: "".join(itos[int(i)] for i in ids),
-        )
-    elif kind == "tiktoken":
-        enc_name = meta["encoding"]
+        # Validate common fields
+        mv = meta.get("meta_version")
+        if mv is None:
+            raise ValueError("Missing required 'meta_version' in meta.pkl")
+        kind = meta.get("kind")
+        dtype = meta.get("dtype")
+        if dtype not in {"uint16", "uint32"}:
+            raise ValueError(f"Unsupported or missing meta 'dtype': {dtype!r}")
+
+        if kind == "char":
+            stoi = meta["stoi"]
+            itos = meta["itos"]
+            return (
+                lambda s: [stoi[c] for c in s],
+                lambda ids: "".join(itos[int(i)] for i in ids),
+            )
+        elif kind == "tiktoken":
+            enc_name = meta["encoding"]
+            try:
+                import tiktoken  # type: ignore
+            except Exception as e:  # pragma: no cover - optional dep path
+                raise RuntimeError(
+                    "tiktoken is required to decode with the provided meta (kind='tiktoken'). "
+                    "Install it or provide a char-level meta.pkl."
+                ) from e
+
+            enc = tiktoken.get_encoding(enc_name)
+            return (
+                lambda s: enc.encode(s, allowed_special={"<|endoftext|>"}),
+                lambda ids: enc.decode(list(ids)),
+            )
+        else:
+            raise ValueError(f"Unsupported or missing meta 'kind': {kind!r}")
+
+    # 2) Try meta.json next to meta.pkl (best-effort)
+    meta_json = None
+    out_dir = None
+    if meta_path is not None:
+        out_dir = meta_path.parent
+        cand = meta_path.with_name("meta.json")
+        if cand.exists():
+            try:
+                import json
+
+                with cand.open("r", encoding="utf-8") as f:
+                    meta_json = json.load(f)
+            except Exception:
+                meta_json = None
+
+    if isinstance(meta_json, dict):
+        kind = meta_json.get("kind")
+        encoding = meta_json.get("encoding")
+        # Support the explicit tiktoken case if provided
+        if kind == "tiktoken" and isinstance(encoding, str):
+            try:
+                import tiktoken  # type: ignore
+            except Exception as e:  # pragma: no cover - optional dep path
+                raise RuntimeError(
+                    "tiktoken is required to decode with meta.json (kind='tiktoken'). Install it or provide meta.pkl."
+                ) from e
+            enc = tiktoken.get_encoding(encoding)
+            return (
+                lambda s: enc.encode(s, allowed_special={"<|endoftext|>"}),
+                lambda ids: enc.decode(list(ids)),
+            )
+        # If meta.json doesn't contain usable hints, proceed to fallback
+
+    # 3) Deterministic fallback to GPT-2 BPE via tiktoken
+    try:
         import tiktoken  # type: ignore
+    except Exception as e:
+        where = out_dir if out_dir is not None else meta_path
+        raise FileNotFoundError(
+            f"No usable dataset meta found at {where}. Expected meta.pkl or meta.json. "
+            "As a fallback we require 'tiktoken' to use GPT-2 BPE ('gpt2') encoding, but it is not installed. "
+            "Install tiktoken or provide a valid meta.pkl/meta.json."
+        ) from e
 
-        enc = tiktoken.get_encoding(enc_name)
-        return (
-            lambda s: enc.encode(s, allowed_special={"<|endoftext|>"}),
-            lambda ids: enc.decode(list(ids)),
-        )
-    else:
-        raise ValueError(f"Unsupported or missing meta 'kind': {kind!r}")
+    enc = tiktoken.get_encoding("gpt2")
+    return (
+        lambda s: enc.encode(s, allowed_special={"<|endoftext|>"}),
+        lambda ids: enc.decode(list(ids)),
+    )
 
 
 def sample(exp: SampleExperiment) -> None:
