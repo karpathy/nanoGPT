@@ -107,6 +107,12 @@ class AppConfig:
     sample: Optional[SampleExperiment] = None
 
 
+@dataclass(frozen=True)
+class PrepareConfig:
+    # Minimal placeholder for future [prepare] strict loader; extend as needed
+    dataset_dir: Path
+
+
 def load_toml(path: Path) -> AppConfig:
     with path.open("rb") as f:
         data = tomllib.load(f)

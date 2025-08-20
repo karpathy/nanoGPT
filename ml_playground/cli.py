@@ -3,9 +3,201 @@ import argparse
 import os
 from argparse import ArgumentParser
 from pathlib import Path
-from ml_playground.config import load_toml, AppConfig
+from typing import Any, Mapping, get_origin, get_args, Union, Literal
+from ml_playground.config import (
+    TrainExperiment,
+    SampleExperiment,
+    ModelConfig,
+    DataConfig,
+    OptimConfig,
+    LRSchedule,
+    RuntimeConfig,
+    SampleConfig,
+    PrepareConfig,
+)
 from ml_playground.trainer import train
 from ml_playground.sampler import sample
+
+
+# -----------------------------
+# Strict config loaders (TOML 1.0 via tomllib)
+# -----------------------------
+
+def _read_toml(path: Path) -> dict[str, Any]:
+    import tomllib
+
+    with path.open("rb") as f:
+        return tomllib.load(f)
+
+
+def _fail_unknown_keys(d: Mapping[str, Any], allowed: set[str], where: str) -> None:
+    unknown = set(d.keys()) - allowed
+    if unknown:
+        raise ValueError(f"Unknown key(s) in {where}: {sorted(unknown)}; allowed: {sorted(allowed)}")
+
+
+def _ensure_section(d: Mapping[str, Any], section: str, where: str) -> Mapping[str, Any]:
+    if section not in d:
+        raise ValueError(f"Missing required section [{section}] in {where}")
+    sec = d[section]
+    if not isinstance(sec, dict):
+        raise ValueError(f"Section [{section}] must be a table in {where}")
+    return sec
+
+
+def _coerce_and_norm_path(value: Any, base_dir: Path, where: str) -> Path:
+    if not isinstance(value, (str, Path)):
+        raise TypeError(f"Expected path-like for {where}, got {type(value).__name__}")
+    p = Path(value)
+    if not p.is_absolute():
+        p = (base_dir / p).resolve()
+    return p
+
+
+def _require_positive(name: str, val: int) -> None:
+    if not isinstance(val, int) or val <= 0:
+        raise ValueError(f"{name} must be a positive integer, got {val!r}")
+
+
+# Basic runtime type checks against dataclass field annotations
+
+def _is_instance_of(value: Any, typ: Any) -> bool:
+    origin = get_origin(typ)
+    if origin is Union:
+        return any(_is_instance_of(value, t) for t in get_args(typ))
+    if origin is Literal:
+        return value in get_args(typ)
+    # Primitive types
+    if typ is int:
+        return isinstance(value, int)
+    if typ is float:
+        return isinstance(value, (int, float))
+    if typ is bool:
+        return isinstance(value, bool)
+    if typ is str:
+        return isinstance(value, str)
+    if typ is Path:
+        return isinstance(value, (Path, str))
+    # Optional[...] already handled via Union
+    # For any other annotations, be permissive (dataclass constructor will likely accept correct mappings)
+    return True
+
+
+def _assert_types(tbl: Mapping[str, Any], cls: Any, where: str) -> None:
+    fields = getattr(cls, '__dataclass_fields__', {})
+    for name, f in fields.items():
+        if name in tbl:
+            typ = f.type
+            val = tbl[name]
+            # Special-case Literals
+            origin = get_origin(typ)
+            if origin is None and str(typ).startswith('typing.Literal'):
+                if val not in get_args(typ):
+                    raise TypeError(f"Invalid literal for {where}.{name}: {val!r}; allowed: {get_args(typ)}")
+            else:
+                if not _is_instance_of(val, typ):
+                    raise TypeError(f"Type mismatch for {where}.{name}: expected {typ}, got {type(val).__name__}")
+
+
+def load_train_config(path: Path) -> TrainExperiment:
+    base_dir = path.parent.resolve()
+    data = _read_toml(path)
+    train_tbl = _ensure_section(data, "train", str(path))
+
+    # enforce only known subtables
+    allowed_top = {"model", "data", "optim", "schedule", "runtime"}
+    _fail_unknown_keys(train_tbl, allowed_top, "[train]")
+
+    # model
+    model_tbl = _ensure_section(train_tbl, "model", "[train]")
+    _fail_unknown_keys(model_tbl, set(ModelConfig.__dataclass_fields__.keys()), "[train.model]")
+    _assert_types(model_tbl, ModelConfig, "[train.model]")
+    model = ModelConfig(**model_tbl)
+
+    # data
+    data_tbl = _ensure_section(train_tbl, "data", "[train]")
+    # Path resolution for dataset_dir
+    if "dataset_dir" not in data_tbl:
+        raise ValueError("Missing required key 'dataset_dir' in [train.data]")
+    data_tbl = dict(data_tbl)
+    data_tbl["dataset_dir"] = _coerce_and_norm_path(data_tbl["dataset_dir"], base_dir, "[train.data].dataset_dir")
+    _fail_unknown_keys(data_tbl, set(DataConfig.__dataclass_fields__.keys()), "[train.data]")
+    _assert_types(data_tbl, DataConfig, "[train.data]")
+    dcfg = DataConfig(**data_tbl)
+    # sanity checks
+    _require_positive("[train.data].batch_size", dcfg.batch_size)
+    _require_positive("[train.data].block_size", dcfg.block_size)
+    _require_positive("[train.data].grad_accum_steps", dcfg.grad_accum_steps)
+
+    # optim
+    optim_tbl = _ensure_section(train_tbl, "optim", "[train]")
+    _fail_unknown_keys(optim_tbl, set(OptimConfig.__dataclass_fields__.keys()), "[train.optim]")
+    _assert_types(optim_tbl, OptimConfig, "[train.optim]")
+    optim = OptimConfig(**optim_tbl)
+
+    # schedule
+    sched_tbl = _ensure_section(train_tbl, "schedule", "[train]")
+    _fail_unknown_keys(sched_tbl, set(LRSchedule.__dataclass_fields__.keys()), "[train.schedule]")
+    _assert_types(sched_tbl, LRSchedule, "[train.schedule]")
+    schedule = LRSchedule(**sched_tbl)
+
+    # runtime
+    rt_tbl = _ensure_section(train_tbl, "runtime", "[train]")
+    rt_tbl = dict(rt_tbl)
+    if "out_dir" not in rt_tbl:
+        raise ValueError("Missing required key 'out_dir' in [train.runtime]")
+    rt_tbl["out_dir"] = _coerce_and_norm_path(rt_tbl["out_dir"], base_dir, "[train.runtime].out_dir")
+    _fail_unknown_keys(rt_tbl, set(RuntimeConfig.__dataclass_fields__.keys()), "[train.runtime]")
+    _assert_types(rt_tbl, RuntimeConfig, "[train.runtime]")
+    runtime = RuntimeConfig(**rt_tbl)
+
+    return TrainExperiment(model=model, data=dcfg, optim=optim, schedule=schedule, runtime=runtime)
+
+
+def load_sample_config(path: Path) -> SampleExperiment:
+    base_dir = path.parent.resolve()
+    data = _read_toml(path)
+    sample_tbl = _ensure_section(data, "sample", str(path))
+    allowed_top = {"runtime", "sample"}
+    _fail_unknown_keys(sample_tbl, allowed_top, "[sample]")
+
+    # runtime
+    rt_tbl = _ensure_section(sample_tbl, "runtime", "[sample]")
+    rt_tbl = dict(rt_tbl)
+    if "out_dir" not in rt_tbl:
+        raise ValueError("Missing required key 'out_dir' in [sample.runtime]")
+    rt_tbl["out_dir"] = _coerce_and_norm_path(rt_tbl["out_dir"], base_dir, "[sample.runtime].out_dir")
+    _fail_unknown_keys(rt_tbl, set(RuntimeConfig.__dataclass_fields__.keys()), "[sample.runtime]")
+    _assert_types(rt_tbl, RuntimeConfig, "[sample.runtime]")
+    runtime = RuntimeConfig(**rt_tbl)
+
+    # sample
+    smp_tbl = _ensure_section(sample_tbl, "sample", "[sample]")
+    _fail_unknown_keys(smp_tbl, set(SampleConfig.__dataclass_fields__.keys()), "[sample.sample]")
+    _assert_types(smp_tbl, SampleConfig, "[sample.sample]")
+    sample_cfg = SampleConfig(**smp_tbl)
+    _require_positive("[sample.sample].num_samples", sample_cfg.num_samples)
+    _require_positive("[sample.sample].max_new_tokens", sample_cfg.max_new_tokens)
+    if sample_cfg.temperature <= 0:
+        raise ValueError("[sample.sample].temperature must be > 0")
+    if sample_cfg.top_k < 0:
+        raise ValueError("[sample.sample].top_k must be >= 0")
+
+    return SampleExperiment(runtime=runtime, sample=sample_cfg)
+
+
+def load_prepare_config(path: Path) -> PrepareConfig:
+    base_dir = path.parent.resolve()
+    data = _read_toml(path)
+    prep_tbl = _ensure_section(data, "prepare", str(path))
+    # minimal: only dataset_dir for now
+    allowed = {"dataset_dir"}
+    _fail_unknown_keys(prep_tbl, allowed, "[prepare]")
+    if "dataset_dir" not in prep_tbl:
+        raise ValueError("Missing required key 'dataset_dir' in [prepare]")
+    ds = _coerce_and_norm_path(prep_tbl["dataset_dir"], base_dir, "[prepare].dataset_dir")
+    return PrepareConfig(dataset_dir=ds)
+
 
 
 def _load_env_files() -> None:
@@ -362,41 +554,47 @@ def main(argv: list[str] | None = None) -> None:
             raise SystemExit(f"Unknown experiment: {args.experiment}")
         # 1) prepare
         prepare()
-        # 2) train
-        loop_cfg: AppConfig = load_toml(args.config)
-        if loop_cfg.train is None or loop_cfg.sample is None:
-            raise SystemExit(
-                "Config for loop must contain both [train] and [sample] blocks"
-            )
-        train(loop_cfg.train)
+        # 2) load configs (strict) before training to fail fast
+        try:
+            train_cfg: TrainExperiment = load_train_config(args.config)
+        except Exception as e:
+            raise SystemExit(str(e))
+        try:
+            sample_cfg: SampleExperiment = load_sample_config(args.config)
+        except Exception as e:
+            raise SystemExit(str(e))
+        # 3) train
+        train(train_cfg)
         # Copy dataset meta.pkl into out_dir to satisfy strict sampling requirements
         try:
-            data_cfg = loop_cfg.train.data
+            data_cfg = train_cfg.data
             if data_cfg.meta_pkl is not None:
                 src_meta = data_cfg.dataset_dir / data_cfg.meta_pkl
-                dst_meta = loop_cfg.train.runtime.out_dir / "meta.pkl"
+                dst_meta = train_cfg.runtime.out_dir / "meta.pkl"
                 if src_meta.exists():
                     shutil.copy2(src_meta, dst_meta)
         except Exception as e:
             # Non-fatal for loop flow, but note that sampling will fail without meta.pkl
             print(f"[loop] Warning: failed to copy required meta.pkl into out_dir: {e}")
-        # 3) sample
-        sample(loop_cfg.sample)
+        # 4) sample
+        sample(sample_cfg)
         return
 
 
-    cfg: AppConfig = load_toml(args.config)
-
     if args.cmd == "train":
-        if cfg.train is None:
-            raise SystemExit("Config must contain [train] block")
-        train(cfg.train)
+        try:
+            train_cfg: TrainExperiment = load_train_config(args.config)
+        except Exception as e:
+            raise SystemExit(str(e))
+        train(train_cfg)
         return
 
     if args.cmd == "sample":
-        if cfg.sample is None:
-            raise SystemExit("Config must contain [sample] block")
-        sample(cfg.sample)
+        try:
+            sample_cfg: SampleExperiment = load_sample_config(args.config)
+        except Exception as e:
+            raise SystemExit(str(e))
+        sample(sample_cfg)
         return
 
 
