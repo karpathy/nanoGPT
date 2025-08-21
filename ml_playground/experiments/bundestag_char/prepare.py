@@ -38,16 +38,16 @@ def main() -> None:
     """
     ds_dir = Path("ml_playground") / "experiments" / "bundestag_char" / "datasets"
     ds_dir.mkdir(parents=True, exist_ok=True)
-    input_file_path = ds_dir / "page1.txt"
+    input_file_path = ds_dir / "input.txt"
 
     # Seed input file from first available candidate; fail fast if none.
-    bundled = Path(__file__).parent / "page1.txt"
+    bundled = Path(__file__).parent / "input.txt"
     candidates = [
         Path("ml_playground")
         / "experiments"
         / "bundestag_char"
         / "datasets"
-        / "page1.txt",
+        / "input.txt",
         Path("ml_playground") / "experiments" / "bundestag_char" / "page1.txt",
         bundled,
     ]
