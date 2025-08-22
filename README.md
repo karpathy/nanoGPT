@@ -182,6 +182,38 @@ Thou hast no right, no right, but to be sold.
 
 Whoa there, GPT, entering some dark place over there. I didn't really tune the hyperparameters in the config too much, feel free to try!
 
+### Finetuning with Hugging Face
+
+This repository now supports a more streamlined process for finetuning models on datasets from the [Hugging Face Hub](https://huggingface.co/datasets).
+
+**1. Prepare a custom dataset**
+
+A generic script `data/prepare_hf.py` is provided to download and tokenize any text-based dataset from the Hub. For example, to prepare the `wikitext` dataset, run:
+
+```sh
+python data/prepare_hf.py wikitext --config_name wikitext-2-raw-v1
+```
+
+This will download the dataset, tokenize it using the GPT-2 tokenizer, and create `train.bin` and `val.bin` files inside `data/wikitext/`. The script will automatically handle creating a validation split if one is not available.
+
+**2. Create a configuration file**
+
+Create a new config file in the `config/` directory for your finetuning run. You can copy an existing file like `config/finetune_shakespeare.py` to get started. For our `wikitext` example, we've included `config/finetune_wikitext.py`. Key parameters to set are:
+- `init_from`: Set this to the name of any GPT-2 compatible model on the Hugging Face Hub (e.g., `'gpt2'`, `'gpt2-medium'`, `'distilgpt2'`).
+- `dataset`: The name of the folder your prepared data is in (e.g., `'wikitext'`).
+- `out_dir`: A new directory to save your finetuned checkpoints.
+- Adjust hyperparameters like `learning_rate`, `batch_size`, and `max_iters` for your specific dataset and hardware.
+
+**3. Run the finetuning**
+
+Launch the training script with your new config file:
+
+```sh
+python train.py config/finetune_wikitext.py
+```
+
+This will initialize the model from the specified Hugging Face checkpoint and start finetuning on your custom dataset.
+
 ## sampling / inference
 
 Use the script `sample.py` to sample either from pre-trained GPT-2 models released by OpenAI, or from a model you trained yourself. For example, here is a way to sample from the largest available `gpt2-xl` model:
