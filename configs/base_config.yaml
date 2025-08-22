@@ -1,0 +1,57 @@
+# Base configuration for a training run
+
+# Trainer settings
+trainer:
+  module: trainers.default_trainer
+  class: DefaultTrainer
+  learning_rate: 6e-4
+  max_iters: 100 # Reduced for CPU testing
+  batch_size: 12
+  eval_interval: 10
+  eval_iters: 10
+  log_interval: 1
+  warmup_iters: 20
+  lr_decay_iters: 100
+  min_lr: 6e-5
+  weight_decay: 1e-1
+  beta1: 0.9
+  beta2: 0.95
+  grad_clip: 1.0
+  device: 'cpu'
+  dtype: 'float32'
+  compile: False
+  gradient_accumulation_steps: 1
+
+# Model settings
+model:
+  module: models.gpt
+  class: GPT
+  config_class: GPTConfig
+  n_layer: 4
+  n_head: 4
+  n_embd: 256
+  block_size: 256
+  dropout: 0.0
+  bias: False
+
+# Tokenizer settings
+tokenizer:
+  module: tokenizers.char_tokenizer
+  class: CharacterTokenizer
+
+# Data settings
+data:
+  module: data_pipelines.char_pipeline
+  class: CharDataPipeline
+  dataset: 'shakespeare_char'
+  data_dir: 'data/shakespeare_char'
+
+# Logging
+wandb_log: False
+wandb_project: 'nanogpt-refactored'
+wandb_run_name: 'run'
+
+# I/O
+out_dir: 'out'
+always_save_checkpoint: True
+init_from: 'scratch' # 'scratch' or 'resume'
