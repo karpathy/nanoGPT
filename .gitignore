@@ -7,7 +7,6 @@ __pycache__/
 *.pkl
 *.pt
 *.pyc
-input.txt
 env/
 .venv/
 
@@ -33,6 +32,6 @@ ml_playground/datasets/**/tokenizer/
 **/.hf_cache/
 
 # Experiment-specific generated data (do not version)
-ml_playground/experiments/**/datasets/
-ml_playground/experiments/**/raw/
+#ml_playground/experiments/**/datasets/
+#ml_playground/experiments/**/raw/
 ml_playground/experiments/**/out/
