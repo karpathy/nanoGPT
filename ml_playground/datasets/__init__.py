@@ -4,6 +4,8 @@ from typing import Callable, Dict
 # Registry of dataset preparers used by CLI and tests.
 # This module must remain cheap to import and side-effect free.
 PREPARERS: Dict[str, Callable[[], None]] = {}
+# Keep a reference to the original dict object to detect monkeypatching in tests/CLI
+DEFAULT_PREPARERS_REF = PREPARERS
 
 
 def load_preparers() -> None:

@@ -170,7 +170,17 @@ def _load_meta_vocab_size(meta_path: Path) -> int | None:
         with meta_path.open("rb") as f:
             meta = pickle.load(f)
         vs = meta.get("vocab_size")
-        return int(vs) if isinstance(vs, int) else None
+        if isinstance(vs, int):
+            return int(vs)
+        # Fallbacks: infer from character-level metadata
+        try:
+            if isinstance(meta.get("stoi"), dict):
+                return int(len(meta["stoi"]))
+            if isinstance(meta.get("itos"), dict):
+                return int(len(meta["itos"]))
+        except Exception:
+            pass
+        return None
     return None
 
 
@@ -302,9 +312,18 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
     # Initialize training counters (override if resuming)
     iter_num = 0
     best_val = float("inf")
+    # Track minimum observed training loss and its iteration
+    min_train_loss = float("inf")
+    min_train_iter = -1
     if checkpoint is not None:
         iter_num = int(checkpoint.get("iter_num", 0))
         best_val = float(checkpoint.get("best_val_loss", float("inf")))
+        # Restore min train loss if present (optional, backwards-compatible)
+        try:
+            min_train_loss = float(checkpoint.get("min_train_loss", float("inf")))
+            min_train_iter = int(checkpoint.get("min_train_iter", -1))
+        except Exception:
+            pass
         print(f"[train] Resumed at iter {iter_num}, best_val_loss {best_val}")
         # Do not clear checkpoint yet; it may be needed for best_metric seed; but we proceed
         checkpoint = None
@@ -503,19 +522,24 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
         if ema is not None:
             ema.update(raw_model)
 
+        # Compute current train loss (scaled back up) and update min trackers
+        current_train_loss = float(loss.item()) * exp.data.grad_accum_steps
+        if current_train_loss < min_train_loss:
+            min_train_loss = current_train_loss
+            min_train_iter = iter_num
+
         if iter_num % rt.log_interval == 0:
             dt = time.time() - t0
             t0 = time.time()
-            total_loss = float(loss.item()) * exp.data.grad_accum_steps
+            tokens_per_sec = tokens_per_iter / max(1e-6, dt)
+            # Clean, unified training log
             print(
-                f"iter {iter_num}: loss {total_loss:.4f}, step_time {dt * 1000:.1f}ms"
+                f"iteration {iter_num}: train-loss {current_train_loss:.4f}, "
+                f"min-train-loss {min_train_loss:.4f} in iter {min_train_iter}, "
+                f"learning-rate {lr:.2e}, tokens/sec {tokens_per_sec:.1f}"
             )
             # TensorBoard: train scalars per log interval
-            tokens_per_iter = (
-                exp.data.grad_accum_steps * exp.data.batch_size * exp.data.block_size
-            )
-            tokens_per_sec = tokens_per_iter / max(1e-6, dt)
-            writer.add_scalar("train/loss_iter", total_loss, iter_num)
+            writer.add_scalar("train/loss_iter", current_train_loss, iter_num)
             writer.add_scalar("train/tokens_per_sec", tokens_per_sec, iter_num)
             writer.add_scalar("train/step_time_ms", dt * 1000.0, iter_num)
 

@@ -4,6 +4,8 @@ from argparse import ArgumentParser
 from pathlib import Path
 import shutil
 import tomllib
+import os
+import json
 
 from ml_playground.config import (
     TrainExperiment,
@@ -14,6 +16,34 @@ from ml_playground.config import (
 from ml_playground import datasets
 from ml_playground.sampler import sample
 from ml_playground.trainer import train
+
+
+def _merge_overrides(
+    base: dict, overrides: dict, *, allowed_sections: set[str]
+) -> dict:
+    # shallow merge per top-level section; ignore unknown sections
+    merged = {k: (dict(v) if isinstance(v, dict) else v) for k, v in base.items()}
+    for sec, ov in overrides.items():
+        if sec not in allowed_sections:
+            continue
+        if isinstance(ov, dict) and isinstance(merged.get(sec), dict):
+            merged[sec].update(ov)  # type: ignore[index]
+        else:
+            merged[sec] = ov
+    return merged
+
+
+def _load_env_overrides(env_var: str) -> dict | None:
+    val = os.environ.get(env_var)
+    if not val:
+        return None
+    try:
+        obj = json.loads(val)
+    except Exception as e:
+        raise ValueError(f"Invalid JSON in {env_var}: {e}")
+    if not isinstance(obj, dict):
+        raise ValueError(f"{env_var} must be a JSON object with section keys")
+    return obj
 
 
 def load_train_config(path: Path) -> TrainExperiment:
@@ -48,13 +78,25 @@ def load_train_config(path: Path) -> TrainExperiment:
     allowed_sections = {"model", "data", "optim", "schedule", "runtime"}
     d = {k: train_tbl[k] for k in allowed_sections}
 
-    # [train.data]: resolve dataset_dir relative to file and keep strict unknown-key check above
+    # Apply environment overrides (JSON object with keys among: model,data,optim,schedule,runtime)
+    ov = _load_env_overrides("ML_PLAYGROUND_TRAIN_OVERRIDES")
+    if isinstance(ov, dict):
+        d = _merge_overrides(
+            d, ov, allowed_sections={"model", "data", "optim", "schedule", "runtime"}
+        )
+
+    # [train.data]: resolve dataset_dir for relative paths.
+    # Rule: if the path starts with "ml_playground/", resolve relative to CWD (repo-root style);
+    # otherwise resolve relative to the config file directory. Do not depend on path existence.
     d_data = dict(d["data"])
     dd = d_data.get("dataset_dir")
     if isinstance(dd, (str, Path)):
         p = Path(dd)
         if not p.is_absolute():
-            d_data["dataset_dir"] = (base_dir / p).resolve()
+            if p.as_posix().startswith("ml_playground/"):
+                d_data["dataset_dir"] = p.resolve()
+            else:
+                d_data["dataset_dir"] = (base_dir / p).resolve()
     d["data"] = d_data
 
     # [train.runtime]: drop unknown keys then resolve out_dir
@@ -96,8 +138,13 @@ def load_sample_config(path: Path) -> SampleExperiment:
         if not isinstance(sample_tbl.get(sec), dict):
             raise ValueError(f"Missing required section [{sec}]")
 
-    # Resolve relative runtime.out_dir
+    # Copy and apply environment overrides (JSON with keys: runtime, sample)
     d = dict(sample_tbl)
+    ov = _load_env_overrides("ML_PLAYGROUND_SAMPLE_OVERRIDES")
+    if isinstance(ov, dict):
+        d = _merge_overrides(d, ov, allowed_sections={"runtime", "sample"})
+
+    # Resolve relative runtime.out_dir
     d_runtime = dict(d["runtime"])
     od = d_runtime.get("out_dir")
     if isinstance(od, (str, Path)):
@@ -141,8 +188,18 @@ def main(argv: list[str] | None = None) -> None:
                     setattr(args, "config", cfg_path)
 
     if args.cmd == "prepare":
-        _PREPARERS = datasets.PREPARERS
-        prepare = _PREPARERS.get(args.experiment)
+        # Allow lazy loading only if the registry hasn't been monkeypatched by tests
+        registry = datasets.PREPARERS
+        if (
+            not registry
+            and getattr(datasets, "DEFAULT_PREPARERS_REF", None) is registry
+        ):
+            try:
+                datasets.load_preparers()
+                registry = datasets.PREPARERS
+            except Exception:
+                pass
+        prepare = registry.get(args.experiment)
         if prepare is None:
             raise SystemExit(f"Unknown experiment: {args.experiment}")
         prepare()
@@ -150,10 +207,18 @@ def main(argv: list[str] | None = None) -> None:
 
     # Generic pipeline (default)
     if args.cmd == "loop":
-        # Use the PREPARERS registry as-is (tests patch this directly)
-        _PREPARERS = datasets.PREPARERS
-
-        prepare = _PREPARERS.get(args.experiment)
+        # Allow lazy loading only if the registry hasn't been monkeypatched by tests
+        registry = datasets.PREPARERS
+        if (
+            not registry
+            and getattr(datasets, "DEFAULT_PREPARERS_REF", None) is registry
+        ):
+            try:
+                datasets.load_preparers()
+                registry = datasets.PREPARERS
+            except Exception:
+                pass
+        prepare = registry.get(args.experiment)
         if prepare is None:
             raise SystemExit(f"Unknown experiment: {args.experiment}")
         # 1) prepare
