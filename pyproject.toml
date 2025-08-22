@@ -70,19 +70,23 @@ extend-exclude = [
   ".idea",
   ".vscode",
   "out",
+  "**/out/**",
+  "data",
+  "**/datasets/**",
   ".venv",
   "env",
   ".pytest_cache",
   ".mypy_cache",
   ".ruff_cache",
   ".git",
+  "htmlcov",
 ]
 
 [tool.mypy]
 # When invoked without explicit targets, analyze only the project code.
 files = ["ml_playground"]
 # Also exclude common ignored/artifact directories if mypy is invoked without args.
-exclude = '^(out/|\.idea/|\.vscode/|\.venv/|env/|\.pytest_cache/|\.mypy_cache/|\.ruff_cache/|\.git/)'
+exclude = '(^|.*/)(out/|data/|datasets/|htmlcov/|\.idea/|\.vscode/|\.venv/|env/|\.pytest_cache/|\.mypy_cache/|\.ruff_cache/|\.git/)'
 
 
 [tool.pytest.ini_options]
@@ -98,6 +102,8 @@ norecursedirs = [
   ".venv",
   "env",
   "out",
+  "data",
+  "htmlcov",
   ".pytest_cache",
   ".mypy_cache",
   ".ruff_cache",
@@ -140,7 +146,11 @@ exclude = [
   ".idea",
   ".vscode",
   "out",
+  "**/out/**",
+  "data",
+  "**/datasets/**",
   ".venv",
   ".mypy_cache",
   ".ruff_cache",
+  "htmlcov",
 ]
