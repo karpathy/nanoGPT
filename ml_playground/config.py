@@ -96,13 +96,15 @@ class DataConfig(_FrozenStrictModel):
     batch_size: int = 12
     block_size: int = 1024
     grad_accum_steps: int = 40
+    # n-gram tokenization size for character datasets (1 = pure char-level)
+    ngram_size: int = 1
 
     @field_validator("dataset_dir", mode="before")
     @classmethod
     def _coerce_path(cls, v: Path | str) -> Path:
         return Path(v)
 
-    @field_validator("batch_size", "block_size", "grad_accum_steps")
+    @field_validator("batch_size", "block_size", "grad_accum_steps", "ngram_size")
     @classmethod
     def _positive_int(cls, v: int) -> int:
         if v <= 0:
@@ -122,6 +124,8 @@ class RuntimeConfig(_FrozenStrictModel):
     device: DeviceKind = "cpu"
     dtype: DTypeKind = "float32"
     compile: bool = False
+    # TensorBoard logging toggle (default: enabled)
+    tensorboard_enabled: bool = True
 
     # Checkpoint policy
     ckpt_last_filename: str = "ckpt_last.pt"

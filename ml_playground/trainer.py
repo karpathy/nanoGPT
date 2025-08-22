@@ -189,9 +189,23 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
     model_cfg = exp.model
 
     rt.out_dir.mkdir(parents=True, exist_ok=True)
-    # Initialize TensorBoard
+    # Initialize TensorBoard (configurable, default enabled)
     tb_dir = rt.out_dir / "logs" / "tb"
-    writer = SummaryWriter(log_dir=str(tb_dir))
+    if getattr(rt, "tensorboard_enabled", True):
+        writer = SummaryWriter(log_dir=str(tb_dir))
+    else:
+
+        class _NoopTB:
+            def add_scalar(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+                pass
+
+            def add_histogram(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+                pass
+
+            def close(self) -> None:
+                pass
+
+        writer = _NoopTB()  # type: ignore[assignment]
 
     # Propagate dataset meta.pkl to out_dir for strict sampling-compatible sampling
     try:

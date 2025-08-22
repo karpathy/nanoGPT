@@ -4,22 +4,23 @@ from typing import Callable, Tuple
 import pickle
 import torch
 from ml_playground.model import GPTConfig, GPT
-from ml_playground.config import SampleExperiment
+from ml_playground.config import SampleExperiment, RuntimeConfig
 from ml_playground.device import setup
 
 
-def _load_checkpoint(out_dir: Path, device: str) -> Tuple[GPT, dict]:
+def _load_checkpoint(rt: RuntimeConfig, device: str) -> Tuple[GPT, dict]:
+    # Use filenames as specified by RuntimeConfig only (no hardcoded candidates)
     candidates = [
-        out_dir / "state" / "best.pt",
-        out_dir / "state" / "last.pt",
-        out_dir / "ckpt_best.pt",
-        out_dir / "ckpt_last.pt",
-        out_dir / "ckpt.pt",
+        rt.out_dir / rt.ckpt_best_filename,
+        rt.out_dir / rt.ckpt_last_filename,
     ]
     ckpt_path = next((p for p in candidates if p.exists()), None)
     if ckpt_path is None:
         tried = ", ".join(str(p) for p in candidates)
-        raise FileNotFoundError(f"No checkpoint found in {out_dir} (tried: {tried})")
+        raise FileNotFoundError(
+            f"No checkpoint found in {rt.out_dir} (tried: {tried}). "
+            "Ensure training has produced checkpoints or configure RuntimeConfig filenames."
+        )
     ckpt = torch.load(ckpt_path, map_location=device)
     if not isinstance(ckpt, dict):
         raise TypeError(
@@ -85,6 +86,40 @@ def _codec_from_meta(
                 lambda s: [stoi[c] for c in s],
                 lambda ids: "".join(itos[int(i)] for i in ids),
             )
+        elif kind == "char_ngram":
+            stoi = meta.get("stoi")
+            itos = meta.get("itos")
+            n = int(meta.get("ngram_size", 1))
+            if not isinstance(stoi, dict) or not isinstance(itos, dict) or n < 1:
+                raise ValueError(
+                    "Invalid meta for char_ngram: expected stoi/itos dicts and ngram_size >= 1"
+                )
+
+            def _enc(s: str) -> list[int]:
+                if n <= 1:
+                    return [stoi[c] for c in s if c in stoi]
+                L = len(s)
+                if L < n:
+                    return []
+                out: list[int] = []
+                for i in range(0, L - n + 1):
+                    tok = s[i : i + n]
+                    idx = stoi.get(tok)
+                    if idx is not None:
+                        out.append(idx)
+                return out
+
+            def _dec(ids: list[int]) -> str:
+                toks = [itos[int(i)] for i in ids]
+                if not toks:
+                    return ""
+                out = toks[0]
+                for t in toks[1:]:
+                    # Overlap decode: append the last char
+                    out += t[-1]
+                return out
+
+            return (_enc, _dec)
         elif kind == "tiktoken":
             enc_name = meta["encoding"]
             try:
@@ -158,7 +193,7 @@ def sample(exp: SampleExperiment) -> None:
     rt = exp.runtime
     device_type, ptdtype, ctx = setup(rt.device, rt.dtype, rt.seed)
 
-    model, _ = _load_checkpoint(rt.out_dir, device=device_type)
+    model, _ = _load_checkpoint(rt, device=device_type)
     model.eval().to(device_type)
     run_model = model
     if rt.compile:

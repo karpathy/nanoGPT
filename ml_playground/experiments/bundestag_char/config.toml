@@ -32,6 +32,9 @@ train_bin = "train.bin"
 val_bin = "val.bin"
 # Metadata (e.g., vocab/encoding) file name (relative to dataset_dir).
 meta_pkl = "meta.pkl"
+# Character-level n-gram size used during dataset preparation (1 = single chars, 3 = trigrams, etc.)
+# Set to 3 to train a 3-gram model.
+ngram_size = 3
 # Micro-batch size per optimization step (per device); memory ~ batch_size * block_size^2.
 batch_size = 8
 # Sequence length of each training sample; must be <= [train.model].block_size.
@@ -65,7 +68,7 @@ min_lr = 0.00008
 
 [train.runtime]
 # Output directory for logs, checkpoints, and metadata for this training run.
-out_dir = "ml_playground/experiments/bundestag_char/out/bundestag_char"
+out_dir = "ml_playground/experiments/bundestag_char/out"
 # Total number of optimizer iterations to run (across all accumulation steps).
 max_iters = 2000000
 # How often (in iterations) to run evaluation/checkpoint logic.
@@ -117,7 +120,7 @@ ema_decay = 0.0
 [sample.runtime]
 # Output directory to read checkpoints from (and optionally write samples/logs to).
 # Typically should match the training run's out_dir you want to sample from.
-out_dir = "ml_playground/experiments/bundestag_char/out/bundestag_char"
+out_dir = "ml_playground/experiments/bundestag_char/out"
 # Iteration controls are usually inert for pure sampling, but kept for API symmetry.
 max_iters = 0
 # Evaluation cadence placeholders (often unused in pure sampling flows).
