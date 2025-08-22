@@ -54,12 +54,36 @@ def seed_text_file(dest: Path, candidates: Iterable[Path]) -> Path:
 def write_bin_and_meta(
     ds_dir: Path, train: np.ndarray, val: np.ndarray, meta: dict
 ) -> None:
-    """Write train.bin, val.bin, and meta.pkl; fail if arrays have unexpected dtypes/shapes."""
+    """Write train.bin, val.bin, and meta.pkl atomically and idempotently.
+
+    If all target files already exist, this is a no-op. When writing, files are
+    first written to temporary paths and then atomically renamed to avoid
+    readers observing partially-written files (important under test parallelism).
+    """
     if train.dtype != val.dtype:
         raise ValueError("train and val arrays must have the same dtype")
     ds_dir.mkdir(parents=True, exist_ok=True)
-    (ds_dir / "train.bin").write_bytes(train.tobytes())
-    (ds_dir / "val.bin").write_bytes(val.tobytes())
-    with (ds_dir / "meta.pkl").open("wb") as f:
+
+    train_path = ds_dir / "train.bin"
+    val_path = ds_dir / "val.bin"
+    meta_path = ds_dir / "meta.pkl"
+
+    if train_path.exists() and val_path.exists() and meta_path.exists():
+        # Idempotent: nothing to do
+        return
+
+    # Write to temp then rename (atomic on POSIX)
+    tmp_train = ds_dir / (".train.bin.tmp")
+    tmp_val = ds_dir / (".val.bin.tmp")
+    tmp_meta = ds_dir / (".meta.pkl.tmp")
+
+    tmp_train.write_bytes(train.tobytes())
+    tmp_val.write_bytes(val.tobytes())
+    with tmp_meta.open("wb") as f:
         pickle.dump(meta, f)
-    print("Wrote:", ds_dir / "train.bin", ds_dir / "val.bin", ds_dir / "meta.pkl")
+
+    tmp_train.replace(train_path)
+    tmp_val.replace(val_path)
+    tmp_meta.replace(meta_path)
+
+    print("Wrote:", train_path, val_path, meta_path)
