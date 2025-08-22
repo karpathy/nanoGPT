@@ -1,14 +1,20 @@
 # Bundestag Finetuning (Qwen2.5-1.5B + LoRA on MPS)
 # This config drives a 3-stage pipeline: prepare -> train -> sample.
 # Each option is annotated to explain its role and recommended values.
+# Notes on interplay:
+# - Effective tokens per optimizer update = batch_size * grad_accum_steps * block_size.
+# - Memory roughly scales with model size and quadratically with block_size; also linearly with batch_size.
+# - [train.data].block_size should be <= [train.hf_model].block_size (usually equal).
+# - If [train.schedule].decay_lr = false, warmup/decay/min_lr are ignored.
+# - Paths (prepare.raw_dir, prepare.dataset_dir, train.runtime.out_dir, sample.runtime.out_dir) are used exactly as configured (absolute or relative), no rewriting.
 
 [prepare]
 # Name of the dataset pipeline to use.
-dataset = "bundestag_finetuning_mps"
+dataset = "bundestag_qwen15b_lora_mps"
 # Path to a folder of raw .txt files (recursively scanned) or a single input.txt in this folder.
-raw_dir = "ml_playground/experiments/bundestag_finetuning_mps/raw/plenarprotokolle"
+raw_dir = "ml_playground/experiments/bundestag_qwen15b_lora_mps/raw/plenarprotokolle"
 # Directory where the prepared dataset artifacts are written (tokenizer, train.jsonl, val.jsonl, meta.json).
-dataset_dir = "ml_playground/experiments/bundestag_finetuning_mps/datasets"
+dataset_dir = "ml_playground/experiments/bundestag_qwen15b_lora_mps/datasets"
 # Whether to wrap speeches with structure tokens (SPEECH_START/END, SPEAKER, etc.) during preparation.
 add_structure_tokens = true
 # Token string used to separate concatenated documents during packing; ensure it’s present if you depend on it.
@@ -40,7 +46,7 @@ extend_mlp_targets = false
 
 [train.data]
 # Directory containing prepared dataset artifacts (tokenizer/, train.jsonl, val.jsonl, meta.json).
-dataset_dir = "ml_playground/experiments/bundestag_finetuning_mps/datasets"
+dataset_dir = "ml_playground/experiments/bundestag_qwen15b_lora_mps/datasets"
 # Per-step batch size (before gradient accumulation).
 batch_size = 8
 # Number of micro-steps to accumulate gradients before an optimizer step.

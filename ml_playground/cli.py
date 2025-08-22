@@ -51,12 +51,37 @@ def load_train_config(path: Path) -> TrainExperiment:
 
     - Ensures required subsections exist ([model],[data],[optim],[schedule],[runtime]).
     - Produces a friendly unknown-key error for [train.data].
-    - Resolves relative dataset_dir and out_dir against the config file directory.
     - Delegates detailed value validation to Pydantic models.
     """
     base_dir = path.parent.resolve()
     with path.open("rb") as f:
-        raw = tomllib.load(f)
+        raw_exp = tomllib.load(f)
+
+    # Discover and merge defaults from ml_playground/experiments/default_config.toml (if present).
+    # Behavior: defaults provide a base; the experiment's config overrides them.
+    def _deep_merge(base: dict, override: dict) -> dict:
+        out = dict(base)
+        for k, v in override.items():
+            if k in out and isinstance(out[k], dict) and isinstance(v, dict):
+                out[k] = _deep_merge(out[k], v)
+            else:
+                out[k] = v
+        return out
+
+    defaults_path = Path("ml_playground") / "experiments" / "default_config.toml"
+    raw = dict(raw_exp)
+    defaults_raw: dict | None = None
+    if defaults_path.exists():
+        try:
+            with defaults_path.open("rb") as df:
+                defaults_raw = tomllib.load(df)
+            if isinstance(defaults_raw, dict):
+                d_train = defaults_raw.get("train")
+                if isinstance(d_train, dict):
+                    raw = _deep_merge({"train": d_train}, raw)
+        except Exception:
+            # Ignore default merge failures; proceed with experiment-only config.
+            defaults_raw = None
 
     train_tbl = raw.get("train")
     if not isinstance(train_tbl, dict):
@@ -74,41 +99,68 @@ def load_train_config(path: Path) -> TrainExperiment:
     if unknown:
         raise ValueError("Unknown key(s) in [train.data]")
 
-    # Resolve relative paths and prune unsupported sections/keys
+    # Resolve and prune unsupported sections/keys (no path rewriting; use as configured)
     allowed_sections = {"model", "data", "optim", "schedule", "runtime"}
     d = {k: train_tbl[k] for k in allowed_sections}
+
+    # Track provenance for startup logging
+    prov: dict[str, dict[str, str]] = {sec: {} for sec in allowed_sections}
+    exp_train_tbl = raw_exp.get("train") if isinstance(raw_exp.get("train"), dict) else {}
+    defaults_train_tbl = (
+        defaults_raw.get("train") if isinstance(defaults_raw, dict) and isinstance(defaults_raw.get("train"), dict) else {}
+    )
+
+    # Initial provenance: default vs experiment
+    for sec in allowed_sections:
+        sec_defaults = defaults_train_tbl.get(sec, {}) if isinstance(defaults_train_tbl.get(sec), dict) else {}
+        sec_exp = exp_train_tbl.get(sec, {}) if isinstance(exp_train_tbl.get(sec), dict) else {}
+        merged_sec = d.get(sec, {})
+        if isinstance(merged_sec, dict):
+            for k in merged_sec.keys():
+                if k in sec_exp:
+                    prov[sec][k] = "override"  # set by experiment
+                elif k in sec_defaults:
+                    prov[sec][k] = "default"
+                else:
+                    prov[sec][k] = "override"  # conservative: present only in experiment or env
 
     # Apply environment overrides (JSON object with keys among: model,data,optim,schedule,runtime)
     ov = _load_env_overrides("ML_PLAYGROUND_TRAIN_OVERRIDES")
     if isinstance(ov, dict):
+        before_env = json.loads(json.dumps(d))  # deep copy for comparison
         d = _merge_overrides(
             d, ov, allowed_sections={"model", "data", "optim", "schedule", "runtime"}
         )
+        # Mark provenance for changed keys as env
+        for sec, sec_map in d.items():
+            if sec not in allowed_sections or not isinstance(sec_map, dict):
+                continue
+            before_map = before_env.get(sec, {})
+            for k, v in sec_map.items():
+                if k not in before_map or before_map.get(k) != v:
+                    prov.setdefault(sec, {})[k] = "env"
 
-    # [train.data]: resolve dataset_dir for relative paths.
-    # Rule: if the path starts with "ml_playground/", resolve relative to CWD (repo-root style);
-    # otherwise resolve relative to the config file directory. Do not depend on path existence.
-    d_data = dict(d["data"])
-    dd = d_data.get("dataset_dir")
-    if isinstance(dd, (str, Path)):
-        p = Path(dd)
-        if not p.is_absolute():
-            if p.as_posix().startswith("ml_playground/"):
-                d_data["dataset_dir"] = p.resolve()
-            else:
-                d_data["dataset_dir"] = (base_dir / p).resolve()
-    d["data"] = d_data
-
-    # [train.runtime]: drop unknown keys then resolve out_dir
+    # No path heuristics: do not rewrite dataset_dir or out_dir; use as configured.
+    # [train.runtime]: drop unknown keys (keep only keys known to RuntimeConfig)
     allowed_runtime_keys = set(RuntimeConfig.model_fields.keys())
     d_runtime_all = dict(d["runtime"])
     d_runtime = {k: v for k, v in d_runtime_all.items() if k in allowed_runtime_keys}
-    od = d_runtime.get("out_dir")
-    if isinstance(od, (str, Path)):
-        p = Path(od)
-        if not p.is_absolute():
-            d_runtime["out_dir"] = (base_dir / p).resolve()
     d["runtime"] = d_runtime
+
+    # Provenance log at startup: print effective config with markers
+    # Format: [config] train.<section>.<key> = <value> (default|override|env)
+    try:
+        print("[config] Effective training configuration (source: default/override/env):")
+        for sec in ("model", "data", "optim", "schedule", "runtime"):
+            sec_map = d.get(sec, {})
+            if not isinstance(sec_map, dict):
+                continue
+            for k in sorted(sec_map.keys()):
+                source = prov.get(sec, {}).get(k, "override")
+                print(f"[config] train.{sec}.{k} = {sec_map[k]!r} ({source})")
+    except Exception:
+        # Never fail due to logging
+        pass
 
     try:
         return TrainExperiment.model_validate(d)
@@ -118,40 +170,101 @@ def load_train_config(path: Path) -> TrainExperiment:
 
 
 def load_sample_config(path: Path) -> SampleExperiment:
-    """Strict loader for sample section with minimal checks and path resolution.
+    """Strict loader for sample section with minimal checks.
 
     - Ensures required subsections exist ([runtime], [sample]).
-    - Resolves relative out_dir against the config file directory.
     - Delegates detailed value validation to Pydantic models.
     """
     base_dir = path.parent.resolve()
     with path.open("rb") as f:
-        raw = tomllib.load(f)
+        raw_exp = tomllib.load(f)
+
+    # Load defaults and deep-merge (defaults under experiment overrides)
+    def _deep_merge(base: dict, override: dict) -> dict:
+        out = dict(base)
+        for k, v in override.items():
+            if k in out and isinstance(out[k], dict) and isinstance(v, dict):
+                out[k] = _deep_merge(out[k], v)
+            else:
+                out[k] = v
+        return out
+
+    defaults_path = Path("ml_playground") / "experiments" / "default_config.toml"
+    raw = dict(raw_exp)
+    defaults_raw: dict | None = None
+    if defaults_path.exists():
+        try:
+            with defaults_path.open("rb") as df:
+                defaults_raw = tomllib.load(df)
+            if isinstance(defaults_raw, dict):
+                d_sample = defaults_raw.get("sample")
+                if isinstance(d_sample, dict):
+                    raw = _deep_merge({"sample": d_sample}, raw)
+        except Exception:
+            defaults_raw = None
 
     sample_tbl = raw.get("sample")
     if not isinstance(sample_tbl, dict):
-        # Keep top-level semantic but tests check for missing [runtime] when sample table exists,
-        # so only raise here if the entire [sample] table is missing.
         raise Exception("Config must contain [sample] block")
 
     for sec in ("runtime", "sample"):
         if not isinstance(sample_tbl.get(sec), dict):
             raise ValueError(f"Missing required section [{sec}]")
 
-    # Copy and apply environment overrides (JSON with keys: runtime, sample)
-    d = dict(sample_tbl)
+    # Allowed keys pruning for runtime/sample according to models
+    allowed_runtime_keys = set(RuntimeConfig.model_fields.keys())
+    # SampleConfig uses its own schema; we keep all keys and let pydantic forbid extras on model_validate
+
+    # Build merged dict and provenance
+    d = {"runtime": dict(sample_tbl["runtime"]), "sample": dict(sample_tbl["sample"]) }
+
+    prov: dict[str, dict[str, str]] = {"runtime": {}, "sample": {}}
+    exp_sample_tbl = raw_exp.get("sample") if isinstance(raw_exp.get("sample"), dict) else {}
+    defaults_sample_tbl = (
+        defaults_raw.get("sample") if isinstance(defaults_raw, dict) and isinstance(defaults_raw.get("sample"), dict) else {}
+    )
+
+    for sec in ("runtime", "sample"):
+        sec_defaults = defaults_sample_tbl.get(sec, {}) if isinstance(defaults_sample_tbl.get(sec), dict) else {}
+        sec_exp = exp_sample_tbl.get(sec, {}) if isinstance(exp_sample_tbl.get(sec), dict) else {}
+        merged_sec = d.get(sec, {})
+        if isinstance(merged_sec, dict):
+            for k in merged_sec.keys():
+                if k in sec_exp:
+                    prov[sec][k] = "override"
+                elif k in sec_defaults:
+                    prov[sec][k] = "default"
+                else:
+                    prov[sec][k] = "override"
+
+    # Apply environment overrides
     ov = _load_env_overrides("ML_PLAYGROUND_SAMPLE_OVERRIDES")
     if isinstance(ov, dict):
+        before_env = json.loads(json.dumps(d))
         d = _merge_overrides(d, ov, allowed_sections={"runtime", "sample"})
+        for sec, sec_map in d.items():
+            if not isinstance(sec_map, dict):
+                continue
+            before_map = before_env.get(sec, {})
+            for k, v in sec_map.items():
+                if k not in before_map or before_map.get(k) != v:
+                    prov.setdefault(sec, {})[k] = "env"
 
-    # Resolve relative runtime.out_dir
-    d_runtime = dict(d["runtime"])
-    od = d_runtime.get("out_dir")
-    if isinstance(od, (str, Path)):
-        p = Path(od)
-        if not p.is_absolute():
-            d_runtime["out_dir"] = (base_dir / p).resolve()
-    d["runtime"] = d_runtime
+    # No path heuristics; prune unknown runtime keys only
+    d["runtime"] = {k: v for k, v in d["runtime"].items() if k in allowed_runtime_keys}
+
+    # Provenance logging
+    try:
+        print("[config] Effective sampling configuration (source: default/override/env):")
+        for sec in ("runtime", "sample"):
+            sec_map = d.get(sec, {})
+            if not isinstance(sec_map, dict):
+                continue
+            for k in sorted(sec_map.keys()):
+                source = prov.get(sec, {}).get(k, "override")
+                print(f"[config] sample.{sec}.{k} = {sec_map[k]!r} ({source})")
+    except Exception:
+        pass
 
     try:
         return SampleExperiment.model_validate(d)
@@ -188,6 +301,11 @@ def main(argv: list[str] | None = None) -> None:
                     setattr(args, "config", cfg_path)
 
     if args.cmd == "prepare":
+        # Route bundestag_qwen15b_lora_mps to generic HF+PEFT integration preparer
+        if getattr(args, "experiment", None) == "bundestag_qwen15b_lora_mps":
+            from ml_playground.experiments.bundestag_qwen15b_lora_mps import prepare as _btg
+            _btg.prepare_from_toml(args.config)
+            return
         # Allow lazy loading only if the registry hasn't been monkeypatched by tests
         registry = datasets.PREPARERS
         if (
@@ -207,6 +325,15 @@ def main(argv: list[str] | None = None) -> None:
 
     # Generic pipeline (default)
     if args.cmd == "loop":
+        # Route bundestag_qwen15b_lora_mps to generic HF+PEFT integration loop
+        if getattr(args, "experiment", None) == "bundestag_qwen15b_lora_mps":
+            # Lazy import: heavy optional deps (transformers/peft) are only loaded on this path
+            from ml_playground.experiments.bundestag_qwen15b_lora_mps import prepare as _btg
+
+            _btg.prepare_from_toml(args.config)
+            _btg.train_from_toml(args.config)
+            _btg.sample_from_toml(args.config)
+            return
         # Allow lazy loading only if the registry hasn't been monkeypatched by tests
         registry = datasets.PREPARERS
         if (
@@ -263,6 +390,15 @@ def main(argv: list[str] | None = None) -> None:
                 pass
             _sg.train_from_toml(args.config)
             return
+        # Route bundestag_qwen15b_lora_mps to generic HF+PEFT integration trainer
+        if getattr(args, "experiment", None) == "bundestag_qwen15b_lora_mps":
+            from ml_playground.experiments.bundestag_qwen15b_lora_mps import prepare as _btg
+            try:
+                _btg.prepare_from_toml(args.config)
+            except Exception:
+                pass
+            _btg.train_from_toml(args.config)
+            return
         try:
             train_cfg_single: TrainExperiment = load_train_config(args.config)
         except Exception as e:
@@ -277,6 +413,11 @@ def main(argv: list[str] | None = None) -> None:
             from ml_playground.experiments.speakger import gemma_finetuning_mps as _sg
 
             _sg.sample_from_toml(args.config)
+            return
+        # Route bundestag_qwen15b_lora_mps to generic HF+PEFT integration sampler
+        if getattr(args, "experiment", None) == "bundestag_qwen15b_lora_mps":
+            from ml_playground.experiments.bundestag_qwen15b_lora_mps import prepare as _btg
+            _btg.sample_from_toml(args.config)
             return
         try:
             sample_cfg_single: SampleExperiment = load_sample_config(args.config)

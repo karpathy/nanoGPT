@@ -5,6 +5,12 @@
 #   - google/gemma-2-2b (default, good balance)
 #   - google/gemma-2-9b-it (larger, may require lower batch sizes)
 #   - google/gemma-2-2b-it (instruction-tuned variant)
+# Notes on interplay:
+# - Effective tokens per optimizer update = batch_size * grad_accum_steps * block_size.
+# - Memory roughly scales with model size and quadratically with block_size; also linearly with batch_size.
+# - [train.data].block_size should be <= [train.hf_model].block_size.
+# - If [train.schedule].decay_lr = false, warmup/decay/min_lr are ignored.
+# - Paths (raw_dir, dataset_dir, out_dir) are used exactly as configured (absolute or relative), no rewriting.
 
 [prepare]
 # Name of the dataset pipeline to use.
