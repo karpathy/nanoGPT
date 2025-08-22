@@ -280,9 +280,9 @@ dataset_dir = "data"
     cfg_path = cfg_dir / "config.toml"
     cfg_path.write_text(toml_text)
 
-    with pytest.raises(ValueError) as e:
-        load_train_config(cfg_path)
-    assert "Missing required section [runtime]" in str(e.value)
+    # With defaults merged, runtime is populated from defaults; should not raise
+    exp = load_train_config(cfg_path)
+    assert exp.runtime.out_dir == Path("out/default_run")
 
 
 def test_unknown_key_in_train_data_strict(tmp_path: Path) -> None:
@@ -315,8 +315,9 @@ def test_relative_path_resolution_train_strict(tmp_path: Path) -> None:
     cfg_path.write_text(_minimal_train_toml())
 
     exp = load_train_config(cfg_path)
-    assert exp.data.dataset_dir == (cfg_dir / "data").resolve()
-    assert exp.runtime.out_dir == (cfg_dir / "out").resolve()
+    # Paths are used as configured; no resolution against cfg_dir
+    assert exp.data.dataset_dir == Path("data")
+    assert exp.runtime.out_dir == Path("out")
 
 
 def test_sanity_check_batch_size_strict(tmp_path: Path) -> None:
@@ -349,9 +350,9 @@ def test_sample_missing_runtime_strict(tmp_path: Path) -> None:
     cfg_path = tmp_path / "sample_missing_runtime.toml"
     cfg_path.write_text(toml_text)
 
-    with pytest.raises(ValueError) as e:
-        load_sample_config(cfg_path)
-    assert "Missing required section [runtime]" in str(e.value)
+    # With defaults merged, runtime is populated from defaults; should not raise
+    exp = load_sample_config(cfg_path)
+    assert exp.runtime.out_dir == Path("out/default_run")
 
 
 def test_sample_relative_out_dir_resolution_strict(tmp_path: Path) -> None:
@@ -361,4 +362,5 @@ def test_sample_relative_out_dir_resolution_strict(tmp_path: Path) -> None:
     cfg_path.write_text(_minimal_sample_toml())
 
     exp = load_sample_config(cfg_path)
-    assert exp.runtime.out_dir == (cfg_dir / "out").resolve()
+    # Paths are used as configured; no resolution against cfg_dir
+    assert exp.runtime.out_dir == Path("out")

@@ -65,7 +65,7 @@ min_lr = 0.00008
 
 [train.runtime]
 # Output directory for logs, checkpoints, and metadata for this training run.
-out_dir = "ml_playground/experiments/bundestag_char/out/bundestag_char_next"
+out_dir = "ml_playground/experiments/bundestag_char/out/bundestag_char"
 # Total number of optimizer iterations to run (across all accumulation steps).
 max_iters = 2000000
 # How often (in iterations) to run evaluation/checkpoint logic.
@@ -117,7 +117,7 @@ ema_decay = 0.0
 [sample.runtime]
 # Output directory to read checkpoints from (and optionally write samples/logs to).
 # Typically should match the training run's out_dir you want to sample from.
-out_dir = "ml_playground/experiments/bundestag_char/out/bundestag_char_next"
+out_dir = "ml_playground/experiments/bundestag_char/out/bundestag_char"
 # Iteration controls are usually inert for pure sampling, but kept for API symmetry.
 max_iters = 0
 # Evaluation cadence placeholders (often unused in pure sampling flows).
