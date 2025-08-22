@@ -33,6 +33,8 @@ dataset_dir = "datasets"
 train_bin = "train.bin"
 val_bin = "val.bin"
 meta_pkl = "meta.pkl"
+# Character-level n-gram size for datasets that use char/ngram tokenization (1 keeps legacy behavior)
+ngram_size = 1
 # Effective batch tokens per optimizer step: batch_size * grad_accum_steps * block_size
 batch_size = 8
 block_size = 256
@@ -77,6 +79,9 @@ seed = 1337
 device = "cpu"
 dtype = "float32"
 compile = false
+# TensorBoard logging (framework-level); set false to disable
+# Default is true to keep logging enabled unless explicitly disabled.
+tensorboard_enabled = true
 # Checkpoint policy (several knobs are inert at defaults)
 ckpt_last_filename = "ckpt_last.pt"
 ckpt_best_filename = "ckpt_best.pt"
