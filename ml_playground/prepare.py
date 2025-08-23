@@ -69,8 +69,21 @@ def write_bin_and_meta(
     meta_path = ds_dir / "meta.pkl"
 
     if train_path.exists() and val_path.exists() and meta_path.exists():
-        # Idempotent: nothing to do
-        return
+        # If existing meta is valid (strict), no-op; otherwise, rewrite artifacts
+        try:
+            with meta_path.open("rb") as f:
+                existing_meta = pickle.load(f)
+            if isinstance(existing_meta, dict) and "meta_version" in existing_meta:
+                # Idempotent: nothing to do
+                return
+            else:
+                print(
+                    f"[prepare] Detected invalid meta.pkl at {meta_path}; regenerating dataset artifacts."
+                )
+        except Exception:
+            print(
+                f"[prepare] Could not read existing meta.pkl at {meta_path}; regenerating dataset artifacts."
+            )
 
     # Write to temp then rename (atomic on POSIX)
     tmp_train = ds_dir / (".train.bin.tmp")

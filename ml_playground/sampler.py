@@ -8,17 +8,30 @@ from ml_playground.config import SampleExperiment, RuntimeConfig
 from ml_playground.device import setup
 
 
-def _load_checkpoint(rt: RuntimeConfig, device: str) -> Tuple[GPT, dict]:
-    # Use filenames as specified by RuntimeConfig only (no hardcoded candidates)
+def _load_checkpoint(rt: RuntimeConfig | Path, device: str) -> Tuple[GPT, dict]:
+    """Load a checkpoint for sampling.
+
+    Accepts either a RuntimeConfig (preferred) or a Path to the out_dir (for tests/back-compat).
+    When given a Path, default checkpoint filenames 'ckpt_best.pt' and 'ckpt_last.pt' are used.
+    """
+    if isinstance(rt, Path):
+        out_dir = rt
+        best_name = "ckpt_best.pt"
+        last_name = "ckpt_last.pt"
+    else:
+        out_dir = rt.out_dir
+        best_name = rt.ckpt_best_filename
+        last_name = rt.ckpt_last_filename
+
     candidates = [
-        rt.out_dir / rt.ckpt_best_filename,
-        rt.out_dir / rt.ckpt_last_filename,
+        out_dir / best_name,
+        out_dir / last_name,
     ]
     ckpt_path = next((p for p in candidates if p.exists()), None)
     if ckpt_path is None:
         tried = ", ".join(str(p) for p in candidates)
         raise FileNotFoundError(
-            f"No checkpoint found in {rt.out_dir} (tried: {tried}). "
+            f"No checkpoint found in {out_dir} (tried: {tried}). "
             "Ensure training has produced checkpoints or configure RuntimeConfig filenames."
         )
     ckpt = torch.load(ckpt_path, map_location=device)
@@ -148,8 +161,8 @@ def _codec_from_meta(
             try:
                 import json
 
-                with cand.open("r", encoding="utf-8") as f:
-                    meta_json = json.load(f)
+                with cand.open("r", encoding="utf-8") as jf:
+                    meta_json = json.load(jf)
             except Exception:
                 meta_json = None
 
