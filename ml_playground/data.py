@@ -127,17 +127,21 @@ class SimpleBatches:
                             cur = (cur + 1) % L  # stride by 1 between epochs
                     else:
                         # need to wrap for last few tokens
-                        take = L - (cur + 1)
-                        x_first = base[cur : cur + T].astype(np.int64, copy=False)
-                        y_first = base[cur + 1 : cur + 1 + take].astype(
-                            np.int64, copy=False
-                        )
-                        rem = T - take
-                        x_wrap = base[:rem].astype(np.int64, copy=False)
-                        y_wrap = base[1 : 1 + rem].astype(np.int64, copy=False)
-                        x_seq = np.concatenate([x_first], axis=0)
-                        y_seq = np.concatenate([y_first, y_wrap], axis=0)
-                        cur = rem
+                        x_first = base[cur:L].astype(np.int64, copy=False)
+                        x_rem = T - int(x_first.shape[0])
+                        if x_rem > 0:
+                            x_wrap = base[:x_rem].astype(np.int64, copy=False)
+                            x_seq = np.concatenate([x_first, x_wrap], axis=0)
+                        else:
+                            x_seq = x_first
+                        y_first = base[cur + 1 : L].astype(np.int64, copy=False)
+                        y_rem = T - int(y_first.shape[0])
+                        if y_rem > 0:
+                            y_wrap = base[:y_rem].astype(np.int64, copy=False)
+                            y_seq = np.concatenate([y_first, y_wrap], axis=0)
+                        else:
+                            y_seq = y_first
+                        cur = x_rem
                 x_list.append(x_seq)
                 y_list.append(y_seq)
             self._cursor[split] = cur
