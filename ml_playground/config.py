@@ -127,6 +127,10 @@ class RuntimeConfig(_FrozenStrictModel):
     # TensorBoard logging toggle (default: enabled)
     tensorboard_enabled: bool = True
 
+    # Optional epoch semantics (experiment-scoped)
+    iters_per_epoch: Optional[int] = None
+    max_epochs: Optional[int] = None
+
     # Checkpoint policy
     ckpt_last_filename: str = "ckpt_last.pt"
     ckpt_best_filename: str = "ckpt_best.pt"
@@ -161,6 +165,15 @@ class RuntimeConfig(_FrozenStrictModel):
     def _non_negative_int(cls, v: int) -> int:
         if v < 0:
             raise ValueError("must be >= 0")
+        return int(v)
+
+    @field_validator("iters_per_epoch", "max_epochs")
+    @classmethod
+    def _positive_optional_int(cls, v: Optional[int]) -> Optional[int]:
+        if v is None:
+            return None
+        if v <= 0:
+            raise ValueError("must be > 0 if provided")
         return int(v)
 
     @field_validator("best_smoothing_alpha", "ema_decay")
