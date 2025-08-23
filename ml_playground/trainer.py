@@ -77,6 +77,8 @@ def _write_sidecar(
     eval_metric_on_ema: float | None,
     device: str,
     dtype: str,
+    dataset_meta: Dict[str, int] | None = None,
+    progress: Dict[str, float | int] | None = None,
 ) -> None:
     created_at = time.time()
     sha256 = _sha256_of_file(pt_path)
@@ -108,6 +110,8 @@ def _write_sidecar(
             "dtype": dtype,
         },
         "metric": decision_metric,
+        **({"dataset": dataset_meta} if dataset_meta is not None else {}),
+        **({"progress": progress} if progress is not None else {}),
     }
     sidecar_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
@@ -384,6 +388,42 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
             writer.add_scalar("train/lr", lr, iter_num)
             metric = val_loss if rt.ckpt_metric == "val_loss" else math.exp(val_loss)
 
+            # Coverage/progress snapshot for sidecar
+            train_tokens_seen_sc = tokens_per_iter * iter_num
+            if rt.eval_interval > 0:
+                eval_events_so_far_sc = (iter_num // rt.eval_interval) + 1
+            else:
+                eval_events_so_far_sc = 0
+            val_tokens_seen_sc = eval_events_so_far_sc * tokens_per_eval_event
+            dataset_meta_sc = {
+                "train_tokens_total": int(train_tokens_total),
+                "val_tokens_total": int(val_tokens_total),
+            }
+            progress_sc = {
+                "train_tokens_seen": int(train_tokens_seen_sc),
+                "train_effective_epochs": (
+                    float(train_tokens_seen_sc) / float(train_tokens_total)
+                    if train_tokens_total > 0
+                    else 0.0
+                ),
+                "train_fraction_seen": (
+                    min(1.0, float(train_tokens_seen_sc) / float(train_tokens_total))
+                    if train_tokens_total > 0
+                    else 0.0
+                ),
+                "val_tokens_seen": int(val_tokens_seen_sc),
+                "val_effective_epochs": (
+                    float(val_tokens_seen_sc) / float(val_tokens_total)
+                    if val_tokens_total > 0
+                    else 0.0
+                ),
+                "val_fraction_seen": (
+                    min(1.0, float(val_tokens_seen_sc) / float(val_tokens_total))
+                    if val_tokens_total > 0
+                    else 0.0
+                ),
+            }
+
             # Optional smoothing (EMA of metric values)
             if rt.best_smoothing_alpha > 0.0:
                 if smoothed_metric is None:
@@ -446,6 +486,8 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
                     eval_metric_on_ema=None,
                     device=device_type,
                     dtype=rt.dtype,
+                    dataset_meta=dataset_meta_sc,
+                    progress=progress_sc,
                 )
 
             # Optional time-based safety checkpoint (updates timer after save)
@@ -485,6 +527,8 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
                             eval_metric_on_ema=None,
                             device=device_type,
                             dtype=rt.dtype,
+                            dataset_meta=dataset_meta_sc,
+                            progress=progress_sc,
                         )
 
                     # Optional top-k archive of best checkpoints
