@@ -225,6 +225,10 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
 
     # Data
     batches = SimpleBatches(exp.data, device=device_type)
+    try:
+        print(f"sampler: {exp.data.sampler}")
+    except Exception:
+        pass
 
     # Determine vocab size (from config or dataset meta)
     vocab_size = model_cfg.vocab_size

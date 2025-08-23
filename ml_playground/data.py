@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple, Any
+from typing import Tuple, Any, Dict
 import numpy as np
 import torch
 import pickle
@@ -92,9 +92,61 @@ class SimpleBatches:
             pass
         self.train = _MemmapReader.open(train_path, dtype=dtype)
         self.val = _MemmapReader.open(val_path, dtype=dtype)
+        # Maintain per-split cursors for sequential sampling
+        self._cursor: Dict[str, int] = {"train": 0, "val": 0}
 
     def get_batch(self, split: str) -> Tuple[torch.Tensor, torch.Tensor]:
         reader = self.train if split == "train" else self.val
-        return _sample_batch(
-            reader, self.data.batch_size, self.data.block_size, self.device
-        )
+        if getattr(self.data, "sampler", "random") == "sequential":
+            # Deterministic, strided coverage with wrap-around
+            L = int(reader.length)
+            if L == 0:
+                raise ValueError(
+                    "Dataset is empty: no tokens available. Ensure the dataset preparation wrote non-empty train/val bins."
+                )
+            bsz = int(self.data.batch_size)
+            T = int(self.data.block_size)
+            cur = self._cursor[split]
+            base = np.asarray(reader.arr)
+            x_list = []
+            y_list = []
+            for _ in range(bsz):
+                if L <= T:
+                    # wrap-around sequence
+                    offs = (cur + np.arange(T, dtype=np.int64)) % L
+                    x_seq = base[offs].astype(np.int64, copy=False)
+                    offs_y = ((cur + 1) + np.arange(T, dtype=np.int64)) % L
+                    y_seq = base[offs_y].astype(np.int64, copy=False)
+                    cur = (cur + T) % L
+                else:
+                    if cur + T + 1 <= L:
+                        x_seq = base[cur : cur + T].astype(np.int64, copy=False)
+                        y_seq = base[cur + 1 : cur + 1 + T].astype(np.int64, copy=False)
+                        cur = cur + T
+                        if cur >= L - T:
+                            cur = (cur + 1) % L  # stride by 1 between epochs
+                    else:
+                        # need to wrap for last few tokens
+                        take = L - (cur + 1)
+                        x_first = base[cur : cur + T].astype(np.int64, copy=False)
+                        y_first = base[cur + 1 : cur + 1 + take].astype(
+                            np.int64, copy=False
+                        )
+                        rem = T - take
+                        x_wrap = base[:rem].astype(np.int64, copy=False)
+                        y_wrap = base[1 : 1 + rem].astype(np.int64, copy=False)
+                        x_seq = np.concatenate([x_first], axis=0)
+                        y_seq = np.concatenate([y_first, y_wrap], axis=0)
+                        cur = rem
+                x_list.append(x_seq)
+                y_list.append(y_seq)
+            self._cursor[split] = cur
+            x_np = np.stack(x_list)
+            y_np = np.stack(y_list)
+            x = torch.from_numpy(x_np).to(self.device)
+            y = torch.from_numpy(y_np).to(self.device)
+            return x, y
+        else:
+            return _sample_batch(
+                reader, self.data.batch_size, self.data.block_size, self.device
+            )
