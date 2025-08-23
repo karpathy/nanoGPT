@@ -98,6 +98,8 @@ class DataConfig(_FrozenStrictModel):
     grad_accum_steps: int = 40
     # n-gram tokenization size for character datasets (1 = pure char-level)
     ngram_size: int = 1
+    # Sampling policy: random (default) or sequential (deterministic coverage)
+    sampler: Literal["random", "sequential"] = "random"
 
     @field_validator("dataset_dir", mode="before")
     @classmethod
