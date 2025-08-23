@@ -350,6 +350,15 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
     )
     print(f"tokens per iteration: {tokens_per_iter:,}")
 
+    # Dataset token totals for coverage metrics
+    train_tokens_total = int(batches.train.length)
+    val_tokens_total = int(batches.val.length)
+    tokens_per_eval_event = rt.eval_iters * exp.data.batch_size * exp.data.block_size
+    print(
+        f"dataset tokens: train {train_tokens_total:,}, val {val_tokens_total:,}; "
+        f"tokens/eval_event {tokens_per_eval_event:,}"
+    )
+
     while iter_num <= rt.max_iters:
         lr = (
             _get_lr(
@@ -546,16 +555,48 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
             dt = time.time() - t0
             t0 = time.time()
             tokens_per_sec = tokens_per_iter / max(1e-6, dt)
+            # Coverage metrics
+            train_tokens_seen = tokens_per_iter * iter_num
+            train_effective_epochs = (
+                (train_tokens_seen / train_tokens_total) if train_tokens_total > 0 else 0.0
+            )
+            train_fraction_seen = (
+                min(1.0, train_tokens_seen / train_tokens_total)
+                if train_tokens_total > 0
+                else 0.0
+            )
+            if rt.eval_interval > 0:
+                eval_events_so_far = (iter_num // rt.eval_interval) + 1
+            else:
+                eval_events_so_far = 0
+            val_tokens_seen = eval_events_so_far * tokens_per_eval_event
+            val_effective_epochs = (
+                (val_tokens_seen / val_tokens_total) if val_tokens_total > 0 else 0.0
+            )
+            val_fraction_seen = (
+                min(1.0, val_tokens_seen / val_tokens_total)
+                if val_tokens_total > 0
+                else 0.0
+            )
             # Clean, unified training log
             print(
                 f"iteration {iter_num}: train-loss {current_train_loss:.4f}, "
                 f"min-train-loss {min_train_loss:.4f} in iter {min_train_iter}, "
-                f"learning-rate {lr:.2e}, tokens/sec {tokens_per_sec:.1f}"
+                f"learning-rate {lr:.2e}, tokens/sec {tokens_per_sec:.1f}, "
+                f"train_epochs {train_effective_epochs:.4f}, val_epochs {val_effective_epochs:.4f}, "
+                f"train_fraction {train_fraction_seen:.3f}, val_fraction {val_fraction_seen:.3f}"
             )
             # TensorBoard: train scalars per log interval
             writer.add_scalar("train/loss_iter", current_train_loss, iter_num)
             writer.add_scalar("train/tokens_per_sec", tokens_per_sec, iter_num)
             writer.add_scalar("train/step_time_ms", dt * 1000.0, iter_num)
+            # TensorBoard: coverage scalars
+            writer.add_scalar("train/tokens_seen", float(train_tokens_seen), iter_num)
+            writer.add_scalar("val/tokens_seen", float(val_tokens_seen), iter_num)
+            writer.add_scalar("train/effective_epochs", train_effective_epochs, iter_num)
+            writer.add_scalar("val/effective_epochs", val_effective_epochs, iter_num)
+            writer.add_scalar("train/fraction_seen", train_fraction_seen, iter_num)
+            writer.add_scalar("val/fraction_seen", val_fraction_seen, iter_num)
 
         iter_num += 1
 

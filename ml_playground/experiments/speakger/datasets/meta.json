@@ -1,0 +1,8 @@
+{
+  "total_texts": 1,
+  "train_texts": 0,
+  "val_texts": 1,
+  "add_structure_tokens": true,
+  "doc_separator": "<DOC_SEP>",
+  "from_csv": false
+}

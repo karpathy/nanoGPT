@@ -1,0 +1,5 @@
+Sprecher: Max Mustermann (BEISPIEL)
+Thema: Beispielrede zur Pipelineprüfung
+Jahr: 2024
+
+Meine Damen und Herren, dies ist eine kurze Beispielrede, um den Datensatzaufbau zu demonstrieren. Vielen Dank.

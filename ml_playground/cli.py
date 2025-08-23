@@ -2,7 +2,9 @@ from __future__ import annotations
 import argparse
 from argparse import ArgumentParser
 from pathlib import Path
+from typing import Any
 import shutil
+import pickle
 import tomllib
 
 from ml_playground.config import (
@@ -24,7 +26,7 @@ def load_train_config(path: Path) -> TrainExperiment:
     - Delegates detailed value validation to Pydantic models.
     """
     with path.open("rb") as f:
-        raw_exp = tomllib.load(f)
+        raw_exp: dict[str, Any] = tomllib.load(f)
 
     # Discover and merge defaults from ml_playground/experiments/default_config.toml (if present).
     # Behavior: defaults provide a base; the experiment's config overrides them.
@@ -45,9 +47,9 @@ def load_train_config(path: Path) -> TrainExperiment:
             with defaults_path.open("rb") as df:
                 defaults_raw = tomllib.load(df)
             if isinstance(defaults_raw, dict):
-                d_train = defaults_raw.get("train")
-                if isinstance(d_train, dict):
-                    raw = _deep_merge({"train": d_train}, raw)
+                d_train_obj = defaults_raw.get("train")
+                if isinstance(d_train_obj, dict):
+                    raw = _deep_merge({"train": d_train_obj}, raw)
         except Exception:
             # Ignore default merge failures; proceed with experiment-only config.
             defaults_raw = None
@@ -74,28 +76,24 @@ def load_train_config(path: Path) -> TrainExperiment:
 
     # Track provenance for startup logging
     prov: dict[str, dict[str, str]] = {sec: {} for sec in allowed_sections}
-    exp_train_tbl = (
-        raw_exp.get("train") if isinstance(raw_exp.get("train"), dict) else {}
+    _tmp_exp_train = raw_exp.get("train")
+    exp_train_tbl: dict[str, Any] = (
+        _tmp_exp_train if isinstance(_tmp_exp_train, dict) else {}
     )
-    defaults_train_tbl = (
-        defaults_raw.get("train")
-        if isinstance(defaults_raw, dict)
-        and isinstance(defaults_raw.get("train"), dict)
-        else {}
+    defaults_dict: dict[str, Any] = (
+        defaults_raw if isinstance(defaults_raw, dict) else {}
+    )
+    _tmp_train = defaults_dict.get("train")
+    defaults_train_tbl: dict[str, Any] = (
+        _tmp_train if isinstance(_tmp_train, dict) else {}
     )
 
     # Initial provenance: default vs experiment
     for sec in allowed_sections:
-        sec_defaults = (
-            defaults_train_tbl.get(sec, {})
-            if isinstance(defaults_train_tbl.get(sec), dict)
-            else {}
-        )
-        sec_exp = (
-            exp_train_tbl.get(sec, {})
-            if isinstance(exp_train_tbl.get(sec), dict)
-            else {}
-        )
+        _dflt_sec = defaults_train_tbl.get(sec)
+        sec_defaults = _dflt_sec if isinstance(_dflt_sec, dict) else {}
+        _exp_sec = exp_train_tbl.get(sec)
+        sec_exp = _exp_sec if isinstance(_exp_sec, dict) else {}
         merged_sec = d.get(sec, {})
         if isinstance(merged_sec, dict):
             for k in merged_sec.keys():
@@ -146,7 +144,7 @@ def load_sample_config(path: Path) -> SampleExperiment:
     - Delegates detailed value validation to Pydantic models.
     """
     with path.open("rb") as f:
-        raw_exp = tomllib.load(f)
+        raw_exp: dict[str, Any] = tomllib.load(f)
 
     # Load defaults and deep-merge (defaults under experiment overrides)
     def _deep_merge(base: dict, override: dict) -> dict:
@@ -166,9 +164,9 @@ def load_sample_config(path: Path) -> SampleExperiment:
             with defaults_path.open("rb") as df:
                 defaults_raw = tomllib.load(df)
             if isinstance(defaults_raw, dict):
-                d_sample = defaults_raw.get("sample")
-                if isinstance(d_sample, dict):
-                    raw = _deep_merge({"sample": d_sample}, raw)
+                d_sample_obj = defaults_raw.get("sample")
+                if isinstance(d_sample_obj, dict):
+                    raw = _deep_merge({"sample": d_sample_obj}, raw)
         except Exception:
             defaults_raw = None
 
@@ -188,27 +186,23 @@ def load_sample_config(path: Path) -> SampleExperiment:
     d = {"runtime": dict(sample_tbl["runtime"]), "sample": dict(sample_tbl["sample"])}
 
     prov: dict[str, dict[str, str]] = {"runtime": {}, "sample": {}}
-    exp_sample_tbl = (
-        raw_exp.get("sample") if isinstance(raw_exp.get("sample"), dict) else {}
+    _tmp_exp_sample = raw_exp.get("sample")
+    exp_sample_tbl: dict[str, Any] = (
+        _tmp_exp_sample if isinstance(_tmp_exp_sample, dict) else {}
     )
-    defaults_sample_tbl = (
-        defaults_raw.get("sample")
-        if isinstance(defaults_raw, dict)
-        and isinstance(defaults_raw.get("sample"), dict)
-        else {}
+    defaults_dict: dict[str, Any] = (
+        defaults_raw if isinstance(defaults_raw, dict) else {}
+    )
+    _tmp_sample = defaults_dict.get("sample")
+    defaults_sample_tbl: dict[str, Any] = (
+        _tmp_sample if isinstance(_tmp_sample, dict) else {}
     )
 
     for sec in ("runtime", "sample"):
-        sec_defaults = (
-            defaults_sample_tbl.get(sec, {})
-            if isinstance(defaults_sample_tbl.get(sec), dict)
-            else {}
-        )
-        sec_exp = (
-            exp_sample_tbl.get(sec, {})
-            if isinstance(exp_sample_tbl.get(sec), dict)
-            else {}
-        )
+        _dflt_sec = defaults_sample_tbl.get(sec)
+        sec_defaults = _dflt_sec if isinstance(_dflt_sec, dict) else {}
+        _exp_sec = exp_sample_tbl.get(sec)
+        sec_exp = _exp_sec if isinstance(_exp_sec, dict) else {}
         merged_sec = d.get(sec, {})
         if isinstance(merged_sec, dict):
             for k in merged_sec.keys():
@@ -294,10 +288,7 @@ def main(argv: list[str] | None = None) -> None:
         prepare = registry.get(args.experiment)
         if prepare is None:
             raise SystemExit(f"Unknown experiment: {args.experiment}")
-        try:
-            prepare()
-        except KeyboardInterrupt:
-            print("\nPreparation interrupted by user (Ctrl+C). Exiting gracefully.")
+        prepare()
         return
 
     # Generic pipeline (default)
@@ -339,27 +330,32 @@ def main(argv: list[str] | None = None) -> None:
         except Exception as e:
             raise SystemExit(str(e))
         # 3) train
-        try:
-            train(train_cfg)
-        except KeyboardInterrupt:
-            print("\nTraining interrupted by user (Ctrl+C). Exiting gracefully.")
-            return
-        # Copy dataset meta.pkl into out_dir to satisfy strict sampling requirements
-        try:
-            data_cfg = train_cfg.data
-            if data_cfg.meta_pkl is not None:
-                src_meta = data_cfg.dataset_dir / data_cfg.meta_pkl
-                dst_meta = train_cfg.runtime.out_dir / "meta.pkl"
-                if src_meta.exists():
-                    shutil.copy2(src_meta, dst_meta)
-        except Exception as e:
-            # Non-fatal for loop flow, but note that sampling will fail without meta.pkl
-            print(f"[loop] Warning: failed to copy required meta.pkl into out_dir: {e}")
+        train(train_cfg)
+        # Strictly ensure out_dir/meta.pkl matches dataset meta for sampling
+        data_cfg = train_cfg.data
+        if data_cfg.meta_pkl is None:
+            raise SystemExit(
+                "Invalid config: [train.data].meta_pkl must be set to 'meta.pkl'"
+            )
+        src_meta = data_cfg.dataset_dir / data_cfg.meta_pkl
+        if not src_meta.exists():
+            raise SystemExit(
+                f"Required dataset meta.pkl not found at {src_meta}. Run 'uv run python -m ml_playground.cli prepare "
+                f"{getattr(args, 'experiment', '<experiment>')}' first."
+            )
+        dst_meta = train_cfg.runtime.out_dir / "meta.pkl"
+        train_cfg.runtime.out_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src_meta, dst_meta)
+        # Validate strict schema early
+        with dst_meta.open("rb") as f:
+            meta = pickle.load(f)
+        if not isinstance(meta, dict) or "meta_version" not in meta:
+            raise SystemExit(
+                f"Invalid meta.pkl copied from {src_meta}: missing required 'meta_version'. "
+                "Re-run prepare to regenerate dataset artifacts."
+            )
         # 4) sample
-        try:
-            sample(sample_cfg)
-        except KeyboardInterrupt:
-            print("\nSampling interrupted by user (Ctrl+C). Exiting gracefully.")
+        sample(sample_cfg)
         return
 
     if args.cmd == "train":
@@ -392,10 +388,7 @@ def main(argv: list[str] | None = None) -> None:
             train_cfg_single: TrainExperiment = load_train_config(args.config)
         except Exception as e:
             raise SystemExit(str(e))
-        try:
-            train(train_cfg_single)
-        except KeyboardInterrupt:
-            print("\nTraining interrupted by user (Ctrl+C). Exiting gracefully.")
+        train(train_cfg_single)
         return
 
     if args.cmd == "sample":
@@ -418,33 +411,50 @@ def main(argv: list[str] | None = None) -> None:
             sample_cfg_single: SampleExperiment = load_sample_config(args.config)
         except Exception as e:
             raise SystemExit(str(e))
-        # Best-effort: copy dataset meta.pkl into out_dir for strict sampling
-        try:
-            with args.config.open("rb") as f:
-                raw = tomllib.load(f)
-            data_tbl = raw.get("train", {}).get("data", {}) or {}
-            ds = data_tbl.get("dataset_dir")
-            meta_name = data_tbl.get("meta_pkl", "meta.pkl")
-            dst_meta = sample_cfg_single.runtime.out_dir / "meta.pkl"
-            if not dst_meta.exists() and isinstance(meta_name, (str, Path)):
-                # Ensure destination directory exists
-                sample_cfg_single.runtime.out_dir.mkdir(parents=True, exist_ok=True)
-                candidates: list[Path] = []
-                if isinstance(ds, (str, Path)):
-                    ds_path = Path(ds)
-                    # 1) Try dataset_dir as provided (absolute or CWD-relative)
-                    candidates.append(ds_path)
-                    # 2) If not absolute, also try relative to the config directory
-                    if not ds_path.is_absolute():
-                        candidates.append((args.config.parent / ds_path).resolve())
-                for cand in candidates:
-                    src_meta = Path(cand) / str(meta_name)
-                    if src_meta.exists():
-                        shutil.copy2(src_meta, dst_meta)
-                        break
-        except Exception:
-            # Non-fatal; sampler will enforce presence
-            pass
+        # Strictly ensure out_dir/meta.pkl matches dataset meta (overwrite and validate)
+        with args.config.open("rb") as f:
+            raw = tomllib.load(f)
+        data_tbl = raw.get("train", {}).get("data", {}) or {}
+        ds = data_tbl.get("dataset_dir")
+        meta_name = data_tbl.get("meta_pkl", "meta.pkl")
+        if not isinstance(meta_name, (str, Path)):
+            raise SystemExit("Invalid config: [train.data].meta_pkl must be a filename")
+        candidates: list[Path] = []
+        if isinstance(ds, (str, Path)):
+            ds_path = Path(ds)
+            # 1) Try dataset_dir as provided (absolute or CWD-relative)
+            candidates.append(ds_path)
+            # 2) If not absolute, also try relative to the config directory
+            if not ds_path.is_absolute():
+                candidates.append((args.config.parent / ds_path).resolve())
+        src_meta_path: Path | None = None
+        for cand in candidates:
+            cand_meta = Path(cand) / str(meta_name)
+            if cand_meta.exists():
+                src_meta_path = cand_meta
+                break
+        if src_meta_path is None:
+            raise SystemExit(
+                "Required dataset meta.pkl not found. Expected '"
+                + str(meta_name)
+                + "' under one of: "
+                + ", ".join(str(c) for c in candidates)
+                + ". Run 'uv run python -m ml_playground.cli prepare "
+                + getattr(args, "experiment", "<experiment>")
+                + "' first."
+            )
+        # Ensure destination directory exists and copy, overwriting stale files
+        sample_cfg_single.runtime.out_dir.mkdir(parents=True, exist_ok=True)
+        dst_meta = sample_cfg_single.runtime.out_dir / "meta.pkl"
+        shutil.copy2(src_meta_path, dst_meta)
+        # Validate strict schema early
+        with dst_meta.open("rb") as f:
+            meta = pickle.load(f)
+        if not isinstance(meta, dict) or "meta_version" not in meta:
+            raise SystemExit(
+                f"Invalid meta.pkl copied from {src_meta_path}: missing required 'meta_version'. "
+                "Re-run prepare to regenerate dataset artifacts."
+            )
         # Also best-effort: copy meta.json if present so sampler can use JSON hints
         try:
             with args.config.open("rb") as f:
@@ -470,10 +480,7 @@ def main(argv: list[str] | None = None) -> None:
         except Exception:
             # Non-fatal; sampler has a deterministic fallback
             pass
-        try:
-            sample(sample_cfg_single)
-        except KeyboardInterrupt:
-            print("\nSampling interrupted by user (Ctrl+C). Exiting gracefully.")
+        sample(sample_cfg_single)
         return
 
 

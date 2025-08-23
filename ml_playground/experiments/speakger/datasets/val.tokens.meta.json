@@ -1,0 +1,9 @@
+{
+  "tokens_file": "val.tokens.int32.bin",
+  "num_tokens": 59549984,
+  "num_records": 519954,
+  "block_size": 128,
+  "sep_token": null,
+  "sep_in_vocab": false,
+  "tokenizer_name_or_path": "google/gemma-3-270m-it"
+}
