@@ -363,7 +363,24 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
         f"tokens/eval_event {tokens_per_eval_event:,}"
     )
 
-    while iter_num <= rt.max_iters:
+    # Derive epoch semantics (experiment-scoped, no change to sampling)
+    computed_iters_per_epoch = (
+        math.ceil(train_tokens_total / max(1, tokens_per_iter))
+        if train_tokens_total > 0
+        else rt.eval_interval or 1
+    )
+    iters_per_epoch = rt.iters_per_epoch or computed_iters_per_epoch
+    loop_max_iters = rt.max_iters
+    if rt.max_epochs is not None:
+        try:
+            loop_max_iters = int(rt.max_epochs) * int(iters_per_epoch)
+        except Exception:
+            loop_max_iters = rt.max_iters
+    print(
+        f"epoch semantics: iters/epoch={iters_per_epoch}, max_iters={loop_max_iters} (configured max_iters={rt.max_iters})"
+    )
+
+    while iter_num <= loop_max_iters:
         lr = (
             _get_lr(
                 iter_num,
