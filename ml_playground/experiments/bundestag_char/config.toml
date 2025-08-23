@@ -42,6 +42,8 @@ block_size = 128
 # Number of gradient accumulation steps to simulate a larger batch without extra memory.
 # Effective batch (samples) = batch_size * grad_accum_steps; effective tokens per update = that * block_size.
 grad_accum_steps = 2
+# Sampling policy: switch bundestag_char to deterministic sequential coverage
+sampler = "sequential"
 
 [train.optim]
 # Base learning rate used by the optimizer; interacts with schedule below if decay_lr = true.
