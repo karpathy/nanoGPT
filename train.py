@@ -220,8 +220,13 @@ if ddp:
     else:
         model = DDP(model, device_ids=[ddp_local_rank])
 
+if ddp and not enable_fsdb:
+    raw_model = model.module # unwrap DDP container
+else:
+    raw_model = model
+
 # optimizer (must be enabled after FSDP wrapping)
-optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
+optimizer = raw_model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory
