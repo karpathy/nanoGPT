@@ -1,9 +1,13 @@
 import math
-import inspect
+from typing import Protocol, cast
 
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+
+
+class _AdamWFactory(Protocol):
+    def __call__(self, params, lr: float, betas, **kwargs) -> torch.optim.Optimizer: ...
 
 
 class LayerNorm(nn.Module):
@@ -214,15 +218,21 @@ class GPT(nn.Module):
         print(
             f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters"
         )
-        # Create AdamW optimizer and use the fused version if it is available
-        use_fused = (
-            (device_type == "cuda")
-            and hasattr(torch.optim, "AdamW")
-            and ("fused" in inspect.signature(torch.optim.AdamW).parameters)
-        )
-        extra_args = dict(fused=True) if use_fused else dict()
-        optimizer = torch.optim.AdamW(
-            optim_groups, lr=learning_rate, betas=betas, **extra_args
+
+        def _create_adamw(
+            factory: _AdamWFactory, groups, lr, betas, device_type: str
+        ) -> torch.optim.Optimizer:
+            if device_type == "cuda":
+                try:
+                    return factory(groups, lr=lr, betas=betas, fused=True)
+                except TypeError:
+                    # Fallback if the installed AdamW doesn't support 'fused'
+                    pass
+            return factory(groups, lr=lr, betas=betas)
+
+        factory = cast(_AdamWFactory, torch.optim.AdamW)
+        optimizer = _create_adamw(
+            factory, optim_groups, learning_rate, betas, device_type
         )
         return optimizer
 

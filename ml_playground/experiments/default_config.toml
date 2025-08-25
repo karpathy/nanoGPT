@@ -1,8 +1,8 @@
 # Shared CPU-friendly defaults for all experiments.
 #
 # Use these as a minimal, safe baseline; experiments may override any subset of
-# settings they need. Paths (dataset_dir, out_dir) are used exactly as provided
-# (absolute or relative) with no automatic rewriting or resolution.
+# settings they need. Paths (dataset_dir, out_dir) are resolved
+# relative to the current experiment.
 #
 # Common guidance and notes:
 # - Many knobs are inert at their defaults (e.g., ema_decay=0.0, best_smoothing_alpha=0.0,
@@ -29,7 +29,7 @@ bias = false
 [train.data]
 # Paths are used as-is (absolute or relative), no rewriting.
 # The default directory can be assumed to exist/be created by prepare steps.
-dataset_dir = "datasets"
+dataset_dir = "./datasets"
 train_bin = "train.bin"
 val_bin = "val.bin"
 meta_pkl = "meta.pkl"
@@ -65,7 +65,7 @@ min_lr = 0.0001
 
 [train.runtime]
 # Paths are used as-is (absolute or relative), no rewriting.
-out_dir = "out/default_run"
+out_dir = "./out/default_run"
 max_iters = 100000
 # Cadence tradeoffs: lower eval_interval/eval_iters increases feedback but adds overhead.
 # always_save_checkpoint ensures the last/best are persisted; ckpt_top_k=0 disables top-k pruning.
@@ -98,7 +98,7 @@ ema_decay = 0.0
 
 [sample.runtime]
 # Use the same default out_dir to find checkpoints by default (fully overridable).
-out_dir = "out/default_run"
+out_dir = "./out/default_run"
 # CPU-first sampling defaults
 device = "cpu"
 dtype = "float32"

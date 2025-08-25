@@ -12,8 +12,8 @@ from .config import (
     DataConfig,
     RuntimeConfig,
     SampleConfig,
-    TrainExperiment,
-    SampleExperiment,
+    TrainerConfig,
+    SamplerConfig,
     AppConfig,
 )
 
@@ -26,7 +26,7 @@ __all__ = [
     "DataConfig",
     "RuntimeConfig",
     "SampleConfig",
-    "TrainExperiment",
-    "SampleExperiment",
+    "TrainerConfig",
+    "SamplerConfig",
     "AppConfig",
 ]

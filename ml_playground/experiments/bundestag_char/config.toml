@@ -10,14 +10,14 @@
 # modest model for local CPU char-level training
 
 # Number of Transformer layers (blocks); increases capacity and compute/memory cost.
-n_layer = 2
+n_layer = 1
 # Number of attention heads per layer; must divide n_embd; more heads can help stability at added cost.
 n_head = 2
 # Embedding/hidden size; larger increases model capacity and compute.
-n_embd = 128
+n_embd = 64
 # Maximum context length the model is built for (positional embeddings); must be >= [train.data].block_size.
 # Increasing this raises memory/time roughly ~ O(block_size^2) per layer due to attention.
-block_size = 128
+block_size = 64
 # Dropout rate for regularization during training; set >0 to regularize, 0.0 for deterministic/fast runs.
 dropout = 0.0
 # Whether to include bias terms in linear/LayerNorm layers; false is common for GPT-style models.
@@ -25,24 +25,22 @@ bias = false
 
 [train.data]
 # Folder containing the preprocessed dataset files referenced below.
-dataset_dir = "ml_playground/experiments/bundestag_char/datasets"
+dataset_dir = "./datasets"
 # Training data file name (relative to dataset_dir).
 train_bin = "train.bin"
 # Validation data file name (relative to dataset_dir).
 val_bin = "val.bin"
 # Metadata (e.g., vocab/encoding) file name (relative to dataset_dir).
 meta_pkl = "meta.pkl"
-# Character-level n-gram size used during dataset preparation (1 = single chars, 3 = trigrams, etc.)
-# Set to 3 to train a 3-gram model.
+# Character-level n-gram size used during dataset preparation (1 = single/chars, 3 = trigrams, etc.)
 ngram_size = 3
-# Micro-batch size per optimization step (per device); memory ~ batch_size * block_size^2.
-batch_size = 8
-# Sequence length of each training sample; must be <= [train.model].block_size.
-block_size = 128
-# Number of gradient accumulation steps to simulate a larger batch without extra memory.
-# Effective batch (samples) = batch_size * grad_accum_steps; effective tokens per update = that * block_size.
-grad_accum_steps = 2
-# Sampling policy: switch bundestag_char to deterministic sequential coverage
+# Micro-batch size per optimization step (per device); keep minimal for tests
+batch_size = 4
+# Sequence length; ensure <= [train.model].block_size
+block_size = 64
+# Number of gradient accumulation steps (keep small)
+grad_accum_steps = 1
+# Sampling policy: deterministic sequential coverage for char dataset
 sampler = "sequential"
 
 [train.optim]
@@ -72,13 +70,13 @@ min_lr = 0.00008
 # Output directory for logs, checkpoints, and metadata for this training run.
 out_dir = "ml_playground/experiments/bundestag_char/out"
 # Total number of optimizer iterations to run (across all accumulation steps).
-max_iters = 2000000
+max_iters = 2
 # How often (in iterations) to run evaluation/checkpoint logic.
-eval_interval = 20
+eval_interval = 1
 # Number of evaluation batches to average per evaluation; higher reduces noise but takes longer.
-eval_iters = 10
+eval_iters = 1
 # How often (in iterations) to log training metrics.
-log_interval = 10
+log_interval = 1
 # If true, only runs evaluation and exits (no training updates); useful for validating or benchmarking.
 eval_only = false
 # If true, save a checkpoint on every eval (last and/or best/top-k as configured); increases disk usage.
@@ -86,7 +84,7 @@ always_save_checkpoint = true
 # Random seed for reproducibility (data shuffling, init, sampling).
 seed = 1337
 # Compute device backend: "cuda" (NVIDIA), "mps" (Apple Silicon), or "cpu".
-device = "mps"
+device = "cpu"
 # Numeric precision for tensors and parameters; affects speed/memory vs. stability/accuracy.
 dtype = "float32"
 # If true, compile/optimize the model/graph (when supported); speeds up but increases startup time.
@@ -122,7 +120,7 @@ ema_decay = 0.0
 [sample.runtime]
 # Output directory to read checkpoints from (and optionally write samples/logs to).
 # Typically should match the training run's out_dir you want to sample from.
-out_dir = "ml_playground/experiments/bundestag_char/out"
+out_dir = "./out"
 # Iteration controls are usually inert for pure sampling, but kept for API symmetry.
 max_iters = 0
 # Evaluation cadence placeholders (often unused in pure sampling flows).

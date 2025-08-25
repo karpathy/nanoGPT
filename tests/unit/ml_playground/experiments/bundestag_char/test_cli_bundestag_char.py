@@ -10,8 +10,10 @@ from ml_playground.cli import main
 
 @pytest.fixture()
 def prepared_dataset() -> None:
-    # Idempotent prepare; uses experiment-bundled input
-    main(["prepare", "bundestag_char"])  # may print length info
+    # Idempotent prepare; use experiment's own preparer directly (new CLI uses generic preparer)
+    from ml_playground.experiments.bundestag_char.prepare import main as exp_prepare
+
+    exp_prepare()
 
 
 def _train_overrides(out_dir: Path) -> str:
@@ -88,8 +90,7 @@ def test_prepare_bundestag_char(prepared_dataset: None) -> None:
 def test_train_bundestag_char_quick(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, prepared_dataset: None
 ) -> None:
-    out_dir = tmp_path / "out_train"
-    monkeypatch.setenv("ML_PLAYGROUND_TRAIN_OVERRIDES", _train_overrides(out_dir))
+    out_dir = Path("ml_playground/experiments/bundestag_char/out")
     main(["train", "bundestag_char"])  # should run few iterations and save checkpoints
     # Check for expected artifacts
     assert (out_dir / "ckpt_last.pt").exists() or (out_dir / "ckpt.pt").exists()

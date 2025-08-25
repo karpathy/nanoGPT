@@ -3,37 +3,38 @@ import pytest
 from pathlib import Path
 from pytest_mock import MockerFixture
 from ml_playground.cli import main
-from ml_playground.config import TrainExperiment, SampleExperiment
-from ml_playground.cli import load_train_config, load_sample_config
+from ml_playground.config import TrainerConfig, SamplerConfig
+from ml_playground.cli import _load_train_config, _load_sample_config
 
 
 def test_main_prepare_shakespeare_success(mocker: MockerFixture) -> None:
     """Test prepare command with shakespeare dataset succeeds."""
-    mock_preparer = mocker.Mock()
-    mocker.patch("ml_playground.datasets.PREPARERS", {"shakespeare": mock_preparer})
+    mock_instance = mocker.Mock()
+    mocker.patch("ml_playground.cli.make_preparer", return_value=mock_instance)
+    # Registry membership validates the experiment name
+    mocker.patch("ml_playground.datasets.PREPARERS", {"shakespeare": object()})
     main(["prepare", "shakespeare"])
-    mock_preparer.assert_called_once()
+    mock_instance.assert_called_once()
 
 
 def test_main_prepare_bundestag_char_success(mocker: MockerFixture) -> None:
     """Test prepare command with bundestag_char dataset succeeds."""
-    mock_preparer = mocker.Mock()
-    mocker.patch("ml_playground.datasets.PREPARERS", {"bundestag_char": mock_preparer})
+    mock_instance = mocker.Mock()
+    mocker.patch("ml_playground.cli.make_preparer", return_value=mock_instance)
+    mocker.patch("ml_playground.datasets.PREPARERS", {"bundestag_char": object()})
     main(["prepare", "bundestag_char"])
-    mock_preparer.assert_called_once()
+    mock_instance.assert_called_once()
 
 
 def test_main_prepare_unknown_dataset_fails(mocker: MockerFixture) -> None:
-    """Test prepare command with valid choice but missing preparer raises SystemExit."""
-    # Use a valid argparse choice but empty PREPARERS to test our custom logic
-    mocker.patch("ml_playground.datasets.PREPARERS", {})
-    with pytest.raises(SystemExit, match="Unknown experiment: shakespeare"):
-        main(["prepare", "shakespeare"])
+    """Test prepare command with an unknown experiment raises SystemExit."""
+    with pytest.raises(SystemExit, match="Unknown experiment: unknown"):
+        main(["prepare", "unknown"])
 
 
 def test_main_train_success(tmp_path: Path, mocker: MockerFixture) -> None:
     """Test train command auto-resolves config for experiment and calls train (strict loader)."""
-    mock_train_cfg = mocker.Mock(spec=TrainExperiment)
+    mock_train_cfg = mocker.Mock(spec=TrainerConfig)
 
     mock_load = mocker.patch(
         "ml_playground.cli.load_train_config", return_value=mock_train_cfg
@@ -48,7 +49,7 @@ def test_main_train_success(tmp_path: Path, mocker: MockerFixture) -> None:
 def test_main_train_no_train_block_fails(tmp_path: Path, mocker: MockerFixture) -> None:
     """Test train command fails when strict loader raises."""
     mocker.patch(
-        "ml_playground.cli.load_train_config",
+        "ml_playground.cli._load_train_config_from_raw",
         side_effect=Exception("Config must contain [train] block"),
     )
     with pytest.raises(SystemExit, match="Config must contain \\[train\\] block"):
@@ -57,10 +58,10 @@ def test_main_train_no_train_block_fails(tmp_path: Path, mocker: MockerFixture) 
 
 def test_main_sample_success(tmp_path: Path, mocker: MockerFixture) -> None:
     """Test sample command auto-resolves config and calls sample function (strict loader)."""
-    mock_sample_cfg = mocker.Mock(spec=SampleExperiment)
+    mock_sample_cfg = mocker.Mock(spec=SamplerConfig)
 
     mock_load = mocker.patch(
-        "ml_playground.cli.load_sample_config", return_value=mock_sample_cfg
+        "ml_playground.cli._load_sample_config_from_raw", return_value=mock_sample_cfg
     )
     mock_sample = mocker.patch("ml_playground.cli.sample")
     main(["sample", "shakespeare"])
@@ -74,7 +75,7 @@ def test_main_sample_no_sample_block_fails(
 ) -> None:
     """Test sample command fails when strict loader raises."""
     mocker.patch(
-        "ml_playground.cli.load_sample_config",
+        "ml_playground.cli._load_sample_config_from_raw",
         side_effect=Exception("Config must contain [sample] block"),
     )
     with pytest.raises(SystemExit, match="Config must contain \\[sample\\] block"):
@@ -84,8 +85,8 @@ def test_main_sample_no_sample_block_fails(
 def test_main_loop_success(tmp_path: Path, mocker: MockerFixture) -> None:
     """Test loop command executes prepare, train, and sample successfully (strict loaders)."""
     mock_preparer = mocker.Mock()
-    mock_train_config = mocker.Mock(spec=TrainExperiment)
-    mock_sample_config = mocker.Mock(spec=SampleExperiment)
+    mock_train_config = mocker.Mock(spec=TrainerConfig)
+    mock_sample_config = mocker.Mock(spec=SamplerConfig)
 
     # Create mock data config with meta_pkl
     mock_data_config = mocker.Mock()
@@ -150,7 +151,7 @@ def test_main_loop_missing_sample_block_fails(
     mocker.patch("ml_playground.datasets.PREPARERS", {"shakespeare": mock_preparer})
     mocker.patch(
         "ml_playground.cli.load_train_config",
-        return_value=mocker.Mock(spec=TrainExperiment),
+        return_value=mocker.Mock(spec=TrainerConfig),
     )
     mocker.patch(
         "ml_playground.cli.load_sample_config", side_effect=Exception("bad sample")
@@ -164,8 +165,8 @@ def test_main_loop_meta_copy_exception_handled(
 ) -> None:
     """Test loop command handles meta.pkl copy exceptions gracefully."""
     mock_preparer = mocker.Mock()
-    mock_train_config = mocker.Mock(spec=TrainExperiment)
-    mock_sample_config = mocker.Mock(spec=SampleExperiment)
+    mock_train_config = mocker.Mock(spec=TrainerConfig)
+    mock_sample_config = mocker.Mock(spec=SamplerConfig)
 
     # Mock data config with meta_pkl
     mock_data_config = mocker.Mock()
@@ -207,8 +208,8 @@ def test_main_loop_no_meta_pkl_skips_copy(
 ) -> None:
     """Test loop command skips meta.pkl copy when meta_pkl is None."""
     mock_preparer = mocker.Mock()
-    mock_train_config = mocker.Mock(spec=TrainExperiment)
-    mock_sample_config = mocker.Mock(spec=SampleExperiment)
+    mock_train_config = mocker.Mock(spec=TrainerConfig)
+    mock_sample_config = mocker.Mock(spec=SamplerConfig)
 
     # Mock data config with no meta_pkl
     mock_data_config = mocker.Mock()
@@ -281,7 +282,7 @@ dataset_dir = "data"
     cfg_path.write_text(toml_text)
 
     # With defaults merged, runtime is populated from defaults; should not raise
-    exp = load_train_config(cfg_path)
+    exp = _load_train_config(cfg_path)
     assert exp.runtime.out_dir == Path("out/default_run")
 
 
@@ -304,7 +305,7 @@ out_dir = "out"
     cfg_path.write_text(toml_text)
 
     with pytest.raises(ValueError) as e:
-        load_train_config(cfg_path)
+        _load_train_config(cfg_path)
     assert "Unknown key(s) in [train.data]" in str(e.value)
 
 
@@ -314,7 +315,7 @@ def test_relative_path_resolution_train_strict(tmp_path: Path) -> None:
     cfg_path = cfg_dir / "config.toml"
     cfg_path.write_text(_minimal_train_toml())
 
-    exp = load_train_config(cfg_path)
+    exp = _load_train_config(cfg_path)
     # Paths are used as configured; no resolution against cfg_dir
     assert exp.data.dataset_dir == Path("data")
     assert exp.runtime.out_dir == Path("out")
@@ -339,7 +340,7 @@ out_dir = "out"
     cfg_path.write_text(toml_text)
 
     with pytest.raises(ValueError) as e:
-        load_train_config(cfg_path)
+        _load_train_config(cfg_path)
     assert "batch_size" in str(e.value)
 
 
@@ -351,7 +352,7 @@ def test_sample_missing_runtime_strict(tmp_path: Path) -> None:
     cfg_path.write_text(toml_text)
 
     # With defaults merged, runtime is populated from defaults; should not raise
-    exp = load_sample_config(cfg_path)
+    exp = _load_sample_config(cfg_path)
     assert exp.runtime.out_dir == Path("out/default_run")
 
 
@@ -361,6 +362,6 @@ def test_sample_relative_out_dir_resolution_strict(tmp_path: Path) -> None:
     cfg_path = cfg_dir / "cfg.toml"
     cfg_path.write_text(_minimal_sample_toml())
 
-    exp = load_sample_config(cfg_path)
+    exp = _load_sample_config(cfg_path)
     # Paths are used as configured; no resolution against cfg_dir
     assert exp.runtime.out_dir == Path("out")
