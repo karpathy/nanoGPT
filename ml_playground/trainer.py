@@ -623,7 +623,9 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
             # Coverage metrics
             train_tokens_seen = tokens_per_iter * iter_num
             train_effective_epochs = (
-                (train_tokens_seen / train_tokens_total) if train_tokens_total > 0 else 0.0
+                (train_tokens_seen / train_tokens_total)
+                if train_tokens_total > 0
+                else 0.0
             )
             train_fraction_seen = (
                 min(1.0, train_tokens_seen / train_tokens_total)
@@ -658,7 +660,9 @@ def train(exp: TrainExperiment) -> Tuple[int, float]:
             # TensorBoard: coverage scalars
             writer.add_scalar("train/tokens_seen", float(train_tokens_seen), iter_num)
             writer.add_scalar("val/tokens_seen", float(val_tokens_seen), iter_num)
-            writer.add_scalar("train/effective_epochs", train_effective_epochs, iter_num)
+            writer.add_scalar(
+                "train/effective_epochs", train_effective_epochs, iter_num
+            )
             writer.add_scalar("val/effective_epochs", val_effective_epochs, iter_num)
             writer.add_scalar("train/fraction_seen", train_fraction_seen, iter_num)
             writer.add_scalar("val/fraction_seen", val_fraction_seen, iter_num)
