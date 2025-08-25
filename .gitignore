@@ -32,8 +32,8 @@ ml_playground/datasets/**/tokenizer/
 **/.hf_cache/
 
 # Experiment-specific generated data (do not version)
-#ml_playground/experiments/**/datasets/
-#ml_playground/experiments/**/raw/
+ml_playground/experiments/**/datasets/
+ml_playground/experiments/**/raw/
 ml_playground/experiments/**/out/
 
 # Exclude local developer resources

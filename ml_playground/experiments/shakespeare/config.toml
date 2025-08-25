@@ -22,7 +22,7 @@ bias = false
 
 [train.data]
 # Folder containing the preprocessed dataset files referenced below. Used as-is.
-dataset_dir = "ml_playground/experiments/shakespeare/datasets"
+dataset_dir = "./datasets"
 # Training data file name (relative to dataset_dir).
 train_bin = "train.bin"
 # Validation data file name (relative to dataset_dir).
@@ -62,7 +62,7 @@ min_lr = 0.00006
 
 [train.runtime]
 # Output directory for logs, checkpoints, and artifacts. Used as-is.
-out_dir = "ml_playground/experiments/shakespeare/out/shakespeare_next"
+out_dir = "./out"
 # Total number of optimizer iterations to run (across all accumulation steps).
 max_iters = 10000
 # How often (in iterations) to run evaluation/checkpoint logic.
@@ -111,7 +111,7 @@ ema_decay = 0.0
 [sample.runtime]
 # Output directory to read checkpoints from (and optionally write samples/logs to).
 # Typically should match the training run's out_dir you want to sample from.
-out_dir = "ml_playground/experiments/shakespeare/out/shakespeare_next"
+out_dir = "./out/samples"
 # Iteration controls are usually inert for pure sampling, but kept for API symmetry.
 max_iters = 0
 # Evaluation cadence placeholders (often unused in pure sampling flows).

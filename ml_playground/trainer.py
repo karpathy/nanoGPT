@@ -5,15 +5,20 @@ import os
 import json
 import hashlib
 from pathlib import Path
-from typing import Dict, Tuple, List, cast
+from typing import Dict, Tuple, List, cast, Protocol
 import pickle
 import shutil
 import torch
 from dataclasses import dataclass
 from ml_playground.model import GPTConfig, GPT
-from ml_playground.config import TrainExperiment
+from ml_playground.config import TrainerConfig
 from ml_playground.device import setup
 from ml_playground.data import SimpleBatches
+
+
+class Trainer(Protocol):
+    def __call__(self, cfg: TrainerConfig) -> Tuple[int, float]: ...
+
 
 # Add TensorBoard (best-effort)
 try:
@@ -188,7 +193,7 @@ def _load_meta_vocab_size(meta_path: Path) -> int | None:
     return None
 
 
-def train(exp: TrainExperiment) -> Tuple[int, float]:
+def train(exp: TrainerConfig) -> Tuple[int, float]:
     rt = exp.runtime
     model_cfg = exp.model
 

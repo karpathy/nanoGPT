@@ -2,7 +2,7 @@ from __future__ import annotations
 from pathlib import Path
 import numpy as np
 from ml_playground.config import (
-    TrainExperiment,
+    TrainerConfig,
     ModelConfig,
     DataConfig,
     OptimConfig,
@@ -18,7 +18,7 @@ def test_train_smoke(tmp_path: Path) -> None:
     (tmp_path / "train.bin").write_bytes(arr.tobytes())
     (tmp_path / "val.bin").write_bytes(arr.tobytes())
 
-    exp = TrainExperiment(
+    exp = TrainerConfig(
         model=ModelConfig(
             n_layer=1,
             n_head=1,

@@ -229,13 +229,14 @@ Create files under `tests/unit/ml_playground/test_<module>.py`:
 from __future__ import annotations
 from pathlib import Path
 import pytest
-from ml_playground.config import load_toml, TrainExperiment
+from ml_playground.config import load_toml, TrainerConfig
+
 
 def test_config_loading_handles_missing_file(tmp_path: Path) -> None:
     """Test that config loading raises appropriate error for missing files."""
     # Arrange
     missing_path = tmp_path / "missing.toml"
-    
+
     # Act / Assert
     with pytest.raises(FileNotFoundError):
         load_toml(missing_path)
