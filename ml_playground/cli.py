@@ -294,7 +294,10 @@ def main(argv: list[str] | None = None) -> None:
         prepare = registry.get(args.experiment)
         if prepare is None:
             raise SystemExit(f"Unknown experiment: {args.experiment}")
-        prepare()
+        try:
+            prepare()
+        except KeyboardInterrupt:
+            print("\nPreparation interrupted by user (Ctrl+C). Exiting gracefully.")
         return
 
     # Generic pipeline (default)
@@ -336,7 +339,11 @@ def main(argv: list[str] | None = None) -> None:
         except Exception as e:
             raise SystemExit(str(e))
         # 3) train
-        train(train_cfg)
+        try:
+            train(train_cfg)
+        except KeyboardInterrupt:
+            print("\nTraining interrupted by user (Ctrl+C). Exiting gracefully.")
+            return
         # Copy dataset meta.pkl into out_dir to satisfy strict sampling requirements
         try:
             data_cfg = train_cfg.data
@@ -349,7 +356,10 @@ def main(argv: list[str] | None = None) -> None:
             # Non-fatal for loop flow, but note that sampling will fail without meta.pkl
             print(f"[loop] Warning: failed to copy required meta.pkl into out_dir: {e}")
         # 4) sample
-        sample(sample_cfg)
+        try:
+            sample(sample_cfg)
+        except KeyboardInterrupt:
+            print("\nSampling interrupted by user (Ctrl+C). Exiting gracefully.")
         return
 
     if args.cmd == "train":
@@ -382,7 +392,10 @@ def main(argv: list[str] | None = None) -> None:
             train_cfg_single: TrainExperiment = load_train_config(args.config)
         except Exception as e:
             raise SystemExit(str(e))
-        train(train_cfg_single)
+        try:
+            train(train_cfg_single)
+        except KeyboardInterrupt:
+            print("\nTraining interrupted by user (Ctrl+C). Exiting gracefully.")
         return
 
     if args.cmd == "sample":
@@ -457,7 +470,10 @@ def main(argv: list[str] | None = None) -> None:
         except Exception:
             # Non-fatal; sampler has a deterministic fallback
             pass
-        sample(sample_cfg_single)
+        try:
+            sample(sample_cfg_single)
+        except KeyboardInterrupt:
+            print("\nSampling interrupted by user (Ctrl+C). Exiting gracefully.")
         return
 
 
