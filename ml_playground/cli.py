@@ -241,18 +241,13 @@ def main(argv: list[str] | None = None) -> None:
     parser: ArgumentParser = configureArguments()
     args = parser.parse_args(argv)
 
-    # Resolve config.toml from experiment where applicable
-    def _resolve_config_from_experiment(experiment: str) -> Path:
-        base = (
-            Path(__file__).resolve().parent / "experiments" / experiment / "config.toml"
-        )
-        return base
-
     # If command provides an experiment, resolve its config.toml automatically
     if hasattr(args, "experiment"):
         exp = getattr(args, "experiment")
         if isinstance(exp, str):
-            cfg_path = _resolve_config_from_experiment(exp)
+            cfg_path = (
+                Path(__file__).resolve().parent / "experiments" / exp / "config.toml"
+            )
             # For train/sample/loop: config is required and must exist
             if args.cmd in {"train", "sample", "loop"}:
                 if not cfg_path.exists():
@@ -485,7 +480,9 @@ def main(argv: list[str] | None = None) -> None:
 
 
 def configureArguments():
-    p = argparse.ArgumentParser("ml_playground")
+    p = argparse.ArgumentParser(
+        description="ML Playground CLI",
+    )
     sub = p.add_subparsers(dest="cmd", required=True)
 
     # Prepare now always takes an experiment name; integration configs are auto-resolved
