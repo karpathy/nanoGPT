@@ -9,7 +9,7 @@ from typing import Any, Tuple
 import pytest
 import torch
 
-from ml_playground.config import RuntimeConfig, SampleConfig, SampleExperiment
+from ml_playground.config import RuntimeConfig, SampleConfig, SamplerConfig
 import ml_playground.sampler as sampler
 
 
@@ -260,7 +260,7 @@ def test_sample_happy_path_with_file_prompt_and_char_meta(
         temperature=0.5,
         top_k=0,
     )
-    exp = SampleExperiment(runtime=rt, sample=sc)
+    exp = SamplerConfig(runtime=rt, sample=sc)
 
     sampler.sample(exp)
     out = capsys.readouterr().out
@@ -307,7 +307,7 @@ def test_sample_with_compile_flag_uses_compiled_model(
     sc = SampleConfig(
         start="\n", num_samples=1, max_new_tokens=3, temperature=0.5, top_k=0
     )
-    exp = SampleExperiment(runtime=rt, sample=sc)
+    exp = SamplerConfig(runtime=rt, sample=sc)
 
     sampler.sample(exp)
     assert called["compiled"] == 1

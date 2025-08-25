@@ -3,7 +3,7 @@ from pathlib import Path
 import torch
 from ml_playground.model import GPTConfig, GPT
 from ml_playground.sampler import sample
-from ml_playground.config import SampleExperiment, SampleConfig, RuntimeConfig
+from ml_playground.config import SamplerConfig, SampleConfig, RuntimeConfig
 
 
 def test_sample_smoke(tmp_path: Path) -> None:
@@ -54,7 +54,7 @@ def test_sample_smoke(tmp_path: Path) -> None:
         out_dir / "ckpt_best.pt",
     )
 
-    exp = SampleExperiment(
+    exp = SamplerConfig(
         runtime=RuntimeConfig(
             out_dir=out_dir,
             max_iters=0,

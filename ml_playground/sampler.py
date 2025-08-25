@@ -1,11 +1,15 @@
 from __future__ import annotations
 from pathlib import Path
-from typing import Callable, Tuple
+from typing import Callable, Tuple, Protocol
 import pickle
 import torch
 from ml_playground.model import GPTConfig, GPT
-from ml_playground.config import SampleExperiment, RuntimeConfig
+from ml_playground.config import SamplerConfig, RuntimeConfig
 from ml_playground.device import setup
+
+
+class Sampler(Protocol):
+    def __call__(self, cfg: SamplerConfig) -> None: ...
 
 
 def _load_checkpoint(rt: RuntimeConfig | Path, device: str) -> Tuple[GPT, dict]:
@@ -202,7 +206,7 @@ def _codec_from_meta(
     )
 
 
-def sample(exp: SampleExperiment) -> None:
+def sample(exp: SamplerConfig) -> None:
     rt = exp.runtime
     device_type, ptdtype, ctx = setup(rt.device, rt.dtype, rt.seed)
 
@@ -218,8 +222,8 @@ def sample(exp: SampleExperiment) -> None:
 
     start = exp.sample.start
     if start.startswith("FILE:"):
-        with open(start[5:], "r", encoding="utf-8") as f:
-            start = f.read()
+        path = Path(start[5:])
+        start = path.read_text(encoding="utf-8")
     start_ids = encode(start)
     x = torch.tensor(start_ids, dtype=torch.long, device=device_type)[None, ...]
 
