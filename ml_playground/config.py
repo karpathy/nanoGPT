@@ -310,6 +310,10 @@ def load_toml(path: Path) -> "AppConfig":
     return AppConfig.model_validate(raw)
 
 
+# Backward-compatible aliases for newer API names used by some modules
+TrainExperiment = TrainerConfig
+SampleExperiment = SamplerConfig
+
 __all__ = [
     "DeviceKind",
     "DTypeKind",
