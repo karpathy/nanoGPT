@@ -35,3 +35,6 @@ ml_playground/datasets/**/tokenizer/
 #ml_playground/experiments/**/datasets/
 #ml_playground/experiments/**/raw/
 ml_playground/experiments/**/out/
+
+# Exclude local developer resources
+.ldres/
