@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Tuple
 
 import numpy as np
-import pytest
 import torch
 
 from ml_playground.config import DataConfig
