@@ -1,22 +1,55 @@
 from __future__ import annotations
+
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Literal, Optional, Any
 
 import tomllib
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # Strict, single-source configuration module.
-# All config models and the TOML loader live here.
 
 DeviceKind = Literal["cpu", "mps", "cuda"]
 DTypeKind = Literal["float32", "bfloat16", "float16"]
 
 
 class _FrozenStrictModel(BaseModel):
+    """
+    Base model that is immutable (frozen) and forbids extra fields. Used to enforce strict schema in all configs.
+    """
+
     model_config = ConfigDict(frozen=True, extra="forbid", validate_default=True)
 
 
+class TrainerConfig(_FrozenStrictModel):
+    """
+    Top-level configuration for a training session, encapsulating model, data, optimizer,
+    scheduler, runtime, and extensible extras.
+    """
+
+    model: ModelConfig
+    data: DataConfig
+    optim: OptimConfig
+    schedule: LRSchedule
+    runtime: RuntimeConfig
+    extras: dict[str, Any] = Field(default_factory=dict)
+
+
+class SamplerConfig(_FrozenStrictModel):
+    """
+    Top-level configuration for model sampling/generation runs, including runtime and sampling parameters.
+    """
+
+    runtime: RuntimeConfig
+    sample: SampleConfig
+    extras: dict[str, Any] = Field(default_factory=dict)
+
+
 class OptimConfig(_FrozenStrictModel):
+    """
+    Configuration for optimizer hyperparameters (learning rate, betas, weight decay, grad clipping, etc).
+    Includes validation to enforce non-negative values.
+    """
+
     learning_rate: float = 6e-4
     weight_decay: float = 1e-1
     beta1: float = 0.9
@@ -34,6 +67,10 @@ class OptimConfig(_FrozenStrictModel):
 
 
 class LRSchedule(_FrozenStrictModel):
+    """
+    Learning rate schedule parameters (warmup, decay, min lr, etc) with built-in validation checks.
+    """
+
     decay_lr: bool = True
     warmup_iters: int = 2_000
     lr_decay_iters: int = 600_000
@@ -56,6 +93,11 @@ class LRSchedule(_FrozenStrictModel):
 
 
 class ModelConfig(_FrozenStrictModel):
+    """
+    Configuration for model architecture parameters (layers, hidden size, dropout, vocab size, etc).
+    Provides validation to ensure non-negativity and valid ranges.
+    """
+
     n_layer: int = 12
     n_head: int = 12
     n_embd: int = 768
@@ -89,6 +131,11 @@ class ModelConfig(_FrozenStrictModel):
 
 
 class DataConfig(_FrozenStrictModel):
+    """
+    Configuration for training data input, including paths to data, batch/block sizes, sampling policy,
+    and dataset-specific hyperparameters.
+    """
+
     dataset_dir: Path
     train_bin: str = "train.bin"
     val_bin: str = "val.bin"
@@ -115,6 +162,11 @@ class DataConfig(_FrozenStrictModel):
 
 
 class RuntimeConfig(_FrozenStrictModel):
+    """
+    Configuration for runtime/environment, checkpointing, logging, early stopping,
+    device+seed settings, and advanced training options.
+    """
+
     out_dir: Path
     max_iters: int = 600_000
     eval_interval: int = 2_000
@@ -187,6 +239,11 @@ class RuntimeConfig(_FrozenStrictModel):
 
 
 class SampleConfig(_FrozenStrictModel):
+    """
+    Configuration for sampling and text generation parameters, including temperature, nucleus/top-k sampling,
+    and output size controls.
+    """
+
     start: str = "\n"
     num_samples: int = 3
     max_new_tokens: int = 200
@@ -225,32 +282,31 @@ class SampleConfig(_FrozenStrictModel):
         return float(v)
 
 
-class TrainExperiment(_FrozenStrictModel):
-    model: ModelConfig
-    data: DataConfig
-    optim: OptimConfig
-    schedule: LRSchedule
-    runtime: RuntimeConfig
-
-
-class SampleExperiment(_FrozenStrictModel):
-    runtime: RuntimeConfig
-    sample: SampleConfig
-
-
 class AppConfig(_FrozenStrictModel):
-    train: Optional[TrainExperiment] = Field(default=None)
-    sample: Optional[SampleExperiment] = Field(default=None)
+    """
+    Top-level config capturing the overall application configuration, possibly including both training
+    and sampling configuration blocks.
+    """
+
+    train: Optional[TrainerConfig] = Field(default=None)
+    sample: Optional[SamplerConfig] = Field(default=None)
 
 
-# Strict TOML loader (no pruning/workarounds). Invalid/incomplete sections raise.
+def load_toml(path: Path) -> "AppConfig":
+    """Load a TOML file into a strongly-typed AppConfig.
 
-
-def load_toml(path: Path) -> AppConfig:
+    This helper is used by experiment preparers to optionally read
+    experiment-scoped configuration values. It performs strict typing
+    via Pydantic models and raises on invalid structure.
+    """
+    if not isinstance(path, Path):
+        path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"Config file not found: {path}")
     with path.open("rb") as f:
-        raw: Any = tomllib.load(f)
+        raw = tomllib.load(f)
     if not isinstance(raw, dict):
-        raw = {}
+        raise ValueError(f"Config at {path} must be a TOML table/object")
     return AppConfig.model_validate(raw)
 
 
@@ -263,8 +319,8 @@ __all__ = [
     "DataConfig",
     "RuntimeConfig",
     "SampleConfig",
-    "TrainExperiment",
-    "SampleExperiment",
+    "TrainerConfig",
+    "SamplerConfig",
     "AppConfig",
     "load_toml",
 ]
