@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-import argparse
+import typer
+from typer.main import get_command
 import importlib
 import json
 import os
 import pickle
 import shutil
 import tomllib
-from argparse import Namespace
 from pathlib import Path
 from typing import Any, Protocol, cast
+from dataclasses import dataclass
 
 from ml_playground import datasets
 from ml_playground.config import (
@@ -602,8 +603,17 @@ def load_sample_config(path: Path) -> SamplerConfig:
     return cfg
 
 
+class HasExperiment(Protocol):
+    experiment: str
+
+
+@dataclass
+class CLIArgs:
+    experiment: str
+
+
 def _resolve_and_load_configs(
-    args: argparse.Namespace,
+    args: HasExperiment,
 ) -> tuple[Path, dict[str, Any], dict[str, Any]]:
     # Validate syntax: require subcommand + experiment name
     try:
@@ -669,7 +679,7 @@ def _try_load_experiment_integration(experiment: str) -> ExperimentIntegration |
 
 
 def _run_prepare(
-    args: argparse.Namespace, prepare_cfg: PreparerConfig, config_path: Path
+    args: HasExperiment, prepare_cfg: PreparerConfig, config_path: Path
 ) -> None:
     # Try experiment-specific integration first
     integration = _try_load_experiment_integration(args.experiment)
@@ -689,7 +699,7 @@ def _run_prepare(
 
 
 def _run_loop(
-    args: argparse.Namespace,
+    args: HasExperiment,
     prepare_cfg: PreparerConfig,
     train_cfg: TrainerConfig,
     sample_cfg: SamplerConfig,
@@ -751,7 +761,7 @@ def _run_loop(
 
 
 def _run_train(
-    args: argparse.Namespace, train_cfg: TrainerConfig, config_path: Path
+    args: HasExperiment, train_cfg: TrainerConfig, config_path: Path
 ) -> None:
     # Route speakger to Gemma PEFT integration trainer (JSONL/PEFT pipeline)
     if args.experiment == "speakger":
@@ -777,7 +787,7 @@ def _run_train(
 
 
 def _run_sample(
-    args: argparse.Namespace, sample_cfg: SamplerConfig, config_path: Path
+    args: HasExperiment, sample_cfg: SamplerConfig, config_path: Path
 ) -> None:
     # Route speakger to Gemma PEFT integration sampler (JSONL/PEFT pipeline)
     if args.experiment == "speakger":
@@ -796,135 +806,114 @@ def _run_sample(
     sample(sample_cfg)
 
 
-def main(argv: list[str] | None = None) -> None:
-    args: Namespace = _configure_arguments(argv)
+# Typer-based CLI
+app = typer.Typer(no_args_is_help=True)
 
-    # Controller: dispatch to subcommands
-    if args.cmd == "prepare":
-        # Prepare does not require a config file; just dispatch to preparer/Integration
-        # Build a minimal PrepareCfg if defaults/experiment provide one, but do not fail if absent
+
+@app.command("prepare")
+def cmd_prepare(experiment: str) -> None:
+    args = CLIArgs(experiment=experiment)
+    try:
         try:
-            # Attempt to resolve configs for prepare extras; ignore if config is missing
-            try:
-                _unused_cfg, config_raw, defaults_raw = _resolve_and_load_configs(args)
-            except SystemExit:
-                config_raw, defaults_raw = ({}, {})
-            try:
-                prepare_cfg: PreparerConfig = _load_prepare_config_from_raw(
-                    config_raw, defaults_raw
-                )
-            except Exception:
-                prepare_cfg = PreparerConfig()
+            _unused_cfg, config_raw, defaults_raw = _resolve_and_load_configs(args)
         except SystemExit:
-            # If experiment config is missing, still allow prepare to fail only due to unknown experiment
-            prepare_cfg = PreparerConfig()
-        _run_prepare(
-            args,
-            prepare_cfg,
-            Path(
-                f"{Path(__file__).resolve().parent / 'experiments' / args.experiment / 'config.toml'}"
-            ),
-        )
-        return
-
-    # For train/sample/loop we must resolve configs strictly
-    config_path, config_raw, defaults_raw = _resolve_and_load_configs(args)
-
-    if args.cmd == "train":
+            config_raw, defaults_raw = ({}, {})
         try:
-            train_cfg_wrapped: TrainerConfig = load_train_config(config_path)
-        except Exception as e:
-            raise SystemExit(str(e))
-        # Apply environment overrides if provided
-        train_cfg_wrapped = _apply_train_overrides(train_cfg_wrapped)
-        try:
-            _run_train(args, train_cfg_wrapped, config_path)
-        except KeyboardInterrupt:
-            print("\nTraining interrupted by user (Ctrl+C). Exiting gracefully.")
-        return
-
-    if args.cmd == "sample":
-        # Load via public wrapper so relative paths are resolved against the experiment root
-        try:
-            sample_cfg_obj: SamplerConfig = load_sample_config(config_path)
-        except Exception as e:
-            raise SystemExit(str(e))
-        # Apply environment overrides if provided
-        sample_cfg_obj = _apply_sample_overrides(sample_cfg_obj)
-        _run_sample(args, sample_cfg_obj, config_path)
-        return
-
-    if args.cmd == "loop":
-        # Load both configs (wrappers for DI; raw for validation and meta copy logic expectations)
-        try:
-            loop_train_cfg: TrainerConfig = load_train_config(config_path)
-        except Exception as e:
-            raise SystemExit(str(e))
-        try:
-            loop_sample_cfg: SamplerConfig = load_sample_config(config_path)
-        except Exception as e:
-            raise SystemExit(str(e))
-        # Also run strict validators so tests that patch them to raise are honored
-        try:
-            _ = _load_train_config_from_raw(config_raw, defaults_raw)
-        except Exception as e:
-            raise SystemExit(str(e))
-        try:
-            _ = _load_sample_config_from_raw(config_raw, defaults_raw)
-        except Exception as e:
-            raise SystemExit(str(e))
-        loop_train_cfg = _apply_train_overrides(loop_train_cfg)
-        loop_sample_cfg = _apply_sample_overrides(loop_sample_cfg)
-        # Build a prepare cfg best-effort from raw (non-fatal)
-        try:
-            loop_prepare_cfg: PreparerConfig = _load_prepare_config_from_raw(
+            prepare_cfg: PreparerConfig = _load_prepare_config_from_raw(
                 config_raw, defaults_raw
             )
         except Exception:
-            loop_prepare_cfg = PreparerConfig()
-        try:
-            _run_loop(
-                args, loop_prepare_cfg, loop_train_cfg, loop_sample_cfg, config_path
-            )
-        except KeyboardInterrupt:
-            print("\nSampling interrupted by user (Ctrl+C). Exiting gracefully.")
-        return
-
-
-def _configure_arguments(args: list[str] | None = None) -> Namespace:
-    cli_parser = argparse.ArgumentParser("ml_playground")
-    sub = cli_parser.add_subparsers(dest="cmd", required=True)
-
-    prep_parser = sub.add_parser(
-        "prepare",
-        help="Prepare experiment by name (or via integration config resolved from experiments/<experiment>/config.toml)",
-    )
-    prep_parser.add_argument(
-        "experiment",
-        help="Experiment name (e.g., shakespeare, bundestag_char, bundestag_tiktoken, speakger, bundestag_qwen15b_lora_mps)",
+            prepare_cfg = PreparerConfig()
+    except SystemExit:
+        prepare_cfg = PreparerConfig()
+    _run_prepare(
+        args,
+        prepare_cfg,
+        Path(
+            f"{Path(__file__).resolve().parent / 'experiments' / experiment / 'config.toml'}"
+        ),
     )
 
-    train_parser = sub.add_parser(
-        "train", help="Train for the given experiment (config.toml auto-resolved)"
-    )
-    train_parser.add_argument("experiment", help="Experiment name")
 
-    sample_parser = sub.add_parser(
-        "sample",
-        help="Sample for the given experiment (config.toml auto-resolved; tries best/last checkpoints)",
-    )
-    sample_parser.add_argument("experiment", help="Experiment name")
+@app.command("train")
+def cmd_train(experiment: str) -> None:
+    args = CLIArgs(experiment=experiment)
+    config_path, config_raw, defaults_raw = _resolve_and_load_configs(args)
+    # Strict validation to satisfy tests that patch the raw loader
+    try:
+        _ = _load_train_config_from_raw(config_raw, defaults_raw)
+    except Exception as e:
+        raise SystemExit(str(e))
+    # Then load the effective config (wrapper) for execution
+    try:
+        train_cfg_wrapped: TrainerConfig = load_train_config(config_path)
+    except Exception as e:
+        raise SystemExit(str(e))
+    train_cfg_wrapped = _apply_train_overrides(train_cfg_wrapped)
+    try:
+        _run_train(args, train_cfg_wrapped, config_path)
+    except KeyboardInterrupt:
+        print("\nTraining interrupted by user (Ctrl+C). Exiting gracefully.")
 
-    loop_parser = sub.add_parser(
-        "loop",
-        help="Run prepare -> train -> sample for the given experiment (config.toml auto-resolved)",
-    )
-    loop_parser.add_argument(
-        "experiment",
-        help="Experiment name",
-    )
 
-    return cli_parser.parse_args(args)
+@app.command("sample")
+def cmd_sample(experiment: str) -> None:
+    args = CLIArgs(experiment=experiment)
+    config_path, config_raw, defaults_raw = _resolve_and_load_configs(args)
+    # Strict validation and config build from raw to satisfy tests
+    try:
+        sample_cfg_obj: SamplerConfig = _load_sample_config_from_raw(
+            config_raw, defaults_raw
+        )
+    except Exception as e:
+        raise SystemExit(str(e))
+    # Apply environment overrides if provided
+    sample_cfg_obj = _apply_sample_overrides(sample_cfg_obj)
+    _run_sample(args, sample_cfg_obj, config_path)
+
+
+@app.command("loop")
+def cmd_loop(experiment: str) -> None:
+    args = CLIArgs(experiment=experiment)
+    config_path, config_raw, defaults_raw = _resolve_and_load_configs(args)
+    try:
+        loop_train_cfg: TrainerConfig = load_train_config(config_path)
+    except Exception as e:
+        raise SystemExit(str(e))
+    try:
+        loop_sample_cfg: SamplerConfig = load_sample_config(config_path)
+    except Exception as e:
+        raise SystemExit(str(e))
+    # Also run strict validators so tests that patch them to raise are honored
+    try:
+        _ = _load_train_config_from_raw(config_raw, defaults_raw)
+    except Exception as e:
+        raise SystemExit(str(e))
+    try:
+        _ = _load_sample_config_from_raw(config_raw, defaults_raw)
+    except Exception as e:
+        raise SystemExit(str(e))
+    loop_train_cfg = _apply_train_overrides(loop_train_cfg)
+    loop_sample_cfg = _apply_sample_overrides(loop_sample_cfg)
+    # Build a prepare cfg best-effort from raw (non-fatal)
+    try:
+        loop_prepare_cfg: PreparerConfig = _load_prepare_config_from_raw(
+            config_raw, defaults_raw
+        )
+    except Exception:
+        loop_prepare_cfg = PreparerConfig()
+    try:
+        _run_loop(args, loop_prepare_cfg, loop_train_cfg, loop_sample_cfg, config_path)
+    except KeyboardInterrupt:
+        print("\nSampling interrupted by user (Ctrl+C). Exiting gracefully.")
+
+
+# Keep a Python API-compatible entry point for tests
+
+
+def main(argv: list[str] | None = None) -> None:
+    cmd = get_command(app)
+    cmd.main(args=argv, prog_name="ml_playground", standalone_mode=False)
 
 
 if __name__ == "__main__":
