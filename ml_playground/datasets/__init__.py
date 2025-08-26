@@ -7,26 +7,17 @@ PREPARERS: Dict[str, Callable[[], None]] = {}
 # Keep a reference to the original dict object to detect monkeypatching in tests/CLI
 DEFAULT_PREPARERS_REF = PREPARERS
 
-
 def load_preparers() -> None:
     """Populate PREPARERS by importing experiment prepare modules on demand.
 
-    Lazy import: avoids side effects and heavy imports at module import time,
-    complying with Import Guidelines (rules 7 and 11).
+    Delegates discovery to ml_playground.experiments.load_preparers and mirrors
+    its registry to avoid hardcoded experiment references here.
     """
     if PREPARERS:
         return
-    # Local imports justified as plugin loading entry point
-    from ml_playground.experiments.shakespeare.prepare import main as _shakespeare  # noqa: F401
-    from ml_playground.experiments.bundestag_char.prepare import main as _bundestag_char  # noqa: F401
-    from ml_playground.experiments.bundestag_tiktoken.prepare import (
-        main as _bundestag_tiktoken,
-    )  # noqa: F401
+    # Local import to avoid import-time side effects
+    from ml_playground import experiments as _experiments
 
-    PREPARERS.update(
-        {
-            "shakespeare": _shakespeare,
-            "bundestag_char": _bundestag_char,
-            "bundestag_tiktoken": _bundestag_tiktoken,
-        }
-    )
+    _experiments.load_preparers()
+    # Mirror experiments registry into datasets registry
+    PREPARERS.update(_experiments.PREPARERS)

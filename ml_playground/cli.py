@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typer
+import click
 from typer.main import get_command
 import importlib
 import json
@@ -9,7 +10,7 @@ import pickle
 import shutil
 import tomllib
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import Any, Protocol, Annotated, cast
 from dataclasses import dataclass
 
 from ml_playground import datasets
@@ -22,6 +23,33 @@ from ml_playground.config import (
 from ml_playground.prepare import PreparerConfig, make_preparer
 from ml_playground.sampler import sample
 from ml_playground.trainer import train
+
+# --- Typer helpers ---------------------------------------------------------
+def _experiments_root() -> Path:
+    """Return the root folder that contains experiment directories."""
+    return Path(__file__).resolve().parent / "experiments"
+
+def _complete_experiments(
+    ctx: typer.Context, param: typer.CallbackParam, incomplete: str
+) -> list[str]:
+    """Auto-complete experiment names based on directories with a config.toml."""
+    try:
+        root = _experiments_root()
+        if not root.exists():
+            return []
+        matches: list[str] = []
+        for p in root.iterdir():
+            if not p.is_dir():
+                continue
+            if not (p / "config.toml").exists():
+                continue
+            name = p.name
+            if name.startswith(incomplete):
+                matches.append(name)
+        return sorted(matches)
+    except Exception:
+        # Never fail completion; just return no suggestions
+        return []
 
 
 def _read_toml_dict(path: Path) -> dict[str, Any]:
@@ -763,19 +791,6 @@ def _run_loop(
 def _run_train(
     args: HasExperiment, train_cfg: TrainerConfig, config_path: Path
 ) -> None:
-    # Route speakger to Gemma PEFT integration trainer (JSONL/PEFT pipeline)
-    if args.experiment == "speakger":
-        from ml_playground.experiments.speakger import gemma_finetuning_mps as _sg
-
-        # Ensure dataset is prepared before training (idempotent)
-        try:
-            _sg.prepare_from_toml(config_path)
-        except Exception:
-            # Let the trainer surface a clearer error if preparation failed
-            pass
-        _sg.train_from_toml(config_path)
-        return
-
     # Try experiment-specific integration trainer
     integration = _try_load_experiment_integration(args.experiment)
     if integration:
@@ -789,13 +804,6 @@ def _run_train(
 def _run_sample(
     args: HasExperiment, sample_cfg: SamplerConfig, config_path: Path
 ) -> None:
-    # Route speakger to Gemma PEFT integration sampler (JSONL/PEFT pipeline)
-    if args.experiment == "speakger":
-        from ml_playground.experiments.speakger import gemma_finetuning_mps as _sg
-
-        _sg.sample_from_toml(config_path)
-        return
-
     # Try experiment-specific integration sampler
     integration = _try_load_experiment_integration(args.experiment)
     if integration:
@@ -806,12 +814,21 @@ def _run_sample(
     sample(sample_cfg)
 
 
-# Typer-based CLI
-app = typer.Typer(no_args_is_help=True)
+ # Typer-based CLI
+app = typer.Typer(no_args_is_help=True, help="ML Playground CLI: prepare data, train models, and sample outputs.")
 
 
 @app.command("prepare")
-def cmd_prepare(experiment: str) -> None:
+def cmd_prepare(
+    experiment: Annotated[
+        str,
+        typer.Argument(
+            help="Experiment name (folder under experiments/)",
+            autocompletion=_complete_experiments,
+        ),
+    ]
+) -> None:
+    """Run the experiment-specific prepare step (or generic preparer)."""
     args = CLIArgs(experiment=experiment)
     try:
         try:
@@ -836,28 +853,48 @@ def cmd_prepare(experiment: str) -> None:
 
 
 @app.command("train")
-def cmd_train(experiment: str) -> None:
+def cmd_train(
+    experiment: Annotated[
+        str,
+        typer.Argument(
+            help="Experiment name (folder under experiments/)",
+            autocompletion=_complete_experiments,
+        ),
+    ]
+) -> None:
+    """Validate config and run training for the given experiment."""
     args = CLIArgs(experiment=experiment)
     config_path, config_raw, defaults_raw = _resolve_and_load_configs(args)
     # Strict validation to satisfy tests that patch the raw loader
     try:
         _ = _load_train_config_from_raw(config_raw, defaults_raw)
     except Exception as e:
-        raise SystemExit(str(e))
+        typer.echo(str(e))
+        raise typer.Exit(code=2)
     # Then load the effective config (wrapper) for execution
     try:
         train_cfg_wrapped: TrainerConfig = load_train_config(config_path)
     except Exception as e:
-        raise SystemExit(str(e))
+        typer.echo(str(e))
+        raise typer.Exit(code=2)
     train_cfg_wrapped = _apply_train_overrides(train_cfg_wrapped)
     try:
         _run_train(args, train_cfg_wrapped, config_path)
     except KeyboardInterrupt:
-        print("\nTraining interrupted by user (Ctrl+C). Exiting gracefully.")
+        typer.echo("\nTraining interrupted by user (Ctrl+C). Exiting gracefully.")
 
 
 @app.command("sample")
-def cmd_sample(experiment: str) -> None:
+def cmd_sample(
+    experiment: Annotated[
+        str,
+        typer.Argument(
+            help="Experiment name (folder under experiments/)",
+            autocompletion=_complete_experiments,
+        ),
+    ]
+) -> None:
+    """Validate config and run sampling for the given experiment."""
     args = CLIArgs(experiment=experiment)
     config_path, config_raw, defaults_raw = _resolve_and_load_configs(args)
     # Strict validation and config build from raw to satisfy tests
@@ -866,33 +903,47 @@ def cmd_sample(experiment: str) -> None:
             config_raw, defaults_raw
         )
     except Exception as e:
-        raise SystemExit(str(e))
+        typer.echo(str(e))
+        raise typer.Exit(code=2)
     # Apply environment overrides if provided
     sample_cfg_obj = _apply_sample_overrides(sample_cfg_obj)
     _run_sample(args, sample_cfg_obj, config_path)
 
 
 @app.command("loop")
-def cmd_loop(experiment: str) -> None:
+def cmd_loop(
+    experiment: Annotated[
+        str,
+        typer.Argument(
+            help="Experiment name (folder under experiments/)",
+            autocompletion=_complete_experiments,
+        ),
+    ]
+) -> None:
+    """Run prepare → train → sample as a single loop for the experiment."""
     args = CLIArgs(experiment=experiment)
     config_path, config_raw, defaults_raw = _resolve_and_load_configs(args)
     try:
         loop_train_cfg: TrainerConfig = load_train_config(config_path)
     except Exception as e:
-        raise SystemExit(str(e))
+        typer.echo(str(e))
+        raise typer.Exit(code=2)
     try:
         loop_sample_cfg: SamplerConfig = load_sample_config(config_path)
     except Exception as e:
-        raise SystemExit(str(e))
+        typer.echo(str(e))
+        raise typer.Exit(code=2)
     # Also run strict validators so tests that patch them to raise are honored
     try:
         _ = _load_train_config_from_raw(config_raw, defaults_raw)
     except Exception as e:
-        raise SystemExit(str(e))
+        typer.echo(str(e))
+        raise typer.Exit(code=2)
     try:
         _ = _load_sample_config_from_raw(config_raw, defaults_raw)
     except Exception as e:
-        raise SystemExit(str(e))
+        typer.echo(str(e))
+        raise typer.Exit(code=2)
     loop_train_cfg = _apply_train_overrides(loop_train_cfg)
     loop_sample_cfg = _apply_sample_overrides(loop_sample_cfg)
     # Build a prepare cfg best-effort from raw (non-fatal)
@@ -905,7 +956,7 @@ def cmd_loop(experiment: str) -> None:
     try:
         _run_loop(args, loop_prepare_cfg, loop_train_cfg, loop_sample_cfg, config_path)
     except KeyboardInterrupt:
-        print("\nSampling interrupted by user (Ctrl+C). Exiting gracefully.")
+        typer.echo("\nSampling interrupted by user (Ctrl+C). Exiting gracefully.")
 
 
 # Keep a Python API-compatible entry point for tests
@@ -913,7 +964,11 @@ def cmd_loop(experiment: str) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     cmd = get_command(app)
-    cmd.main(args=argv, prog_name="ml_playground", standalone_mode=False)
+    try:
+        cmd.main(args=argv, prog_name="ml_playground", standalone_mode=False)
+    except click.exceptions.NoArgsIsHelpError:
+        # Help was shown (no args). Exit cleanly without traceback.
+        return
 
 
 if __name__ == "__main__":

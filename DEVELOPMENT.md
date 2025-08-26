@@ -91,3 +91,51 @@ uv run pytest -n auto -W error --strict-markers --strict-config -v
 - [ ] Tests pass with warnings as errors
 - [ ] No test-specific branches in production code
 - [ ] TOML-only configuration respected
+
+
+## Troubleshooting: Local master differs from origin/master
+If your local `master` is not identical to `origin/master`, it’s usually one of these cases:
+
+1) Your local branch is simply behind the remote (fast-forward possible)
+- Symptoms: `git rev-list --left-right --count master...origin/master` shows `0 <n>` behind, no ahead.
+- Fix:
+  ```bash
+  git fetch --all --prune
+  git merge --ff-only origin/master
+  ```
+
+2) Histories diverged due to a remote history rewrite (force-push)
+- Symptoms: `git rev-list --left-right --count master...origin/master` shows both ahead and behind counts (>0 >0). Commit IDs differ even if the tree content might be the same.
+- Safe procedure:
+  ```bash
+  # 0) Safety backup of your current local tip
+  git branch backup_before_reset_master
+
+  # 1) Make sure you have the latest remote refs
+  git fetch --all --prune
+
+  # 2) Ensure local master tracks origin/master (optional but recommended)
+  git branch --set-upstream-to=origin/master master
+
+  # 3) If a fast-forward is possible, use it; otherwise, hard reset to align with remote
+  git merge --ff-only origin/master || git reset --hard origin/master
+  ```
+  Notes:
+  - If you had local commits you want to keep, they are still available on `backup_before_reset_master`. You can cherry-pick them onto the updated `master`.
+  - Prefer `--force-with-lease` when you need to publish rebased branches: it protects others’ work while allowing history rewrites.
+
+Verification
+```bash
+# Both should be identical and show 0 0
+git rev-parse master
+git rev-parse origin/master
+git rev-list --left-right --count master...origin/master
+```
+
+Recommended Git settings (already in this doc) help keep a linear history and avoid accidental merge commits:
+```bash
+git config --global pull.rebase true
+git config --global rebase.autostash true
+git config --global merge.ff only
+git config --global branch.autosetuprebase always
+```
