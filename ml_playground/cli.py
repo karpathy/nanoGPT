@@ -24,14 +24,14 @@ from ml_playground.prepare import PreparerConfig, make_preparer
 from ml_playground.sampler import sample
 from ml_playground.trainer import train
 
+
 # --- Typer helpers ---------------------------------------------------------
 def _experiments_root() -> Path:
     """Return the root folder that contains experiment directories."""
     return Path(__file__).resolve().parent / "experiments"
 
-def _complete_experiments(
-    ctx: typer.Context, param: typer.CallbackParam, incomplete: str
-) -> list[str]:
+
+def _complete_experiments(ctx: typer.Context, incomplete: str) -> list[str]:
     """Auto-complete experiment names based on directories with a config.toml."""
     try:
         root = _experiments_root()
@@ -814,8 +814,11 @@ def _run_sample(
     sample(sample_cfg)
 
 
- # Typer-based CLI
-app = typer.Typer(no_args_is_help=True, help="ML Playground CLI: prepare data, train models, and sample outputs.")
+# Typer-based CLI
+app = typer.Typer(
+    no_args_is_help=True,
+    help="ML Playground CLI: prepare data, train models, and sample outputs.",
+)
 
 
 @app.command("prepare")
@@ -826,7 +829,7 @@ def cmd_prepare(
             help="Experiment name (folder under experiments/)",
             autocompletion=_complete_experiments,
         ),
-    ]
+    ],
 ) -> None:
     """Run the experiment-specific prepare step (or generic preparer)."""
     args = CLIArgs(experiment=experiment)
@@ -860,7 +863,7 @@ def cmd_train(
             help="Experiment name (folder under experiments/)",
             autocompletion=_complete_experiments,
         ),
-    ]
+    ],
 ) -> None:
     """Validate config and run training for the given experiment."""
     args = CLIArgs(experiment=experiment)
@@ -892,7 +895,7 @@ def cmd_sample(
             help="Experiment name (folder under experiments/)",
             autocompletion=_complete_experiments,
         ),
-    ]
+    ],
 ) -> None:
     """Validate config and run sampling for the given experiment."""
     args = CLIArgs(experiment=experiment)
@@ -918,7 +921,7 @@ def cmd_loop(
             help="Experiment name (folder under experiments/)",
             autocompletion=_complete_experiments,
         ),
-    ]
+    ],
 ) -> None:
     """Run prepare → train → sample as a single loop for the experiment."""
     args = CLIArgs(experiment=experiment)
@@ -969,6 +972,46 @@ def main(argv: list[str] | None = None) -> None:
     except click.exceptions.NoArgsIsHelpError:
         # Help was shown (no args). Exit cleanly without traceback.
         return
+    except click.exceptions.MissingParameter as e:
+        # Special-case the required 'experiment' parameter to show helpful guidance
+        pname = getattr(getattr(e, "param", None), "name", None)
+        if pname == "experiment":
+            try:
+                experiments = _complete_experiments(cast(typer.Context, None), "")
+            except Exception:
+                experiments = []
+            if experiments:
+                exp_list = "\n  - " + "\n  - ".join(experiments)
+                typer.echo(
+                    "Missing required argument: 'experiment'. Available experiments:"
+                    f"{exp_list}\nUsage: ml_playground [prepare|train|sample|loop] <experiment>"
+                )
+            else:
+                typer.echo(
+                    "Missing required argument: 'experiment'. No experiments found.\n"
+                    "Ensure ml_playground/experiments contains experiment folders with a config.toml.\n"
+                    "Usage: ml_playground [prepare|train|sample|loop] <experiment>"
+                )
+        else:
+            typer.echo(str(e))
+        raise SystemExit(2)
+    except click.ClickException as e:
+        # Show concise message and exit with the exception's exit code
+        try:
+            msg = e.format_message()  # type: ignore[attr-defined]
+        except Exception:
+            msg = str(e)
+        typer.echo(msg)
+        raise SystemExit(getattr(e, "exit_code", 1))
+    except click.exceptions.Exit as e:
+        # Silence tracebacks for click's Exit; exit with its code.
+        raise SystemExit(getattr(e, "exit_code", 0))
+    except KeyboardInterrupt:
+        typer.echo("\nOperation interrupted by user (Ctrl+C). Exiting gracefully.")
+    except Exception as e:
+        # Fallback: never show a traceback to the user
+        typer.echo(f"Error: {e}")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
