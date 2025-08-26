@@ -5,7 +5,7 @@ import os
 import json
 import hashlib
 from pathlib import Path
-from typing import Dict, Tuple, List, cast, Protocol
+from typing import cast, Protocol
 import pickle
 import shutil
 import torch
@@ -17,7 +17,7 @@ from ml_playground.data import SimpleBatches
 
 
 class Trainer(Protocol):
-    def __call__(self, cfg: TrainerConfig) -> Tuple[int, float]: ...
+    def __call__(self, cfg: TrainerConfig) -> tuple[int, float]: ...
 
 
 # Add TensorBoard (best-effort)
@@ -82,8 +82,8 @@ def _write_sidecar(
     eval_metric_on_ema: float | None,
     device: str,
     dtype: str,
-    dataset_meta: Dict[str, int] | None = None,
-    progress: Dict[str, float | int] | None = None,
+    dataset_meta: dict[str, int] | None = None,
+    progress: dict[str, float | int] | None = None,
 ) -> None:
     created_at = time.time()
     sha256 = _sha256_of_file(pt_path)
@@ -147,9 +147,9 @@ class _EMA:
 @torch.no_grad()
 def _estimate_loss(
     model: GPT, batches: SimpleBatches, eval_iters: int, ctx
-) -> Dict[str, float]:
+) -> dict[str, float]:
     model.eval()
-    losses: Dict[str, float] = {}
+    losses: dict[str, float] = {}
     for split in ("train", "val"):
         acc = 0.0
         for _ in range(eval_iters):
@@ -193,7 +193,7 @@ def _load_meta_vocab_size(meta_path: Path) -> int | None:
     return None
 
 
-def train(exp: TrainerConfig) -> Tuple[int, float]:
+def train(exp: TrainerConfig) -> tuple[int, float]:
     rt = exp.runtime
     model_cfg = exp.model
 
@@ -326,7 +326,7 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
 
     # Initialize EMA/retention/smoothing state
     ema = _EMA(raw_model, rt.ema_decay, device_type) if rt.ema_decay > 0.0 else None
-    best_ckpts: List[_CkptInfo] = []
+    best_ckpts: list[_CkptInfo] = []
     last_time_ckpt = time.time()
 
     if rt.ckpt_greater_is_better:
