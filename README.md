@@ -7,6 +7,7 @@ Policy
 - UV is mandatory for all workflows (venv, dependency sync, running tools). Do not use pip, requirements.txt, or uvx.
 - Never set PYTHONPATH. Running inside the project, venv ensures ml_playground is importable.
 - Quality tooling is mandatory before commit (ruff, mypy, pyright), and tests must pass.
+- Linear history for own work: rebase your branches and avoid merge commits; fast-forward only. See DEVELOPMENT.md → “Git Workflow: Linear history”.
 
 Prerequisites
 - Install UV: https://docs.astral.sh/uv/

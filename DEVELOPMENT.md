@@ -53,6 +53,37 @@ uv run pytest -n auto -W error --strict-markers --strict-config -v
 - Small, focused commits with conventional messages.
 - Run quality gates locally before committing.
 
+## Git Workflow: Linear history (Rebase, no merge commits for own branches)
+- Do not use `git merge` to integrate upstream into your own feature branches. Always rebase on top of the latest upstream branch (e.g., `master`).
+- Only fast-forward updates to protected branches. If a merge would create a merge commit, rebase first and then fast-forward.
+- Recommended Git configuration:
+  ```bash
+  git config --global pull.rebase true
+  git config --global rebase.autostash true
+  git config --global merge.ff only
+  git config --global branch.autosetuprebase always
+  ```
+- Typical feature flow:
+  ```bash
+  # start a feature
+  git checkout -b feat/my-change
+  # ...work, commit
+
+  # keep up to date without merge commits
+  git fetch origin
+  git rebase origin/master  # resolve conflicts if any
+
+  # run quality gates before publishing
+  uv run ruff check --fix . && uv run ruff format .
+  uv run pyright && uv run mypy ml_playground
+  uv run pytest -n auto -W error --strict-markers --strict-config -v
+
+  # publish rebased branch safely
+  git push --force-with-lease -u origin HEAD
+  ```
+- Integrating multiple feature branches: rebase them onto each other in the intended order, then fast-forward the target branch to the final tip. Avoid merge commits.
+- Prohibited: Merge commits when integrating your own branches (use rebase+ff only). For third‑party PRs, maintainers may choose an appropriate strategy but should prefer linear fast‑forward where possible.
+
 ## CI/Review Checklist
 - [ ] Lint/format clean
 - [ ] pyright clean
