@@ -7,19 +7,19 @@
 # - Checkpoint selection uses ckpt_metric with optional smoothing and EMA if configured.
 
 [train.model]
-# modest model for local CPU char-level training
+# mid-size model tuned for Apple Silicon (M2 Pro) with fp16 on MPS
 
 # Number of Transformer layers (blocks); increases capacity and compute/memory cost.
-n_layer = 1
+n_layer = 8
 # Number of attention heads per layer; must divide n_embd; more heads can help stability at added cost.
-n_head = 2
+n_head = 8
 # Embedding/hidden size; larger increases model capacity and compute.
-n_embd = 64
+n_embd = 512
 # Maximum context length the model is built for (positional embeddings); must be >= [train.data].block_size.
 # Increasing this raises memory/time roughly ~ O(block_size^2) per layer due to attention.
-block_size = 64
+block_size = 256
 # Dropout rate for regularization during training; set >0 to regularize, 0.0 for deterministic/fast runs.
-dropout = 0.0
+dropout = 0.1
 # Whether to include bias terms in linear/LayerNorm layers; false is common for GPT-style models.
 bias = false
 
@@ -34,18 +34,18 @@ val_bin = "val.bin"
 meta_pkl = "meta.pkl"
 # Character-level n-gram size used during dataset preparation (1 = single/chars, 3 = trigrams, etc.)
 ngram_size = 3
-# Micro-batch size per optimization step (per device); keep minimal for tests
-batch_size = 4
+# Micro-batch size per optimization step (per device); tuned for MPS memory
+batch_size = 20
 # Sequence length; ensure <= [train.model].block_size
-block_size = 64
-# Number of gradient accumulation steps (keep small)
+block_size = 256
+# Number of gradient accumulation steps to increase effective batch without extra memory
 grad_accum_steps = 1
 # Sampling policy: deterministic sequential coverage for char dataset
 sampler = "sequential"
 
 [train.optim]
 # Base learning rate used by the optimizer; interacts with schedule below if decay_lr = true.
-learning_rate = 0.0008
+learning_rate = 0.0003
 # L2-style weight decay for regularization; typically not applied to LayerNorm/bias parameters in AdamW-style setups.
 weight_decay = 0.1
 # Adam/AdamW beta1 (momentum) parameter; higher retains more past gradients.
@@ -59,34 +59,33 @@ grad_clip = 1.0
 # Whether to apply a learning-rate schedule (typically warmup + decay).
 decay_lr = true
 # Number of warmup iterations from 0 -> learning_rate; ignored if decay_lr = false.
-warmup_iters = 100
-# Number of iterations over which to decay from learning_rate down toward min_lr; ignored if decay_lr = false.
-# Choose with awareness of [train.runtime].max_iters; if lr_decay_iters << max_iters, LR may stay at min_lr for long.
-lr_decay_iters = 200
+warmup_iters = 2000
+# Number of iterations over which to decay from learning_rate down toward min_lr; align with max_iters for cosine/poly schedules.
+lr_decay_iters = 100_000
 # Lower bound (floor) for the learning rate during decay; helps avoid stalling late in training.
-min_lr = 0.00008
+min_lr = 0.00003
 
 [train.runtime]
 # Output directory for logs, checkpoints, and metadata for this training run.
 out_dir = "ml_playground/experiments/bundestag_char/out"
 # Total number of optimizer iterations to run (across all accumulation steps).
-max_iters = 2
+max_iters = 100_000
 # How often (in iterations) to run evaluation/checkpoint logic.
-eval_interval = 1
+eval_interval = 1_000
 # Number of evaluation batches to average per evaluation; higher reduces noise but takes longer.
-eval_iters = 1
+eval_iters = 100
 # How often (in iterations) to log training metrics.
-log_interval = 1
+log_interval = 20
 # If true, only runs evaluation and exits (no training updates); useful for validating or benchmarking.
 eval_only = false
 # If true, save a checkpoint on every eval (last and/or best/top-k as configured); increases disk usage.
-always_save_checkpoint = true
+always_save_checkpoint = false
 # Random seed for reproducibility (data shuffling, init, sampling).
 seed = 1337
 # Compute device backend: "cuda" (NVIDIA), "mps" (Apple Silicon), or "cpu".
-device = "cpu"
+device = "mps"
 # Numeric precision for tensors and parameters; affects speed/memory vs. stability/accuracy.
-dtype = "float32"
+dtype = "bfloat16"
 # If true, compile/optimize the model/graph (when supported); speeds up but increases startup time.
 compile = false
 
@@ -96,7 +95,7 @@ ckpt_last_filename = "ckpt_last.pt"
 # Filename pattern/name for the best-scoring checkpoint according to ckpt_metric.
 ckpt_best_filename = "ckpt_best.pt"
 # Keep the top-K best checkpoints (by ckpt_metric) in addition to "last"; 0 disables top-K retention.
-ckpt_top_k = 0
+ckpt_top_k = 3
 # Metric key to select "best" (e.g., "val_loss"); must match what evaluation reports.
 ckpt_metric = "val_loss"
 # Whether higher metric values are better (true) or lower are better (false); e.g., false for "val_loss".
@@ -110,17 +109,17 @@ ckpt_write_metadata = true
 ckpt_time_interval_minutes = 0
 # Exponential smoothing coefficient for the metric used to decide "best"; 0.0 disables smoothing.
 # Smoothing can reduce checkpoint churn and interacts with early_stop_patience.
-best_smoothing_alpha = 0.0
+best_smoothing_alpha = 0.9
 # Early stopping patience in number of evaluations without improvement; 0 disables early stopping.
-early_stop_patience = 0
+early_stop_patience = 10
 # Exponential Moving Average (EMA) decay for model weights; 0.0 disables.
 # If >0, evaluations/checkpoints may use EMA weights for better validation stability.
-ema_decay = 0.0
+ema_decay = 0.999
 
 [sample.runtime]
 # Output directory to read checkpoints from (and optionally write samples/logs to).
 # Typically should match the training run's out_dir you want to sample from.
-out_dir = "./out"
+out_dir = "ml_playground/experiments/bundestag_char/out"
 # Iteration controls are usually inert for pure sampling, but kept for API symmetry.
 max_iters = 0
 # Evaluation cadence placeholders (often unused in pure sampling flows).
@@ -136,9 +135,9 @@ always_save_checkpoint = false
 # Seed to make generation reproducible for a fixed prompt and settings.
 seed = 1337
 # Device to run generation on; "cpu" is fine for small char-level models, use "cuda"/"mps" if available.
-device = "cpu"
+device = "mps"
 # Numeric precision during sampling; can be lower precision if supported to speed up generation.
-dtype = "float32"
+dtype = "float16"
 # Whether to compile/optimize the model for inference (if supported); usually false for quick runs.
 compile = false
 
@@ -150,7 +149,7 @@ num_samples = 2
 # Maximum number of new tokens to generate after the prompt.
 max_new_tokens = 1024
 # Softens or sharpens the probability distribution before sampling; higher = more random, 0 = greedy/argmax.
-temperature = 0.9
+temperature = 0.8
 # Sample only from the top-K most likely tokens at each step; lower K increases coherence, higher K increases diversity.
 # Interplay: lower temperature + small top_k -> focused, deterministic-like; higher temperature + large top_k -> diverse/creative.
-top_k = 200
+top_k = 100
