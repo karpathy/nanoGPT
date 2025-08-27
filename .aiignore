@@ -9,3 +9,4 @@
 *.pkl
 *.pt
 *.pyc
+**/input.txt
