@@ -5,3 +5,7 @@
 # Be aware that the files you included in .aiignore can still be accessed by Junie in two cases:
 # - If Brave Mode is turned on.
 # - If a command has been added to the Allowlist — Junie will not ask for confirmation, even if it accesses - files and folders listed in .aiignore.
+*.bin
+*.pkl
+*.pt
+*.pyc
