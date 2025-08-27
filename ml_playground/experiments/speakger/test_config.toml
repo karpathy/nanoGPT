@@ -1,0 +1,16 @@
+# Minimal test configuration for SpeakGer experiment to keep CLI tests fast.
+# Focus on [sample] only to satisfy strict sample loader in CLI tests.
+
+[sample.runtime]
+out_dir = "./out/test_run"
+device = "cpu"
+dtype = "float32"
+compile = false
+seed = 42
+
+[sample.sample]
+start = ""
+num_samples = 1
+max_new_tokens = 4
+temperature = 0.8
+top_k = 0

@@ -124,7 +124,7 @@ early_stop_patience = 3
 # Exponential moving average decay for model parameters (0 disables EMA).
 ema_decay = 0.0
 # If true, save a fully merged model when achieving best validation (in addition to adapters).
-save_merged_on_best = true
+save_merged_on_best = false
 # Keep only the latest N iter_* checkpoints (0 disables pruning).
 keep_last_n = 2
 
@@ -139,6 +139,8 @@ dtype = "float16"
 compile = false
 # Random seed applied before sampling to make runs reproducible (when do_sample=true).
 seed = 1337
+# Require LoRA adapters during sampling (error if missing)
+require_adapters = true
 
 [sample.sample]
 # Prompt text to start generation; can also be "FILE:/path/to/prompt.txt".

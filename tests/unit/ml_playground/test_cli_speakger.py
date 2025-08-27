@@ -18,7 +18,7 @@ def test_sample_routes_to_speakger_integration(
         called["count"] += 1
 
     monkeypatch.setattr(
-        "ml_playground.experiments.speakger.gemma_finetuning_mps.sample_from_toml",
+        "ml_playground.experiments.speakger.sampler.sample_from_toml",
         _fake_sample_from_toml,
         raising=False,
     )
