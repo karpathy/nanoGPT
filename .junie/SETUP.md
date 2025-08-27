@@ -31,25 +31,30 @@ uv run python -m ml_playground.cli prepare bundestag_char
 
 ### Training
 ```bash
-uv run python -m ml_playground.cli train ml_playground/configs/shakespeare_cpu.toml
-uv run python -m ml_playground.cli train ml_playground/configs/bundestag_char_cpu.toml
+uv run python -m ml_playground.cli train shakespeare --exp-config ml_playground/configs/shakespeare_cpu.toml
+uv run python -m ml_playground.cli train bundestag_char --exp-config ml_playground/configs/bundestag_char_cpu.toml
 ```
 
 ### Sampling
 ```bash
-uv run python -m ml_playground.cli sample ml_playground/configs/shakespeare_cpu.toml
-uv run python -m ml_playground.cli sample ml_playground/configs/bundestag_char_cpu.toml
+uv run python -m ml_playground.cli sample shakespeare --exp-config ml_playground/configs/shakespeare_cpu.toml
+uv run python -m ml_playground.cli sample bundestag_char --exp-config ml_playground/configs/bundestag_char_cpu.toml
 ```
 
 ### End-to-End Loop
 ```bash
-uv run python -m ml_playground.cli loop bundestag_char ml_playground/configs/bundestag_char_cpu.toml
+uv run python -m ml_playground.cli loop bundestag_char --exp-config ml_playground/configs/bundestag_char_cpu.toml
 ```
 
 ## Configuration System
 
 - All configuration via TOML files mapped to dataclasses in `ml_playground/config.py`
-- No CLI parameter overrides - TOML is the single source of truth
+- No ad-hoc CLI parameter overrides — TOML remains the source of truth.
+- Allowed exceptions (as implemented):
+  - Global CLI option `--exp-config PATH` selects an alternative experiment TOML file (replaces the experiment’s `config.toml`). The global `experiments/default_config.toml` is still merged first under the experiment config.
+  - Environment JSON overrides are supported, deep-merged, and strictly re-validated; invalid overrides are ignored to avoid breaking flows:
+    - `ML_PLAYGROUND_TRAIN_OVERRIDES`
+    - `ML_PLAYGROUND_SAMPLE_OVERRIDES`
 - Paths automatically converted to `pathlib.Path` objects
 - Device defaults to CPU-first; MPS/CUDA supported when explicitly configured
 

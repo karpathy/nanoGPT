@@ -256,7 +256,12 @@ Ruff automatically applies modern Python best practices:
 - **Strictly typed code**: Use explicit types and `pathlib.Path` for filesystem paths
 - **Pure functions**: Favor pure functions for data preparation
 - **Explicit device selection**: Make device selection explicit in code
-- **TOML-only configuration**: Keep CLI free of config mutation logic
+- **Configuration and overrides**:
+  - TOML is the primary source of truth; avoid ad-hoc CLI flags that mutate config.
+  - Allowed exceptions (documented and tested):
+    - Global CLI option `--exp-config PATH` to choose a specific experiment TOML; `experiments/default_config.toml` is merged first.
+    - Environment JSON overrides: `ML_PLAYGROUND_TRAIN_OVERRIDES` and `ML_PLAYGROUND_SAMPLE_OVERRIDES`.
+      These are deep-merged and then strictly re-validated; invalid env overrides are ignored.
 
 ## Tool Configuration Policy
 

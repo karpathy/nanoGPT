@@ -120,3 +120,28 @@ rm -rf .venv
 uv venv --clear
 uv sync --all-groups
 ```
+
+### Overrides not taking effect
+
+**Symptoms**: Changes provided via environment variables aren’t visible at runtime, or validation errors occur.
+
+**Checks**:
+- Ensure you’re setting JSON in `ML_PLAYGROUND_TRAIN_OVERRIDES` or `ML_PLAYGROUND_SAMPLE_OVERRIDES`.
+  - Example (POSIX):
+    ```bash
+    export ML_PLAYGROUND_TRAIN_OVERRIDES='{"runtime": {"seed": 123}}'
+    ```
+- Keys must match Pydantic model fields (e.g., `train.runtime.seed`, `sample.runtime.device`). Unknown/invalid keys will be ignored during re-validation.
+- Overrides are deep-merged into the effective config and strictly re-validated. If validation fails, the original config is kept to avoid breaking flows.
+
+### Using a custom experiment config (--exp-config)
+
+Provide `--exp-config PATH` to point the CLI at a specific experiment TOML file.
+- `experiments/default_config.toml` is still loaded first and merged under the experiment config.
+- Precedence: default_config.toml → experiment config (or `--exp-config`) → environment JSON overrides (if valid).
+
+Examples:
+```bash
+uv run python -m ml_playground.cli train shakespeare --exp-config ml_playground/configs/shakespeare_cpu.toml
+uv run python -m ml_playground.cli sample bundestag_char --exp-config ml_playground/configs/bundestag_char_cpu.toml
+```

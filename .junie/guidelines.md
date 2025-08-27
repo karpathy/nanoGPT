@@ -54,7 +54,12 @@ This guideline system is organized into focused documents for easy navigation:
 
 **Granular Commits**: Make small, focused commits with conventional commit messages. Run quality gates before each commit, not just before PR.
 
-**TOML Configuration**: All configuration via TOML files mapped to dataclasses. No CLI parameter overrides.
+**TOML Configuration**: TOML is the primary source of truth, mapped to dataclasses. No ad‑hoc CLI parameter overrides.
+- Allowed exceptions (as implemented):
+  - Global CLI option `--exp-config PATH` selects an alternative experiment TOML file (replaces the experiment’s `config.toml`). The global `experiments/default_config.toml` is still merged first under the experiment config.
+  - Environment JSON overrides are supported, deep-merged, and strictly re-validated; invalid overrides are ignored to avoid breaking flows:
+    - `ML_PLAYGROUND_TRAIN_OVERRIDES`
+    - `ML_PLAYGROUND_SAMPLE_OVERRIDES`
 
 **Strict Typing**: Code is strictly typed with explicit types and pathlib.Path for filesystem paths.
 
@@ -79,14 +84,14 @@ uv run pytest -n auto -W error --strict-markers --strict-config -v
 uv run python -m ml_playground.cli prepare shakespeare
 uv run python -m ml_playground.cli prepare bundestag_char
 
-# Train from TOML
-uv run python -m ml_playground.cli train ml_playground/configs/shakespeare_cpu.toml
+# Train (select config with --exp-config if not using the experiment's default)
+uv run python -m ml_playground.cli train shakespeare --exp-config ml_playground/configs/shakespeare_cpu.toml
 
 # Sample from trained model
-uv run python -m ml_playground.cli sample ml_playground/configs/shakespeare_cpu.toml
+uv run python -m ml_playground.cli sample shakespeare --exp-config ml_playground/configs/shakespeare_cpu.toml
 
 # End-to-end pipeline
-uv run python -m ml_playground.cli loop bundestag_char ml_playground/configs/bundestag_char_cpu.toml
+uv run python -m ml_playground.cli loop bundestag_char --exp-config ml_playground/configs/bundestag_char_cpu.toml
 ```
 
 ## Need Help?
