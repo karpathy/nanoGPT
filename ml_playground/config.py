@@ -32,6 +32,7 @@ class TrainerConfig(_FrozenStrictModel):
     schedule: LRSchedule
     runtime: RuntimeConfig
     extras: dict[str, Any] = Field(default_factory=dict)
+    logger: Any | None = Field(default=None)
 
 
 class SamplerConfig(_FrozenStrictModel):
@@ -42,6 +43,7 @@ class SamplerConfig(_FrozenStrictModel):
     runtime: RuntimeConfig
     sample: SampleConfig
     extras: dict[str, Any] = Field(default_factory=dict)
+    logger: Any | None = Field(default=None)
 
 
 class OptimConfig(_FrozenStrictModel):

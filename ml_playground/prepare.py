@@ -22,6 +22,7 @@ class PreparerConfig:
     add_structure_tokens: bool | None = None
     doc_separator: str | None = None
     extras: dict[str, Any] = field(default_factory=dict)
+    logger: Any | None = None
 
 
 class Preparer(Protocol):
@@ -88,13 +89,29 @@ class _PreparerInstance:
                 if isinstance(existing_meta, dict) and "meta_version" in existing_meta:
                     return
                 else:
-                    print(
+                    logger = getattr(self.cfg, "logger", None)
+                    msg = (
                         f"[prepare] Detected invalid meta.pkl at {meta_path}; regenerating dataset artifacts."
                     )
+                    if logger is not None:
+                        try:
+                            logger.warning(msg)
+                        except Exception:
+                            pass
+                    else:
+                        print(msg)
             except Exception:
-                print(
+                logger = getattr(self.cfg, "logger", None)
+                msg = (
                     f"[prepare] Could not read existing meta.pkl at {meta_path}; regenerating dataset artifacts."
                 )
+                if logger is not None:
+                    try:
+                        logger.warning(msg)
+                    except Exception:
+                        pass
+                else:
+                    print(msg)
 
         # Write to temp then rename (atomic on POSIX)
         tmp_train = ds_dir / ".train.bin.tmp"
