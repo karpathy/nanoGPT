@@ -253,6 +253,8 @@ class GPT(nn.Module):
 
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
         # idx is (B, T) array of indices in the current context
+        if temperature < 0.0:
+            raise ValueError("temperature must be >= 0.0")
         for _ in range(max_new_tokens):
             idx_cond = (
                 idx
@@ -260,11 +262,16 @@ class GPT(nn.Module):
                 else idx[:, -self.config.block_size :]
             )
             logits, _ = self(idx_cond)
-            logits = logits[:, -1, :] / max(temperature, 1e-8)
-            if top_k is not None:
-                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                logits[logits < v[:, [-1]]] = -float("Inf")
-            probs = F.softmax(logits, dim=-1)
-            idx_next = torch.multinomial(probs, num_samples=1)
+            logits = logits[:, -1, :]
+            if temperature == 0.0:
+                # Deterministic: take argmax
+                idx_next = torch.argmax(logits, dim=-1, keepdim=True)
+            else:
+                logits = logits / temperature
+                if top_k is not None:
+                    v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                    logits[logits < v[:, [-1]]] = -float("Inf")
+                probs = F.softmax(logits, dim=-1)
+                idx_next = torch.multinomial(probs, num_samples=1)
             idx = torch.cat((idx, idx_next), dim=1)
         return idx
