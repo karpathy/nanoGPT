@@ -28,6 +28,7 @@ dependencies = [
   "pydantic>=2",
   "notebook>=7.4.5",
   "typer>=0.12",
+  "sentencepiece>=0.2",
 ]
 
 [project.optional-dependencies]
