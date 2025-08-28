@@ -90,9 +90,7 @@ class _PreparerInstance:
                     return
                 else:
                     logger = getattr(self.cfg, "logger", None)
-                    msg = (
-                        f"[prepare] Detected invalid meta.pkl at {meta_path}; regenerating dataset artifacts."
-                    )
+                    msg = f"[prepare] Detected invalid meta.pkl at {meta_path}; regenerating dataset artifacts."
                     if logger is not None:
                         try:
                             logger.warning(msg)
@@ -102,9 +100,7 @@ class _PreparerInstance:
                         print(msg)
             except Exception:
                 logger = getattr(self.cfg, "logger", None)
-                msg = (
-                    f"[prepare] Could not read existing meta.pkl at {meta_path}; regenerating dataset artifacts."
-                )
+                msg = f"[prepare] Could not read existing meta.pkl at {meta_path}; regenerating dataset artifacts."
                 if logger is not None:
                     try:
                         logger.warning(msg)

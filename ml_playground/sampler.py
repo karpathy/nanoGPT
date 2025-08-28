@@ -237,7 +237,5 @@ def sample(exp: SamplerConfig) -> None:
                     top_k=exp.sample.top_k,
                 )
                 print(start)
-                print(
-                    "---------------"
-                )
+                print("---------------")
                 print(decode(y[0].tolist()))
