@@ -17,15 +17,18 @@ try:  # pragma: no cover - optional heavy deps
     from transformers import AutoTokenizer as AutoTokenizer  # type: ignore
     from transformers import AutoModelForCausalLM as AutoModelForCausalLM  # type: ignore
 except Exception:  # pragma: no cover
+
     class AutoTokenizer:  # type: ignore[no-redef]
         ...
 
     class AutoModelForCausalLM:  # type: ignore[no-redef]
         ...
 
+
 try:  # pragma: no cover - optional peft
     from peft import PeftModel as PeftModel  # type: ignore
 except Exception:  # pragma: no cover
+
     class PeftModel:  # type: ignore[no-redef]
         ...
 
@@ -41,9 +44,21 @@ def _load_best_stats(out_dir: Path) -> tuple[float | None, int | None]:
         best_path = out_dir / "state" / "best.pt"
         if best_path.exists():
             obj: dict[str, Any] = torch.load(best_path, map_location="cpu")  # type: ignore[no-redef]
-            return float(obj.get("best_val_loss")) if "best_val_loss" in obj else None, int(
-                obj.get("iter_num", 0)
-            )
+            raw_best = obj.get("best_val_loss", None)
+            best_val: float | None
+            if isinstance(raw_best, (int, float, str)):
+                try:
+                    best_val = float(raw_best)
+                except Exception:
+                    best_val = None
+            else:
+                best_val = None
+            raw_iter = obj.get("iter_num", 0)
+            try:
+                iter_num: int = int(raw_iter)  # type: ignore[arg-type]
+            except Exception:
+                iter_num = 0
+            return best_val, iter_num
     except Exception:
         pass
     return None, None
@@ -51,7 +66,7 @@ def _load_best_stats(out_dir: Path) -> tuple[float | None, int | None]:
 
 def _analyze_text(text: str) -> dict[str, Any]:
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-    header = {"speaker": None, "topic": None, "year": None}
+    header: dict[str, str | None] = {"speaker": None, "topic": None, "year": None}
     # Simple header extraction
     for ln in lines[:5]:
         if ln.lower().startswith("sprecher:"):
@@ -105,21 +120,28 @@ def sample_from_toml(config_path: Path) -> None:
     # Load model + tokenizer per minimal API, allowing tests to monkeypatch
     tok = AutoTokenizer.from_pretrained(out_dir / "tokenizer", use_fast=True)  # type: ignore[attr-defined]
     base = AutoModelForCausalLM.from_pretrained(model_name)  # type: ignore[attr-defined]
+    model: Any
     try:
         model = PeftModel.from_pretrained(base, out_dir / "adapters" / "best")  # type: ignore[attr-defined]
     except Exception:
-        model = base
+        model = base  # type: ignore[assignment]
 
     prompt = _get(raw, "sample.sample.start", "")
     enc = tok(prompt, return_tensors="pt")
     input_ids = enc.get("input_ids")
     attn = enc.get("attention_mask")
     out = model.generate(input_ids=input_ids, attention_mask=attn)
-    text = tok.decode(out[0], skip_special_tokens=True, clean_up_tokenization_spaces=False)
+    text = tok.decode(
+        out[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
+    )
 
     # Compose filenames depending on whether best.pt exists
     best_val_loss, iter_num = _load_best_stats(out_dir)
-    tag = "best" if best_val_loss is not None else datetime.now().strftime("%Y%m%d_%H%M%S")
+    tag = (
+        "best"
+        if best_val_loss is not None
+        else datetime.now().strftime("%Y%m%d_%H%M%S")
+    )
     base_name = f"sample_{tag}"
 
     # Write .txt
@@ -135,7 +157,9 @@ def sample_from_toml(config_path: Path) -> None:
         "analysis": analysis,
     }
     json_path = samples_dir / f"{base_name}.json"
-    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    json_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
     print("[speakger] Sample analysis:")
     print("== Lines ==", len(analysis["lines"]))
@@ -148,5 +172,7 @@ class SpeakGerSampler(_SamplerProto):
             created_files=(),
             updated_files=(),
             skipped_files=(),
-            messages=(f"[speakger] sampled using {_config_path()} with in-module sampler",),
+            messages=(
+                f"[speakger] sampled using {_config_path()} with in-module sampler",
+            ),
         )
