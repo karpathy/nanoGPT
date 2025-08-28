@@ -300,6 +300,10 @@ def load_toml(path: Path) -> "AppConfig":
     This helper is used by experiment preparers to optionally read
     experiment-scoped configuration values. It performs strict typing
     via Pydantic models and raises on invalid structure.
+
+    NOTE: AppConfig is strict (forbids extras). To allow experiment-specific
+    top-level sections (e.g., [export]), we filter the loaded TOML to only
+    include keys that AppConfig knows about ("train" and "sample").
     """
     if not isinstance(path, Path):
         path = Path(path)
@@ -309,7 +313,12 @@ def load_toml(path: Path) -> "AppConfig":
         raw = tomllib.load(f)
     if not isinstance(raw, dict):
         raise ValueError(f"Config at {path} must be a TOML table/object")
-    return AppConfig.model_validate(raw)
+    filtered: dict[str, Any] = {}
+    if "train" in raw:
+        filtered["train"] = raw["train"]
+    if "sample" in raw:
+        filtered["sample"] = raw["sample"]
+    return AppConfig.model_validate(filtered)
 
 
 # Backward-compatible aliases for newer API names used by some modules
