@@ -21,14 +21,6 @@ dropout = 0.0
 bias = false
 
 [train.data]
-# Folder containing the preprocessed dataset files referenced below. Used as-is.
-dataset_dir = "./datasets"
-# Training data file name (relative to dataset_dir).
-train_bin = "train.bin"
-# Validation data file name (relative to dataset_dir).
-val_bin = "val.bin"
-# Metadata (e.g., vocab/encoding) file name (relative to dataset_dir).
-meta_pkl = "meta.pkl"
 # Micro-batch size per optimization step; memory ~ batch_size * block_size^2.
 batch_size = 8
 # Sequence length of each training sample; must be <= [train.model].block_size.
@@ -61,8 +53,6 @@ lr_decay_iters = 2000
 min_lr = 0.00006
 
 [train.runtime]
-# Output directory for logs, checkpoints, and artifacts. Used as-is.
-out_dir = "./out"
 # Total number of optimizer iterations to run (across all accumulation steps).
 max_iters = 10000
 # How often (in iterations) to run evaluation/checkpoint logic.

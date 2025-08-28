@@ -10,14 +10,14 @@
 # mid-size model tuned for Apple Silicon (M2 Pro) with fp16 on MPS
 
 # Number of Transformer layers (blocks); increases capacity and compute/memory cost.
-n_layer = 8
+n_layer = 4
 # Number of attention heads per layer; must divide n_embd; more heads can help stability at added cost.
-n_head = 8
+n_head = 6
 # Embedding/hidden size; larger increases model capacity and compute.
-n_embd = 512
+n_embd = 384
 # Maximum context length the model is built for (positional embeddings); must be >= [train.data].block_size.
 # Increasing this raises memory/time roughly ~ O(block_size^2) per layer due to attention.
-block_size = 256
+block_size = 192
 # Dropout rate for regularization during training; set >0 to regularize, 0.0 for deterministic/fast runs.
 dropout = 0.1
 # Whether to include bias terms in linear/LayerNorm layers; false is common for GPT-style models.
@@ -26,20 +26,14 @@ bias = false
 [train.data]
 # Folder containing the preprocessed dataset files referenced below.
 dataset_dir = "./datasets"
-# Training data file name (relative to dataset_dir).
-train_bin = "train.bin"
-# Validation data file name (relative to dataset_dir).
-val_bin = "val.bin"
-# Metadata (e.g., vocab/encoding) file name (relative to dataset_dir).
-meta_pkl = "meta.pkl"
 # Character-level n-gram size used during dataset preparation (1 = single/chars, 3 = trigrams, etc.)
 ngram_size = 2
 # Micro-batch size per optimization step (per device); tuned for MPS memory
-batch_size = 20
+batch_size = 8
 # Sequence length; ensure <= [train.model].block_size
-block_size = 256
+block_size = 192
 # Number of gradient accumulation steps to increase effective batch without extra memory
-grad_accum_steps = 1
+grad_accum_steps = 2
 # Sampling policy: deterministic sequential coverage for char dataset
 sampler = "sequential"
 
@@ -67,7 +61,7 @@ min_lr = 0.00003
 
 [train.runtime]
 # Output directory for logs, checkpoints, and metadata for this training run.
-out_dir = "ml_playground/experiments/bundestag_char/out"
+out_dir = "./out/default_run"
 # Total number of optimizer iterations to run (across all accumulation steps).
 max_iters = 100_000
 # How often (in iterations) to run evaluation/checkpoint logic.
@@ -119,7 +113,7 @@ ema_decay = 0.999
 [sample.runtime]
 # Output directory to read checkpoints from (and optionally write samples/logs to).
 # Typically should match the training run's out_dir you want to sample from.
-out_dir = "ml_playground/experiments/bundestag_char/out"
+out_dir = "./out/default_run"
 # Iteration controls are usually inert for pure sampling, but kept for API symmetry.
 max_iters = 0
 # Evaluation cadence placeholders (often unused in pure sampling flows).
@@ -137,7 +131,7 @@ seed = 1337
 # Device to run generation on; "cpu" is fine for small char-level models, use "cuda"/"mps" if available.
 device = "mps"
 # Numeric precision during sampling; can be lower precision if supported to speed up generation.
-dtype = "float16"
+dtype = "bfloat16"
 # Whether to compile/optimize the model for inference (if supported); usually false for quick runs.
 compile = false
 

@@ -60,9 +60,15 @@ class BundestagCharPreparer(_PreparerProto):
         try:
             cfg_path = exp_dir / "config.toml"
             if cfg_path.exists():
-                app = load_toml(cfg_path)
-                if app.train is not None and app.train.data is not None:
-                    n = int(getattr(app.train.data, "ngram_size", 1))
+                import tomllib as _tomllib
+                with cfg_path.open("rb") as _f:
+                    _raw = _tomllib.load(_f)
+                if isinstance(_raw, dict):
+                    _tr = _raw.get("train")
+                    if isinstance(_tr, dict):
+                        _dt = _tr.get("data")
+                        if isinstance(_dt, dict) and "ngram_size" in _dt:
+                            n = int(_dt.get("ngram_size", 1))
         except Exception:
             n = 1
         if n < 1:

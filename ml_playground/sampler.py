@@ -207,6 +207,10 @@ def _codec_from_meta(
 
 
 def sample(exp: SamplerConfig) -> None:
+    if exp.runtime is None:
+        raise ValueError(
+            "SamplerConfig.runtime is not resolved; use load_experiment_toml or provide [sample.runtime]."
+        )
     rt = exp.runtime
     device_type, ptdtype, ctx = setup(rt.device, rt.dtype, rt.seed)
 

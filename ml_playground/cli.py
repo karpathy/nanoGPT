@@ -229,8 +229,9 @@ def _load_sample_config_from_raw(
 ) -> SamplerConfig:
     """Strict loader for sample section with minimal checks from preloaded dict.
 
-    - Ensures required subsections exist ([runtime], [sample]).
+    - Ensures required subsections exist ([sample] with either [runtime] or runtime_ref, plus [sample.sample]).
     - Enforces unknown-key rejection outside [sample.extras].
+    - Supports schema-level reference `runtime_ref = "train.runtime"` with override merge.
     - Delegates detailed value validation to Pydantic models.
     """
     # Deep-merge defaults provided by caller (defaults under experiment overrides)
@@ -244,21 +245,28 @@ def _load_sample_config_from_raw(
     if not isinstance(sample_tbl, dict):
         raise Exception("Config must contain [sample] block")
 
-    # Strictness: only runtime, sample, extras allowed at this level
-    allowed_top = {"runtime", "sample", "extras"}
+    # Strictness: only runtime, runtime_ref, sample, extras allowed at this level
+    allowed_top = {"runtime", "runtime_ref", "sample", "extras"}
     unknown_top = set(sample_tbl.keys()) - allowed_top
     if unknown_top:
         raise ValueError("Unknown key(s) in [sample] (outside extras)")
 
-    for sec in ("runtime", "sample"):
-        if not isinstance(sample_tbl.get(sec), dict):
-            raise ValueError(f"Missing required section [{sec}]")
+    # Require [sample.sample]
+    if not isinstance(sample_tbl.get("sample"), dict):
+        raise ValueError("Missing required section [sample]")
+
+    runtime_tbl = sample_tbl.get("runtime")
+    runtime_ref = sample_tbl.get("runtime_ref")
+    if not isinstance(runtime_tbl, dict) and not isinstance(runtime_ref, str):
+        raise ValueError(
+            "Sampler requires either [sample.runtime] or sample.runtime_ref"
+        )
 
     # Allowed keys pruning for runtime/sample according to models
     allowed_runtime_keys = set(RuntimeConfig.model_fields.keys())
 
     # Build merged dict and provenance
-    d = {"runtime": dict(sample_tbl["runtime"]), "sample": dict(sample_tbl["sample"])}
+    d: dict[str, Any] = {"sample": dict(sample_tbl["sample"])}
 
     # Extract extras
     extras_obj = sample_tbl.get("extras")
@@ -280,7 +288,8 @@ def _load_sample_config_from_raw(
         _tmp_sample if isinstance(_tmp_sample, dict) else {}
     )
 
-    for sec in ("runtime", "sample"):
+    # Prepare provenance for sample subsection
+    for sec in ("sample",):
         _dflt_sec = defaults_sample_tbl.get(sec)
         sec_defaults = _dflt_sec if isinstance(_dflt_sec, dict) else {}
         _exp_sec = exp_sample_tbl.get(sec)
@@ -295,8 +304,40 @@ def _load_sample_config_from_raw(
                 else:
                     prov[sec][k] = "override"
 
-    # No path heuristics; prune unknown runtime keys only
-    d["runtime"] = {k: v for k, v in d["runtime"].items() if k in allowed_runtime_keys}
+    # Resolve runtime via ref merge if requested
+    if isinstance(runtime_ref, str):
+        if runtime_ref != "train.runtime":
+            raise ValueError("Unsupported sample.runtime_ref; allowed: 'train.runtime'")
+        # Merge defaults.train and exp.train, then take .runtime
+        defaults_train_tbl = (
+            defaults_dict.get("train")
+            if isinstance(defaults_dict.get("train"), dict)
+            else {}
+        )
+        exp_train_tbl = (
+            raw_exp.get("train") if isinstance(raw_exp.get("train"), dict) else {}
+        )
+        merged_train_tbl = _deep_merge_dicts(defaults_train_tbl, exp_train_tbl)
+        base_rt = merged_train_tbl.get("runtime")
+        if not isinstance(base_rt, dict):
+            raise ValueError(
+                "sample.runtime_ref points to 'train.runtime' but [train.runtime] is missing"
+            )
+        resolved_rt = {k: v for k, v in base_rt.items() if k in allowed_runtime_keys}
+        if isinstance(runtime_tbl, dict):
+            # sample.runtime overrides
+            overrides = {
+                k: v for k, v in runtime_tbl.items() if k in allowed_runtime_keys
+            }
+            resolved_rt.update(overrides)
+        d["runtime"] = resolved_rt
+    else:
+        # Use provided sample.runtime directly
+        d["runtime"] = {
+            k: v
+            for k, v in (runtime_tbl if isinstance(runtime_tbl, dict) else {}).items()
+            if k in allowed_runtime_keys
+        }
 
     # Provenance logging
     try:
@@ -317,7 +358,7 @@ def _load_sample_config_from_raw(
         raise ValueError(str(e))
 
 
-def _deep_merge_dicts(base: dict, override: dict) -> dict:
+def _deep_merge_dicts(base: Any, override: Any) -> dict[str, Any]:
     """Recursively merge override into base (override wins).
     Note: dict union (|, |=) and update() are shallow; this handles nested dicts.
     """
@@ -492,7 +533,8 @@ def _load_train_config(path: Path) -> TrainerConfig:
 def _load_sample_config(path: Path) -> SamplerConfig:
     """Strict loader for sample section with minimal checks.
 
-    - Ensures required subsections exist ([runtime], [sample]).
+    - Ensures required subsections exist ([sample] with either [runtime] or runtime_ref, plus [sample.sample]).
+    - Supports schema-level reference `runtime_ref = "train.runtime"` with override merge.
     - Delegates detailed value validation to Pydantic models.
     """
     with path.open("rb") as f:
@@ -519,16 +561,29 @@ def _load_sample_config(path: Path) -> SamplerConfig:
     if not isinstance(sample_tbl, dict):
         raise Exception("Config must contain [sample] block")
 
-    for sec in ("runtime", "sample"):
-        if not isinstance(sample_tbl.get(sec), dict):
-            raise ValueError(f"Missing required section [{sec}]")
+    # Strictness: only runtime, runtime_ref, sample, extras allowed at this level
+    allowed_top = {"runtime", "runtime_ref", "sample", "extras"}
+    unknown_top = set(sample_tbl.keys()) - allowed_top
+    if unknown_top:
+        raise ValueError("Unknown key(s) in [sample] (outside extras)")
+
+    # Require [sample.sample]
+    if not isinstance(sample_tbl.get("sample"), dict):
+        raise ValueError("Missing required section [sample]")
+
+    # Handle runtime presence or reference
+    runtime_tbl = sample_tbl.get("runtime")
+    runtime_ref = sample_tbl.get("runtime_ref")
+    if not isinstance(runtime_tbl, dict) and not isinstance(runtime_ref, str):
+        raise ValueError(
+            "Sampler requires either [sample.runtime] or sample.runtime_ref"
+        )
 
     # Allowed keys pruning for runtime/sample according to models
     allowed_runtime_keys = set(RuntimeConfig.model_fields.keys())
-    # SampleConfig uses its own schema; we keep all keys and let pydantic forbid extras on model_validate
 
     # Build merged dict and provenance
-    d = {"runtime": dict(sample_tbl["runtime"]), "sample": dict(sample_tbl["sample"])}
+    d: dict[str, Any] = {"sample": dict(sample_tbl["sample"])}
 
     # Strict: do not rewrite any paths; use them exactly as configured.
     prov: dict[str, dict[str, str]] = {"runtime": {}, "sample": {}}
@@ -544,7 +599,7 @@ def _load_sample_config(path: Path) -> SamplerConfig:
         _tmp_sample if isinstance(_tmp_sample, dict) else {}
     )
 
-    for sec in ("runtime", "sample"):
+    for sec in ("sample",):
         _dflt_sec = defaults_sample_tbl.get(sec)
         sec_defaults = _dflt_sec if isinstance(_dflt_sec, dict) else {}
         _exp_sec = exp_sample_tbl.get(sec)
@@ -559,10 +614,40 @@ def _load_sample_config(path: Path) -> SamplerConfig:
                 else:
                     prov[sec][k] = "override"
 
-    # Environment overrides are not supported: only default + experiment TOMLs are used.
-
-    # No path heuristics; prune unknown runtime keys only
-    d["runtime"] = {k: v for k, v in d["runtime"].items() if k in allowed_runtime_keys}
+    # Resolve runtime via ref merge if requested
+    if isinstance(runtime_ref, str):
+        if runtime_ref != "train.runtime":
+            raise ValueError("Unsupported sample.runtime_ref; allowed: 'train.runtime'")
+        # Merge defaults.train and exp.train, then take .runtime
+        defaults_train_tbl = (
+            defaults_dict.get("train")
+            if isinstance(defaults_dict.get("train"), dict)
+            else {}
+        )
+        exp_train_tbl = (
+            raw_exp.get("train") if isinstance(raw_exp.get("train"), dict) else {}
+        )
+        merged_train_tbl = _deep_merge_dicts(defaults_train_tbl, exp_train_tbl)
+        base_rt = merged_train_tbl.get("runtime")
+        if not isinstance(base_rt, dict):
+            raise ValueError(
+                "sample.runtime_ref points to 'train.runtime' but [train.runtime] is missing"
+            )
+        resolved_rt = {k: v for k, v in base_rt.items() if k in allowed_runtime_keys}
+        if isinstance(runtime_tbl, dict):
+            # sample.runtime overrides
+            overrides = {
+                k: v for k, v in runtime_tbl.items() if k in allowed_runtime_keys
+            }
+            resolved_rt.update(overrides)
+        d["runtime"] = resolved_rt
+    else:
+        # Use provided sample.runtime directly
+        d["runtime"] = {
+            k: v
+            for k, v in (runtime_tbl if isinstance(runtime_tbl, dict) else {}).items()
+            if k in allowed_runtime_keys
+        }
 
     # Provenance logging
     try:
@@ -595,16 +680,28 @@ def load_train_config(path: Path) -> TrainerConfig:
         defaults_raw = {}
     raw_exp = _read_toml_dict(path)
     cfg = _load_train_config_from_raw(raw_exp, defaults_raw)
+    exp_root = path.parent
     # Resolve dataset_dir relative to experiment root if it is not absolute
     try:
         ds = cfg.data.dataset_dir
         if not ds.is_absolute():
-            resolved = (path.parent / ds).resolve()
+            resolved = (exp_root / ds).resolve()
             cfg = cfg.model_copy(
                 update={"data": cfg.data.model_copy(update={"dataset_dir": resolved})}
             )
     except Exception:
         # Keep original on any resolution error
+        pass
+    # Resolve train.runtime.out_dir relative to experiment root if not absolute
+    try:
+        rt = cfg.runtime
+        od = rt.out_dir
+        if not od.is_absolute():
+            resolved_out = (exp_root / od).resolve()
+            cfg = cfg.model_copy(
+                update={"runtime": rt.model_copy(update={"out_dir": resolved_out})}
+            )
+    except Exception:
         pass
     return cfg
 
@@ -623,14 +720,16 @@ def load_sample_config(path: Path) -> SamplerConfig:
     cfg = _load_sample_config_from_raw(raw_exp, defaults_raw)
     # Resolve runtime.out_dir relative to experiment root if not absolute
     try:
-        out_dir = cfg.runtime.out_dir
-        if not out_dir.is_absolute():
-            resolved_out = (path.parent / out_dir).resolve()
-            cfg = cfg.model_copy(
-                update={
-                    "runtime": cfg.runtime.model_copy(update={"out_dir": resolved_out})
-                }
-            )
+        rt = cfg.runtime
+        if rt is not None:
+            out_dir = rt.out_dir
+            if not out_dir.is_absolute():
+                resolved_out = (path.parent / out_dir).resolve()
+                cfg = cfg.model_copy(
+                    update={
+                        "runtime": rt.model_copy(update={"out_dir": resolved_out})
+                    }
+                )
     except Exception:
         pass
     return cfg
@@ -891,6 +990,19 @@ def cmd_prepare(
             prepare_cfg = PreparerConfig()
     except SystemExit:
         prepare_cfg = PreparerConfig()
+    # Resolve [prepare] paths relative to the experiment root when provided
+    try:
+        exp_root = config_path.parent
+        ds = getattr(prepare_cfg, "dataset_dir", None)
+        if isinstance(ds, Path) and not ds.is_absolute():
+            prepare_cfg = prepare_cfg.model_copy(
+                update={"dataset_dir": (exp_root / ds).resolve()}
+            )
+        rd = getattr(prepare_cfg, "raw_dir", None)
+        if isinstance(rd, Path) and not rd.is_absolute():
+            prepare_cfg = prepare_cfg.model_copy(update={"raw_dir": (exp_root / rd).resolve()})
+    except Exception:
+        pass
     _run_prepare(
         args,
         prepare_cfg,
@@ -961,6 +1073,18 @@ def cmd_sample(
     except Exception as e:
         typer.echo(str(e))
         raise typer.Exit(code=2)
+    # Resolve runtime.out_dir relative to experiment root if provided and relative
+    try:
+        rt = sample_cfg_obj.runtime
+        if rt is not None:
+            od = rt.out_dir
+            if not od.is_absolute():
+                resolved_out = (config_path.parent / od).resolve()
+                sample_cfg_obj = sample_cfg_obj.model_copy(
+                    update={"runtime": rt.model_copy(update={"out_dir": resolved_out})}
+                )
+    except Exception:
+        pass
     # Apply environment overrides if provided
     sample_cfg_obj = _apply_sample_overrides(sample_cfg_obj)
     _run_sample(args, sample_cfg_obj, config_path)
@@ -1133,6 +1257,23 @@ def main(argv: list[str] | None = None) -> None:
                     CLIArgs(experiment=exp)
                 )
                 sample_cfg = _load_sample_config_from_raw(raw, defaults)
+                # Apply environment overrides first, then resolve relative paths
+                try:
+                    sample_cfg = _apply_sample_overrides(sample_cfg)
+                except Exception:
+                    pass
+                # Resolve runtime.out_dir relative to experiment root if provided and relative
+                try:
+                    rt = sample_cfg.runtime
+                    if rt is not None:
+                        od = rt.out_dir
+                        if not od.is_absolute():
+                            resolved_out = (_cfg_path.parent / od).resolve()
+                            sample_cfg = sample_cfg.model_copy(
+                                update={"runtime": rt.model_copy(update={"out_dir": resolved_out})}
+                            )
+                except Exception:
+                    pass
             except Exception as e:
                 raise SystemExit(str(e))
             try:

@@ -5,8 +5,31 @@ from typing import Literal, Optional, Any
 
 import tomllib
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from .prepare import PreparerConfig
+
+
+def _deep_merge_dicts(base: Any, override: Any) -> dict[str, Any]:
+    """Recursively merge override into base (override wins).
+    Only merges nested dicts; other types are replaced.
+    """
+    out = dict(base) if isinstance(base, dict) else {}
+    if not isinstance(override, dict):
+        return out
+    for k, v in override.items():
+        bv = out.get(k)
+        if isinstance(bv, dict) and isinstance(v, dict):
+            out[k] = _deep_merge_dicts(bv, v)
+        else:
+            out[k] = v
+    return out
 
 # Strict, single-source configuration module.
+
+# Section/key constants to avoid scattered magic strings
+SECTION_PREPARE = "prepare"
+SECTION_TRAIN = "train"
+SECTION_SAMPLE = "sample"
+KEY_EXTRAS = "extras"
 
 DeviceKind = Literal["cpu", "mps", "cuda"]
 DTypeKind = Literal["float32", "bfloat16", "float16"]
@@ -38,12 +61,24 @@ class TrainerConfig(_FrozenStrictModel):
 class SamplerConfig(_FrozenStrictModel):
     """
     Top-level configuration for model sampling/generation runs, including runtime and sampling parameters.
+    Supports a schema-level reference to reuse runtime from the training section.
     """
 
-    runtime: RuntimeConfig
+    # Either provide runtime directly or a reference to an existing section
+    runtime: Optional[RuntimeConfig] = None
+    runtime_ref: Optional[Literal["train.runtime"]] = None
+
     sample: SampleConfig
     extras: dict[str, Any] = Field(default_factory=dict)
     logger: Any | None = Field(default=None)
+
+    @model_validator(mode="after")
+    def _check_runtime_or_ref(self) -> "SamplerConfig":
+        if self.runtime is None and self.runtime_ref is None:
+            raise ValueError(
+                "SamplerConfig requires either 'runtime' or 'runtime_ref'."
+            )
+        return self
 
 
 class OptimConfig(_FrozenStrictModel):
@@ -314,11 +349,53 @@ def load_toml(path: Path) -> "AppConfig":
     if not isinstance(raw, dict):
         raise ValueError(f"Config at {path} must be a TOML table/object")
     filtered: dict[str, Any] = {}
-    if "train" in raw:
-        filtered["train"] = raw["train"]
-    if "sample" in raw:
-        filtered["sample"] = raw["sample"]
+    if SECTION_TRAIN in raw:
+        filtered[SECTION_TRAIN] = raw[SECTION_TRAIN]
+    if SECTION_SAMPLE in raw:
+        filtered[SECTION_SAMPLE] = raw[SECTION_SAMPLE]
     return AppConfig.model_validate(filtered)
+
+
+class ExperimentConfig(_FrozenStrictModel):
+    """Full experiment configuration parsed once and validated strictly."""
+
+    prepare: PreparerConfig
+    train: TrainerConfig
+    sample: SamplerConfig
+
+    @model_validator(mode="after")
+    def _resolve_references(self) -> "ExperimentConfig":
+        # Resolve [sample.runtime] via schema-level reference if provided
+        s = self.sample
+        if s.runtime_ref == "train.runtime":
+            # Merge train.runtime into sample.runtime overrides (if any)
+            base = self.train.runtime.model_dump()
+            if s.runtime is not None:
+                overrides = s.runtime.model_dump()
+                base.update(overrides)
+            resolved_rt = RuntimeConfig.model_validate(base)
+            # rebuild sample without the ref
+            self.sample = SamplerConfig(
+                runtime=resolved_rt,
+                sample=s.sample,
+                extras=s.extras,
+                logger=s.logger,
+            )
+        # You could add more reference resolutions here in future
+        return self
+
+
+def load_experiment_toml(path: Path | str) -> ExperimentConfig:
+    """Parse the entire TOML once, returning a fully validated ExperimentConfig."""
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"Config file not found: {p}")
+    with p.open("rb") as f:
+        raw = tomllib.load(f)
+    if not isinstance(raw, dict):
+        raise ValueError(f"Config at {p} must be a TOML table/object")
+    # No filtering: rely on ExperimentConfig's strict schema to forbid unknown sections
+    return ExperimentConfig.model_validate(raw)
 
 
 # Backward-compatible aliases for newer API names used by some modules
@@ -336,6 +413,13 @@ __all__ = [
     "SampleConfig",
     "TrainerConfig",
     "SamplerConfig",
+    "PreparerConfig",
     "AppConfig",
+    "ExperimentConfig",
     "load_toml",
+    "load_experiment_toml",
+    "SECTION_PREPARE",
+    "SECTION_TRAIN",
+    "SECTION_SAMPLE",
+    "KEY_EXTRAS",
 ]

@@ -11,33 +11,27 @@
 # n_layer: number of Transformer blocks. More layers => more capacity and memory/compute.
 n_layer = 4
 # n_head: attention heads per layer. Must divide n_embd. More heads can improve modelling but increase memory.
-n_head = 8
+n_head = 4
 # n_embd: hidden/embedding size. Increases representation capacity; scales memory linearly.
-n_embd = 256
+n_embd = 128
 # block_size: model's maximum context length (in tokens). Attention memory/time scales ~O(block_size^2).
 # Keep this >= [train.data].block_size.
-block_size = 512
+block_size = 64
 # dropout: dropout probability applied during training for regularization (0.0 = disabled).
 dropout = 0.1
 # bias: whether linear/LayerNorm layers include bias terms. Turning off slightly reduces params.
 bias = false
+# vocab_size: reserve to 4096 based on ~3825 discovered tokens (+headroom for specials)
+vocab_size = 4096
 
 [train.data]
-# Folder containing the preprocessed dataset files referenced below.
-dataset_dir = "./datasets"
-# Training data file name (relative to dataset_dir).
-train_bin = "train.bin"
-# Validation data file name (relative to dataset_dir).
-val_bin = "val.bin"
-# Metadata (e.g., vocab/encoding) file name (relative to dataset_dir).
-meta_pkl = "meta.pkl"
 # Character-level n-gram size used during dataset preparation (1 = single/chars, >1 = n-grams).
 # For tiktoken/BPE workflows set this to 1 (preparer treats n <= 1 as token mode).
 ngram_size = 1
 # Micro-batch size per optimization step (per device)
 batch_size = 8
 # Sequence length; ensure <= [train.model].block_size
-block_size = 512
+block_size = 64
 # Number of gradient accumulation steps to increase effective batch without extra memory
 grad_accum_steps = 4
 # Sampling policy: random sampling for tokenized workflows
@@ -75,14 +69,14 @@ lr_decay_iters = 200_000
 min_lr = 1e-5
 
 [train.runtime]
-# out_dir: directory where logs, checkpoints and metadata will be written.
-out_dir = "ml_playground/experiments/bundestag_ttok/exploratory"
 # max_iters: total optimizer steps (after accumulation) to run.
 max_iters = 200_000
 # eval_interval: run validation/checkpoint logic every this many iterations.
-eval_interval = 2
+# Less frequent evals reduce overhead and avoid triggering early stop too soon.
+eval_interval = 1000
 # eval_iters: number of validation batches to average when computing val metrics (higher -> smoother estimates).
-eval_iters = 200
+# Keep a reasonable average without spending too long in eval.
+eval_iters = 100
 # log_interval: how often (iterations) to print training metrics.
 log_interval = 1
 # eval_only: if true, run evaluation and exit without training updates.
@@ -94,7 +88,7 @@ seed = 1337
 # device: compute backend. Use "mps" for Apple Silicon, "cuda" for NVIDIA, or "cpu".
 device = "mps"
 # dtype: numeric precision for tensors. float16/bfloat16 reduce memory but may affect numeric stability.
-dtype = "float16"
+dtype = "bfloat16"
 # compile: whether to JIT-compile/optimize model graphs (if supported). Speeds up iterations at cost of startup time.
 compile = false
 # ckpt_top_k: keep top-K best checkpoints by ckpt_metric (0 disables retention).
@@ -108,11 +102,11 @@ ema_decay = 0.999
 # best_smoothing_alpha: smoothing factor for metric used to decide 'best' (0 disables smoothing).
 best_smoothing_alpha = 0.9
 # early_stop_patience: number of evals without improvement before early stopping; 0 disables.
-early_stop_patience = 10
+early_stop_patience = 0
 
 [sample.runtime]
 # out_dir: checkpoint directory to load from for sampling flows (keep aligned with train out_dir if sampling trained models).
-out_dir = "ml_playground/experiments/bundestag_tiktoken/out/bundestag_tiktoken"
+out_dir = "./out"
 # max_iters, eval_interval, eval_iters: retained for symmetry with training interface; often unused during pure sampling.
 max_iters = 0
 eval_interval = 1
@@ -128,7 +122,7 @@ seed = 1337
 # device: compute backend for generation. "mps" recommended on Apple Silicon for speed.
 device = "mps"
 # dtype: numeric precision during sampling. float16 speeds inference but watch stability; float32 is safest.
-dtype = "float32"
+dtype = "bfloat16"
 # compile: compile/optimize the model for inference (if supported).
 compile = false
 
@@ -136,9 +130,9 @@ compile = false
 # Prompt to prime the model; generation continues after this text.
 start = "\nNächste Rednerin ist die Vorsitzende der AfD-Fraktion, Dr. Alice Weidel.\n(Beifall bei der AfD)\n  Dr. Alice Weidel (AfD): \n"
 # Number of independent samples to generate for the same prompt/settings.
-num_samples = 1
+num_samples = 2
 # Maximum number of new tokens to generate after the prompt.
-max_new_tokens = 1024
+max_new_tokens = 512
 # Softens or sharpens the probability distribution before sampling; higher = more random, 0 = greedy/argmax.
 temperature = 0.8
 # Sample only from the top-K most likely tokens at each step; lower K increases coherence, higher K increases diversity.

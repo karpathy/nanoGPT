@@ -1,28 +1,34 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Protocol, Any
+from typing import Protocol, Any, Optional
 from pathlib import Path
 import pickle
 import numpy as np
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+class PreparerConfig(BaseModel):
+    """Strict config for data preparation (owner-local)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", validate_default=True)
+
+    dataset_dir: Optional[Path] = None
+    raw_dir: Optional[Path] = None
+    add_structure_tokens: Optional[bool] = None
+    doc_separator: Optional[str] = None
+    extras: dict[str, Any] = Field(default_factory=dict)
+    logger: Any | None = Field(default=None)
+
+    @field_validator("dataset_dir", "raw_dir", mode="before")
+    @classmethod
+    def _coerce_path(cls, v: Path | str | None) -> Optional[Path]:
+        if v is None:
+            return None
+        return Path(v)
 
 
 class Encoder(Protocol):
     def encode_ordinary(self, text: str) -> list[int]: ...
-
-
-@dataclass(frozen=True)
-class PreparerConfig:
-    """
-    Minimal, frozen config for data preparation. Assumes values are valid/resolved by the CLI.
-    """
-
-    dataset_dir: Path | None = None
-    raw_dir: Path | None = None
-    add_structure_tokens: bool | None = None
-    doc_separator: str | None = None
-    extras: dict[str, Any] = field(default_factory=dict)
-    logger: Any | None = None
 
 
 class Preparer(Protocol):

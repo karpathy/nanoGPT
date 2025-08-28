@@ -65,7 +65,7 @@ min_lr = 0.0001
 
 [train.runtime]
 # Paths are used as-is (absolute or relative), no rewriting.
-out_dir = "./out/default_run"
+out_dir = "./out"
 max_iters = 100000
 # Cadence tradeoffs: lower eval_interval/eval_iters increases feedback but adds overhead.
 # always_save_checkpoint ensures the last/best are persisted; ckpt_top_k=0 disables top-k pruning.
@@ -98,7 +98,7 @@ ema_decay = 0.0
 
 [sample.runtime]
 # Use the same default out_dir to find checkpoints by default (fully overridable).
-out_dir = "./out/default_run"
+out_dir = "./out"
 # CPU-first sampling defaults
 device = "cpu"
 dtype = "float32"
