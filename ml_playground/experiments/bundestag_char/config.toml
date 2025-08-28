@@ -153,3 +153,23 @@ temperature = 0.8
 # Sample only from the top-K most likely tokens at each step; lower K increases coherence, higher K increases diversity.
 # Interplay: lower temperature + small top_k -> focused, deterministic-like; higher temperature + large top_k -> diverse/creative.
 top_k = 100
+
+
+# Ollama export configuration (POC)
+[export.ollama]
+# Enable/disable the Ollama export flow.
+enabled = true
+# Directory where the Ollama-ready files will be written.
+# If empty or omitted, defaults to an 'export' folder inside this experiment directory.
+export_dir = "export"
+# Name used in Modelfile and suggested 'ollama create' target.
+model_name = "bundestag-char"
+# Quantization preset to use during gguf quantization (requires llama.cpp tools available).
+quant = "q4_K_M"
+# Optional template file path for chat formatting; omit or empty to keep the Modelfile minimal.
+template = ""
+# Optional: paths to external tools; if empty, assume on PATH.
+# e.g., convert_bin = "llama.cpp/convert-hf-to-gguf.py"
+# e.g., quant_bin = "llama.cpp/quantize"
+convert_bin = ""
+quant_bin = ""

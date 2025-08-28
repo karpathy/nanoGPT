@@ -38,3 +38,10 @@ ml_playground/experiments/**/out/
 
 # Exclude local developer resources
 .ldres/
+
+# Vendor llama.cpp binaries and build artifacts (do not commit)
+tools/llama_cpp/llama-gguf
+tools/llama_cpp/llama-quantize
+
+# Stray helper files
+--help
