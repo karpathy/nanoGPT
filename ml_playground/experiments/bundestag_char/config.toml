@@ -33,7 +33,7 @@ val_bin = "val.bin"
 # Metadata (e.g., vocab/encoding) file name (relative to dataset_dir).
 meta_pkl = "meta.pkl"
 # Character-level n-gram size used during dataset preparation (1 = single/chars, 3 = trigrams, etc.)
-ngram_size = 3
+ngram_size = 2
 # Micro-batch size per optimization step (per device); tuned for MPS memory
 batch_size = 20
 # Sequence length; ensure <= [train.model].block_size
@@ -171,5 +171,5 @@ template = ""
 # Optional: paths to external tools; if empty, assume on PATH.
 # e.g., convert_bin = "llama.cpp/convert-hf-to-gguf.py"
 # e.g., quant_bin = "llama.cpp/quantize"
-convert_bin = ""
-quant_bin = ""
+convert_bin = "/Users/tv/code/nanoGPT/tools/llama_cpp/llama-gguf"
+quant_bin = "/Users/tv/code/nanoGPT/tools/llama_cpp/llama-quantize"
