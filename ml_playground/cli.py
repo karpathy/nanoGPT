@@ -6,7 +6,6 @@ from typer.main import get_command
 import importlib
 import json
 import os
-import pickle
 import shutil
 import tomllib
 from pathlib import Path
@@ -23,6 +22,12 @@ from ml_playground.config import (
 from ml_playground.prepare import PreparerConfig, make_preparer
 from ml_playground.sampler import sample
 from ml_playground.trainer import train
+
+from ml_playground.experiments.protocol import (
+    Preparer as ExpPreparer,
+    Trainer as ExpTrainer,
+    Sampler as ExpSampler,
+)
 
 
 # --- Typer helpers ---------------------------------------------------------
@@ -689,16 +694,6 @@ def _resolve_and_load_configs(
     return cfg_path, config_raw, defaults_raw
 
 
-from ml_playground.experiments.protocol import (
-    PrepareReport,
-    TrainReport,
-    SampleReport,
-    Preparer as ExpPreparer,
-    Trainer as ExpTrainer,
-    Sampler as ExpSampler,
-)
-
-
 def _load_exp_class_instance(module_path: str, method_name: str) -> object:
     """Import module_path and instantiate the first class exposing method_name.
 
@@ -716,19 +711,36 @@ def _load_exp_class_instance(module_path: str, method_name: str) -> object:
                 return attr()
             except Exception:
                 continue
-    raise SystemExit(f"No suitable class with method '{method_name}' found in {module_path}")
+    raise SystemExit(
+        f"No suitable class with method '{method_name}' found in {module_path}"
+    )
 
 
 def _load_preparer(experiment: str) -> ExpPreparer:
-    return cast(ExpPreparer, _load_exp_class_instance(f"ml_playground.experiments.{experiment}.preparer", "prepare"))
+    return cast(
+        ExpPreparer,
+        _load_exp_class_instance(
+            f"ml_playground.experiments.{experiment}.preparer", "prepare"
+        ),
+    )
 
 
 def _load_trainer(experiment: str) -> ExpTrainer:
-    return cast(ExpTrainer, _load_exp_class_instance(f"ml_playground.experiments.{experiment}.trainer", "train"))
+    return cast(
+        ExpTrainer,
+        _load_exp_class_instance(
+            f"ml_playground.experiments.{experiment}.trainer", "train"
+        ),
+    )
 
 
 def _load_sampler(experiment: str) -> ExpSampler:
-    return cast(ExpSampler, _load_exp_class_instance(f"ml_playground.experiments.{experiment}.sampler", "sample"))
+    return cast(
+        ExpSampler,
+        _load_exp_class_instance(
+            f"ml_playground.experiments.{experiment}.sampler", "sample"
+        ),
+    )
 
 
 def _run_prepare(
@@ -859,7 +871,10 @@ def cmd_prepare(
     config_path: Path = (
         exp_config
         if isinstance(exp_config, Path)
-        else Path(__file__).resolve().parent / "experiments" / experiment / "config.toml"
+        else Path(__file__).resolve().parent
+        / "experiments"
+        / experiment
+        / "config.toml"
     )
     try:
         try:
@@ -951,6 +966,44 @@ def cmd_sample(
     _run_sample(args, sample_cfg_obj, config_path)
 
 
+@app.command("convert")
+def cmd_convert(
+    ctx: typer.Context,
+    experiment: Annotated[
+        str,
+        typer.Argument(
+            help="Experiment name (folder under experiments/)",
+            autocompletion=_complete_experiments,
+        ),
+    ],
+) -> None:
+    """Export a trained model to an Ollama-ready directory. Supports only bundestag_char (POC)."""
+    # Only bundestag_char is supported in this POC
+    if experiment != "bundestag_char":
+        typer.echo("convert currently supports only 'bundestag_char'.")
+        raise typer.Exit(code=2)
+    # Resolve config path
+    cfg_path = _experiments_root() / experiment / "config.toml"
+    if not cfg_path.exists():
+        typer.echo(f"Config not found for experiment '{experiment}': {cfg_path}")
+        raise typer.Exit(code=2)
+    # Delegate to experiment-local converter
+    try:
+        mod = importlib.import_module(
+            "ml_playground.experiments.bundestag_char.ollama_export"
+        )
+        getattr(mod, "convert_from_toml")(cfg_path)
+    except SystemExit as e:
+        # Echo the underlying error message before exiting with the same code
+        msg = str(e).strip()
+        if msg:
+            typer.echo(msg)
+        raise typer.Exit(code=getattr(e, "code", 1))
+    except Exception as e:
+        typer.echo(str(e))
+        raise typer.Exit(code=1)
+
+
 @app.command("loop")
 def cmd_loop(
     ctx: typer.Context,
@@ -1022,7 +1075,7 @@ def main(argv: list[str] | None = None) -> None:
         if not isinstance(argv, list) or not argv:
             raise SystemExit("Syntax error: expected 'command <experiment>'")
         cmd_name = argv[0]
-        if cmd_name not in {"prepare", "train", "sample", "loop"}:
+        if cmd_name not in {"prepare", "train", "sample", "loop", "convert"}:
             raise SystemExit(f"Unknown command: {cmd_name}")
         if len(argv) < 2:
             raise SystemExit("Syntax error: expected 'command <experiment>'")
@@ -1047,7 +1100,9 @@ def main(argv: list[str] | None = None) -> None:
         if cmd_name == "train":
             try:
                 # Strict validation (tests may patch this to raise)
-                _cfg_path, raw, defaults = _resolve_and_load_configs(CLIArgs(experiment=exp))
+                _cfg_path, raw, defaults = _resolve_and_load_configs(
+                    CLIArgs(experiment=exp)
+                )
                 _ = _load_train_config_from_raw(raw, defaults)
             except Exception as e:
                 raise SystemExit(str(e))
@@ -1074,7 +1129,9 @@ def main(argv: list[str] | None = None) -> None:
                     raise SystemExit(str(e))
                 return
             try:
-                _cfg_path, raw, defaults = _resolve_and_load_configs(CLIArgs(experiment=exp))
+                _cfg_path, raw, defaults = _resolve_and_load_configs(
+                    CLIArgs(experiment=exp)
+                )
                 sample_cfg = _load_sample_config_from_raw(raw, defaults)
             except Exception as e:
                 raise SystemExit(str(e))
@@ -1084,13 +1141,30 @@ def main(argv: list[str] | None = None) -> None:
                 raise SystemExit(str(e))
             return
 
+        # convert
+        if cmd_name == "convert":
+            if exp != "bundestag_char":
+                raise SystemExit("convert currently supports only 'bundestag_char'")
+            try:
+                mod = importlib.import_module(
+                    "ml_playground.experiments.bundestag_char.ollama_export"
+                )
+                getattr(mod, "convert_from_toml")(cfg_path)
+            except Exception as e:
+                raise SystemExit(str(e))
+            return
+
         # loop
         if cmd_name == "loop":
             # Ensure registry is populated unless tests have monkeypatched it
             try:
-                if datasets.PREPARERS is datasets.DEFAULT_PREPARERS_REF and not datasets.PREPARERS:
+                if (
+                    datasets.PREPARERS is datasets.DEFAULT_PREPARERS_REF
+                    and not datasets.PREPARERS
+                ):
                     # Lazy-load preparers from experiments
                     from ml_playground.datasets import load_preparers as _load_preps
+
                     _load_preps()
             except Exception:
                 pass
@@ -1125,9 +1199,15 @@ def main(argv: list[str] | None = None) -> None:
                 raise SystemExit(str(e))
             try:
                 # Copy meta.pkl if present and exists
-                meta_name = getattr(getattr(train_cfg, "data", object()), "meta_pkl", None)
-                ds_dir = getattr(getattr(train_cfg, "data", object()), "dataset_dir", None)
-                out_dir = getattr(getattr(train_cfg, "runtime", object()), "out_dir", None)
+                meta_name = getattr(
+                    getattr(train_cfg, "data", object()), "meta_pkl", None
+                )
+                ds_dir = getattr(
+                    getattr(train_cfg, "data", object()), "dataset_dir", None
+                )
+                out_dir = getattr(
+                    getattr(train_cfg, "runtime", object()), "out_dir", None
+                )
                 if meta_name and isinstance(ds_dir, Path) and isinstance(out_dir, Path):
                     src = ds_dir / str(meta_name)
                     dst = out_dir / str(meta_name)
@@ -1137,7 +1217,9 @@ def main(argv: list[str] | None = None) -> None:
                         except Exception:
                             # Print a warning but do not fail the loop
                             try:
-                                print(f"Warning: failed to copy meta.pkl from {src} to {dst}")
+                                print(
+                                    f"Warning: failed to copy meta.pkl from {src} to {dst}"
+                                )
                             except Exception:
                                 pass
                 sample(sample_cfg)
