@@ -7,130 +7,129 @@
 # - Paths (dataset_dir, out_dir) are used exactly as configured (absolute or relative), no rewriting.
 
 [train.model]
-# Number of Transformer blocks; increases capacity and compute/memory cost.
-n_layer = 6
-# Number of attention heads per layer; must divide n_embd; more heads can help stability at added cost.
+# token-level / tiktoken workflow - small model for fast experiments
+# n_layer: number of Transformer blocks. More layers => more capacity and memory/compute.
+n_layer = 4
+# n_head: attention heads per layer. Must divide n_embd. More heads can improve modelling but increase memory.
 n_head = 8
-# Embedding/hidden size; larger increases model capacity and compute.
-n_embd = 384
-# Model context length (positional embeddings); must be >= [train.data].block_size.
+# n_embd: hidden/embedding size. Increases representation capacity; scales memory linearly.
+n_embd = 256
+# block_size: model's maximum context length (in tokens). Attention memory/time scales ~O(block_size^2).
+# Keep this >= [train.data].block_size.
 block_size = 512
-# Dropout rate for regularization during training; 0.0 for deterministic/fast runs.
-dropout = 0.0
-# Whether to include bias terms in linear/LayerNorm layers; false is common for GPT-style models.
+# dropout: dropout probability applied during training for regularization (0.0 = disabled).
+dropout = 0.1
+# bias: whether linear/LayerNorm layers include bias terms. Turning off slightly reduces params.
 bias = false
 
 [train.data]
-# Folder containing the preprocessed dataset files referenced below. Used as-is.
-dataset_dir = "ml_playground/experiments/bundestag_tiktoken/datasets"
+# Folder containing the preprocessed dataset files referenced below.
+dataset_dir = "./datasets"
 # Training data file name (relative to dataset_dir).
 train_bin = "train.bin"
 # Validation data file name (relative to dataset_dir).
 val_bin = "val.bin"
 # Metadata (e.g., vocab/encoding) file name (relative to dataset_dir).
 meta_pkl = "meta.pkl"
-# Micro-batch size per optimization step; memory ~ batch_size * block_size^2.
-batch_size = 64
-# Sequence length of each training sample; must be <= [train.model].block_size.
-block_size = 128
-# Number of gradient accumulation steps; effective batch (samples) = batch_size * grad_accum_steps.
-# Effective tokens per optimizer update = (batch_size * grad_accum_steps) * block_size.
-grad_accum_steps = 2
+# Character-level n-gram size used during dataset preparation (1 = single/chars, >1 = n-grams).
+# For tiktoken/BPE workflows set this to 1 (preparer treats n <= 1 as token mode).
+ngram_size = 1
+# Micro-batch size per optimization step (per device)
+batch_size = 8
+# Sequence length; ensure <= [train.model].block_size
+block_size = 512
+# Number of gradient accumulation steps to increase effective batch without extra memory
+grad_accum_steps = 4
+# Sampling policy: random sampling for tokenized workflows
+sampler = "random"
+
 
 [train.optim]
-# Base learning rate used by the optimizer; interacts with schedule below if decay_lr = true.
-learning_rate = 0.0006
-# L2-style weight decay for regularization; often excluded for LayerNorm/bias in AdamW.
+# learning_rate: base LR for optimizer. Larger models often require smaller LR; tune for stability.
+learning_rate = 0.0005
+# weight_decay: L2-style regularization applied to weights (not typically to LayerNorm/bias).
 weight_decay = 0.1
-# Adam/AdamW beta1 (momentum) parameter; higher retains more past gradients.
+# beta1 / beta2: Adam optimizer moment coefficients.
+# - beta1 (default ~0.9) controls exponential decay for the 1st moment (momentum). Lowering slightly (e.g., 0.8)
+#   can help with very noisy gradients; raising (closer to 1.0) increases smoothing of past gradients.
+# - beta2 (default ~0.95-0.999) controls decay for the 2nd moment (variance). Lower values react faster to changes.
+# Typical stable defaults: beta1=0.9, beta2=0.95 for transformer-style training; reduce beta2 if you observe slow adapt.
 beta1 = 0.9
-# Adam/AdamW beta2 (variance) parameter; higher smooths more but reacts slower to changes.
 beta2 = 0.95
-# Global gradient norm clipping threshold to prevent exploding gradients (0 disables if supported).
+# grad_clip: clip gradient norm to this value (prevents exploding gradients). 0 or None disables if supported.
 grad_clip = 1.0
 
 [train.schedule]
-# Enable learning-rate schedule (warmup + decay). If false, other fields are ignored.
+# decay_lr: enable/disable LR schedule. True uses warmup + decay (recommended).
 decay_lr = true
-# Number of warmup iterations from 0 -> learning_rate.
-warmup_iters = 1000
-# Iterations over which LR decays from learning_rate down toward min_lr.
-# Interplay with [train.runtime].max_iters: if much smaller, LR stays at min for long.
-lr_decay_iters = 1000000
-# Lower bound (floor) for the learning rate during decay.
-min_lr = 0.00006
+# warmup_iters: number of iterations to linearly increase LR from 0 to learning_rate.
+# Recommended: a few thousand iterations (e.g., 1k-5k) depending on dataset size and batch config.
+# Warmup stabilizes early training by avoiding large updates from initial noisy gradients.
+warmup_iters = 2000
+# lr_decay_iters: total iterations over which LR decays toward min_lr after warmup.
+# For cosine or linear decay, set this near your expected max_iters to get a smooth decay over training.
+# If set much smaller than max_iters, LR will hit min_lr early and stay there; if much larger, decay will be slow.
+lr_decay_iters = 200_000
+# min_lr: lower bound for LR during decay. Prevents LR from going to zero and allows continued small updates.
+# Typical values: 1e-5 .. 1e-6 for mid-sized training runs; lower for very long schedules.
+min_lr = 1e-5
 
 [train.runtime]
-# Output directory for logs, checkpoints, and artifacts. Used as-is.
-out_dir = "ml_playground/experiments/bundestag_tiktoken/out/bundestag_tiktoken"
-# Total number of optimizer iterations to run (across all accumulation steps).
-max_iters = 1000000
-# How often (in iterations) to run evaluation/checkpoint logic.
-eval_interval = 300
-# Number of evaluation batches to average per evaluation; higher reduces noise but takes longer.
-eval_iters = 100
-# How often (in iterations) to log training metrics.
-log_interval = 100
-# If true, only runs evaluation and exits (no training updates).
+# out_dir: directory where logs, checkpoints and metadata will be written.
+out_dir = "ml_playground/experiments/bundestag_ttok/exploratory"
+# max_iters: total optimizer steps (after accumulation) to run.
+max_iters = 200_000
+# eval_interval: run validation/checkpoint logic every this many iterations.
+eval_interval = 2
+# eval_iters: number of validation batches to average when computing val metrics (higher -> smoother estimates).
+eval_iters = 200
+# log_interval: how often (iterations) to print training metrics.
+log_interval = 1
+# eval_only: if true, run evaluation and exit without training updates.
 eval_only = false
-# If true, save a checkpoint on every eval (last and/or best/top-k as configured).
+# always_save_checkpoint: if true, save checkpoint on every eval (increases disk usage).
 always_save_checkpoint = false
-# Random seed for reproducibility (data shuffling, init, sampling).
+# seed: RNG seed for reproducibility of splits, initialization, and sampling.
 seed = 1337
-# Compute device backend: "cuda" (NVIDIA), "mps" (Apple Silicon), or "cpu".
+# device: compute backend. Use "mps" for Apple Silicon, "cuda" for NVIDIA, or "cpu".
 device = "mps"
-# Numeric precision for tensors and parameters; affects speed/memory vs. stability/accuracy.
-dtype = "float32"
-# If true, compile/optimize the model/graph (when supported); speeds up but increases startup time.
+# dtype: numeric precision for tensors. float16/bfloat16 reduce memory but may affect numeric stability.
+dtype = "float16"
+# compile: whether to JIT-compile/optimize model graphs (if supported). Speeds up iterations at cost of startup time.
 compile = false
-
-# Checkpoint policy
-# Filename for the most recent checkpoint snapshot saved (rolling "last" save).
-ckpt_last_filename = "ckpt_last.pt"
-# Filename for the best-scoring checkpoint according to ckpt_metric.
-ckpt_best_filename = "ckpt_best.pt"
-# Keep the top-K best checkpoints (by ckpt_metric) in addition to "last"; 0 disables.
-ckpt_top_k = 0
-# Metric key to select "best" (e.g., "val_loss"); must match what evaluation reports.
+# ckpt_top_k: keep top-K best checkpoints by ckpt_metric (0 disables retention).
+ckpt_top_k = 1
+# ckpt_metric: metric key used to select "best" checkpoint (e.g. "val_loss").
 ckpt_metric = "val_loss"
-# Whether higher metric values are better (true) or lower are better (false); false for "val_loss".
+# ckpt_greater_is_better: True if larger metric values are better (e.g., accuracy); False for metrics like loss.
 ckpt_greater_is_better = false
-# Atomic write of checkpoint files to avoid partial files on crashes.
-ckpt_atomic = false
-# If true, write extra metadata (e.g., config, metrics) alongside checkpoints for reproducibility.
-ckpt_write_metadata = true
-# Minimum time between time-based checkpoint saves; 0 disables time-based saves.
-ckpt_time_interval_minutes = 10
-# Exponential smoothing coefficient for the metric used to decide "best"; 0.0 disables smoothing.
-best_smoothing_alpha = 0.0
-# Early stopping patience in number of evaluations without improvement; 0 disables early stopping.
-early_stop_patience = 0
-# Exponential Moving Average (EMA) decay for model weights; 0.0 disables.
-ema_decay = 0.0
+# ema_decay: EMA decay applied to model weights for more stable evaluation. 0 disables EMA.
+ema_decay = 0.999
+# best_smoothing_alpha: smoothing factor for metric used to decide 'best' (0 disables smoothing).
+best_smoothing_alpha = 0.9
+# early_stop_patience: number of evals without improvement before early stopping; 0 disables.
+early_stop_patience = 10
 
 [sample.runtime]
-# Output directory to read checkpoints from (and optionally write samples/logs to).
-# Typically should match the training run's out_dir you want to sample from.
+# out_dir: checkpoint directory to load from for sampling flows (keep aligned with train out_dir if sampling trained models).
 out_dir = "ml_playground/experiments/bundestag_tiktoken/out/bundestag_tiktoken"
-# Iteration controls are usually inert for pure sampling, but kept for API symmetry.
+# max_iters, eval_interval, eval_iters: retained for symmetry with training interface; often unused during pure sampling.
 max_iters = 0
-# Evaluation cadence placeholders (often unused in pure sampling flows).
 eval_interval = 1
-# Number of evaluation batches during sampling flows (often unused).
 eval_iters = 1
-# Logging cadence during sampling (if the driver logs progress).
+# log_interval: logging cadence during sampling (if driver logs).
 log_interval = 1
-# If true, run evaluation-only behavior in sampling loop implementations that support it.
+# eval_only: if true, run sampling-only evaluation behaviors supported by the driver.
 eval_only = false
-# Whether to save artifacts during sampling (e.g., generated text dumps); false to avoid clutter.
+# always_save_checkpoint: whether sampling should also persist artifacts (usually false).
 always_save_checkpoint = false
-# Seed to make generation reproducible for a fixed prompt and settings.
+# seed: RNG seed for reproducible generation for the same prompt/settings.
 seed = 1337
-# Device to run generation on; "mps" uses Apple Silicon; use "cuda"/"cpu" as available.
+# device: compute backend for generation. "mps" recommended on Apple Silicon for speed.
 device = "mps"
-# Numeric precision during sampling; can be lower precision if supported to speed up generation.
+# dtype: numeric precision during sampling. float16 speeds inference but watch stability; float32 is safest.
 dtype = "float32"
-# Whether to compile/optimize the model for inference (if supported); usually false for quick runs.
+# compile: compile/optimize the model for inference (if supported).
 compile = false
 
 [sample.sample]

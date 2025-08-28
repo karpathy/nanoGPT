@@ -4,7 +4,12 @@ from pathlib import Path
 from typing import Iterable
 import numpy as np
 import tiktoken
-from ml_playground.prepare import PreparerConfig, seed_text_file, split_train_val, write_bin_and_meta
+from ml_playground.prepare import (
+    PreparerConfig,
+    seed_text_file,
+    split_train_val,
+    write_bin_and_meta,
+)
 from ml_playground.experiments.protocol import (
     Preparer as _PreparerProto,
     PrepareReport,
