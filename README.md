@@ -79,3 +79,13 @@ TensorBoard (auto-enabled)
 - View the dashboard:
   uv run tensorboard --logdir out/<your_out_dir>/logs/tb --port 6006
   Then open http://localhost:6006
+
+GGUF export (vendor approach)
+- Place llama.cpp’s converter at a stable path in this repo:
+  tools/llama_cpp/convert-hf-to-gguf.py
+- Copy the upstream file from:
+  https://raw.githubusercontent.com/ggerganov/llama.cpp/master/convert-hf-to-gguf.py
+- Configure your exporter to use it by setting [export.ollama].convert_bin to the absolute path above.
+- Verify:
+  uv run python tools/llama_cpp/convert-hf-to-gguf.py --help
+  (If you see a placeholder message, you still need to copy the upstream script.)
