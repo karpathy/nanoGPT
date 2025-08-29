@@ -16,7 +16,7 @@ n_head = 4
 n_embd = 128
 # block_size: model's maximum context length (in tokens). Attention memory/time scales ~O(block_size^2).
 # Keep this >= [train.data].block_size.
-block_size = 64
+block_size = 256
 # dropout: dropout probability applied during training for regularization (0.0 = disabled).
 dropout = 0.1
 # bias: whether linear/LayerNorm layers include bias terms. Turning off slightly reduces params.
@@ -31,7 +31,7 @@ ngram_size = 1
 # Micro-batch size per optimization step (per device)
 batch_size = 8
 # Sequence length; ensure <= [train.model].block_size
-block_size = 64
+block_size = 256
 # Number of gradient accumulation steps to increase effective batch without extra memory
 grad_accum_steps = 4
 # Sampling policy: random sampling for tokenized workflows
@@ -132,7 +132,7 @@ start = "\nNächste Rednerin ist die Vorsitzende der AfD-Fraktion, Dr. Alice We
 # Number of independent samples to generate for the same prompt/settings.
 num_samples = 2
 # Maximum number of new tokens to generate after the prompt.
-max_new_tokens = 512
+max_new_tokens = 2048
 # Softens or sharpens the probability distribution before sampling; higher = more random, 0 = greedy/argmax.
 temperature = 0.8
 # Sample only from the top-K most likely tokens at each step; lower K increases coherence, higher K increases diversity.
