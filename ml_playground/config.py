@@ -23,6 +23,7 @@ def _deep_merge_dicts(base: Any, override: Any) -> dict[str, Any]:
             out[k] = v
     return out
 
+
 # Strict, single-source configuration module.
 
 # Section/key constants to avoid scattered magic strings
