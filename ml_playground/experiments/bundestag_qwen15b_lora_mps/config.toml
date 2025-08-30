@@ -20,7 +20,7 @@ add_structure_tokens = true
 # Token string used to separate concatenated documents during packing; ensure it’s present if you depend on it.
 doc_separator = "<DOC_SEP>"
 
-[train.hf_model]
+[train.extras.hf_model]
 # Hugging Face base model to fine-tune with LoRA.
 model_name = "Qwen/Qwen2.5-1.5B"
 # Enable gradient checkpointing to reduce memory at the cost of additional compute.
@@ -28,7 +28,7 @@ gradient_checkpointing = true
 # Logical sequence length for data packing/truncation during training (tokens per training block).
 block_size = 256
 
-[train.peft]
+[train.extras.peft]
 # Toggle LoRA training. If false, trains full model (not recommended on consumer hardware).
 enabled = true
 # Intrinsic rank of LoRA matrices (capacity of the adapter).
@@ -45,16 +45,14 @@ target_modules = ["q_proj","v_proj","o_proj"]
 extend_mlp_targets = false
 
 [train.data]
-# Directory containing prepared dataset artifacts (tokenizer/, train.jsonl, val.jsonl, meta.json).
-dataset_dir = "ml_playground/experiments/bundestag_qwen15b_lora_mps/datasets"
 # Per-step batch size (before gradient accumulation).
 batch_size = 8
 # Number of micro-steps to accumulate gradients before an optimizer step.
 grad_accum_steps = 8
 # Token block length for training examples (should usually match hf_model.block_size).
 block_size = 256
-# Whether to shuffle training blocks each epoch (set false for reproducible debug runs).
-shuffle = false
+# Sampling policy for training blocks: "random" (default) or "sequential" for deterministic order.
+sampler = "sequential"
 
 [train.optim]
 # Base learning rate for AdamW optimizer.
