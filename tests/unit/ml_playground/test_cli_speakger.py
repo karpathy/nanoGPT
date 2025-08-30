@@ -23,11 +23,12 @@ def test_sample_routes_to_speakger_integration(
         raising=False,
     )
 
-    # Ensure classic sampler is not used on this path
-    classic_sample = mocker.patch("ml_playground.cli.sample")
+    # Ensure classic sampler path (internal) is not used on this path
+    classic_sample = mocker.patch("ml_playground.cli._run_sample")
 
     # Act: run CLI with experiment auto-resolved config
-    main(["sample", "speakger"])
+    with pytest.raises(SystemExit, match="0"):
+        main(["sample", "speakger"])
 
     # Assert: integration sampler called once
     assert called["count"] == 1

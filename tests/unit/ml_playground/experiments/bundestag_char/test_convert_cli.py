@@ -87,7 +87,8 @@ outp.write_bytes(b'Q-GGUF')
     )
 
     # Act: run CLI
-    main(["convert", "bundestag_char"])
+    with pytest.raises(SystemExit, match="0"):
+        main(["convert", "bundestag_char"])
 
     # Assert: expected files created in our export dir
     model_path = export_dir / "model.gguf"
