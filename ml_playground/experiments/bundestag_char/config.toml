@@ -61,7 +61,7 @@ min_lr = 0.00003
 
 [train.runtime]
 # Output directory for logs, checkpoints, and metadata for this training run.
-out_dir = "./out/default_run"
+out_dir = "./out"
 # Total number of optimizer iterations to run (across all accumulation steps).
 max_iters = 100_000
 # How often (in iterations) to run evaluation/checkpoint logic.
@@ -113,7 +113,7 @@ ema_decay = 0.999
 [sample.runtime]
 # Output directory to read checkpoints from (and optionally write samples/logs to).
 # Typically should match the training run's out_dir you want to sample from.
-out_dir = "./out/default_run"
+out_dir = "./out"
 # Iteration controls are usually inert for pure sampling, but kept for API symmetry.
 max_iters = 0
 # Evaluation cadence placeholders (often unused in pure sampling flows).

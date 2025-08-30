@@ -283,7 +283,7 @@ dataset_dir = "data"
 
     # With defaults merged, runtime is populated from defaults; should not raise
     exp = _load_train_config(cfg_path)
-    assert exp.runtime.out_dir == Path("out/default_run")
+    assert exp.runtime.out_dir == Path("out")
 
 
 def test_unknown_key_in_train_data_strict(tmp_path: Path) -> None:
@@ -353,7 +353,7 @@ def test_sample_missing_runtime_strict(tmp_path: Path) -> None:
 
     # With defaults merged, runtime is populated from defaults; should not raise
     exp = _load_sample_config(cfg_path)
-    assert exp.runtime.out_dir == Path("out/default_run")
+    assert exp.runtime.out_dir == Path("out")
 
 
 def test_sample_relative_out_dir_resolution_strict(tmp_path: Path) -> None:
