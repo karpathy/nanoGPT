@@ -2,6 +2,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable, Tuple, Protocol
 import pickle
+import logging
 import torch
 from ml_playground.model import GPTConfig, GPT
 from ml_playground.config import SamplerConfig, RuntimeConfig
@@ -152,6 +153,19 @@ def _codec_from_meta(
                 lambda s: enc.encode(s, allowed_special={"<|endoftext|>"}),
                 lambda ids: enc.decode(list(ids)),
             )
+        elif kind == "word":
+            stoi = meta.get("stoi")
+            itos = meta.get("itos")
+            if not isinstance(stoi, dict) or not isinstance(itos, dict):
+                raise ValueError("Invalid meta for word: expected stoi/itos dicts")
+            sep = meta.get("token_sep", " ")
+            import re as _re
+
+            _pat = _re.compile(r"\S+")
+            return (
+                lambda s: [stoi[t] for t in _pat.findall(s) if t in stoi],
+                lambda ids: sep.join(itos[int(i)] for i in ids),
+            )
         else:
             raise ValueError(f"Unsupported or missing meta 'kind': {kind!r}")
 
@@ -211,26 +225,51 @@ def sample(exp: SamplerConfig) -> None:
         raise ValueError(
             "SamplerConfig.runtime is not resolved; use load_experiment_toml or provide [sample.runtime]."
         )
+    # Provide a sensible default logger if none was supplied in the config
+    if exp.logger is None:
+        _logger = logging.getLogger("ml_playground.sample")
+        if not _logger.handlers:
+            _h = logging.StreamHandler()
+            _h.setFormatter(logging.Formatter("%(message)s"))
+            _logger.addHandler(_h)
+        _logger.setLevel(logging.INFO)
+        logger = _logger
+    else:
+        logger = exp.logger
     rt = exp.runtime
+    # Early progress: device/context
+    logger.info("[sample] Initializing device and context...")
     device_type, ptdtype, ctx = setup(rt.device, rt.dtype, rt.seed)
+    logger.info(f"[sample] Device: {device_type}, dtype: {ptdtype}, seed: {rt.seed}")
 
+    # Load checkpoint and prepare model
+    logger.info(f"[sample] Loading checkpoint from {rt.out_dir} ...")
     model, _ = _load_checkpoint(rt, device=device_type)
     model.eval().to(device_type)
+    logger.info("[sample] Checkpoint loaded; model moved to device.")
+
     run_model = model
     if rt.compile:
+        logger.info("[sample] Compiling model (torch.compile)...")
         run_model = torch.compile(model)  # type: ignore[attr-defined,assignment]
+        logger.info("[sample] Compilation complete.")
 
     # Require dataset meta next to checkpoint outputs
+    logger.info("[sample] Loading tokenizer/meta...")
     meta_path = rt.out_dir / "meta.pkl"
     encode, decode = _codec_from_meta(meta_path)
+    logger.info("[sample] Tokenizer ready.")
 
     start = exp.sample.start
     if start.startswith("FILE:"):
         path = Path(start[5:])
+        logger.info(f"[sample] Reading prompt from {path} ...")
         start = path.read_text(encoding="utf-8")
+    logger.info("[sample] Encoding prompt...")
     start_ids = encode(start)
     x = torch.tensor(start_ids, dtype=torch.long, device=device_type)[None, ...]
 
+    logger.info("[sample] Starting generation...")
     with torch.no_grad():
         with ctx:
             for _ in range(exp.sample.num_samples):
@@ -240,6 +279,14 @@ def sample(exp: SamplerConfig) -> None:
                     temperature=exp.sample.temperature,
                     top_k=exp.sample.top_k,
                 )
-                print(start)
-                print("---------------")
-                print(decode(y[0].tolist()))
+                # Log to configured logger
+                logger.info(start)
+                logger.info("---------------")
+                logger.info(decode(y[0].tolist()))
+                # Also print to stdout for CLI UX and test expectations
+                try:
+                    print(start)
+                    print("---------------")
+                    print(decode(y[0].tolist()))
+                except Exception:
+                    pass

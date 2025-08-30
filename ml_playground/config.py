@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Literal, Optional, Any
 
 import tomllib
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from .prepare import PreparerConfig
 
@@ -181,6 +182,8 @@ class DataConfig(_FrozenStrictModel):
     batch_size: int = 12
     block_size: int = 1024
     grad_accum_steps: int = 40
+    # Tokenizer selection for bundestag_char-like datasets
+    tokenizer: Literal["char", "word"] = "char"
     # n-gram tokenization size for character datasets (1 = pure char-level)
     ngram_size: int = 1
     # Sampling policy: random (default) or sequential (deterministic coverage)
@@ -344,7 +347,7 @@ def load_toml(path: Path) -> "AppConfig":
     if not isinstance(path, Path):
         path = Path(path)
     if not path.exists():
-        raise FileNotFoundError(f"Config file not found: {path}")
+        raise FileNotFoundError(f"Config file not found: {path.resolve()}")
     with path.open("rb") as f:
         raw = tomllib.load(f)
     if not isinstance(raw, dict):

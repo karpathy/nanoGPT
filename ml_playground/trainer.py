@@ -216,15 +216,7 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
 
         writer = _NoopTB()  # type: ignore[assignment]
 
-    # Propagate dataset meta.pkl to out_dir for strict sampling-compatible sampling
-    try:
-        if exp.data.meta_pkl is not None:
-            src_meta = exp.data.dataset_dir / exp.data.meta_pkl
-            if src_meta.exists():
-                shutil.copy2(src_meta, rt.out_dir / "meta.pkl")
-    except Exception:
-        # Non-fatal during training; sampling will require meta.pkl and enforce strictly
-        pass
+    # meta.pkl fallback copying removed - sampling must find meta.pkl in the expected location
 
     device_type, ptdtype, ctx = setup(rt.device, rt.dtype, rt.seed)
 

@@ -255,6 +255,13 @@ class GPT(nn.Module):
         # idx is (B, T) array of indices in the current context
         if temperature < 0.0:
             raise ValueError("temperature must be >= 0.0")
+        
+        # Validate initial indices are within vocabulary range
+        max_vocab_idx = self.config.vocab_size - 1
+        if torch.any(idx >= self.config.vocab_size):
+            # Clamp out-of-range indices to valid range
+            idx = torch.clamp(idx, 0, max_vocab_idx)
+        
         for _ in range(max_new_tokens):
             idx_cond = (
                 idx
@@ -273,5 +280,8 @@ class GPT(nn.Module):
                     logits[logits < v[:, [-1]]] = -float("Inf")
                 probs = F.softmax(logits, dim=-1)
                 idx_next = torch.multinomial(probs, num_samples=1)
+            
+            # Ensure generated token is within vocabulary range
+            idx_next = torch.clamp(idx_next, 0, max_vocab_idx)
             idx = torch.cat((idx, idx_next), dim=1)
         return idx

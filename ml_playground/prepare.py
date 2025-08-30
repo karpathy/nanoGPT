@@ -102,8 +102,6 @@ class _PreparerInstance:
                             logger.warning(msg)
                         except Exception:
                             pass
-                    else:
-                        print(msg)
             except Exception:
                 logger = getattr(self.cfg, "logger", None)
                 msg = f"[prepare] Could not read existing meta.pkl at {meta_path}; regenerating dataset artifacts."
