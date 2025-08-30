@@ -6,6 +6,25 @@ __pycache__/
 *.bin
 *.pkl
 *.pt
+*.pth
+*.ckpt
+*.onnx
+*.npz
+*.npy
+*.h5
+*.hdf5
+*.safetensors
+*.msgpack
+*.zip
+*.tar
+*.tar.gz
+*.gz
+*.bz2
+*.xz
+*.zst
+*.gguf
+*.ggml
+*.weights
 *.pyc
 env/
 .venv/
@@ -16,6 +35,29 @@ out/
 .mypy_cache/
 .ruff_cache/
 .coverage
+
+# Common generated artifact directories
+datasets/
+**/datasets/
+checkpoints/
+**/checkpoints/
+runs/
+**/runs/
+wandb/
+**/wandb/
+lightning_logs/
+**/lightning_logs/
+artifacts/
+**/artifacts/
+mlruns/
+**/mlruns/
+logs/
+**/logs/
+tb_logs/
+tensorboard/
+**/tensorboard/
+events.out.tfevents.*
+
 # Prepared dataset artifacts
 ml_playground/datasets/**/train.bin
 ml_playground/datasets/**/val.bin
@@ -27,7 +69,14 @@ ml_playground/datasets/**/tokenizer/
 .output.txt
 /.env
 
+# Local caches (any location)
+.cache/
+**/.cache/
+.hf_cache/
+**/.hf_cache/
+
 # Local Hugging Face/Transformers cache directories (any location)
+# (kept for clarity; overlaps with .hf_cache patterns)
 .hf_cache/
 **/.hf_cache/
 
@@ -46,3 +95,7 @@ tools/llama_cpp/llama-quantize
 
 # Stray helper files
 --help
+
+
+# Local editor/workspace folders
+.windsurf/
