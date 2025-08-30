@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling>=1.25.0"]
+requires = ["hatchling>=1.27.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -8,42 +8,38 @@ version = "0.0.0"
 description = "A minimal GPT training repo (uv-integrated)"
 readme = "README.md"
 authors = [
-  { name = "Andrej Karpathy" },
+    { name = "Andrej Karpathy" },
 ]
 license = { file = "LICENSE" }
 requires-python = ">=3.13"
 dependencies = [
-  "numpy>=2",
-  "requests>=2.32.5",
-  "tiktoken>=0.7",
-  "tqdm>=4.66",
-  "datasets>=2.20",
-  "transformers>=4.55.4",
-  "peft>=0.17.1",
-  "beautifulsoup4>=4.13.5",
-  "torch>=2.4.1",
-  "pip >= 25.2",
-  "tensorboard>=2.20.0",
-  "torch-tb-profiler>=0.4.3",
-  "pydantic>=2",
-  "notebook>=7.4.5",
-  "typer>=0.16.1",
-  "sentencepiece>=0.2.1",
-  "pandas-stubs==2.3.2.250827",
+    "numpy>=2.3.2",
+    "requests>=2.32.5",
+    "tiktoken>=0.11.0",
+    "tqdm>=4.67.1",
+    "datasets>=4.0.0",
+    "transformers>=4.55.4",
+    "peft>=0.17.1",
+    "beautifulsoup4>=4.13.5",
+    "torch>=2.8.0",
+    "pip >= 25.2",
+    "tensorboard>=2.20.0",
+    "torch-tb-profiler>=0.4.3",
+    "pydantic>=2.11.7",
+    "notebook>=7.4.5",
+    "typer>=0.16.1",
+    "sentencepiece>=0.2.1",
+    "pandas-stubs==2.3.2.250827",
 ]
 
 [project.optional-dependencies]
-notebooks = [
-  "matplotlib>=3.7",
-  "pandas>=1.5",
-  "jupyter>=1.0",
-]
+
 # Optional extra: LIT integration (install only when needed)
 # Note: lit-nlp currently pulls transitive deps (e.g., llvmlite via umap-learn) that
 # are not compatible with Python 3.13. The extra is therefore disabled on 3.13+
 # to allow `uv sync --extra lit` to succeed without attempting incompatible installs.
 lit = [
-  #"lit-nlp>=1.3.1; # python_version < '3.13'",
+    #"lit-nlp>=1.3.1; # python_version < '3.13'",
 ]
 
 
@@ -62,15 +58,15 @@ packages = ["ml_playground"]
 # Mandatory dev tooling available in the project venv
 # Sync with: uv sync --group dev (do NOT use --all-groups unless you intend to install optional extras)
 dev = [
-  "pytest>=8",
-  "pytest-xdist>=3",
-  "pytest-cov>=6",
-  "pytest-mock>=3",
-  "coverage[toml]>=7",
-  "ruff>=0.6",
-  "mypy>=1.11",
-  "pyright>=1.1.380",
-  "types-requests>=2.32",
+    "pytest>=8.4.1",
+    "pytest-xdist>=3.8.0",
+    "pytest-cov>=6.2.1",
+    "pytest-mock>=3.14.1",
+    "coverage[toml]>=7.10.6",
+    "ruff>=0.12.11",
+    "mypy>=1.17.1",
+    "pyright>=1.1.404",
+    "types-requests>=2.32.4.20250809",
 ]
 
 
@@ -78,51 +74,78 @@ dev = [
 [tool.ruff]
 respect-gitignore = true
 extend-exclude = [
-  ".idea",
-  ".vscode",
-  "out",
-  "**/out/**",
-  "data",
-  "**/datasets/**",
-  ".venv",
-  "env",
-  ".pytest_cache",
-  ".mypy_cache",
-  ".ruff_cache",
-  ".git",
-  "htmlcov",
+    ".idea",
+    ".vscode",
+    "out",
+    "**/out/**",
+    "data",
+    "datasets",
+    "**/datasets/**",
+    "checkpoints",
+    "**/checkpoints/**",
+    "*.pt",
+    "runs",
+    "**/runs/**",
+    "wandb",
+    "**/wandb/**",
+    "lightning_logs",
+    "**/lightning_logs/**",
+    "artifacts",
+    "**/artifacts/**",
+    "mlruns",
+    "**/mlruns/**",
+    ".cache",
+    "**/.cache/**",
+    ".hf_cache",
+    "**/.hf_cache/**",
+    ".venv",
+    "env",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".git",
+    "htmlcov",
 ]
 
 [tool.mypy]
 # When invoked without explicit targets, analyze only the project code.
 files = ["ml_playground"]
 # Also exclude common ignored/artifact directories if mypy is invoked without args.
-exclude = '(^|.*/)(out/|data/|datasets/|htmlcov/|\.idea/|\.vscode/|\.venv/|env/|\.pytest_cache/|\.mypy_cache/|\.ruff_cache/|\.git/)'
+exclude = '(^|.*/)(out/|data/|datasets/|checkpoints/|runs/|wandb/|lightning_logs/|artifacts/|mlruns/|htmlcov/|\.idea/|\.vscode/|\.venv/|env/|\.pytest_cache/|\.mypy_cache/|\.ruff_cache/|\.hf_cache/|\.cache/|\.git/)'
 
 
 [tool.pytest.ini_options]
 # Updated pytest settings for ml_playground
 addopts = "-n auto -W error --strict-markers --strict-config -v"
 testpaths = [
-  "tests",
+    "tests",
 ]
 norecursedirs = [
-  ".git",
-  ".idea",
-  ".vscode",
-  ".venv",
-  "env",
-  "out",
-  "data",
-  "htmlcov",
-  ".pytest_cache",
-  ".mypy_cache",
-  ".ruff_cache",
+    ".git",
+    ".idea",
+    ".vscode",
+    ".venv",
+    "env",
+    "out",
+    "data",
+    "datasets",
+    "checkpoints",
+    "runs",
+    "wandb",
+    "lightning_logs",
+    "artifacts",
+    "mlruns",
+    ".hf_cache",
+    ".cache",
+    "htmlcov",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
 ]
 markers = [
-  "slow: marks tests as slow (deselected by default)",
-  "integration: marks tests as integration tests",
-  "perf: marks tests as performance tests (deselected by default)",
+    "slow: marks tests as slow (deselected by default)",
+    "integration: marks tests as integration tests",
+    "perf: marks tests as performance tests (deselected by default)",
 ]
 
 [tool.coverage.run]
@@ -130,16 +153,25 @@ source = ["ml_playground"]
 branch = true
 parallel = true
 omit = [
-  "tests/*",
-  "*/conftest.py",
+    "tests/*",
+    "*/conftest.py",
+    "**/datasets/*",
+    "**/checkpoints/*",
+    "**/runs/*",
+    "**/wandb/*",
+    "**/lightning_logs/*",
+    "**/artifacts/*",
+    "**/mlruns/*",
+    "**/.hf_cache/*",
+    "**/.cache/*",
 ]
 
 [tool.coverage.report]
 # ULTRA-STRICT: 100% coverage required, no exceptions
 exclude_lines = [
-  # Only allow exclusion for truly impossible-to-test code
-  "if 0:",
-  "if __name__ == .__main__.:",
+    # Only allow exclusion for truly impossible-to-test code
+    "if 0:",
+    "if __name__ == .__main__.:",
 ]
 show_missing = true
 skip_covered = false
@@ -153,15 +185,32 @@ directory = "htmlcov"
 [tool.pyright]
 include = ["ml_playground"]
 exclude = [
-  ".git",
-  ".idea",
-  ".vscode",
-  "out",
-  "**/out/**",
-  "data",
-  "**/datasets/**",
-  ".venv",
-  ".mypy_cache",
-  ".ruff_cache",
-  "htmlcov",
+    ".git",
+    ".idea",
+    ".vscode",
+    "out",
+    "**/out/**",
+    "data",
+    "datasets",
+    "**/datasets/**",
+    "checkpoints",
+    "**/checkpoints/**",
+    "runs",
+    "**/runs/**",
+    "wandb",
+    "**/wandb/**",
+    "lightning_logs",
+    "**/lightning_logs/**",
+    "artifacts",
+    "**/artifacts/**",
+    "mlruns",
+    "**/mlruns/**",
+    ".hf_cache",
+    "**/.hf_cache/**",
+    ".cache",
+    "**/.cache/**",
+    ".venv",
+    ".mypy_cache",
+    ".ruff_cache",
+    "htmlcov",
 ]
