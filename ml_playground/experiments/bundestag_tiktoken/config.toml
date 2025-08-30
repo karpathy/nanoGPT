@@ -66,7 +66,7 @@ warmup_iters = 2000
 lr_decay_iters = 200_000
 # min_lr: lower bound for LR during decay. Prevents LR from going to zero and allows continued small updates.
 # Typical values: 1e-5 .. 1e-6 for mid-sized training runs; lower for very long schedules.
-min_lr = 1e-5
+min_lr = 1e-4
 
 [train.runtime]
 # max_iters: total optimizer steps (after accumulation) to run.
@@ -105,8 +105,6 @@ best_smoothing_alpha = 0.9
 early_stop_patience = 0
 
 [sample.runtime]
-# out_dir: checkpoint directory to load from for sampling flows (keep aligned with train out_dir if sampling trained models).
-out_dir = "./out"
 # max_iters, eval_interval, eval_iters: retained for symmetry with training interface; often unused during pure sampling.
 max_iters = 0
 eval_interval = 1
@@ -132,8 +130,8 @@ start = "\nNächste Rednerin ist die Vorsitzende der AfD-Fraktion, Dr. Alice We
 # Number of independent samples to generate for the same prompt/settings.
 num_samples = 2
 # Maximum number of new tokens to generate after the prompt.
-max_new_tokens = 2048
+max_new_tokens = 512
 # Softens or sharpens the probability distribution before sampling; higher = more random, 0 = greedy/argmax.
 temperature = 0.8
 # Sample only from the top-K most likely tokens at each step; lower K increases coherence, higher K increases diversity.
-top_k = 200
+top_k = 10

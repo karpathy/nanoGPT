@@ -12,48 +12,38 @@
 # Number of Transformer layers (blocks); increases capacity and compute/memory cost.
 n_layer = 4
 # Number of attention heads per layer; must divide n_embd; more heads can help stability at added cost.
-n_head = 6
+n_head = 8
 # Embedding/hidden size; larger increases model capacity and compute.
 n_embd = 384
 # Maximum context length the model is built for (positional embeddings); must be >= [train.data].block_size.
 # Increasing this raises memory/time roughly ~ O(block_size^2) per layer due to attention.
-block_size = 192
+block_size = 256
 # Dropout rate for regularization during training; set >0 to regularize, 0.0 for deterministic/fast runs.
-dropout = 0.1
+dropout = 0.2
 # Whether to include bias terms in linear/LayerNorm layers; false is common for GPT-style models.
 bias = false
 
 [train.data]
 # Folder containing the preprocessed dataset files referenced below.
 dataset_dir = "./datasets"
+# Tokenizer selection: "char" (default) or "word" for word-level vocabulary
+tokenizer = "word"
 # Character-level n-gram size used during dataset preparation (1 = single/chars, 3 = trigrams, etc.)
-ngram_size = 2
+ngram_size = 1
 # Micro-batch size per optimization step (per device); tuned for MPS memory
 batch_size = 8
 # Sequence length; ensure <= [train.model].block_size
-block_size = 192
+block_size = 256
 # Number of gradient accumulation steps to increase effective batch without extra memory
-grad_accum_steps = 2
+grad_accum_steps = 4
 # Sampling policy: deterministic sequential coverage for char dataset
-sampler = "sequential"
-
-[train.optim]
-# Base learning rate used by the optimizer; interacts with schedule below if decay_lr = true.
-learning_rate = 0.0003
-# L2-style weight decay for regularization; typically not applied to LayerNorm/bias parameters in AdamW-style setups.
-weight_decay = 0.1
-# Adam/AdamW beta1 (momentum) parameter; higher retains more past gradients.
-beta1 = 0.9
-# Adam/AdamW beta2 (second-moment) parameter; higher smooths variance more but reacts slower to changes.
-beta2 = 0.95
-# Gradient norm clipping threshold to prevent exploding gradients; 0 or None would disable if supported.
-grad_clip = 1.0
+sampler = "random"
 
 [train.schedule]
 # Whether to apply a learning-rate schedule (typically warmup + decay).
 decay_lr = true
 # Number of warmup iterations from 0 -> learning_rate; ignored if decay_lr = false.
-warmup_iters = 2000
+warmup_iters = 3_000
 # Number of iterations over which to decay from learning_rate down toward min_lr; align with max_iters for cosine/poly schedules.
 lr_decay_iters = 100_000
 # Lower bound (floor) for the learning rate during decay; helps avoid stalling late in training.
@@ -65,11 +55,11 @@ out_dir = "./out"
 # Total number of optimizer iterations to run (across all accumulation steps).
 max_iters = 100_000
 # How often (in iterations) to run evaluation/checkpoint logic.
-eval_interval = 1_000
+eval_interval = 25
 # Number of evaluation batches to average per evaluation; higher reduces noise but takes longer.
-eval_iters = 100
+eval_iters = 10
 # How often (in iterations) to log training metrics.
-log_interval = 20
+log_interval = 100
 # If true, only runs evaluation and exits (no training updates); useful for validating or benchmarking.
 eval_only = false
 # If true, save a checkpoint on every eval (last and/or best/top-k as configured); increases disk usage.
@@ -89,7 +79,7 @@ ckpt_last_filename = "ckpt_last.pt"
 # Filename pattern/name for the best-scoring checkpoint according to ckpt_metric.
 ckpt_best_filename = "ckpt_best.pt"
 # Keep the top-K best checkpoints (by ckpt_metric) in addition to "last"; 0 disables top-K retention.
-ckpt_top_k = 3
+ckpt_top_k = 0
 # Metric key to select "best" (e.g., "val_loss"); must match what evaluation reports.
 ckpt_metric = "val_loss"
 # Whether higher metric values are better (true) or lower are better (false); e.g., false for "val_loss".
@@ -105,7 +95,7 @@ ckpt_time_interval_minutes = 0
 # Smoothing can reduce checkpoint churn and interacts with early_stop_patience.
 best_smoothing_alpha = 0.9
 # Early stopping patience in number of evaluations without improvement; 0 disables early stopping.
-early_stop_patience = 10
+early_stop_patience = 0
 # Exponential Moving Average (EMA) decay for model weights; 0.0 disables.
 # If >0, evaluations/checkpoints may use EMA weights for better validation stability.
 ema_decay = 0.999

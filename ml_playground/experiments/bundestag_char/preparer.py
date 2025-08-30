@@ -5,7 +5,7 @@ from typing import Iterable, Dict, Tuple
 import pickle
 from array import array
 from timeit import default_timer as timer
-from ml_playground.prepare import PreparerConfig
+from ml_playground.prepare import PreparerConfig, seed_text_file
 from ml_playground.experiments.protocol import (
     Preparer as _PreparerProto,
     PrepareReport,
@@ -39,10 +39,14 @@ class BundestagCharPreparer(_PreparerProto):
 
         # Inline legacy prepare logic
         input_file_path = ds_dir / "input.txt"
-        if not input_file_path.exists():
-            raise FileNotFoundError(
-                f"Missing dataset at {input_file_path}; provide an input.txt with your corpus"
-            )
+        bundled = Path(__file__).parent / "input.txt"
+        candidates = [
+            Path("/datasets/Bundestag.csv"),
+            ds_dir / "input.txt",
+            exp_dir / "page1.txt",
+            bundled,
+        ]
+        seed_text_file(input_file_path, candidates)
 
         # Perform a memory-efficient two-pass preparation:
         # 1) Scan to collect token set and total token count (so we can split train/val).
@@ -54,7 +58,6 @@ class BundestagCharPreparer(_PreparerProto):
             cfg_path = exp_dir / "config.toml"
             if cfg_path.exists():
                 import tomllib as _tomllib
-
                 with cfg_path.open("rb") as _f:
                     _raw = _tomllib.load(_f)
                 if isinstance(_raw, dict):
