@@ -3,14 +3,14 @@
 Character-level language modeling on Bundestag speeches with a simple vocabulary built from the dataset characters.
 
 ## Overview
-- Dataset: Custom text (seeded with page1.txt by default)
+ - Dataset: Custom text (provide input.txt manually)
 - Encoding: Per-character IDs (uint16)
 - Method: Classic NanoGPT-style training (strict TOML config)
 - Pipeline: prepare → train → sample via ml_playground CLI
 
 ## Data
-- Input: ml_playground/experiments/bundestag_char/datasets/page1.txt
-  - If missing, the preparer seeds it from a bundled sample file; replace with your own text for real runs.
+ - Input: ml_playground/experiments/bundestag_char/datasets/input.txt
+   - Preparers fail if this file is missing; create it with your own text.
 - Outputs (prepared):
   - train.bin, val.bin (uint16 arrays)
   - meta.pkl (vocab metadata with stoi/itos, vocab_size)

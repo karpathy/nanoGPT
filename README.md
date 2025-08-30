@@ -28,7 +28,7 @@ Quality gates (required before commit/PR)
 
 Datasets
 - Shakespeare (GPT-2 BPE; prepared via internal ml_playground.experiments.shakespeare)
-- Bundestag (char-level; prepared via internal ml_playground.experiments.bundestag_char; auto-seeds ml_playground/experiments/bundestag_char/datasets/page1.txt from a bundled sample if missing — replace it with your own text for real runs)
+ - Bundestag (char-level; prepared via internal ml_playground.experiments.bundestag_char; requires a user-provided text at ml_playground/experiments/bundestag_char/datasets/input.txt)
 - Bundestag (tiktoken BPE; prepared via internal ml_playground.experiments.bundestag_tiktoken)
 
 Prepare
