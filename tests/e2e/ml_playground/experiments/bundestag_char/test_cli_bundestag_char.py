@@ -136,7 +136,6 @@ def test_loop_bundestag_char_quick(
         "ML_PLAYGROUND_TRAIN_OVERRIDES", _train_overrides(out_dir, tmp_dataset)
     )
     monkeypatch.setenv("ML_PLAYGROUND_SAMPLE_OVERRIDES", _sample_overrides(out_dir))
-    with pytest.raises(SystemExit, match="0"):
-        main(["loop", "bundestag_char"])  # end-to-end pipeline
+    main(["loop", "bundestag_char"])  # end-to-end pipeline
     # Check that training produced checkpoints in the designated directory
     assert (out_dir / "ckpt_best.pt").exists()

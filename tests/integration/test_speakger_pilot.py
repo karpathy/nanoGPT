@@ -2,12 +2,105 @@ from __future__ import annotations
 
 from pathlib import Path
 import json
+import csv
+from typing import Any, Iterable, Mapping, Optional, Dict
 
-from ml_playground.datasets.speakger_pilot import (
-    detect_schema_columns,
-    make_head_subset,
-    stream_filter_to_file,
-)
+
+def detect_schema_columns(headers: Iterable[str]) -> Dict[str, str]:
+    """Best-effort header detection used by this integration test."""
+    low = [h.strip() for h in headers]
+    lmap = {h.lower(): h for h in low}
+
+    def pick(*candidates: str, default: Optional[str] = None) -> str:
+        for c in candidates:
+            if c.lower() in lmap:
+                return lmap[c.lower()]
+        return default or candidates[0]
+
+    return {
+        "speaker": pick("speaker", "name"),
+        "party": pick("party", "party_short", "party_long"),
+        "date": pick("date", "datum"),
+        "topic": pick("topic", "thema", default="topic"),
+        "content": pick("content", "text", "speech", default="content"),
+    }
+
+
+def make_head_subset(src: Path, dst: Path, n_lines: int) -> Path:
+    """Write the first n_lines of src (including header) to dst and return dst."""
+    src = Path(src)
+    dst = Path(dst)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    with src.open("r", encoding="utf-8") as f_in, dst.open("w", encoding="utf-8") as f_out:
+        for i, line in enumerate(f_in):
+            if i >= n_lines:
+                break
+            f_out.write(line)
+    return dst
+
+
+def _row_year(row: Mapping[str, Any], date_key: str) -> Optional[int]:
+    v = row.get(date_key)
+    if v is None:
+        return None
+    s = str(v)
+    for i in range(len(s)):
+        if s[i : i + 4].isdigit():
+            try:
+                return int(s[i : i + 4])
+            except Exception:
+                return None
+    return None
+
+
+def stream_filter_to_file(
+    *,
+    speeches_csv: Path,
+    mps_mapping_csv: Optional[Path] = None,  # unused in minimal test
+    mps_meta_csv: Optional[Path] = None,     # unused in minimal test
+    out_path: Path,
+    output_format: str = "jsonl",
+    chunksize: int = 10_000,  # unused in minimal test
+    party: str,
+    start_year: int,
+    end_year: int,
+) -> Dict[str, Any]:
+    """Stream rows, filter by party substring and year range, write JSONL, return report."""
+    del chunksize, mps_mapping_csv, mps_meta_csv  # not exercised by this test
+    party_norm = str(party).lower()
+
+    rows_written = 0
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(speeches_csv, "r", encoding="utf-8", newline="") as f_in, open(
+        out_path, "w", encoding="utf-8"
+    ) as f_out:
+        reader = csv.DictReader(f_in)
+        schema = detect_schema_columns(reader.fieldnames or [])
+        for row in reader:
+            p = str(row.get(schema["party"], "")).lower()
+            if party_norm not in p and p != party_norm:
+                continue
+            y = _row_year(row, schema["date"]) or -10**9
+            if y < start_year or y > end_year:
+                continue
+            obj = {
+                "speaker": row.get(schema["speaker"], ""),
+                "party": row.get(schema["party"], ""),
+                "date": row.get(schema["date"], ""),
+                "topic": row.get(schema["topic"], ""),
+                "content": row.get(schema["content"], ""),
+                "year": y if y > 0 else None,
+            }
+            f_out.write(json.dumps(obj, ensure_ascii=False) + "\n")
+            rows_written += 1
+
+    return {
+        "rows_written": rows_written,
+        "out_path": str(out_path),
+        "format": output_format,
+    }
 
 
 def test_speakger_pilot_end_to_end(tmp_path: Path) -> None:

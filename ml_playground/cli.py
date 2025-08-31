@@ -1411,8 +1411,12 @@ def main(argv: list[str] | None = None) -> None:
     """
     cmd = get_command(app)
     try:
-        # Use standalone_mode=True to let typer handle exceptions and convert them to SystemExit
-        cmd.main(args=argv, prog_name="ml_playground", standalone_mode=True)
+        # Use standalone_mode=False so success does not raise SystemExit (for programmatic calls/tests)
+        ret = cmd.main(args=argv, prog_name="ml_playground", standalone_mode=False)
+        # If click/typer returns a non-zero integer exit code, propagate as SystemExit
+        if isinstance(ret, int) and ret != 0:
+            raise SystemExit(ret)
+        return
     except click.exceptions.NoArgsIsHelpError:
         # Help was shown (no args). Exit cleanly without traceback.
         return
@@ -1448,9 +1452,11 @@ def main(argv: list[str] | None = None) -> None:
         typer.echo(msg)
         raise SystemExit(getattr(e, "exit_code", 1))
     except click.exceptions.Exit as e:
-        # Silence tracebacks for click's Exit; exit with its code.
-        # Note: typer.Exit is actually click.exceptions.Exit
-        raise SystemExit(getattr(e, "exit_code", 0))
+        # For programmatic entry, only propagate non-zero exit codes
+        code = getattr(e, "exit_code", 0)
+        if code != 0:
+            raise SystemExit(code)
+        return
     except KeyboardInterrupt:
         typer.echo("\nOperation interrupted by user (Ctrl+C). Exiting gracefully.")
     except Exception as e:
