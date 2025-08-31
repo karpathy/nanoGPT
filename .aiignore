@@ -10,3 +10,5 @@
 *.pt
 *.pyc
 **/input.txt
+**/all_mps*.csv
+**/Bundestag.csv
