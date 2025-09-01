@@ -66,6 +66,11 @@ ml_playground/datasets/**/meta.json
 ml_playground/datasets/**/train.jsonl
 ml_playground/datasets/**/val.jsonl
 ml_playground/datasets/**/tokenizer/
+
+# Bundestag MP datasets (sensitive CSVs)
+**/all_mps_mapping.csv
+**/all_mps_meta.csv
+
 .output.txt
 /.env
 
