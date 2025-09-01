@@ -1,0 +1,80 @@
+# Tiny defaults for fast e2e runs. Schema mirrors production defaults.
+
+[prepare]
+dataset_dir = "./datasets"
+raw_dir = "./raw"
+add_structure_tokens = false
+doc_separator = "\n\n"
+
+[train.model]
+n_layer = 1
+n_head = 1
+n_embd = 32
+block_size = 32
+dropout = 0.0
+# Keep bias false for GPT-style
+bias = false
+# Allow small vocabulary for speed when used
+vocab_size = 256
+
+[train.data]
+batch_size = 1
+block_size = 16
+grad_accum_steps = 1
+sampler = "random"
+
+[train.optim]
+learning_rate = 0.0005
+weight_decay = 0.0
+beta1 = 0.9
+beta2 = 0.95
+grad_clip = 0.0
+
+[train.schedule]
+decay_lr = false
+warmup_iters = 0
+lr_decay_iters = 1
+min_lr = 0.00001
+
+[train.runtime]
+max_iters = 2
+eval_interval = 1
+eval_iters = 1
+log_interval = 1
+eval_only = false
+always_save_checkpoint = true
+seed = 1
+device = "cpu"
+dtype = "float32"
+compile = false
+# No checkpoint churn for speed
+ckpt_top_k = 0
+ckpt_write_metadata = false
+ckpt_time_interval_minutes = 0
+ckpt_atomic = false
+best_smoothing_alpha = 0.0
+early_stop_patience = 0
+ema_decay = 0.0
+# Keep relative out_dir to be overridden by experiment config in tests if needed
+out_dir = "out"
+
+[sample.runtime]
+# Keep sampling lightweight
+out_dir = "out"
+device = "cpu"
+dtype = "float32"
+compile = false
+eval_only = false
+always_save_checkpoint = false
+seed = 1
+max_iters = 0
+eval_interval = 1
+eval_iters = 1
+log_interval = 1
+
+[sample.sample]
+start = "Hi"
+num_samples = 1
+max_new_tokens = 8
+temperature = 0.8
+top_k = 20
