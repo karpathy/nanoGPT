@@ -89,3 +89,10 @@ GGUF export (vendor approach)
 - Verify:
   uv run python tools/llama_cpp/convert-hf-to-gguf.py --help
   (If you see a placeholder message, you still need to copy the upstream script.)
+
+Testing
+- Unit tests: see `tests/unit/README.md` for scope, principles, and how to run.
+- Integration tests: see `tests/integration/README.md` for guidance and patterns.
+- End-to-end (E2E) tests: see `tests/e2e/README.md`.
+  - When invoking the CLI in E2E tests, pass the tiny test defaults explicitly:
+    `--exp-config tests/e2e/ml_playground/experiments/test_default_config.toml`

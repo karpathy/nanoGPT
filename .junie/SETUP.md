@@ -58,6 +58,14 @@ uv run python -m ml_playground.cli loop bundestag_char --exp-config ml_playgroun
 - Paths automatically converted to `pathlib.Path` objects
 - Device defaults to CPU-first; MPS/CUDA supported when explicitly configured
 
+## Testing
+
+- Unit tests: see `tests/unit/README.md` (fast, isolated; no external TOML)
+- Integration tests: see `tests/integration/README.md` (compose small real components via Python APIs)
+- End-to-end (E2E) tests: see `tests/e2e/README.md` (CLI wiring, config merge, logging)
+  - When invoking the CLI in E2E tests, pass the tiny test defaults explicitly:
+    `--exp-config tests/e2e/ml_playground/experiments/test_default_config.toml`
+
 ## Quick Troubleshooting
 
 **Tests cannot import `ml_playground`**: You're not in the project venv - run `uv venv` then `uv sync --all-groups`

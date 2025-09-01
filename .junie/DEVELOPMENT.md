@@ -43,6 +43,13 @@ uv run pytest -n auto -W error --strict-markers --strict-config -v
 
 ## Testing Standards (ULTRA-STRICT POLICY - 100% SUCCESS REQUIRED)
 
+Testing Docs
+- Unit tests: see `tests/unit/README.md` (isolation, speed, pure-Python focus)
+- Integration tests: see `tests/integration/README.md` (compose small real components)
+- End-to-end (E2E): see `tests/e2e/README.md` (CLI wiring, config/paths, logging)
+  - For CLI-based E2E tests, pass the tiny defaults explicitly:
+    `--exp-config tests/e2e/ml_playground/experiments/test_default_config.toml`
+
 ### 1. Test Framework and Runner
 - **Framework**: pytest only. Do not use unittest or nose.
 - **Runner**: `uv run pytest`

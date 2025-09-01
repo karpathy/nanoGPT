@@ -101,6 +101,13 @@ uv run python -m ml_playground.cli loop bundestag_char --exp-config ml_playgroun
 - **Import problems**: Review [IMPORT_GUIDELINES.md](IMPORT_GUIDELINES.md) for strict policies
 - **Troubleshooting**: Consult [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for common issues
 
+## 🧪 Testing Docs
+- Unit tests: see `tests/unit/README.md` (fast, isolated, pure-Python; no external TOML)
+- Integration tests: see `tests/integration/README.md` (compose real modules via Python APIs)
+- End-to-end (E2E) tests: see `tests/e2e/README.md` (CLI wiring, config merge, logging)
+  - Use explicit tiny defaults for E2E CLI runs:
+    `--exp-config tests/e2e/ml_playground/experiments/test_default_config.toml`
+
 ---
 
 *This guideline system ensures consistent, high-quality development practices across the ml_playground module. Each document focuses on a specific aspect while maintaining coherent overall standards.*
