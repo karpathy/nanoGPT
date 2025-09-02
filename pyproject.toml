@@ -116,7 +116,7 @@ exclude = '(^|.*/)(out/|data/|datasets/|checkpoints/|runs/|wandb/|lightning_logs
 
 [tool.pytest.ini_options]
 # Updated pytest settings for ml_playground
-addopts = "-n auto -W error --strict-markers --strict-config -v"
+addopts = "-W error --strict-markers --strict-config -v"
 testpaths = [
     "tests",
 ]

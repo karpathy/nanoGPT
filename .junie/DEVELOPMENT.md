@@ -1,3 +1,7 @@
+---
+apply: always
+---
+
 # ml_playground Development Practices
 
 Core development practices, quality standards, and workflow for ml_playground contributors.

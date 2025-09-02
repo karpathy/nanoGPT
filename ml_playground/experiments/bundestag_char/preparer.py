@@ -5,22 +5,23 @@ from typing import Iterable, Dict, Tuple
 import pickle
 from array import array
 from timeit import default_timer as timer
-from ml_playground.prepare import PreparerConfig, seed_text_file
+from ml_playground.prepare import PreparerConfig, seed_text_file, split_train_val, prepare_with_tokenizer, write_bin_and_meta, snapshot_files, diff_files, create_standardized_metadata
+from ml_playground.tokenizer import create_tokenizer, CharTokenizer
 from ml_playground.experiments.protocol import (
     Preparer as _PreparerProto,
     PrepareReport,
 )
+from ml_playground.error_handling import DataError, safe_file_operation, validate_file_exists, ProgressReporter
+from ml_playground.config import validate_config_field, validate_path_exists
 
 
 class BundestagCharPreparer(_PreparerProto):
     def prepare(self, cfg: PreparerConfig) -> PrepareReport:  # type: ignore[override]
-        # Track side effects for standard outputs
         exp_dir = Path(__file__).resolve().parent
         ds_dir = exp_dir / "datasets"
         ds_dir.mkdir(parents=True, exist_ok=True)
         outputs = [ds_dir / "train.bin", ds_dir / "val.bin", ds_dir / "meta.pkl"]
 
-        # Fast-path: if dataset artifacts already exist and meta looks valid, skip heavy work
         if _artifacts_look_valid(outputs):
             msgs = (
                 f"[bundestag_char] dataset already prepared at {ds_dir}; skipping.",
@@ -35,9 +36,8 @@ class BundestagCharPreparer(_PreparerProto):
                 messages=msgs,
             )
 
-        pre = _snapshot(outputs)
+        pre = snapshot_files(outputs)
 
-        # Inline legacy prepare logic
         input_file_path = ds_dir / "input.txt"
         bundled = Path(__file__).parent / "input.txt"
         candidates = [
@@ -48,11 +48,6 @@ class BundestagCharPreparer(_PreparerProto):
         ]
         seed_text_file(input_file_path, candidates)
 
-        # Perform a memory-efficient two-pass preparation:
-        # 1) Scan to collect token set and total token count (so we can split train/val).
-        # 2) Build vocab (stoi/itos) and stream-encode tokens writing binary files in chunks.
-        # This avoids loading the entire file or large Python lists into memory.
-        # Read n-gram size from experiment config if available
         n: int = 1
         try:
             cfg_path = exp_dir / "config.toml"
@@ -71,238 +66,32 @@ class BundestagCharPreparer(_PreparerProto):
         if n < 1:
             n = 1
 
-        # First pass: gather token set and total token count with progress reporting.
-        token_set: set[str] = set()
-        total_tokens = 0
-        chunk_size = 64 * 1024  # 64KB reads
+        validate_config_field(n, "ngram_size", int, min_value=1)
+        
+        validate_file_exists(input_file_path, "Input text file")
 
-        total_bytes = None
-        try:
-            total_bytes = input_file_path.stat().st_size
-        except Exception:
-            total_bytes = None
-
-        print(f"[prepare] First pass: scanning {input_file_path} for tokens...")
-        start_time = timer()
-        last_report = start_time
-        report_interval_seconds = 5.0
-        processed_bytes = 0
-
-        if n <= 1:
-            # Use binary reads for accurate byte progress, decode for token extraction
-            with input_file_path.open("rb") as f:
-                while True:
-                    chunk_bytes = f.read(chunk_size)
-                    if not chunk_bytes:
-                        break
-                    processed_bytes = f.tell()
-                    chunk = chunk_bytes.decode("utf-8", errors="ignore")
-                    token_set.update(chunk)
-                    total_tokens += len(chunk)
-                    now = timer()
-                    if now - last_report >= report_interval_seconds:
-                        last_report = now
-                        if total_bytes:
-                            pct = processed_bytes * 100.0 / total_bytes
-                            print(
-                                f"[prepare] scan progress: {processed_bytes}/{total_bytes} bytes ({pct:.1f}%), tokens_seen={len(token_set)}"
-                            )
-                        else:
-                            print(
-                                f"[prepare] scan progress: bytes_processed={processed_bytes}, tokens_seen={len(token_set)}"
-                            )
+        data = input_file_path.read_text(encoding="utf-8")
+        
+        if n == 1:
+            tokens = sorted(set(data))
+            stoi = {tok: i for i, tok in enumerate(tokens)}
+            tokenizer = CharTokenizer(vocab=stoi)
         else:
-            # For n-grams keep a sliding tail across binary chunk boundaries
-            with input_file_path.open("rb") as f:
-                tail = ""
-                while True:
-                    chunk_bytes = f.read(chunk_size)
-                    if not chunk_bytes:
-                        break
-                    processed_bytes = f.tell()
-                    chunk = chunk_bytes.decode("utf-8", errors="ignore")
-                    seq = tail + chunk
-                    L = len(seq)
-                    if L >= n:
-                        for i in range(0, L - n + 1):
-                            token_set.add(seq[i : i + n])
-                        total_tokens += max(0, L - n + 1)
-                        tail = seq[-(n - 1) :]
-                    else:
-                        tail = seq
-                    now = timer()
-                    if now - last_report >= report_interval_seconds:
-                        last_report = now
-                        if total_bytes:
-                            pct = processed_bytes * 100.0 / total_bytes
-                            print(
-                                f"[prepare] scan progress: {processed_bytes}/{total_bytes} bytes ({pct:.1f}%), ngram_types={len(token_set)}"
-                            )
-                        else:
-                            print(
-                                f"[prepare] scan progress: bytes_processed={processed_bytes}, ngram_types={len(token_set)}"
-                            )
+            return self._legacy_prepare(cfg, data, n, ds_dir, pre, outputs)
 
-        elapsed = timer() - start_time
-        print(
-            f"[prepare] First pass complete: discovered {len(token_set)} unique tokens, total_tokens_estimate={total_tokens}, time={elapsed:.1f}s"
-        )
-
-        # Build vocab mappings
-        tokens_sorted = sorted(token_set)
-        stoi = {tok: i for i, tok in enumerate(tokens_sorted)}
-        itos = {i: tok for i, tok in enumerate(tokens_sorted)}
-        vocab_size = int(len(stoi))
-
-        use_uint16 = vocab_size <= 65535
-        dtype_str = "uint16" if use_uint16 else "uint32"
-        typecode = "H" if use_uint16 else "I"  # for array('H') or array('I')
-
-        # Compute split point in token counts
-        train_target = int(total_tokens * 0.9)
-
-        # Prepare temp file paths
-        tmp_train = ds_dir / ".train.bin.tmp"
-        tmp_val = ds_dir / ".val.bin.tmp"
-        tmp_meta = ds_dir / ".meta.pkl.tmp"
-
-        # Ensure dataset dir exists
-        ds_dir.mkdir(parents=True, exist_ok=True)
-
-        # Second pass: stream-encode tokens and write binary in chunks with progress reporting
-        buf_size = 32_768  # flush buffer after this many tokens
-        train_written = 0
-        val_written = 0
-        train_buf = array(typecode)
-        val_buf = array(typecode)
-
-        def _flush_buf(ar: array, fh, name: str = "?"):
-            if len(ar) == 0:
-                return
-            ar.tofile(fh)
-            ar_len = len(ar)
-            ar.clear()
-            print(f"[prepare] flushed {ar_len} items to {name}")
-
-        print(
-            f"[prepare] Second pass: encoding and writing to {tmp_train} and {tmp_val}..."
-        )
-        start_time = timer()
-        last_report = start_time
-        report_interval_seconds = 5.0
-        processed_tokens = 0
-
-        with tmp_train.open("wb") as train_fh, tmp_val.open("wb") as val_fh:
-            if n <= 1:
-                with input_file_path.open("rb") as f:
-                    while True:
-                        chunk_bytes = f.read(chunk_size)
-                        if not chunk_bytes:
-                            break
-                        chunk = chunk_bytes.decode("utf-8", errors="ignore")
-                        for ch in chunk:
-                            idx = stoi.get(ch)
-                            if idx is None:
-                                continue
-                            processed_tokens += 1
-                            if train_written < train_target:
-                                train_buf.append(idx)
-                                train_written += 1
-                                if len(train_buf) >= buf_size:
-                                    _flush_buf(train_buf, train_fh, "train")
-                            else:
-                                val_buf.append(idx)
-                                val_written += 1
-                                if len(val_buf) >= buf_size:
-                                    _flush_buf(val_buf, val_fh, "val")
-                        now = timer()
-                        if now - last_report >= report_interval_seconds:
-                            last_report = now
-                            pct = (
-                                (processed_tokens / total_tokens * 100.0)
-                                if total_tokens
-                                else 0.0
-                            )
-                            print(
-                                f"[prepare] encode progress: tokens_processed={processed_tokens}, train={train_written}, val={val_written}, {pct:.1f}%"
-                            )
-            else:
-                with input_file_path.open("rb") as f:
-                    tail = ""
-                    while True:
-                        chunk_bytes = f.read(chunk_size)
-                        if not chunk_bytes:
-                            break
-                        chunk = chunk_bytes.decode("utf-8", errors="ignore")
-                        seq = tail + chunk
-                        L = len(seq)
-                        if L >= n:
-                            for i in range(0, L - n + 1):
-                                tok = seq[i : i + n]
-                                idx = stoi.get(tok)
-                                if idx is None:
-                                    continue
-                                processed_tokens += 1
-                                if train_written < train_target:
-                                    train_buf.append(idx)
-                                    train_written += 1
-                                    if len(train_buf) >= buf_size:
-                                        _flush_buf(train_buf, train_fh, "train")
-                                else:
-                                    val_buf.append(idx)
-                                    val_written += 1
-                                    if len(val_buf) >= buf_size:
-                                        _flush_buf(val_buf, val_fh, "val")
-                            tail = seq[-(n - 1) :]
-                        else:
-                            tail = seq
-                        now = timer()
-                        if now - last_report >= report_interval_seconds:
-                            last_report = now
-                            pct = (
-                                (processed_tokens / total_tokens * 100.0)
-                                if total_tokens
-                                else 0.0
-                            )
-                            print(
-                                f"[prepare] encode progress: tokens_processed={processed_tokens}, train={train_written}, val={val_written}, {pct:.1f}%"
-                            )
-            # flush remaining buffers
-            _flush_buf(train_buf, train_fh, "train")
-            _flush_buf(val_buf, val_fh, "val")
-
-        elapsed = timer() - start_time
-        print(
-            f"[prepare] Second pass complete: train_written={train_written}, val_written={val_written}, time={elapsed:.1f}s"
-        )
-
-        # Atomically write meta and rename temp bins to final names
-        meta = {
-            "meta_version": 1,
-            "kind": "char" if n == 1 else "char_ngram",
-            "dtype": dtype_str,
-            "stoi": stoi,
-            "itos": itos,
-            "vocab_size": vocab_size,
-        }
-        if n != 1:
-            meta["ngram_size"] = n
-
-        # write meta to temp and replace atomically
-        with tmp_meta.open("wb") as fw:
-            pickle.dump(meta, fw)
-
-        (tmp_train).replace(ds_dir / "train.bin")
-        (tmp_val).replace(ds_dir / "val.bin")
-        (tmp_meta).replace(ds_dir / "meta.pkl")
-
-        created, updated, skipped = _diff(outputs, pre)
+        train_arr, val_arr, meta = prepare_with_tokenizer(data, tokenizer)
+        
+        write_bin_and_meta(ds_dir, train_arr, val_arr, meta)
+        
+        created, updated, skipped = diff_files(outputs, pre)
+        
         msgs = (
             f"[bundestag_char] prepared dataset at {ds_dir}",
             f"[bundestag_char.outputs.created] {[str(p) for p in created]}",
             f"[bundestag_char.outputs.updated] {[str(p) for p in updated]}",
             f"[bundestag_char.outputs.skipped] {[str(p) for p in skipped]}",
         )
+        
         return PrepareReport(
             created_files=tuple(created),
             updated_files=tuple(updated),
@@ -310,78 +99,82 @@ class BundestagCharPreparer(_PreparerProto):
             messages=msgs,
         )
 
+    def _legacy_prepare(self, cfg: PreparerConfig, data: str, n: int, ds_dir: Path, pre: dict, outputs: list) -> PrepareReport:
+        logger = cfg.logger or logging.getLogger(__name__)
+        progress = ProgressReporter(logger, total_steps=3)
+        
+        progress.start("Starting n-gram tokenization preparation")
+        
+        vocab = _build_vocab(data, n)
+        stoi = {tok: i for i, tok in enumerate(vocab)}
+        
+        progress.update(1, "Collecting vocabulary")
+        
+        progress.update(1, "Encoding tokens and writing files")
+        train_path, val_path = ds_dir / "train.bin", ds_dir / "val.bin"
+        
+        train_text, val_text = split_train_val(data)
+        
+        train_tokens = _encode_ngrams(train_text, stoi, n)
+        val_tokens = _encode_ngrams(val_text, stoi, n)
+        
+        train_arr = array("I", train_tokens)
+        val_arr = array("I", val_tokens)
+        
+        safe_file_operation(lambda: train_arr.tofile(open(train_path, "wb")), logger=logger)
+        safe_file_operation(lambda: val_arr.tofile(open(val_path, "wb")), logger=logger)
+        
+        meta = create_standardized_metadata(
+            tokenizer=CharTokenizer(vocab=stoi),
+            train_tokens=len(train_tokens),
+            val_tokens=len(val_tokens),
+            extras={"ngram_size": n}
+        )
+        
+        with ds_dir / "meta.pkl".open("wb") as f:
+            pickle.dump(meta, f)
+        
+        progress.finish("N-gram tokenization preparation completed")
+        
+        created, updated, skipped = diff_files(outputs, pre)
+        
+        msgs = (
+            f"[bundestag_char] prepared dataset at {ds_dir}",
+            f"[bundestag_char.outputs.created] {[str(p) for p in created]}",
+            f"[bundestag_char.outputs.updated] {[str(p) for p in updated]}",
+            f"[bundestag_char.outputs.skipped] {[str(p) for p in skipped]}",
+        )
+        
+        return PrepareReport(
+            created_files=tuple(created),
+            updated_files=tuple(updated),
+            skipped_files=tuple(skipped),
+            messages=msgs,
+        )
 
-def _snapshot(paths: Iterable[Path]) -> dict[Path, tuple[bool, float, int]]:
-    m: dict[Path, tuple[bool, float, int]] = {}
-    for p in paths:
+    @staticmethod
+    def _flush_buf(ar: array, fh, name: str = "?") -> None:
         try:
-            if p.exists():
-                st = p.stat()
-                m[p] = (True, st.st_mtime, st.st_size)
-            else:
-                m[p] = (False, 0.0, 0)
-        except Exception:
-            m[p] = (False, 0.0, 0)
-    return m
+            ar.tofile(fh)
+        except Exception as e:
+            raise DataError(f"Failed to write buffer '{name}' to file: {e}") from e
+        ar.clear()
 
 
-def _diff(paths: Iterable[Path], before: dict[Path, tuple[bool, float, int]]):
-    created: list[Path] = []
-    updated: list[Path] = []
-    skipped: list[Path] = []
-    for p in paths:
-        existed, mtime, size = before.get(p, (False, 0.0, 0))
-        try:
-            if p.exists():
-                st = p.stat()
-                if not existed:
-                    created.append(p)
-                elif st.st_mtime != mtime or st.st_size != size:
-                    updated.append(p)
-                else:
-                    skipped.append(p)
-        except Exception:
-            # If stat fails post, consider as updated when present
-            if p.exists() and not existed:
-                created.append(p)
-    return created, updated, skipped
-
-
-def _build_vocab(text: str, n: int) -> Tuple[Dict[str, int], Dict[int, str]]:
-    if n <= 1:
-        tokens = sorted(set(text))
-    else:
-        tokens = sorted({text[i : i + n] for i in range(0, max(0, len(text) - n + 1))})
-    stoi = {tok: i for i, tok in enumerate(tokens)}
-    itos = {i: tok for i, tok in enumerate(tokens)}
-    return stoi, itos
+def _build_vocab(text: str, n: int) -> list[str]:
+    if n == 1:
+        return sorted(set(text))
+    return sorted(set(text[i : i + n] for i in range(len(text) - n + 1)))
 
 
 def _encode_ngrams(text: str, stoi: Dict[str, int], n: int) -> list[int]:
-    if n <= 1:
-        return [stoi[c] for c in text if c in stoi]
-    L = len(text)
-    if L < n:
-        return []
-    ids: list[int] = []
-    for i in range(0, L - n + 1):
-        tok = text[i : i + n]
-        idx = stoi.get(tok)
-        if idx is not None:
-            ids.append(idx)
-    return ids
+    return [stoi[text[i : i + n]] for i in range(len(text) - n + 1)]
 
 
 def _artifacts_look_valid(outputs: Iterable[Path]) -> bool:
-    paths = list(outputs)
-    if len(paths) != 3:
-        return False
-    train_path, val_path, meta_path = paths
-    try:
-        if not (train_path.exists() and val_path.exists() and meta_path.exists()):
+    for path in outputs:
+        if not path.exists():
             return False
-        with meta_path.open("rb") as f:
-            meta_obj = pickle.load(f)
-        return isinstance(meta_obj, dict) and ("meta_version" in meta_obj)
-    except Exception:
-        return False
+        if path.stat().st_size == 0:
+            return False
+    return True

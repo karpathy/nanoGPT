@@ -1,3 +1,7 @@
+---
+apply: always
+---
+
 # ml_playground Setup Guide
 
 Quick start guide for setting up the ml_playground development environment.

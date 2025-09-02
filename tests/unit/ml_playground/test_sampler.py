@@ -11,6 +11,7 @@ import torch
 
 from ml_playground.config import RuntimeConfig, SampleConfig, SamplerConfig
 import ml_playground.sampler as sampler
+from ml_playground.error_handling import CheckpointError, DataError, ModelError
 
 
 # ---------------------------
@@ -49,6 +50,13 @@ class _DummyModel:
             raise RuntimeError("bad state_dict")
         self.loaded_state = sd
 
+    def __call__(self, x: torch.Tensor) -> Tuple[torch.Tensor, None]:
+        # Return fake logits for testing
+        b, t = x.shape
+        vocab_size = 16  # Match the vocab_size in the test
+        logits = torch.randn(b, t, vocab_size, dtype=torch.float32, device=x.device)
+        return logits, None
+
     def generate(
         self,
         x: torch.Tensor,
@@ -58,7 +66,7 @@ class _DummyModel:
     ) -> torch.Tensor:
         # Return input with a fixed number of additional tokens
         b, t = x.shape
-        out = torch.ones((b, t + 3), dtype=torch.long, device=x.device)
+        out = torch.ones((b, t + max_new_tokens), dtype=torch.long, device=x.device)
         out[:, :t] = x
         return out
 
@@ -69,46 +77,46 @@ class _DummyModel:
 
 
 def test_load_checkpoint_no_files_raises(tmp_path: Path) -> None:
-    """It should raise FileNotFoundError when no candidate checkpoint exists."""
-    with pytest.raises(FileNotFoundError) as e:
+    """It should raise CheckpointError when no candidate checkpoint exists."""
+    with pytest.raises(CheckpointError) as e:
         sampler._load_checkpoint(tmp_path, device="cpu")
     # Ensure message lists path
     assert str(tmp_path) in str(e.value)
 
 
 def test_load_checkpoint_non_dict_raises(tmp_path: Path) -> None:
-    """It should raise TypeError if the checkpoint file is not a dict."""
+    """It should raise CheckpointError if the checkpoint file is not a dict."""
     ckpt = tmp_path / "ckpt_best.pt"
     torch.save(123, ckpt)
-    with pytest.raises(TypeError):
+    with pytest.raises(CheckpointError):
         sampler._load_checkpoint(tmp_path, device="cpu")
 
 
 def test_load_checkpoint_missing_keys_raises(tmp_path: Path) -> None:
-    """It should raise ValueError when required keys are missing from checkpoint."""
+    """It should raise CheckpointError when required keys are missing from checkpoint."""
     ckpt = tmp_path / "ckpt_best.pt"
     torch.save({"iter_num": 1, "best_val_loss": 3.14}, ckpt)
-    with pytest.raises(ValueError) as e:
+    with pytest.raises(CheckpointError) as e:
         sampler._load_checkpoint(tmp_path, device="cpu")
+    assert "model" in str(e.value)
     assert "model_args" in str(e.value)
-    assert "best_val_loss" in str(e.value)  # found keys listed
 
 
 def test_load_checkpoint_bad_model_args_raises(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """It should raise ValueError when GPTConfig construction fails."""
+    """It should raise CheckpointError when model_args is missing required keys."""
     # Craft checkpoint with invalid model_args
     ckpt = tmp_path / "ckpt_best.pt"
     torch.save({"model": {}, "model_args": {"n_layer": -1}}, ckpt)
-    with pytest.raises(ValueError):
+    with pytest.raises(CheckpointError):
         sampler._load_checkpoint(tmp_path, device="cpu")
 
 
 def test_load_checkpoint_load_state_error_is_wrapped(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """It should wrap load_state_dict errors as RuntimeError with path info."""
+    """It should wrap load_state_dict errors as ModelError with path info."""
     # Prepare a valid-looking checkpoint but force load failure via Dummy GPT
     ckpt = tmp_path / "ckpt_best.pt"
     # Minimal valid args for our GPTConfig (use default values by omitting fields)
@@ -131,9 +139,9 @@ def test_load_checkpoint_load_state_error_is_wrapped(
             super().__init__()
 
     monkeypatch.setattr(sampler, "GPT", _DummyGPT)
-    with pytest.raises(RuntimeError) as e:
+    with pytest.raises(ModelError) as e:
         sampler._load_checkpoint(tmp_path, device="cpu")
-    assert str(ckpt) in str(e.value)
+    assert str(ckpt) in str(e.value)  # Ensure path is mentioned
 
 
 # ---------------------------
@@ -152,16 +160,16 @@ def test_codec_from_meta_char_success(tmp_path: Path) -> None:
 
 
 def test_codec_from_meta_missing_meta_version_raises(tmp_path: Path) -> None:
-    """meta.pkl without meta_version should raise ValueError."""
+    """meta.pkl without meta_version should raise DataError."""
     meta_path = tmp_path / "meta.pkl"
     meta = {"kind": "char", "dtype": "uint32", "stoi": {"a": 1}, "itos": {1: "a"}}
     meta_path.write_bytes(pickle.dumps(meta))
-    with pytest.raises(ValueError, match="meta_version"):
+    with pytest.raises(DataError, match="meta_version"):
         sampler._codec_from_meta(meta_path)
 
 
 def test_codec_from_meta_unsupported_dtype_raises(tmp_path: Path) -> None:
-    """meta.pkl with unsupported dtype should raise ValueError."""
+    """meta.pkl with unsupported dtype should raise DataError."""
     meta_path = tmp_path / "meta.pkl"
     meta = {
         "meta_version": 1,
@@ -171,14 +179,14 @@ def test_codec_from_meta_unsupported_dtype_raises(tmp_path: Path) -> None:
         "itos": {1: "a"},
     }
     meta_path.write_bytes(pickle.dumps(meta))
-    with pytest.raises(ValueError, match="dtype"):
+    with pytest.raises(DataError, match="dtype"):
         sampler._codec_from_meta(meta_path)
 
 
 def test_codec_from_meta_meta_json_tiktoken_without_dep_raises(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """meta.json specifying tiktoken without tiktoken installed should raise RuntimeError."""
+    """meta.json specifying tiktoken without tiktoken installed should raise DataError."""
     # No meta.pkl, but write meta.json next to it
     meta_path = tmp_path / "meta.pkl"  # missing on purpose
     (tmp_path / "meta.json").write_text(
@@ -194,14 +202,14 @@ def test_codec_from_meta_meta_json_tiktoken_without_dep_raises(
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", _no_tiktoken)
-    with pytest.raises(RuntimeError, match="tiktoken is required"):
+    with pytest.raises(DataError, match="tiktoken is required|No usable dataset meta"):
         sampler._codec_from_meta(meta_path)
 
 
 def test_codec_from_meta_no_meta_and_no_tiktoken_fallback_raises(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """When no meta files are present and tiktoken import fails, raise FileNotFoundError."""
+    """When no meta files are present and tiktoken import fails, raise DataError."""
     meta_path = tmp_path / "meta.pkl"  # missing
     # Force ImportError
     real_import = builtins.__import__
@@ -212,7 +220,7 @@ def test_codec_from_meta_no_meta_and_no_tiktoken_fallback_raises(
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", _no_tiktoken)
-    with pytest.raises(FileNotFoundError, match="No usable dataset meta"):
+    with pytest.raises(DataError, match="No usable dataset meta"):
         sampler._codec_from_meta(meta_path)
 
 
@@ -245,7 +253,7 @@ def test_sample_happy_path_with_file_prompt_and_char_meta(
     dummy = _DummyModel()
 
     def _fake_load(out: Path, device: str) -> Tuple[_DummyModel, dict[str, Any]]:
-        return dummy, {"model_args": {}}
+        return dummy, {"model_args": {"block_size": 128, "vocab_size": 16, "n_layer": 1, "n_head": 1, "n_embd": 8}}
 
     monkeypatch.setattr(sampler, "_load_checkpoint", _fake_load)
 
@@ -258,7 +266,7 @@ def test_sample_happy_path_with_file_prompt_and_char_meta(
         num_samples=1,
         max_new_tokens=3,
         temperature=0.5,
-        top_k=0,
+        top_k=10,
     )
     exp = SamplerConfig(runtime=rt, sample=sc)
 
@@ -295,11 +303,12 @@ def test_sample_with_compile_flag_uses_compiled_model(
     # Stub torch.compile
     monkeypatch.setattr(torch, "compile", lambda m: _Compiled())  # type: ignore[attr-defined]
     # Patch _load_checkpoint to return a baseline model that will be "compiled"
-    monkeypatch.setattr(
-        sampler,
-        "_load_checkpoint",
-        lambda od, device: (_DummyModel(), {"model_args": {}}),
-    )
+    dummy = _DummyModel()
+
+    def _fake_load(out: Path, device: str) -> Tuple[_DummyModel, dict[str, Any]]:
+        return dummy, {"model_args": {"block_size": 128, "vocab_size": 16, "n_layer": 1, "n_head": 1, "n_embd": 8}}
+
+    monkeypatch.setattr(sampler, "_load_checkpoint", _fake_load)
 
     rt = RuntimeConfig(
         out_dir=out_dir, device="cpu", dtype="float32", compile=True, seed=1

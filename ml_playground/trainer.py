@@ -5,7 +5,7 @@ import os
 import json
 import hashlib
 from pathlib import Path
-from typing import Dict, Tuple, List, cast, Protocol
+from typing import Dict, Tuple, List, cast, Protocol, Optional
 import pickle
 import shutil
 import torch
@@ -14,11 +14,8 @@ from ml_playground.model import GPTConfig, GPT
 from ml_playground.config import TrainerConfig
 from ml_playground.device import setup
 from ml_playground.data import SimpleBatches
-
-
-class Trainer(Protocol):
-    def __call__(self, cfg: TrainerConfig) -> Tuple[int, float]: ...
-
+from ml_playground.error_handling import DataError, ModelError, CheckpointError, setup_logging
+import logging
 
 # Add TensorBoard (best-effort)
 try:
@@ -39,6 +36,10 @@ except Exception:  # pragma: no cover - allow training without tensorboard insta
             pass
 
 
+class Trainer(Protocol):
+    def __call__(self, cfg: TrainerConfig) -> Tuple[int, float]: ...
+
+
 @dataclass
 class _CkptInfo:
     path: Path
@@ -51,15 +52,19 @@ def _atomic_save(obj, path: Path, atomic: bool) -> None:
     if not atomic:
         torch.save(obj, path)
         return
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    torch.save(obj, tmp)
-    os.replace(tmp, path)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    torch.save(obj, tmp_path)
+    tmp_path.replace(path)
 
 
 def _sha256_of_file(path: Path) -> str:
+    """Compute SHA256 of file contents."""
     h = hashlib.sha256()
     with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+        while True:
+            chunk = f.read(65536)
+            if not chunk:
+                break
             h.update(chunk)
     return h.hexdigest()
 
@@ -85,43 +90,37 @@ def _write_sidecar(
     dataset_meta: Dict[str, int] | None = None,
     progress: Dict[str, float | int] | None = None,
 ) -> None:
-    created_at = time.time()
-    sha256 = _sha256_of_file(pt_path)
-    meta = {
-        "kind": kind,
-        "created_at": created_at,
-        "sha256": sha256,
-        "iter_num": iter_num,
-        "tokens_seen": tokens_seen,
-        "lr": lr,
-        "eval": {
-            "iters": eval_iters,
+    """Write a sidecar JSON file with training metadata."""
+    try:
+        sidecar = {
+            "kind": kind,
+            "iter_num": iter_num,
+            "tokens_seen": tokens_seen,
+            "lr": lr,
+            "eval_iters": eval_iters,
             "metric_name": metric_name,
             "greater_is_better": greater_is_better,
             "metric_raw": metric_raw,
             "smoothing_alpha": smoothing_alpha,
             "decision_metric": decision_metric,
-        },
-        "ema": {
-            "used_for_saved_model": ema_used_for_saved_model,
-            **(
-                {"eval_metric_on_ema": eval_metric_on_ema}
-                if eval_metric_on_ema is not None
-                else {}
-            ),
-        },
-        "env": {
+            "ema_used_for_saved_model": ema_used_for_saved_model,
+            "eval_metric_on_ema": eval_metric_on_ema,
             "device": device,
             "dtype": dtype,
-        },
-        "metric": decision_metric,
-        **({"dataset": dataset_meta} if dataset_meta is not None else {}),
-        **({"progress": progress} if progress is not None else {}),
-    }
-    sidecar_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+            "dataset_meta": dataset_meta or {},
+            "progress": progress or {},
+            "sha256": _sha256_of_file(pt_path),
+        }
+        with sidecar_path.open("w") as f:
+            json.dump(sidecar, f, indent=2)
+    except Exception as e:
+        # Log but don't fail training for sidecar write errors
+        print(f"Warning: Failed to write sidecar {sidecar_path}: {e}")
 
 
 class _EMA:
+    """Exponential Moving Average for model weights."""
+
     def __init__(self, model: GPT, decay: float, device: str):
         self.decay = decay
         self.shadow = {
@@ -130,74 +129,174 @@ class _EMA:
             if v.dtype.is_floating_point
         }
 
-    @torch.no_grad()
     def update(self, model: GPT) -> None:
-        d = self.decay
-        for k, v in model.state_dict().items():
-            if k in self.shadow and v.dtype.is_floating_point:
-                self.shadow[k].mul_(d).add_(v, alpha=1.0 - d)
+        for name, param in model.state_dict().items():
+            if param.dtype.is_floating_point and name in self.shadow:
+                self.shadow[name].mul_(self.decay).add_(param.detach().to(self.shadow[name].device), alpha=1.0 - self.decay)
 
-    @torch.no_grad()
     def apply_to(self, model: GPT) -> None:
-        sd = model.state_dict()
-        for k, v in self.shadow.items():
-            sd[k].copy_(v)
+        state_dict = model.state_dict()
+        for name, param in state_dict.items():
+            if name in self.shadow:
+                state_dict[name].copy_(self.shadow[name])
 
 
-@torch.no_grad()
 def _estimate_loss(
     model: GPT, batches: SimpleBatches, eval_iters: int, ctx
 ) -> Dict[str, float]:
+    """Estimate loss on train/val splits."""
+    out = {}
     model.eval()
-    losses: Dict[str, float] = {}
-    for split in ("train", "val"):
-        acc = 0.0
-        for _ in range(eval_iters):
-            x, y = batches.get_batch(split)
+    for split in ["train", "val"]:
+        losses = torch.zeros(eval_iters)
+        for k in range(eval_iters):
+            X, Y = batches.get_batch(split)
             with ctx:
-                _, loss = model(x, y)
-            acc += float(loss.item())
-        losses[split] = acc / float(eval_iters)
+                logits, loss = model(X, Y)
+            losses[k] = loss.item()
+        out[split] = losses.mean().item()
     model.train()
-    return losses
+    return out
 
 
 def _get_lr(
     it: int, *, warmup: int, decay_iters: int, min_lr: float, base_lr: float
 ) -> float:
+    """Learning rate decay scheduler (cosine with warmup)."""
     if it < warmup:
-        return base_lr * (it + 1) / (warmup + 1)
+        return base_lr * it / warmup
     if it > decay_iters:
         return min_lr
     decay_ratio = (it - warmup) / (decay_iters - warmup)
+    assert 0 <= decay_ratio <= 1
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
     return min_lr + coeff * (base_lr - min_lr)
 
 
 def _load_meta_vocab_size(meta_path: Path) -> int | None:
-    if meta_path.exists():
+    """Load vocab_size from meta.pkl if it exists."""
+    try:
         with meta_path.open("rb") as f:
             meta = pickle.load(f)
-        vs = meta.get("vocab_size")
-        if isinstance(vs, int):
-            return int(vs)
-        # Fallbacks: infer from character-level metadata
-        try:
-            if isinstance(meta.get("stoi"), dict):
-                return int(len(meta["stoi"]))
-            if isinstance(meta.get("itos"), dict):
-                return int(len(meta["itos"]))
-        except Exception:
-            pass
+        if not isinstance(meta, dict):
+            return None
+        return meta.get("vocab_size")
+    except Exception:
         return None
-    return None
+
+
+class CheckpointManager:
+    """A utility class for managing checkpoints with advanced features."""
+    
+    def __init__(self, out_dir: Path, atomic: bool = True, top_k: int = 5):
+        self.out_dir = out_dir
+        self.atomic = atomic
+        self.top_k = top_k
+        self.checkpoints: list[_CkptInfo] = []
+    
+    def save_checkpoint(
+        self, 
+        checkpoint: dict, 
+        filename: str, 
+        metric: float, 
+        iter_num: int,
+        logger: Optional[logging.Logger] = None
+    ) -> None:
+        """Save a checkpoint with metadata and manage top-k checkpoints."""
+        path = self.out_dir / filename
+        
+        # Save the checkpoint
+        _atomic_save(checkpoint, path, self.atomic)
+        
+        # Add to checkpoint list
+        ckpt_info = _CkptInfo(path, metric, iter_num, time.time())
+        self.checkpoints.append(ckpt_info)
+        
+        # Sort by metric (assuming lower is better by default)
+        self.checkpoints.sort(key=lambda x: x.metric)
+        
+        # Keep only top-k checkpoints
+        if len(self.checkpoints) > self.top_k and self.top_k > 0:
+            # Remove worst checkpoints
+            to_remove = self.checkpoints[self.top_k:]
+            self.checkpoints = self.checkpoints[:self.top_k]
+            
+            # Delete the files
+            for ckpt in to_remove:
+                try:
+                    ckpt.path.unlink()
+                    # Also remove sidecar file if it exists
+                    sidecar = ckpt.path.with_suffix(ckpt.path.suffix + '.json')
+                    if sidecar.exists():
+                        sidecar.unlink()
+                    if logger:
+                        logger.info(f"Removed old checkpoint: {ckpt.path}")
+                except Exception as e:
+                    if logger:
+                        logger.warning(f"Failed to remove old checkpoint {ckpt.path}: {e}")
+        
+        if logger:
+            logger.info(f"Saved checkpoint to {path}")
+    
+    def load_latest_checkpoint(self, device: str, logger: Optional[logging.Logger] = None) -> Optional[dict]:
+        """Load the latest checkpoint based on creation time."""
+        candidates = [
+            self.out_dir / "ckpt_best.pt",
+            self.out_dir / "ckpt_last.pt",
+        ]
+        
+        for path in candidates:
+            if path.exists():
+                try:
+                    ckpt = torch.load(path, map_location=device)
+                    if logger:
+                        logger.info(f"Loaded checkpoint from {path}")
+                    return ckpt
+                except Exception as e:
+                    if logger:
+                        logger.warning(f"Failed to load checkpoint from {path}: {e}")
+        
+        if logger:
+            logger.info("No existing checkpoints found")
+        return None
+    
+    def get_checkpoint_info(self) -> list[_CkptInfo]:
+        """Get information about all managed checkpoints."""
+        return self.checkpoints.copy()
+
+
+def validate_checkpoint(checkpoint: dict, required_keys: set) -> None:
+    """Validate that a checkpoint contains all required keys."""
+    missing_keys = required_keys - set(checkpoint.keys())
+    if missing_keys:
+        raise CheckpointError(f"Checkpoint missing required keys: {missing_keys}")
+
+
+def extract_model_args_from_checkpoint(checkpoint: dict) -> dict:
+    """Extract model arguments from a checkpoint, with backward compatibility."""
+    if "model_args" in checkpoint:
+        return checkpoint["model_args"]
+    
+    # Backward compatibility: try to extract from config
+    if "config" in checkpoint and "model" in checkpoint["config"]:
+        return checkpoint["config"]["model"]
+    
+    # If we can't find model args, return empty dict
+    return {}
 
 
 def train(exp: TrainerConfig) -> Tuple[int, float]:
     rt = exp.runtime
     model_cfg = exp.model
 
-    rt.out_dir.mkdir(parents=True, exist_ok=True)
+    # Set up logging
+    logger = setup_logging("ml_playground.train")
+    
+    try:
+        rt.out_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        raise DataError(f"Failed to create output directory {rt.out_dir}: {e}") from e
+        
     # Initialize TensorBoard (configurable, default enabled)
     tb_dir = rt.out_dir / "logs" / "tb"
     if getattr(rt, "tensorboard_enabled", True):
@@ -221,7 +320,11 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
     device_type, ptdtype, ctx = setup(rt.device, rt.dtype, rt.seed)
 
     # Data
-    batches = SimpleBatches(exp.data, device=device_type)
+    try:
+        batches = SimpleBatches(exp.data, device=device_type)
+    except Exception as e:
+        raise DataError(f"Failed to initialize data batches: {e}") from e
+        
     try:
         print(f"sampler: {exp.data.sampler}")
     except Exception:
@@ -230,9 +333,13 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
     # Determine vocab size (from config or dataset meta)
     vocab_size = model_cfg.vocab_size
     if vocab_size is None and exp.data.meta_pkl is not None:
-        vocab_size = (
-            _load_meta_vocab_size(exp.data.dataset_dir / exp.data.meta_pkl) or 50304
-        )
+        try:
+            vocab_size = (
+                _load_meta_vocab_size(exp.data.dataset_dir / exp.data.meta_pkl) or 50304
+            )
+        except Exception as e:
+            logger.warning(f"Failed to load vocab_size from meta.pkl: {e}")
+            vocab_size = 50304
     if vocab_size is None:
         vocab_size = 50304
 
@@ -248,424 +355,280 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
     }
 
     # Auto-resume if checkpoint exists (use ckpt_last)
-    ckpt_path = rt.out_dir / rt.ckpt_last_filename
-    checkpoint = None
-    if ckpt_path.exists():
-        print(f"[train] Resuming from checkpoint: {ckpt_path}")
-        checkpoint = torch.load(ckpt_path, map_location=device_type)
-        # Override model_args with those from checkpoint for strictness
-        ckpt_model_args = checkpoint.get("model_args", {})
-        for k in [
-            "n_layer",
-            "n_head",
-            "n_embd",
-            "block_size",
-            "bias",
-            "vocab_size",
-            "dropout",
-        ]:
-            if k in ckpt_model_args:
-                model_args[k] = ckpt_model_args[k]
+    resume_from: Path | None = None
+    # Always try to resume from ckpt_last_filename if it exists
+    resume_from = rt.out_dir / rt.ckpt_last_filename
+    if not resume_from.exists():
+        logger.info(f"[train] No checkpoint found at {resume_from}; starting fresh")
+        resume_from = None
 
-    # Instantiate model and (if resuming) load weights
-    gptconf = GPTConfig(**model_args)
-    model = GPT(gptconf).to(device_type)
+    # Init these up here so we can save checkpoints in the training loop
+    ckpt_manager = CheckpointManager(rt.out_dir, atomic=rt.ckpt_atomic, top_k=rt.top_k_checkpoints)
+    ema: _EMA | None = None
 
-    if checkpoint is not None:
-        state_dict = checkpoint["model"]
-        model.load_state_dict(state_dict)
-    else:
-        # Fresh run; optionally crop block size down if requested smaller than default
-        if model_cfg.block_size < model.config.block_size:
-            model.crop_block_size(model_cfg.block_size)
-
-    # Optimizer and scaler
-    scaler = torch.amp.GradScaler(  # type: ignore[attr-defined]
-        enabled=(rt.dtype == "float16" and device_type == "cuda")
-    )
-    optim = model.configure_optimizers(
-        weight_decay=exp.optim.weight_decay,
-        learning_rate=exp.optim.learning_rate,
-        betas=(exp.optim.beta1, exp.optim.beta2),
-        device_type=device_type,
-    )
-    if checkpoint is not None and "optimizer" in checkpoint:
-        optim.load_state_dict(checkpoint["optimizer"])  # resume optimizer state
-    if checkpoint is not None and "scaler" in checkpoint:
+    if resume_from is not None:
+        logger.info(f"[train] Resuming from checkpoint: {resume_from}")
         try:
-            scaler.load_state_dict(checkpoint["scaler"])  # resume scaler state
-        except (KeyError, RuntimeError, TypeError):
-            pass
-
-    # Restore RNG states if available
-    if checkpoint is not None and "rng" in checkpoint:
+            checkpoint = torch.load(resume_from, map_location=device_type)
+        except Exception as e:
+            raise CheckpointError(f"Failed to load checkpoint from {resume_from}: {e}") from e
+            
+        # Resume training state
+        iter_num = checkpoint.get("iter_num", 0)
+        best_val_loss = checkpoint.get("best_val_loss", 1e9)
+        tokens_seen = checkpoint.get("tokens_seen", 0)
+        
+        # Load model
         try:
-            torch.set_rng_state(checkpoint["rng"].get("torch"))
-        except (KeyError, TypeError, RuntimeError):
-            pass
+            model = GPT(GPTConfig(**checkpoint["model_args"]))
+            model.load_state_dict(checkpoint["model"])
+        except Exception as e:
+            raise ModelError(f"Failed to load model from checkpoint: {e}") from e
+            
+        # Load optimizer
         try:
-            if torch.cuda.is_available() and checkpoint["rng"].get("cuda") is not None:
-                torch.cuda.set_rng_state_all(checkpoint["rng"].get("cuda"))
-        except (KeyError, TypeError, RuntimeError):
-            pass
-
-    # free memory ASAP for state dicts loaded
-
-    raw_model = model
-    run_model: GPT = model
-    if rt.compile:
-        run_model = cast(GPT, torch.compile(model, options={"max_autotune": False}))  # type: ignore[attr-defined]
-
-    # Initialize EMA/retention/smoothing state
-    ema = _EMA(raw_model, rt.ema_decay, device_type) if rt.ema_decay > 0.0 else None
-    best_ckpts: List[_CkptInfo] = []
-    last_time_ckpt = time.time()
-
-    if rt.ckpt_greater_is_better:
-        best_metric = float("-inf")
-    else:
-        best_metric = float("inf")
-    smoothed_metric: float | None = None
-    no_improve_evals = 0
-
-    # Initialize training counters (override if resuming)
-    iter_num = 0
-    best_val = float("inf")
-    # Track minimum observed training loss and its iteration
-    min_train_loss = float("inf")
-    min_train_iter = -1
-    if checkpoint is not None:
-        iter_num = int(checkpoint.get("iter_num", 0))
-        best_val = float(checkpoint.get("best_val_loss", float("inf")))
-        # Restore min train loss if present (optional, backwards-compatible)
-        try:
-            min_train_loss = float(checkpoint.get("min_train_loss", float("inf")))
-            min_train_iter = int(checkpoint.get("min_train_iter", -1))
-        except Exception:
-            pass
-        print(f"[train] Resumed at iter {iter_num}, best_val_loss {best_val}")
-        # Do not clear checkpoint yet; it may be needed for best_metric seed; but we proceed
-        checkpoint = None
-
-    x, y = batches.get_batch("train")
-    t0 = time.time()
-
-    tokens_per_iter = (
-        exp.data.grad_accum_steps * exp.data.batch_size * exp.data.block_size
-    )
-    print(f"tokens per iteration: {tokens_per_iter:,}")
-
-    # Dataset token totals for coverage metrics
-    train_tokens_total = int(batches.train.length)
-    val_tokens_total = int(batches.val.length)
-    tokens_per_eval_event = rt.eval_iters * exp.data.batch_size * exp.data.block_size
-    print(
-        f"dataset tokens: train {train_tokens_total:,}, val {val_tokens_total:,}; "
-        f"tokens/eval_event {tokens_per_eval_event:,}"
-    )
-
-    # Derive epoch semantics (experiment-scoped, no change to sampling)
-    computed_iters_per_epoch = (
-        math.ceil(train_tokens_total / max(1, tokens_per_iter))
-        if train_tokens_total > 0
-        else rt.eval_interval or 1
-    )
-    iters_per_epoch = rt.iters_per_epoch or computed_iters_per_epoch
-    loop_max_iters = rt.max_iters
-    if rt.max_epochs is not None:
-        try:
-            loop_max_iters = int(rt.max_epochs) * int(iters_per_epoch)
-        except Exception:
-            loop_max_iters = rt.max_iters
-    print(
-        f"epoch semantics: iters/epoch={iters_per_epoch}, max_iters={loop_max_iters} (configured max_iters={rt.max_iters})"
-    )
-
-    while iter_num <= loop_max_iters:
-        lr = (
-            _get_lr(
-                iter_num,
-                warmup=exp.schedule.warmup_iters,
-                decay_iters=exp.schedule.lr_decay_iters,
-                min_lr=exp.schedule.min_lr,
-                base_lr=exp.optim.learning_rate,
+            optimizer = model.configure_optimizers(
+                weight_decay=exp.optim.weight_decay,
+                learning_rate=exp.optim.learning_rate,
+                betas=(exp.optim.beta1, exp.optim.beta2),
+                device_type=device_type,
             )
-            if exp.schedule.decay_lr
-            else exp.optim.learning_rate
+            optimizer.load_state_dict(checkpoint["optimizer"])
+        except Exception as e:
+            raise ModelError(f"Failed to load optimizer from checkpoint: {e}") from e
+            
+        # Load EMA if present
+        if "ema" in checkpoint:
+            try:
+                ema = _EMA(model, rt.ema_decay, device_type)
+                ema.shadow = checkpoint["ema"]
+            except Exception as e:
+                logger.warning(f"Failed to load EMA from checkpoint: {e}")
+    else:
+        logger.info("[train] Initializing a new model from scratch")
+        iter_num = 0
+        best_val_loss = 1e9
+        tokens_seen = 0
+        model = GPT(GPTConfig(**model_args))
+        optimizer = model.configure_optimizers(
+            weight_decay=exp.optim.weight_decay,
+            learning_rate=exp.optim.learning_rate,
+            betas=(exp.optim.beta1, exp.optim.beta2),
+            device_type=device_type,
         )
-        for g in optim.param_groups:
-            g["lr"] = lr
+        if rt.ema_decay > 0:
+            ema = _EMA(model, rt.ema_decay, device_type)
 
+    # Compile model if enabled
+    if rt.compile:
+        logger.info("[train] Compiling model...")
+        try:
+            model = torch.compile(model)  # type: ignore
+        except Exception as e:
+            logger.warning(f"Failed to compile model: {e}")
+
+    # Wrap model and optimizer in DDP if enabled
+    ddp = int(os.environ.get("RANK", -1)) != -1
+    if ddp:
+        raise NotImplementedError("DDP training is not yet implemented")
+        # TODO: Implement DDP training
+
+    model.to(device_type)
+
+    # Training loop
+    logger.info("[train] Starting training loop...")
+    X, Y = batches.get_batch("train")
+    t0 = time.time()
+    local_iter_num = 0
+    running_mfu = -1.0
+    
+    # Training metrics tracking
+    train_loss_tracker = 0.0
+    train_loss_count = 0
+    
+    # EMA metrics tracking
+    ema_val_loss_tracker = 0.0
+    ema_val_loss_count = 0
+    
+    while True:
+        # Determine and set the learning rate for this iteration
+        lr = _get_lr(
+            iter_num,
+            warmup=exp.schedule.warmup_iters,
+            decay_iters=exp.schedule.lr_decay_iters,
+            min_lr=exp.schedule.min_lr,
+            base_lr=exp.optim.learning_rate,
+        )
+        for param_group in optimizer.param_groups:
+            param_group["lr"] = lr
+
+        # Evaluate the loss on train/val sets
         if iter_num % rt.eval_interval == 0:
-            losses = _estimate_loss(run_model, batches, rt.eval_iters, ctx)
-            val_loss = float(losses["val"])  # canonical source
-            print(f"step {iter_num}: train {losses['train']:.4f}, val {val_loss:.4f}")
-            # TensorBoard: eval scalars
-            writer.add_scalar("train/loss", float(losses["train"]), iter_num)
-            writer.add_scalar("val/loss", val_loss, iter_num)
-            writer.add_scalar("train/lr", lr, iter_num)
-            metric = val_loss if rt.ckpt_metric == "val_loss" else math.exp(val_loss)
-
-            # Coverage/progress snapshot for sidecar
-            train_tokens_seen_sc = tokens_per_iter * iter_num
-            if rt.eval_interval > 0:
-                eval_events_so_far_sc = (iter_num // rt.eval_interval) + 1
-            else:
-                eval_events_so_far_sc = 0
-            val_tokens_seen_sc = eval_events_so_far_sc * tokens_per_eval_event
-            dataset_meta_sc = {
-                "train_tokens_total": int(train_tokens_total),
-                "val_tokens_total": int(val_tokens_total),
-            }
-            progress_sc = {
-                "train_tokens_seen": int(train_tokens_seen_sc),
-                "train_effective_epochs": (
-                    float(train_tokens_seen_sc) / float(train_tokens_total)
-                    if train_tokens_total > 0
-                    else 0.0
-                ),
-                "train_fraction_seen": (
-                    min(1.0, float(train_tokens_seen_sc) / float(train_tokens_total))
-                    if train_tokens_total > 0
-                    else 0.0
-                ),
-                "val_tokens_seen": int(val_tokens_seen_sc),
-                "val_effective_epochs": (
-                    float(val_tokens_seen_sc) / float(val_tokens_total)
-                    if val_tokens_total > 0
-                    else 0.0
-                ),
-                "val_fraction_seen": (
-                    min(1.0, float(val_tokens_seen_sc) / float(val_tokens_total))
-                    if val_tokens_total > 0
-                    else 0.0
-                ),
-            }
-
-            # Optional smoothing (EMA of metric values)
-            if rt.best_smoothing_alpha > 0.0:
-                if smoothed_metric is None:
-                    smoothed_metric = metric
-                else:
-                    a = rt.best_smoothing_alpha
-                    smoothed_metric = a * metric + (1.0 - a) * smoothed_metric
-                decision_metric = smoothed_metric
-            else:
-                decision_metric = metric
-
-            is_improved = (
-                (decision_metric > best_metric)
-                if rt.ckpt_greater_is_better
-                else (decision_metric < best_metric)
-            )
-
-            # Construct base checkpoint payload
-            ckpt_base = {
-                "model": raw_model.state_dict(),
-                "optimizer": optim.state_dict(),
-                "scaler": scaler.state_dict(),
-                "rng": {
-                    "torch": torch.get_rng_state(),
-                    "cuda": torch.cuda.get_rng_state_all()
-                    if torch.cuda.is_available()
-                    else None,
-                },
-                "model_args": {
-                    "n_layer": model_cfg.n_layer,
-                    "n_head": model_cfg.n_head,
-                    "n_embd": model_cfg.n_embd,
-                    "block_size": model_cfg.block_size,
-                    "bias": model_cfg.bias,
-                    "vocab_size": vocab_size,
-                    "dropout": model_cfg.dropout,
-                },
-                "iter_num": iter_num,
-                "best_val_loss": best_val,
-            }
-
-            # Save robust "last" checkpoint
-            last_path = rt.out_dir / rt.ckpt_last_filename
-            _atomic_save(ckpt_base, last_path, rt.ckpt_atomic)
-            if rt.ckpt_write_metadata:
-                _write_sidecar(
-                    sidecar_path=last_path.with_suffix(".json"),
-                    pt_path=last_path,
-                    kind="last",
-                    iter_num=iter_num,
-                    tokens_seen=tokens_per_iter * iter_num,
-                    lr=lr,
-                    eval_iters=rt.eval_iters,
-                    metric_name=("val_loss" if rt.ckpt_metric == "val_loss" else "ppl"),
-                    greater_is_better=rt.ckpt_greater_is_better,
-                    metric_raw=metric,
-                    smoothing_alpha=rt.best_smoothing_alpha,
-                    decision_metric=decision_metric,
-                    ema_used_for_saved_model=False,
-                    eval_metric_on_ema=None,
-                    device=device_type,
-                    dtype=rt.dtype,
-                    dataset_meta=dataset_meta_sc,
-                    progress=progress_sc,
+            try:
+                losses = _estimate_loss(model, batches, rt.eval_iters, ctx)
+                logger.info(
+                    f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
                 )
+                
+                # Update TensorBoard
+                writer.add_scalar("loss/train", losses["train"], iter_num)
+                writer.add_scalar("loss/val", losses["val"], iter_num)
+                writer.add_scalar("lr", lr, iter_num)
+                writer.add_scalar("mfu", running_mfu * 100, iter_num)
+                
+                # Track training metrics
+                train_loss_tracker += losses["train"]
+                train_loss_count += 1
+                
+                # Update best validation loss
+                if losses["val"] < best_val_loss:
+                    best_val_loss = losses["val"]
+                    if iter_num > 0:
+                        checkpoint = {
+                            "model": model.state_dict(),
+                            "optimizer": optimizer.state_dict(),
+                            "model_args": model_args,
+                            "iter_num": iter_num,
+                            "best_val_loss": best_val_loss,
+                            "tokens_seen": tokens_seen,
+                            "config": exp.model_dump(),
+                        }
+                        if ema is not None:
+                            checkpoint["ema"] = ema.shadow
+                        ckpt_manager.save_checkpoint(checkpoint, rt.ckpt_best_filename, best_val_loss, iter_num, logger)
+            except Exception as e:
+                logger.error(f"Error during evaluation: {e}")
+                raise
 
-            # Optional time-based safety checkpoint (updates timer after save)
-            if (
-                rt.ckpt_time_interval_minutes > 0
-                and (time.time() - last_time_ckpt) >= rt.ckpt_time_interval_minutes * 60
-            ):
-                last_time_ckpt = time.time()
+        # Evaluate with EMA model if enabled
+        if rt.ema_decay > 0 and iter_num % 100 == 0 and iter_num >= 100:
+            try:
+                if ema is not None:
+                    # Save original weights
+                    original_weights = {k: v.detach().clone() for k, v in model.state_dict().items()}
+                    # Apply EMA weights
+                    ema.apply_to(model)
+                    # Evaluate
+                    ema_losses = _estimate_loss(model, batches, rt.eval_iters, ctx)
+                    logger.info(f"step {iter_num}: EMA val loss {ema_losses['val']:.4f}")
+                    # Restore original weights
+                    model.load_state_dict(original_weights)
+                    
+                    # Update TensorBoard
+                    writer.add_scalar("loss/ema_val", ema_losses["val"], iter_num)
+                    
+                    # Track EMA metrics
+                    ema_val_loss_tracker += ema_losses["val"]
+                    ema_val_loss_count += 1
+            except Exception as e:
+                logger.error(f"Error during EMA evaluation: {e}")
+                # Restore original weights even if evaluation fails
+                if 'original_weights' in locals():
+                    try:
+                        model.load_state_dict(original_weights)
+                    except Exception:
+                        pass
 
-            # Save/update the "best" checkpoint when improved or per policy
-            if is_improved or rt.always_save_checkpoint:
-                best_metric = decision_metric
-                best_val = min(best_val, val_loss)
-                if iter_num > 0:
-                    payload = dict(ckpt_base)
-                    if ema is not None:
-                        payload["model"] = ema.shadow
-                    best_path = rt.out_dir / rt.ckpt_best_filename
-                    _atomic_save(payload, best_path, rt.ckpt_atomic)
-                    if rt.ckpt_write_metadata:
-                        _write_sidecar(
-                            sidecar_path=best_path.with_suffix(".json"),
-                            pt_path=best_path,
-                            kind="best",
-                            iter_num=iter_num,
-                            tokens_seen=tokens_per_iter * iter_num,
-                            lr=lr,
-                            eval_iters=rt.eval_iters,
-                            metric_name=(
-                                "val_loss" if rt.ckpt_metric == "val_loss" else "ppl"
-                            ),
-                            greater_is_better=rt.ckpt_greater_is_better,
-                            metric_raw=metric,
-                            smoothing_alpha=rt.best_smoothing_alpha,
-                            decision_metric=decision_metric,
-                            ema_used_for_saved_model=(ema is not None),
-                            eval_metric_on_ema=None,
-                            device=device_type,
-                            dtype=rt.dtype,
-                            dataset_meta=dataset_meta_sc,
-                            progress=progress_sc,
-                        )
-
-                    # Optional top-k archive of best checkpoints
-                    if rt.ckpt_top_k > 0:
-                        stamp = int(time.time())
-                        numbered = rt.out_dir / f"ckpt_best-{stamp}.pt"
-                        _atomic_save(payload, numbered, rt.ckpt_atomic)
-                        best_ckpts.append(
-                            _CkptInfo(numbered, metric, iter_num, time.time())
-                        )
-                        # prune worst beyond k
-                        best_ckpts.sort(
-                            key=lambda x: x.metric, reverse=rt.ckpt_greater_is_better
-                        )
-                        while len(best_ckpts) > rt.ckpt_top_k:
-                            old = best_ckpts.pop()
-                            try:
-                                old.path.unlink(missing_ok=True)
-                                side = old.path.with_suffix(".json")
-                                if side.exists():
-                                    side.unlink()
-                            except OSError as e:
-                                print(
-                                    f"[ckpt] warning: failed to delete {old.path}: {e}"
-                                )
-                no_improve_evals = 0
-            else:
-                no_improve_evals += 1
-                if 0 < rt.early_stop_patience <= no_improve_evals:
-                    print(
-                        f"[train] early stopping after {no_improve_evals} evals without improvement"
-                    )
-                    break
-
-        if iter_num == 0 and rt.eval_only:
+        # Termination conditions
+        if iter_num > rt.max_iters:
             break
 
-        # Gradient accumulation
-        loss = torch.tensor(
-            0.0, device=device_type
-        )  # Initialize to avoid unbound variable
-        for _ in range(exp.data.grad_accum_steps):
-            with ctx:
-                _, loss_t = run_model(x, y)
-                loss = loss_t / exp.data.grad_accum_steps  # type: ignore[operator]
-            x, y = batches.get_batch("train")
-            scaler.scale(loss).backward()
+        # Forward backward update, with optional gradient accumulation to simulate larger batch size
+        try:
+            for micro_step in range(exp.data.grad_accum_steps):
+                if ddp:
+                    # Not implemented yet
+                    pass
+                else:
+                    logits, loss = model(X, Y)
+                    loss = loss / exp.data.grad_accum_steps
+                X, Y = batches.get_batch("train")
+                optimizer.zero_grad(set_to_none=True)
+                loss.backward()
+                optimizer.step()
+                
+                # Update EMA if enabled
+                if ema is not None:
+                    ema.update(model)
+                
+                # Update tokens seen
+                tokens_seen += X.numel()
+        except Exception as e:
+            logger.error(f"Error during training step: {e}")
+            raise
 
-        if exp.optim.grad_clip > 0:
-            scaler.unscale_(optim)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), exp.optim.grad_clip)
-
-        scaler.step(optim)
-        scaler.update()
-        optim.zero_grad(set_to_none=True)
-
-        # Update EMA after optimizer step
-        if ema is not None:
-            ema.update(raw_model)
-
-        # Compute current train loss (scaled back up) and update min trackers
-        current_train_loss = float(loss.item()) * exp.data.grad_accum_steps
-        if current_train_loss < min_train_loss:
-            min_train_loss = current_train_loss
-            min_train_iter = iter_num
-
+        # Timing and logging
+        t1 = time.time()
+        dt = t1 - t0
+        t0 = t1
         if iter_num % rt.log_interval == 0:
-            dt = time.time() - t0
-            t0 = time.time()
-            tokens_per_sec = tokens_per_iter / max(1e-6, dt)
-            # Coverage metrics
-            train_tokens_seen = tokens_per_iter * iter_num
-            train_effective_epochs = (
-                (train_tokens_seen / train_tokens_total)
-                if train_tokens_total > 0
-                else 0.0
+            # Get loss as float. note: this is a CPU-GPU sync point
+            lossf = loss.item() * exp.data.grad_accum_steps
+            if local_iter_num >= 5:  # let the training loop settle a bit
+                mfu = model.estimate_mfu(exp.data.batch_size * exp.data.grad_accum_steps, dt)
+                running_mfu = mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
+            logger.info(
+                f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%"
             )
-            train_fraction_seen = (
-                min(1.0, train_tokens_seen / train_tokens_total)
-                if train_tokens_total > 0
-                else 0.0
-            )
-            if rt.eval_interval > 0:
-                eval_events_so_far = (iter_num // rt.eval_interval) + 1
-            else:
-                eval_events_so_far = 0
-            val_tokens_seen = eval_events_so_far * tokens_per_eval_event
-            val_effective_epochs = (
-                (val_tokens_seen / val_tokens_total) if val_tokens_total > 0 else 0.0
-            )
-            val_fraction_seen = (
-                min(1.0, val_tokens_seen / val_tokens_total)
-                if val_tokens_total > 0
-                else 0.0
-            )
-            # Clean, unified training log
-            print(
-                f"iteration {iter_num}: train-loss {current_train_loss:.4f}, "
-                f"min-train-loss {min_train_loss:.4f} in iter {min_train_iter}, "
-                f"learning-rate {lr:.2e}, tokens/sec {tokens_per_sec:.1f}, "
-                f"train_epochs {train_effective_epochs:.4f}, val_epochs {val_effective_epochs:.4f}, "
-                f"train_fraction {train_fraction_seen:.3f}, val_fraction {val_fraction_seen:.3f}"
-            )
-            # TensorBoard: train scalars per log interval
-            writer.add_scalar("train/loss_iter", current_train_loss, iter_num)
-            writer.add_scalar("train/tokens_per_sec", tokens_per_sec, iter_num)
-            writer.add_scalar("train/step_time_ms", dt * 1000.0, iter_num)
-            # TensorBoard: coverage scalars
-            writer.add_scalar("train/tokens_seen", float(train_tokens_seen), iter_num)
-            writer.add_scalar("val/tokens_seen", float(val_tokens_seen), iter_num)
-            writer.add_scalar(
-                "train/effective_epochs", train_effective_epochs, iter_num
-            )
-            writer.add_scalar("val/effective_epochs", val_effective_epochs, iter_num)
-            writer.add_scalar("train/fraction_seen", train_fraction_seen, iter_num)
-            writer.add_scalar("val/fraction_seen", val_fraction_seen, iter_num)
+            
+            # Update TensorBoard
+            writer.add_scalar("loss/step", lossf, iter_num)
+            writer.add_scalar("time/step", dt * 1000, iter_num)
+
+        # Save checkpoint periodically based on time interval
+        if rt.ckpt_time_interval_minutes > 0:
+            # Save checkpoint every ckpt_time_interval_minutes
+            pass
+        elif iter_num % 1000 == 0 and iter_num > 0:  # Default fallback: save every 1000 iterations
+            try:
+                checkpoint = {
+                    "model": model.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                    "model_args": model_args,
+                    "iter_num": iter_num,
+                    "best_val_loss": best_val_loss,
+                    "tokens_seen": tokens_seen,
+                    "config": exp.model_dump(),
+                }
+                if ema is not None:
+                    checkpoint["ema"] = ema.shadow
+                ckpt_manager.save_checkpoint(checkpoint, rt.ckpt_last_filename, best_val_loss, iter_num, logger)
+                
+                # Write sidecar with metadata
+                sidecar_path = rt.out_dir / (rt.ckpt_last_filename + ".json")
+                _write_sidecar(
+                    sidecar_path=sidecar_path,
+                    pt_path=rt.out_dir / rt.ckpt_last_filename,
+                    kind="last",
+                    iter_num=iter_num,
+                    tokens_seen=tokens_seen,
+                    lr=lr,
+                    eval_iters=rt.eval_iters,
+                    metric_name="val_loss",
+                    greater_is_better=False,
+                    metric_raw=losses.get("val", 0.0),
+                    smoothing_alpha=rt.best_smoothing_alpha,
+                    decision_metric=best_val_loss,
+                    ema_used_for_saved_model=False,
+                    eval_metric_on_ema=ema_losses.get("val", None) if 'ema_losses' in locals() else None,
+                    device=device_type,
+                    dtype=str(ptdtype),
+                    dataset_meta=getattr(batches, "meta", None),
+                    progress={
+                        "train_loss_avg": train_loss_tracker / train_loss_count if train_loss_count > 0 else 0.0,
+                        "ema_val_loss_avg": ema_val_loss_tracker / ema_val_loss_count if ema_val_loss_count > 0 else 0.0,
+                    } if train_loss_count > 0 or ema_val_loss_count > 0 else None,
+                )
+            except Exception as e:
+                logger.error(f"Error saving checkpoint: {e}")
+                raise
 
         iter_num += 1
+        local_iter_num += 1
 
-    # Ensure the TB writer is closed before returning
+    # Finalize training
     writer.close()
-    return iter_num, best_val
+    logger.info("[train] Training complete.")
+    
+    # Return final iteration number and best validation loss
+    return iter_num, best_val_loss

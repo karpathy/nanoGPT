@@ -1,3 +1,7 @@
+---
+apply: always
+---
+
 # ml_playground Developer Guidelines
 
 **Audience**: Advanced contributors working exclusively on the `ml_playground` module. These rules are binding. Follow them exactly.

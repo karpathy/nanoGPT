@@ -1,3 +1,7 @@
+---
+apply: always
+---
+
 # Import Guidelines: Strict Policy and Rationale
 
 This is a prescriptive, low‑choice standard for all Python imports in the codebase. Follow as written.

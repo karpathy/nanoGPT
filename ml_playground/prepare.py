@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import Protocol, Any, Optional
+from typing import Protocol, Any, Optional, Iterable, Tuple, List
 from pathlib import Path
 import pickle
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from ml_playground.tokenizer import Tokenizer, CharTokenizer, WordTokenizer, TiktokenTokenizer, create_tokenizer
 
 
 class PreparerConfig(BaseModel):
@@ -37,6 +38,114 @@ class Preparer(Protocol):
     def __call__(self) -> None: ...
 
 
+def _snapshot(paths: Iterable[Path]) -> dict[Path, tuple[bool, float, int]]:
+    """Take a snapshot of file states (existence, mtime, size) for diffing later."""
+    m: dict[Path, tuple[bool, float, int]] = {}
+    for p in paths:
+        try:
+            if p.exists():
+                st = p.stat()
+                m[p] = (True, st.st_mtime, st.st_size)
+            else:
+                m[p] = (False, 0.0, 0)
+        except Exception:
+            m[p] = (False, 0.0, 0)
+    return m
+
+
+def snapshot_files(paths: Iterable[Path]) -> dict[Path, tuple[bool, float, int]]:
+    """Public utility to take a snapshot of file states for diffing later.
+    
+    Returns a dict mapping each path to (exists, mtime, size).
+    """
+    return _snapshot(paths)
+
+
+def _diff(paths: Iterable[Path], before: dict[Path, tuple[bool, float, int]]) -> tuple[list[Path], list[Path], list[Path]]:
+    """Compare file states before and after an operation to determine what changed."""
+    after = _snapshot(paths)
+    created: list[Path] = []
+    updated: list[Path] = []
+    skipped: list[Path] = []
+    for p in paths:
+        b = before.get(p, (False, 0.0, 0))
+        a = after.get(p, (False, 0.0, 0))
+        if not b[0] and a[0]:
+            created.append(p)
+        elif b[0] and a[0] and a[1] > b[1]:
+            updated.append(p)
+        elif b[0] and a[0]:
+            skipped.append(p)
+    return created, updated, skipped
+
+
+def diff_files(paths: Iterable[Path], before: dict[Path, tuple[bool, float, int]]) -> Tuple[set[Path], set[Path], set[Path]]:
+    """Public utility to compare file states and determine what changed.
+    
+    Returns (created, updated, skipped) as sets of paths.
+    """
+    after = _snapshot(paths)
+    created, updated, skipped = set(), set(), set()
+    
+    for p in paths:
+        if not before.get(p, (False, 0.0, 0))[0]:  # didn't exist before
+            if after.get(p, (False, 0.0, 0))[0]:  # exists now
+                created.add(p)
+        else:  # existed before
+            if not after.get(p, (False, 0.0, 0))[0]:  # doesn't exist now
+                # This case shouldn't happen in normal usage
+                pass
+            elif (
+                before[p][1] != after[p][1] or  # mtime changed
+                before[p][2] != after[p][2]     # size changed
+            ):
+                updated.add(p)
+            else:
+                skipped.add(p)
+    
+    return created, updated, skipped
+
+
+def create_standardized_metadata(
+    tokenizer: Tokenizer, 
+    train_tokens: int, 
+    val_tokens: int,
+    extras: dict = None
+) -> dict:
+    """Create standardized metadata for dataset preparation.
+    
+    Args:
+        tokenizer: The tokenizer used for encoding
+        train_tokens: Number of tokens in training set
+        val_tokens: Number of tokens in validation set
+        extras: Additional metadata to include
+    
+    Returns:
+        Standardized metadata dictionary
+    """
+    meta = {
+        "meta_version": 1,
+        "vocab_size": tokenizer.vocab_size,
+        "train_tokens": train_tokens,
+        "val_tokens": val_tokens,
+    }
+    
+    # Add tokenizer-specific information
+    if hasattr(tokenizer, 'name'):
+        meta["tokenizer"] = tokenizer.name
+    
+    # Add encoding information if available
+    if hasattr(tokenizer, 'encode') and hasattr(tokenizer, 'decode'):
+        meta["has_encode"] = True
+        meta["has_decode"] = True
+    
+    # Include extras if provided
+    if extras:
+        meta.update(extras)
+        
+    return meta
+
+
 class _PreparerInstance:
     """
     Instance-based Preparer that captures behavior via the provided PreparerConfig.
@@ -48,34 +157,27 @@ class _PreparerInstance:
 
     def __call__(self) -> None:
         extras = self.cfg.extras
-        enc: Encoder = extras["encoder"]  # provided by CLI
+        
+        # Create tokenizer based on config
+        tokenizer_type = extras.get("tokenizer_type", "char")
+        tokenizer = create_tokenizer(tokenizer_type)
 
         text = extras.get("raw_text")
         if text is None:
             text = Path(extras["raw_text_path"]).read_text(encoding="utf-8")
 
-        train_arr, val_arr = self._prepare_with_encoder(text, enc)
-        meta = extras.get("meta") or {"meta_version": 1}
+        train_arr, val_arr, meta = self._prepare_with_tokenizer(text, tokenizer)
         self._write_bin_and_meta(self.cfg.dataset_dir, train_arr, val_arr, meta)  # type: ignore[arg-type]
 
     def _split_train_val(self, text: str, split: float = 0.9) -> tuple[str, str]:
         n = len(text)
-        return text[: int(n * split)], text[int(n * split) :]
+        train_end = int(n * split)
+        return text[:train_end], text[train_end:]
 
-    def _encode_split_with_encoder(
-        self, train_data: str, val_data: str, enc: Encoder
-    ) -> tuple[np.ndarray, np.ndarray]:
-        train_ids = enc.encode_ordinary(train_data)
-        val_ids = enc.encode_ordinary(val_data)
-        train_arr = np.array(train_ids, dtype=np.uint16)
-        val_arr = np.array(val_ids, dtype=np.uint16)
-        return train_arr, val_arr
-
-    def _prepare_with_encoder(
-        self, text: str, enc: Encoder
-    ) -> tuple[np.ndarray, np.ndarray]:
-        train_data, val_data = self._split_train_val(text, 0.9)
-        return self._encode_split_with_encoder(train_data, val_data, enc)
+    def _prepare_with_tokenizer(
+        self, text: str, tokenizer: Tokenizer
+    ) -> tuple[np.ndarray, np.ndarray, dict]:
+        return prepare_with_tokenizer(text, tokenizer)
 
     def _write_bin_and_meta(
         self, ds_dir: Path, train: np.ndarray, val: np.ndarray, meta: dict
@@ -87,8 +189,9 @@ class _PreparerInstance:
         val_path = ds_dir / "val.bin"
         meta_path = ds_dir / "meta.pkl"
 
+        before = _snapshot([train_path, val_path, meta_path])
+
         if train_path.exists() and val_path.exists() and meta_path.exists():
-            # If existing meta is valid (strict), no-op; otherwise, rewrite artifacts
             try:
                 with meta_path.open("rb") as f:
                     existing_meta = pickle.load(f)
@@ -113,7 +216,6 @@ class _PreparerInstance:
                 else:
                     print(msg)
 
-        # Write to temp then rename (atomic on POSIX)
         tmp_train = ds_dir / ".train.bin.tmp"
         tmp_val = ds_dir / ".val.bin.tmp"
         tmp_meta = ds_dir / ".meta.pkl.tmp"
@@ -127,7 +229,19 @@ class _PreparerInstance:
         tmp_val.replace(val_path)
         tmp_meta.replace(meta_path)
 
-        print("Wrote:", train_path, val_path, meta_path)
+        created, updated, skipped = _diff([train_path, val_path, meta_path], before)
+        logger = getattr(self.cfg, "logger", None)
+        if logger is not None:
+            try:
+                logger.info(f"[prepare] Created: {created}")
+                logger.info(f"[prepare] Updated: {updated}")
+                logger.info(f"[prepare] Skipped: {skipped}")
+            except Exception:
+                pass
+        else:
+            print(f"[prepare] Created: {created}")
+            print(f"[prepare] Updated: {updated}")
+            print(f"[prepare] Skipped: {skipped}")
 
 
 def make_preparer(cfg: PreparerConfig) -> Preparer:
@@ -148,12 +262,34 @@ def split_train_val(text: str, split: float = 0.9) -> tuple[str, str]:
     Provides a stable functional API used by experiment preparers.
     """
     n = len(text)
-    if split <= 0.0:
-        split = 0.5
-    elif split >= 1.0:
-        split = 0.9
-    i = int(n * split)
-    return text[:i], text[i:]
+    train_end = int(n * split)
+    return text[:train_end], text[train_end:]
+
+
+def create_tokenizer_for_preparation(tokenizer_type: str, **kwargs) -> Tokenizer:
+    """Create a tokenizer for data preparation based on type."""
+    return create_tokenizer(tokenizer_type, **kwargs)
+
+
+def prepare_with_tokenizer(
+    text: str, tokenizer: Tokenizer, split: float = 0.9
+) -> tuple[np.ndarray, np.ndarray, dict]:
+    """Prepare train/val data and metadata using a tokenizer."""
+    # Split text into train/val
+    train_text, val_text = split_train_val(text, split)
+    
+    # Encode train/val data
+    train_ids = tokenizer.encode(train_text)
+    val_ids = tokenizer.encode(val_text)
+    
+    # Convert to numpy arrays
+    train_arr = np.array(train_ids, dtype=np.uint16)
+    val_arr = np.array(val_ids, dtype=np.uint16)
+    
+    # Create metadata
+    meta = create_standardized_metadata(tokenizer, len(train_ids), len(val_ids))
+    
+    return train_arr, val_arr, meta
 
 
 def write_bin_and_meta(
@@ -169,6 +305,8 @@ def write_bin_and_meta(
     train_path = ds_dir / "train.bin"
     val_path = ds_dir / "val.bin"
     meta_path = ds_dir / "meta.pkl"
+
+    before = _snapshot([train_path, val_path, meta_path])
 
     if train_path.exists() and val_path.exists() and meta_path.exists():
         try:
@@ -198,7 +336,10 @@ def write_bin_and_meta(
     tmp_val.replace(val_path)
     tmp_meta.replace(meta_path)
 
-    print("Wrote:", train_path, val_path, meta_path)
+    created, updated, skipped = _diff([train_path, val_path, meta_path], before)
+    print(f"[prepare] Created: {created}")
+    print(f"[prepare] Updated: {updated}")
+    print(f"[prepare] Skipped: {skipped}")
 
 
 def seed_text_file(dst: Path, candidates: list[Path]) -> None:
@@ -208,20 +349,13 @@ def seed_text_file(dst: Path, candidates: list[Path]) -> None:
     - No-ops if dst already exists
     - Raises FileNotFoundError if none of the candidates exist
     """
-    dst.parent.mkdir(parents=True, exist_ok=True)
     if dst.exists():
         return
-
-    for p in candidates:
-        try:
-            if p.exists():
-                text = p.read_text(encoding="utf-8")
-                dst.write_text(text, encoding="utf-8")
-                return
-        except Exception:
-            # Try next candidate
-            continue
-
+    for cand in candidates:
+        if cand.exists():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_bytes(cand.read_bytes())
+            return
     raise FileNotFoundError(
-        "No seed text found among candidates: " + ", ".join(str(p) for p in candidates)
+        f"seed_text_file: none of the candidate paths exist: {candidates}"
     )

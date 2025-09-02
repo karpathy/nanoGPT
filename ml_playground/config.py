@@ -183,7 +183,7 @@ class DataConfig(_FrozenStrictModel):
     block_size: int = 1024
     grad_accum_steps: int = 40
     # Tokenizer selection for bundestag_char-like datasets
-    tokenizer: Literal["char", "word"] = "char"
+    tokenizer: Literal["char", "word", "tiktoken"] = "char"
     # n-gram tokenization size for character datasets (1 = pure char-level)
     ngram_size: int = 1
     # Sampling policy: random (default) or sequential (deterministic coverage)
@@ -406,6 +406,74 @@ def load_experiment_toml(path: Path | str) -> ExperimentConfig:
 TrainExperiment = TrainerConfig
 SampleExperiment = SamplerConfig
 
+
+def validate_config_field(value: Any, field_name: str, expected_type: type, required: bool = True, min_value: Any = None, max_value: Any = None) -> None:
+    """Validate a configuration field with type and range checks.
+    
+    Args:
+        value: The value to validate
+        field_name: Name of the field (for error messages)
+        expected_type: Expected type of the value
+        required: Whether the field is required (cannot be None)
+        min_value: Minimum allowed value (for numeric types)
+        max_value: Maximum allowed value (for numeric types)
+    
+    Raises:
+        ValueError: If validation fails
+    """
+    # Check if required
+    if required and value is None:
+        raise ValueError(f"Required configuration field '{field_name}' is missing")
+    
+    # Skip further validation if None and not required
+    if value is None:
+        return
+    
+    # Type check
+    if not isinstance(value, expected_type):
+        raise ValueError(
+            f"Configuration field '{field_name}' must be of type {expected_type.__name__}, "
+            f"got {type(value).__name__}"
+        )
+    
+    # Range checks for numeric types
+    if isinstance(value, (int, float)):
+        if min_value is not None and value < min_value:
+            raise ValueError(
+                f"Configuration field '{field_name}' must be >= {min_value}, got {value}"
+            )
+        if max_value is not None and value > max_value:
+            raise ValueError(
+                f"Configuration field '{field_name}' must be <= {max_value}, got {value}"
+            )
+
+
+def validate_path_exists(path: Path, field_name: str, must_be_file: bool = False, must_be_dir: bool = False) -> None:
+    """Validate that a path exists and optionally check if it's a file or directory.
+    
+    Args:
+        path: Path to validate
+        field_name: Name of the field (for error messages)
+        must_be_file: If True, path must exist and be a file
+        must_be_dir: If True, path must exist and be a directory
+    
+    Raises:
+        ValueError: If validation fails
+    """
+    if not path.exists():
+        raise ValueError(f"Path specified in '{field_name}' does not exist: {path}")
+    
+    if must_be_file and not path.is_file():
+        raise ValueError(f"Path specified in '{field_name}' must be a file: {path}")
+    
+    if must_be_dir and not path.is_dir():
+        raise ValueError(f"Path specified in '{field_name}' must be a directory: {path}")
+
+
+# Expose utility functions
+validate_config_field = validate_config_field
+validate_path_exists = validate_path_exists
+
 __all__ = [
     "DeviceKind",
     "DTypeKind",
@@ -426,4 +494,6 @@ __all__ = [
     "SECTION_TRAIN",
     "SECTION_SAMPLE",
     "KEY_EXTRAS",
+    "validate_config_field",
+    "validate_path_exists",
 ]
