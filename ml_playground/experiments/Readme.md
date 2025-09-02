@@ -21,6 +21,8 @@ Conventions
 - Outputs: example configs write to `<experiment>/out/<run_name>`.
 - Typing/UV: everything follows the project’s strict typing and UV‑only workflow (see repo README for commands).
 
+All experiments now use the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../docs/framework_utilities.md).
+
 Common CLI patterns
 - Prepare: `uv run python -m ml_playground.cli prepare <experiment_name>`
 - Train: `uv run python -m ml_playground.cli train <experiment_name>`
@@ -214,4 +216,3 @@ temperature = 0.8
 top_k = 200
 top_p = 0.95
 num_samples = 1
-```

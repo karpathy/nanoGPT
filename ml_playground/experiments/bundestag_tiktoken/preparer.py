@@ -1,24 +1,22 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable
 import numpy as np
-import tiktoken
 from ml_playground.prepare import (
     PreparerConfig,
-    seed_text_file,
     split_train_val,
     write_bin_and_meta,
     snapshot_files,
     diff_files,
     create_standardized_metadata,
+    seed_text_file,
 )
 from ml_playground.tokenizer import TiktokenTokenizer
 from ml_playground.experiments.protocol import (
     Preparer as _PreparerProto,
     PrepareReport,
 )
-from ml_playground.error_handling import DataError, safe_file_operation, validate_file_exists, ProgressReporter
+from ml_playground.error_handling import validate_file_exists, ProgressReporter
 import logging
 
 
@@ -28,7 +26,7 @@ class BundestagTiktokenPreparer(_PreparerProto):
         ds_dir = exp_dir / "datasets"
         ds_dir.mkdir(parents=True, exist_ok=True)
         outputs = [ds_dir / "train.bin", ds_dir / "val.bin", ds_dir / "meta.pkl"]
-        
+
         pre = snapshot_files(outputs)
 
         input_file_path = ds_dir / "input.txt"
@@ -45,34 +43,31 @@ class BundestagTiktokenPreparer(_PreparerProto):
 
         data = input_file_path.read_text(encoding="utf-8")
         train_text, val_text = split_train_val(data)
-        
+
         logger = cfg.logger or logging.getLogger(__name__)
         progress = ProgressReporter(logger, total_steps=4)
-        
+
         progress.start("Starting Bundestag tiktoken preparation")
 
-        enc = tiktoken.get_encoding("gpt2")
         tokenizer = TiktokenTokenizer(encoding_name="gpt2")
-        
+
         progress.update(1, "Encoding training data")
-        train_ids = enc.encode_ordinary(train_text)
+        train_ids = tokenizer.encode(train_text)
         progress.update(1, "Encoding validation data")
-        val_ids = enc.encode_ordinary(val_text)
-        
-        train_ids = np.array(train_ids, dtype=np.uint16)
-        val_ids = np.array(val_ids, dtype=np.uint16)
-        
+        val_ids = tokenizer.encode(val_text)
+
+        train_ids_arr: np.ndarray = np.array(train_ids, dtype=np.uint16)
+        val_ids_arr: np.ndarray = np.array(val_ids, dtype=np.uint16)
+
         progress.update(1, "Creating metadata")
         meta = create_standardized_metadata(
-            tokenizer=tokenizer,
-            train_tokens=len(train_ids),
-            val_tokens=len(val_ids)
+            tokenizer=tokenizer, train_tokens=len(train_ids), val_tokens=len(val_ids)
         )
-        
-        write_bin_and_meta(ds_dir, train_ids, val_ids, meta)
-        
+
+        write_bin_and_meta(ds_dir, train_ids_arr, val_ids_arr, meta)
+
         progress.finish("Bundestag tiktoken preparation completed")
-        
+
         created, updated, skipped = diff_files(outputs, pre)
 
         msgs = (

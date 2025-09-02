@@ -1,11 +1,24 @@
 from __future__ import annotations
 
-from typing import Protocol, Any, Optional, Iterable, Tuple, List
+from typing import Protocol, Any, Optional, Iterable, Tuple
 from pathlib import Path
 import pickle
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from ml_playground.tokenizer import Tokenizer, CharTokenizer, WordTokenizer, TiktokenTokenizer, create_tokenizer
+from ml_playground.tokenizer import Tokenizer, create_tokenizer
+
+
+"""
+Centralized data preparation utilities for ml_playground experiments.
+
+This module provides standardized utilities for data preparation including:
+- File state management for tracking changes
+- Standardized metadata creation
+- Data splitting and encoding utilities
+- Atomic file writing operations
+
+All experiments should use these utilities to ensure consistency and proper error handling.
+"""
 
 
 class PreparerConfig(BaseModel):
@@ -55,13 +68,15 @@ def _snapshot(paths: Iterable[Path]) -> dict[Path, tuple[bool, float, int]]:
 
 def snapshot_files(paths: Iterable[Path]) -> dict[Path, tuple[bool, float, int]]:
     """Public utility to take a snapshot of file states for diffing later.
-    
+
     Returns a dict mapping each path to (exists, mtime, size).
     """
     return _snapshot(paths)
 
 
-def _diff(paths: Iterable[Path], before: dict[Path, tuple[bool, float, int]]) -> tuple[list[Path], list[Path], list[Path]]:
+def _diff(
+    paths: Iterable[Path], before: dict[Path, tuple[bool, float, int]]
+) -> tuple[list[Path], list[Path], list[Path]]:
     """Compare file states before and after an operation to determine what changed."""
     after = _snapshot(paths)
     created: list[Path] = []
@@ -79,14 +94,16 @@ def _diff(paths: Iterable[Path], before: dict[Path, tuple[bool, float, int]]) ->
     return created, updated, skipped
 
 
-def diff_files(paths: Iterable[Path], before: dict[Path, tuple[bool, float, int]]) -> Tuple[set[Path], set[Path], set[Path]]:
+def diff_files(
+    paths: Iterable[Path], before: dict[Path, tuple[bool, float, int]]
+) -> Tuple[set[Path], set[Path], set[Path]]:
     """Public utility to compare file states and determine what changed.
-    
+
     Returns (created, updated, skipped) as sets of paths.
     """
     after = _snapshot(paths)
     created, updated, skipped = set(), set(), set()
-    
+
     for p in paths:
         if not before.get(p, (False, 0.0, 0))[0]:  # didn't exist before
             if after.get(p, (False, 0.0, 0))[0]:  # exists now
@@ -96,53 +113,50 @@ def diff_files(paths: Iterable[Path], before: dict[Path, tuple[bool, float, int]
                 # This case shouldn't happen in normal usage
                 pass
             elif (
-                before[p][1] != after[p][1] or  # mtime changed
-                before[p][2] != after[p][2]     # size changed
+                before[p][1] != after[p][1]  # mtime changed
+                or before[p][2] != after[p][2]  # size changed
             ):
                 updated.add(p)
             else:
                 skipped.add(p)
-    
+
     return created, updated, skipped
 
 
 def create_standardized_metadata(
-    tokenizer: Tokenizer, 
-    train_tokens: int, 
-    val_tokens: int,
-    extras: dict = None
+    tokenizer: Tokenizer, train_tokens: int, val_tokens: int, extras: dict | None = None
 ) -> dict:
     """Create standardized metadata for dataset preparation.
-    
+
     Args:
         tokenizer: The tokenizer used for encoding
         train_tokens: Number of tokens in training set
         val_tokens: Number of tokens in validation set
         extras: Additional metadata to include
-    
+
     Returns:
         Standardized metadata dictionary
     """
     meta = {
         "meta_version": 1,
-        "vocab_size": tokenizer.vocab_size,
+        "vocab_size": tokenizer.get_vocab_size(),
         "train_tokens": train_tokens,
         "val_tokens": val_tokens,
     }
-    
+
     # Add tokenizer-specific information
-    if hasattr(tokenizer, 'name'):
+    if hasattr(tokenizer, "name"):
         meta["tokenizer"] = tokenizer.name
-    
+
     # Add encoding information if available
-    if hasattr(tokenizer, 'encode') and hasattr(tokenizer, 'decode'):
+    if hasattr(tokenizer, "encode") and hasattr(tokenizer, "decode"):
         meta["has_encode"] = True
         meta["has_decode"] = True
-    
+
     # Include extras if provided
     if extras:
         meta.update(extras)
-        
+
     return meta
 
 
@@ -157,7 +171,7 @@ class _PreparerInstance:
 
     def __call__(self) -> None:
         extras = self.cfg.extras
-        
+
         # Create tokenizer based on config
         tokenizer_type = extras.get("tokenizer_type", "char")
         tokenizer = create_tokenizer(tokenizer_type)
@@ -277,18 +291,18 @@ def prepare_with_tokenizer(
     """Prepare train/val data and metadata using a tokenizer."""
     # Split text into train/val
     train_text, val_text = split_train_val(text, split)
-    
+
     # Encode train/val data
     train_ids = tokenizer.encode(train_text)
     val_ids = tokenizer.encode(val_text)
-    
+
     # Convert to numpy arrays
     train_arr = np.array(train_ids, dtype=np.uint16)
     val_arr = np.array(val_ids, dtype=np.uint16)
-    
+
     # Create metadata
     meta = create_standardized_metadata(tokenizer, len(train_ids), len(val_ids))
-    
+
     return train_arr, val_arr, meta
 
 

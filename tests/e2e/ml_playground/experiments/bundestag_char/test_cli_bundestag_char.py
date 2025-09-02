@@ -40,7 +40,7 @@ def _train_overrides(out_dir: Path, dataset_dir: Path) -> str:
             "eval_iters": 1,
             "log_interval": 1,
             "eval_only": False,
-            "always_save_checkpoint": True,
+            "checkpointing": {"keep": {"last": 1, "best": 1}},
             "ckpt_time_interval_minutes": 0,
             "device": "cpu",
             "dtype": "float32",
@@ -68,13 +68,6 @@ def _train_overrides(out_dir: Path, dataset_dir: Path) -> str:
             "warmup_iters": 1,
             "lr_decay_iters": 2,
             "min_lr": 0.00008,
-        },
-        "optim": {
-            "learning_rate": 0.0008,
-            "weight_decay": 0.0,
-            "beta1": 0.9,
-            "beta2": 0.95,
-            "grad_clip": 1.0,
         },
     }
     return _json.dumps(ov)
@@ -107,9 +100,11 @@ def test_train_bundestag_char_quick(
     )
     # Use tiny e2e defaults to minimize runtime
     test_defaults = Path(__file__).resolve().parent.parent / "test_default_config.toml"
-    main(["--exp-config", str(test_defaults), "train", "bundestag_char"])  # should run few iterations and save checkpoints
+    main(
+        ["--exp-config", str(test_defaults), "train", "bundestag_char"]
+    )  # should run few iterations and save checkpoints
     # Check for expected artifacts
-    assert (out_dir / "ckpt_last.pt").exists() or (out_dir / "ckpt.pt").exists()
+    assert (out_dir / "ckpt_last.pt").exists()
     assert (out_dir / "ckpt_best.pt").exists()
     # meta.pkl should be propagated for sampling
     assert (out_dir / "meta.pkl").exists()
@@ -124,10 +119,14 @@ def test_sample_bundestag_char_quick(
         "ML_PLAYGROUND_TRAIN_OVERRIDES", _train_overrides(out_dir, tmp_dataset)
     )
     test_defaults = Path(__file__).resolve().parent.parent / "test_default_config.toml"
-    main(["--exp-config", str(test_defaults), "train", "bundestag_char"])  # produce checkpoint
+    main(
+        ["--exp-config", str(test_defaults), "train", "bundestag_char"]
+    )  # produce checkpoint
     # Now sample with small settings
     monkeypatch.setenv("ML_PLAYGROUND_SAMPLE_OVERRIDES", _sample_overrides(out_dir))
-    main(["--exp-config", str(test_defaults), "sample", "bundestag_char"])  # should not raise and print some text
+    main(
+        ["--exp-config", str(test_defaults), "sample", "bundestag_char"]
+    )  # should not raise and print some text
 
 
 def test_loop_bundestag_char_quick(
@@ -140,6 +139,8 @@ def test_loop_bundestag_char_quick(
     )
     monkeypatch.setenv("ML_PLAYGROUND_SAMPLE_OVERRIDES", _sample_overrides(out_dir))
     test_defaults = Path(__file__).resolve().parent.parent / "test_default_config.toml"
-    main(["--exp-config", str(test_defaults), "loop", "bundestag_char"])  # end-to-end pipeline
+    main(
+        ["--exp-config", str(test_defaults), "loop", "bundestag_char"]
+    )  # end-to-end pipeline
     # Check that training produced checkpoints in the designated directory
-    assert (out_dir / "ckpt_best.pt").exists()
+    assert (out_dir / "ckpt_last.pt").exists()

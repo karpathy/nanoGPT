@@ -30,7 +30,10 @@ def make_head_subset(src: Path, dst: Path, n_lines: int) -> Path:
     src = Path(src)
     dst = Path(dst)
     dst.parent.mkdir(parents=True, exist_ok=True)
-    with src.open("r", encoding="utf-8") as f_in, dst.open("w", encoding="utf-8") as f_out:
+    with (
+        src.open("r", encoding="utf-8") as f_in,
+        dst.open("w", encoding="utf-8") as f_out,
+    ):
         for i, line in enumerate(f_in):
             if i >= n_lines:
                 break
@@ -56,7 +59,7 @@ def stream_filter_to_file(
     *,
     speeches_csv: Path,
     mps_mapping_csv: Optional[Path] = None,  # unused in this skipped test
-    mps_meta_csv: Optional[Path] = None,     # unused in this skipped test
+    mps_meta_csv: Optional[Path] = None,  # unused in this skipped test
     out_path: Path,
     output_format: str = "jsonl",
     chunksize: int = 10_000,  # unused in this skipped test
@@ -71,16 +74,17 @@ def stream_filter_to_file(
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(speeches_csv, "r", encoding="utf-8", newline="") as f_in, open(
-        out_path, "w", encoding="utf-8"
-    ) as f_out:
+    with (
+        open(speeches_csv, "r", encoding="utf-8", newline="") as f_in,
+        open(out_path, "w", encoding="utf-8") as f_out,
+    ):
         reader = csv.DictReader(f_in)
         schema = _detect_schema_columns(reader.fieldnames or [])
         for row in reader:
             p = str(row.get(schema["party"], "")).lower()
             if party_norm not in p and p != party_norm:
                 continue
-            y = _row_year(row, schema["date"]) or -10**9
+            y = _row_year(row, schema["date"]) or -(10**9)
             if y < start_year or y > end_year:
                 continue
             obj = {

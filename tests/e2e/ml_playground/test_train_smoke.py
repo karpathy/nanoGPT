@@ -50,7 +50,12 @@ def test_train_smoke(tmp_path: Path) -> None:
             eval_iters=1,
             log_interval=1,
             eval_only=False,
-            always_save_checkpoint=False,
+            checkpointing=RuntimeConfig.Checkpointing(
+                keep=RuntimeConfig.Checkpointing.Keep(
+                    last=1,
+                    best=1,
+                )
+            ),
             seed=123,
             device="cpu",
             dtype="float32",

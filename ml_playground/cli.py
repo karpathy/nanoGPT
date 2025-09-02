@@ -10,8 +10,7 @@ import shutil
 import tomllib
 import logging
 from pathlib import Path
-from typing import Any, Protocol, Annotated, cast, Union
-from dataclasses import dataclass
+from typing import Any, Annotated, cast, Union
 
 from ml_playground.config import (
     TrainerConfig,
@@ -48,7 +47,7 @@ def _complete_experiments(ctx: typer.Context, incomplete: str) -> list[str]:
     root = _experiments_root()
     if not root.exists():
         return []
-    
+
     try:
         # Only catch exceptions from directory listing operations
         return sorted(
@@ -182,7 +181,55 @@ def _load_train_config_from_raw(
     defaults_dict: TomlData = defaults_raw if isinstance(defaults_raw, dict) else {}
     _tmp_train = defaults_dict.get("train")
     defaults_train_tbl: TomlData = _tmp_train if isinstance(_tmp_train, dict) else {}
-    _log_config_provenance("train", d, exp_train_tbl, defaults_train_tbl, allowed_sections)
+
+    # Initial provenance: default vs experiment
+    prov: dict[str, dict[str, str]] = {
+        "model": {},
+        "data": {},
+        "optim": {},
+        "schedule": {},
+        "runtime": {},
+    }
+    for sec in ("model", "data", "optim", "schedule", "runtime"):
+        _dflt_sec = defaults_train_tbl.get(sec)
+        sec_defaults = _dflt_sec if isinstance(_dflt_sec, dict) else {}
+        _exp_sec = exp_train_tbl.get(sec)
+        sec_exp = _exp_sec if isinstance(_exp_sec, dict) else {}
+        merged_sec = d.get(sec, {})
+        if isinstance(merged_sec, dict):
+            for k in merged_sec.keys():
+                if k in sec_exp:
+                    prov[sec][k] = "override"  # set by experiment
+                elif k in sec_defaults:
+                    prov[sec][k] = "default"
+                else:
+                    prov[sec][k] = (
+                        "override"  # conservative: present only in experiment
+                    )
+
+    # Environment overrides are not supported: only default + experiment TOMLs are used.
+
+    # Strict: do not rewrite any paths; use them exactly as configured.
+    # [train.runtime]: drop unknown keys (keep only keys known to RuntimeConfig)
+    allowed_runtime_keys = set(RuntimeConfig.model_fields.keys())
+    d_runtime_all = dict(d["runtime"])
+    d_runtime = {k: v for k, v in d_runtime_all.items() if k in allowed_runtime_keys}
+    d["runtime"] = d_runtime
+
+    # Provenance log at startup: print effective config with markers
+    # Format: [config] train.<section>.<key> = <value> (default|override)
+    try:
+        print("[config] Effective training configuration (source: default/override):")
+        for sec in ("model", "data", "optim", "schedule", "runtime"):
+            sec_map = d.get(sec, {})
+            if not isinstance(sec_map, dict):
+                continue
+            for k in sorted(sec_map.keys()):
+                source = prov.get(sec, {}).get(k, "override")
+                print(f"[config] train.{sec}.{k} = {sec_map[k]!r} ({source})")
+    except Exception:
+        # Never fail due to logging
+        pass
 
     try:
         return TrainerConfig.model_validate(d)
@@ -287,7 +334,9 @@ def _load_sample_config_from_raw(
         }
 
     # Centralized provenance logging
-    _log_config_provenance("sample", d, exp_sample_tbl, defaults_sample_tbl, ("runtime", "sample"))
+    _log_config_provenance(
+        "sample", d, exp_sample_tbl, defaults_sample_tbl, ("runtime", "sample")
+    )
 
     try:
         return SamplerConfig.model_validate(d)
@@ -407,7 +456,13 @@ def _load_train_config(path: Path) -> TrainerConfig:
     d = {k: train_tbl[k] for k in allowed_sections}
 
     # Track provenance for startup logging
-    prov: dict[str, dict[str, str]] = {sec: {} for sec in allowed_sections}
+    prov: dict[str, dict[str, str]] = {
+        "model": {},
+        "data": {},
+        "optim": {},
+        "schedule": {},
+        "runtime": {},
+    }
     _tmp_exp_train = raw_exp.get("train")
     exp_train_tbl: TomlData = _tmp_exp_train if isinstance(_tmp_exp_train, dict) else {}
     defaults_dict: TomlData = defaults_raw if isinstance(defaults_raw, dict) else {}
@@ -670,16 +725,15 @@ def _log_config_provenance(
     merged_config: dict[str, Any],
     exp_config: TomlData,
     defaults_config: TomlData,
-    sections: tuple[str, ...]
+    sections: tuple[str, ...],
 ) -> None:
     """Centralized provenance logging for configuration loading.
-    
+
     Tracks which config values come from defaults vs experiment overrides
     and prints them in a standardized format.
     """
     try:
         prov: dict[str, dict[str, str]] = {sec: {} for sec in sections}
-        
         # Build provenance tracking
         for sec in sections:
             _dflt_sec = defaults_config.get(sec)
@@ -687,7 +741,7 @@ def _log_config_provenance(
             _exp_sec = exp_config.get(sec)
             sec_exp = _exp_sec if isinstance(_exp_sec, dict) else {}
             merged_sec = merged_config.get(sec, {})
-            
+
             if isinstance(merged_sec, dict):
                 for k in merged_sec.keys():
                     if k in sec_exp:
@@ -695,10 +749,14 @@ def _log_config_provenance(
                     elif k in sec_defaults:
                         prov[sec][k] = "default"
                     else:
-                        prov[sec][k] = "override"  # conservative: present only in experiment
+                        prov[sec][k] = (
+                            "override"  # conservative: present only in experiment
+                        )
 
         # Print provenance log
-        print(f"[config] Effective {config_type} configuration (source: default/override):")
+        print(
+            f"[config] Effective {config_type} configuration (source: default/override):"
+        )
         for sec in sections:
             sec_map = merged_config.get(sec, {})
             if not isinstance(sec_map, dict):
@@ -725,7 +783,9 @@ def _resolve_and_load_configs(
     if isinstance(explicit_cfg, Path):
         cfg_path = explicit_cfg
     else:
-        cfg_path = Path(__file__).resolve().parent / "experiments" / experiment / "config.toml"
+        cfg_path = (
+            Path(__file__).resolve().parent / "experiments" / experiment / "config.toml"
+        )
 
     if not cfg_path.exists():
         # If explicit path was given, error references that path; otherwise reference default location.
@@ -753,12 +813,14 @@ def _resolve_and_load_configs(
 
 class ExperimentLoader:
     """Encapsulates pluggable experiment discovery with shared error messages."""
-    
+
     def __init__(self) -> None:
         # Cache instances keyed by (role, experiment) where role in {"preparer", "trainer", "sampler"}
         self._cache: dict[tuple[str, str], object] = {}
 
-    def _load_exp_class_instance(self, module_path: str, method_name: str, role: str, experiment: str) -> object:
+    def _load_exp_class_instance(
+        self, module_path: str, method_name: str, role: str, experiment: str
+    ) -> object:
         """Import module_path and instantiate the first class exposing method_name.
 
         This removes per-experiment integration shims and relies only on canonical modules.
@@ -767,16 +829,16 @@ class ExperimentLoader:
         cache_key = (role, experiment)
         if cache_key in self._cache:
             return self._cache[cache_key]
-            
+
         try:
             mod = importlib.import_module(module_path)
         except Exception as e:
             raise SystemExit(f"Failed to import {module_path}: {e}")
-        
+
         # Collect available class names for better error messaging
         available_classes = []
         suitable_instance = None
-        
+
         # Find a class with the given method and a no-arg constructor
         for attr_name in dir(mod):
             attr = getattr(mod, attr_name)
@@ -788,14 +850,16 @@ class ExperimentLoader:
                         break
                     except Exception:
                         continue
-        
+
         if suitable_instance is None:
-            available_list = ", ".join(sorted(available_classes)) if available_classes else "none"
+            available_list = (
+                ", ".join(sorted(available_classes)) if available_classes else "none"
+            )
             raise SystemExit(
                 f"No suitable class with method '{method_name}' found in {module_path}. "
                 f"Available classes: {available_list}"
             )
-        
+
         # Cache the instance before returning
         self._cache[cache_key] = suitable_instance
         return suitable_instance
@@ -804,7 +868,10 @@ class ExperimentLoader:
         return cast(
             ExpPreparer,
             self._load_exp_class_instance(
-                f"ml_playground.experiments.{experiment}.preparer", "prepare", "preparer", experiment
+                f"ml_playground.experiments.{experiment}.preparer",
+                "prepare",
+                "preparer",
+                experiment,
             ),
         )
 
@@ -812,7 +879,10 @@ class ExperimentLoader:
         return cast(
             ExpTrainer,
             self._load_exp_class_instance(
-                f"ml_playground.experiments.{experiment}.trainer", "train", "trainer", experiment
+                f"ml_playground.experiments.{experiment}.trainer",
+                "train",
+                "trainer",
+                experiment,
             ),
         )
 
@@ -820,7 +890,10 @@ class ExperimentLoader:
         return cast(
             ExpSampler,
             self._load_exp_class_instance(
-                f"ml_playground.experiments.{experiment}.sampler", "sample", "sampler", experiment
+                f"ml_playground.experiments.{experiment}.sampler",
+                "sample",
+                "sampler",
+                experiment,
             ),
         )
 
@@ -834,14 +907,19 @@ _experiment_loader = ExperimentLoader()
 # Side-channel to capture last strict validation errors per config path
 _last_load_errors: dict[Path, dict[str, str | None]] = {}
 
-def load_app_config(experiment: str, exp_config: Path | None) -> tuple[Path, AppConfig, PreparerConfig]:
+
+def load_app_config(
+    experiment: str, exp_config: Path | None
+) -> tuple[Path, AppConfig, PreparerConfig]:
     """Load, merge, validate, resolve and override all configs once.
 
     Returns (cfg_path, AppConfig, PreparerConfig).
     - Does not raise on train/sample validation errors; instead sets them to None.
       Error strings are stored in a side-channel for commands to surface.
     """
-    cfg_path, config_raw, defaults_raw = _resolve_and_load_configs(experiment, exp_config)
+    cfg_path, config_raw, defaults_raw = _resolve_and_load_configs(
+        experiment, exp_config
+    )
 
     # Preparer (best-effort)
     try:
@@ -853,10 +931,14 @@ def load_app_config(experiment: str, exp_config: Path | None) -> tuple[Path, App
         exp_root = cfg_path.parent
         ds = getattr(prep_cfg, "dataset_dir", None)
         if isinstance(ds, Path) and not ds.is_absolute():
-            prep_cfg = prep_cfg.model_copy(update={"dataset_dir": (exp_root / ds).resolve()})
+            prep_cfg = prep_cfg.model_copy(
+                update={"dataset_dir": (exp_root / ds).resolve()}
+            )
         rd = getattr(prep_cfg, "raw_dir", None)
         if isinstance(rd, Path) and not rd.is_absolute():
-            prep_cfg = prep_cfg.model_copy(update={"raw_dir": (exp_root / rd).resolve()})
+            prep_cfg = prep_cfg.model_copy(
+                update={"raw_dir": (exp_root / rd).resolve()}
+            )
     except Exception:
         pass
 
@@ -870,13 +952,25 @@ def load_app_config(experiment: str, exp_config: Path | None) -> tuple[Path, App
         try:
             ds = tcfg.data.dataset_dir
             if not ds.is_absolute():
-                tcfg = tcfg.model_copy(update={"data": tcfg.data.model_copy(update={"dataset_dir": (exp_root / ds).resolve()})})
+                tcfg = tcfg.model_copy(
+                    update={
+                        "data": tcfg.data.model_copy(
+                            update={"dataset_dir": (exp_root / ds).resolve()}
+                        )
+                    }
+                )
         except Exception:
             pass
         try:
             od = tcfg.runtime.out_dir
             if not od.is_absolute():
-                tcfg = tcfg.model_copy(update={"runtime": tcfg.runtime.model_copy(update={"out_dir": (exp_root / od).resolve()})})
+                tcfg = tcfg.model_copy(
+                    update={
+                        "runtime": tcfg.runtime.model_copy(
+                            update={"out_dir": (exp_root / od).resolve()}
+                        )
+                    }
+                )
         except Exception:
             pass
         # apply env overrides once
@@ -897,7 +991,13 @@ def load_app_config(experiment: str, exp_config: Path | None) -> tuple[Path, App
             if rt is not None:
                 od = rt.out_dir
                 if not od.is_absolute():
-                    scfg = scfg.model_copy(update={"runtime": rt.model_copy(update={"out_dir": (cfg_path.parent / od).resolve()})})
+                    scfg = scfg.model_copy(
+                        update={
+                            "runtime": rt.model_copy(
+                                update={"out_dir": (cfg_path.parent / od).resolve()}
+                            )
+                        }
+                    )
         except Exception:
             pass
         scfg = _apply_sample_overrides(scfg)
@@ -918,17 +1018,27 @@ def load_app_config(experiment: str, exp_config: Path | None) -> tuple[Path, App
     return cfg_path, app, prep_cfg
 
 
-def ensure_loaded(ctx: typer.Context, experiment: str) -> tuple[Path, AppConfig, PreparerConfig]:
+def ensure_loaded(
+    ctx: typer.Context, experiment: str
+) -> tuple[Path, AppConfig, PreparerConfig]:
     """Ensure that (cfg_path, AppConfig, PreparerConfig) are loaded and cached in Typer context.
     Also caches error messages under ctx.obj["app_errors"].
     """
     ctx.ensure_object(dict)
     obj = cast(dict[str, Any], ctx.obj)
-    exp_config = obj.get("exp_config") if isinstance(obj.get("exp_config"), Path) or obj.get("exp_config") is None else None
+    exp_config = (
+        obj.get("exp_config")
+        if isinstance(obj.get("exp_config"), Path) or obj.get("exp_config") is None
+        else None
+    )
     cache_key = (experiment, exp_config)
     cached = obj.get("loaded_cache")
     if isinstance(cached, dict) and cached.get("key") == cache_key:
-        return cast(Path, cached["cfg_path"]), cast(AppConfig, cached["app"]), cast(PreparerConfig, cached["prep"])
+        return (
+            cast(Path, cached["cfg_path"]),
+            cast(AppConfig, cached["app"]),
+            cast(PreparerConfig, cached["prep"]),
+        )
 
     # Load fresh
     try:
@@ -942,13 +1052,6 @@ def ensure_loaded(ctx: typer.Context, experiment: str) -> tuple[Path, AppConfig,
         raise typer.Exit(code=2)
 
     # Recompute errors to cache by attempting strict loads (without I/O) already done in load_app_config
-    errors: dict[str, str | None] = {
-        "train": None,
-        "sample": None,
-    }
-    # We can re-run validations using the same raw dicts without re-reading, but we don't
-    # have them here; instead, rely on None presence to indicate prior validation failure.
-    # The specific messages were captured inside load_app_config in local vars; attach them via obj.
     obj["app_errors"] = obj.get("app_errors", {})
     if isinstance(obj["app_errors"], dict):
         obj["app_errors"][cache_key] = {
@@ -973,12 +1076,10 @@ def ensure_loaded(ctx: typer.Context, experiment: str) -> tuple[Path, AppConfig,
 
 
 def run_or_exit(
-    func,
-    keyboard_interrupt_msg: str | None = None,
-    exception_exit_code: int = 2
+    func, keyboard_interrupt_msg: str | None = None, exception_exit_code: int = 2
 ):
     """Helper to run a function with standardized error handling.
-    
+
     Args:
         func: Function to execute
         keyboard_interrupt_msg: Message to show on KeyboardInterrupt (if None, no handler)
@@ -1012,40 +1113,50 @@ def get_cfg_path(experiment: str, exp_config: Path | None) -> Path:
     return _experiments_root() / experiment / "config.toml"
 
 
-def load_effective_train(experiment: str, exp_config: Path | None) -> tuple[Path, TrainerConfig]:
+def load_effective_train(
+    experiment: str, exp_config: Path | None
+) -> tuple[Path, TrainerConfig]:
     """Load and validate training configuration, returning config path and effective config."""
-    config_path, config_raw, defaults_raw = _resolve_and_load_configs(experiment, exp_config)
-    
+    config_path, config_raw, defaults_raw = _resolve_and_load_configs(
+        experiment, exp_config
+    )
+
     # Strict validation to satisfy tests that patch the raw loader
     try:
         _ = _load_train_config_from_raw(config_raw, defaults_raw)
     except Exception as e:
         typer.echo(str(e))
         raise typer.Exit(code=2)
-    
+
     # Load the effective config (wrapper) for execution
     try:
         train_cfg: TrainerConfig = load_train_config(config_path)
     except Exception as e:
         typer.echo(str(e))
         raise typer.Exit(code=2)
-    
+
     # Apply environment overrides
     train_cfg = _apply_train_overrides(train_cfg)
     return config_path, train_cfg
 
 
-def load_effective_sample(experiment: str, exp_config: Path | None) -> tuple[Path, SamplerConfig]:
+def load_effective_sample(
+    experiment: str, exp_config: Path | None
+) -> tuple[Path, SamplerConfig]:
     """Load and validate sampling configuration, returning config path and effective config."""
-    config_path, config_raw, defaults_raw = _resolve_and_load_configs(experiment, exp_config)
-    
+    config_path, config_raw, defaults_raw = _resolve_and_load_configs(
+        experiment, exp_config
+    )
+
     # Strict validation and config build from raw to satisfy tests
     try:
-        sample_cfg: SamplerConfig = _load_sample_config_from_raw(config_raw, defaults_raw)
+        sample_cfg: SamplerConfig = _load_sample_config_from_raw(
+            config_raw, defaults_raw
+        )
     except Exception as e:
         typer.echo(str(e))
         raise typer.Exit(code=2)
-    
+
     # Resolve runtime.out_dir relative to experiment root if provided and relative
     try:
         rt = sample_cfg.runtime
@@ -1058,14 +1169,10 @@ def load_effective_sample(experiment: str, exp_config: Path | None) -> tuple[Pat
                 )
     except Exception:
         pass
-    
+
     # Apply environment overrides
     sample_cfg = _apply_sample_overrides(sample_cfg)
     return config_path, sample_cfg
-
-
-
-
 
 
 def _log_command_status(tag: str, cfg: Any) -> None:
@@ -1166,9 +1273,7 @@ def _run_loop(
         pass
 
 
-def _run_train(
-    experiment: str, train_cfg: TrainerConfig, config_path: Path
-) -> None:
+def _run_train(experiment: str, train_cfg: TrainerConfig, config_path: Path) -> None:
     _log_command_status("train", train_cfg)
     trainer: ExpTrainer = _experiment_loader.load_trainer(experiment)
     report = trainer.train(train_cfg)
@@ -1194,9 +1299,7 @@ def _run_train(
         pass
 
 
-def _run_sample(
-    experiment: str, sample_cfg: SamplerConfig, config_path: Path
-) -> None:
+def _run_sample(experiment: str, sample_cfg: SamplerConfig, config_path: Path) -> None:
     _log_command_status("sample", sample_cfg)
     sampler: ExpSampler = _experiment_loader.load_sampler(experiment)
     report = sampler.sample(sample_cfg)
@@ -1244,7 +1347,7 @@ def global_options(
     if exp_config is not None and not exp_config.exists():
         typer.echo(f"Config file not found: {exp_config}")
         raise typer.Exit(code=2)
-    
+
     try:
         # Ensure INFO-level logs (including status) are visible by default
         root_logger = logging.getLogger()
@@ -1269,9 +1372,11 @@ def cmd_prepare(
     ],
 ) -> None:
     """Run the experiment-specific prepare step (config loaded once)."""
+
     def prepare_impl():
         cfg_path, app, prep_cfg = ensure_loaded(ctx, experiment)
         _run_prepare(experiment, prep_cfg, cfg_path)
+
     run_or_exit(prepare_impl, exception_exit_code=2)
 
 
@@ -1287,22 +1392,28 @@ def cmd_train(
     ],
 ) -> None:
     """Validate config and run training for the given experiment (single-load)."""
+
     def train_impl():
         cfg_path, app, _prep = ensure_loaded(ctx, experiment)
         if app.train is None:
             # Preserve user-friendly error message
-            errs = cast(dict[str, Any], getattr(ctx, "obj", {})).get("loaded_errors", {})
+            errs = cast(dict[str, Any], getattr(ctx, "obj", {})).get(
+                "loaded_errors", {}
+            )
             msg = None
-            if isinstance(errs, dict) and errs.get("key") == (experiment, cast(dict[str, Any], getattr(ctx, "obj", {})).get("exp_config")):
+            if isinstance(errs, dict) and errs.get("key") == (
+                experiment,
+                cast(dict[str, Any], getattr(ctx, "obj", {})).get("exp_config"),
+            ):
                 msg = errs.get("train")
             typer.echo(msg or "Config must contain [train] block")
             raise typer.Exit(code=2)
         _run_train(experiment, app.train, cfg_path)
-    
+
     run_or_exit(
         train_impl,
         keyboard_interrupt_msg="\nTraining interrupted by user (Ctrl+C). Exiting gracefully.",
-        exception_exit_code=2
+        exception_exit_code=2,
     )
 
 
@@ -1320,29 +1431,36 @@ def cmd_sample(
     """Validate config and run sampling for the given experiment (single-load)."""
     # Special-case integration for 'speakger': delegate to its sampler entrypoint
     if experiment == "speakger":
+
         def speakger_impl():
             exp_config = _extract_exp_config(ctx)
             cfg_path = get_cfg_path(experiment, exp_config)
             mod = importlib.import_module("ml_playground.experiments.speakger.sampler")
             getattr(mod, "sample_from_toml")(cfg_path)
+
         run_or_exit(speakger_impl, exception_exit_code=2)
         return
 
     def sample_impl():
         cfg_path, app, _prep = ensure_loaded(ctx, experiment)
         if app.sample is None:
-            errs = cast(dict[str, Any], getattr(ctx, "obj", {})).get("loaded_errors", {})
+            errs = cast(dict[str, Any], getattr(ctx, "obj", {})).get(
+                "loaded_errors", {}
+            )
             msg = None
-            if isinstance(errs, dict) and errs.get("key") == (experiment, cast(dict[str, Any], getattr(ctx, "obj", {})).get("exp_config")):
+            if isinstance(errs, dict) and errs.get("key") == (
+                experiment,
+                cast(dict[str, Any], getattr(ctx, "obj", {})).get("exp_config"),
+            ):
                 msg = errs.get("sample")
             typer.echo(msg or "Config must contain [sample] block")
             raise typer.Exit(code=2)
         _run_sample(experiment, app.sample, cfg_path)
-    
+
     run_or_exit(
         sample_impl,
         keyboard_interrupt_msg="\nSampling interrupted by user (Ctrl+C). Exiting gracefully.",
-        exception_exit_code=2
+        exception_exit_code=2,
     )
 
 
@@ -1393,24 +1511,36 @@ def cmd_loop(
     ],
 ) -> None:
     """Run prepare → train → sample as a single loop for the experiment (single-load)."""
+
     def loop_impl():
         cfg_path, app, prep_cfg = ensure_loaded(ctx, experiment)
         errs = cast(dict[str, Any], getattr(ctx, "obj", {})).get("loaded_errors", {})
-        key = (experiment, cast(dict[str, Any], getattr(ctx, "obj", {})).get("exp_config"))
+        key = (
+            experiment,
+            cast(dict[str, Any], getattr(ctx, "obj", {})).get("exp_config"),
+        )
         if app.train is None:
-            msg = errs.get("train") if isinstance(errs, dict) and errs.get("key") == key else None
+            msg = (
+                errs.get("train")
+                if isinstance(errs, dict) and errs.get("key") == key
+                else None
+            )
             typer.echo(msg or "Config must contain [train] block")
             raise typer.Exit(code=2)
         if app.sample is None:
-            msg = errs.get("sample") if isinstance(errs, dict) and errs.get("key") == key else None
+            msg = (
+                errs.get("sample")
+                if isinstance(errs, dict) and errs.get("key") == key
+                else None
+            )
             typer.echo(msg or "Config must contain [sample] block")
             raise typer.Exit(code=2)
         _run_loop(experiment, prep_cfg, app.train, app.sample, cfg_path)
-    
+
     run_or_exit(
         loop_impl,
         keyboard_interrupt_msg="\nSampling interrupted by user (Ctrl+C). Exiting gracefully.",
-        exception_exit_code=2
+        exception_exit_code=2,
     )
 
 
@@ -1447,14 +1577,14 @@ def cmd_analyze(
     except Exception as e:
         typer.echo(str(e))
         raise typer.Exit(code=2)
-    
+
     def analyze_impl():
         run_server_bundestag_char(host=host, port=port, open_browser=open_browser)
-    
+
     run_or_exit(
         analyze_impl,
         keyboard_interrupt_msg="\nAnalysis server interrupted by user (Ctrl+C). Exiting.",
-        exception_exit_code=2
+        exception_exit_code=2,
     )
 
 
@@ -1521,4 +1651,3 @@ def main(argv: list[str] | None = None) -> None:
 
 if __name__ == "__main__":
     main()
-

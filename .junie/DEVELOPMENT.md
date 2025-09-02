@@ -8,6 +8,8 @@ Core development practices, quality standards, and workflow for ml_playground co
 
 ## Quality Gates (Mandatory)
 
+For detailed information about the centralized framework utilities, see [Framework Utilities Documentation](../docs/framework_utilities.md).
+
 Run these commands before every commit:
 
 ```bash

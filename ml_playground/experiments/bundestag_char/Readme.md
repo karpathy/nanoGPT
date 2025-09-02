@@ -20,6 +20,7 @@ Character-level language modeling on Bundestag speeches with a simple vocabulary
 - Encode train/val splits 90/10 into uint16 arrays
 - Model architecture and training hyperparameters are specified in TOML
 - TensorBoard logging at out_dir/logs/tb
+This experiment uses the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../../docs/framework_utilities.md).
 
 ## Environment Setup (UV-only)
 ```bash
@@ -95,6 +96,7 @@ Character-level language modeling on Bundestag speeches with a simple vocabulary
 - Encode train/val splits 90/10 into uint16 arrays
 - Model architecture and training hyperparameters are specified in TOML
 - TensorBoard logging at out_dir/logs/tb
+This experiment uses the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../../docs/framework_utilities.md).
 
 ## Environment Setup (UV-only)
 ```bash

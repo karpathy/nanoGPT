@@ -72,32 +72,40 @@ class _DummyModel:
 
 
 # ---------------------------
-# _load_checkpoint tests
+# load_checkpoint tests
 # ---------------------------
 
 
-def test_load_checkpoint_no_files_raises(tmp_path: Path) -> None:
-    """It should raise CheckpointError when no candidate checkpoint exists."""
+def test_load_checkpoint_no_files_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """It should raise CheckpointError when no checkpoint files exist."""
     with pytest.raises(CheckpointError) as e:
-        sampler._load_checkpoint(tmp_path, device="cpu")
-    # Ensure message lists path
-    assert str(tmp_path) in str(e.value)
+        sampler.load_checkpoint(tmp_path, device="cpu")
+    assert "No checkpoint found" in str(e.value)
 
 
-def test_load_checkpoint_non_dict_raises(tmp_path: Path) -> None:
-    """It should raise CheckpointError if the checkpoint file is not a dict."""
+def test_load_checkpoint_non_dict_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """It should raise CheckpointError when checkpoint is not a dict."""
+    # Craft a non-dict checkpoint by creating a tensor
     ckpt = tmp_path / "ckpt_best.pt"
-    torch.save(123, ckpt)
-    with pytest.raises(CheckpointError):
-        sampler._load_checkpoint(tmp_path, device="cpu")
-
-
-def test_load_checkpoint_missing_keys_raises(tmp_path: Path) -> None:
-    """It should raise CheckpointError when required keys are missing from checkpoint."""
-    ckpt = tmp_path / "ckpt_best.pt"
-    torch.save({"iter_num": 1, "best_val_loss": 3.14}, ckpt)
+    torch.save(torch.tensor([1, 2, 3]), ckpt)
     with pytest.raises(CheckpointError) as e:
-        sampler._load_checkpoint(tmp_path, device="cpu")
+        sampler.load_checkpoint(tmp_path, device="cpu")
+    assert "not a dict" in str(e.value)
+
+
+def test_load_checkpoint_missing_keys_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """It should raise CheckpointError when checkpoint is missing required keys."""
+    # Craft checkpoint with missing keys
+    ckpt = tmp_path / "ckpt_best.pt"
+    torch.save({"model": {}}, ckpt)  # missing model_args
+    with pytest.raises(CheckpointError) as e:
+        sampler.load_checkpoint(tmp_path, device="cpu")
     assert "model" in str(e.value)
     assert "model_args" in str(e.value)
 
@@ -110,7 +118,7 @@ def test_load_checkpoint_bad_model_args_raises(
     ckpt = tmp_path / "ckpt_best.pt"
     torch.save({"model": {}, "model_args": {"n_layer": -1}}, ckpt)
     with pytest.raises(CheckpointError):
-        sampler._load_checkpoint(tmp_path, device="cpu")
+        sampler.load_checkpoint(tmp_path, device="cpu")
 
 
 def test_load_checkpoint_load_state_error_is_wrapped(
@@ -122,7 +130,7 @@ def test_load_checkpoint_load_state_error_is_wrapped(
     # Minimal valid args for our GPTConfig (use default values by omitting fields)
     torch.save(
         {
-            "model": {"fail_load": True},
+            "model": {"invalid_key": "invalid_value"},  # This will cause load to fail
             "model_args": {
                 "block_size": 4,
                 "vocab_size": 16,
@@ -130,6 +138,9 @@ def test_load_checkpoint_load_state_error_is_wrapped(
                 "n_head": 1,
                 "n_embd": 8,
             },
+            "iter_num": 0,
+            "best_val_loss": 0.0,
+            "config": {},
         },
         ckpt,
     )
@@ -138,9 +149,13 @@ def test_load_checkpoint_load_state_error_is_wrapped(
         def __init__(self, config: Any) -> None:  # match GPT(conf)
             super().__init__()
 
+        def load_state_dict(self, state_dict: dict) -> None:
+            # Force an error to be raised
+            raise RuntimeError("Forced load error for testing")
+
     monkeypatch.setattr(sampler, "GPT", _DummyGPT)
     with pytest.raises(ModelError) as e:
-        sampler._load_checkpoint(tmp_path, device="cpu")
+        sampler.load_checkpoint(tmp_path, device="cpu")
     assert str(ckpt) in str(e.value)  # Ensure path is mentioned
 
 
@@ -249,32 +264,39 @@ def test_sample_happy_path_with_file_prompt_and_char_meta(
         lambda device, dtype, seed: ("cpu", torch.float32, nullcontext()),
     )
 
-    # Patch _load_checkpoint to return a dummy model and fake ckpt dict
+    # Patch load_checkpoint to return a dummy model and fake checkpoint
     dummy = _DummyModel()
 
-    def _fake_load(out: Path, device: str) -> Tuple[_DummyModel, dict[str, Any]]:
-        return dummy, {"model_args": {"block_size": 128, "vocab_size": 16, "n_layer": 1, "n_head": 1, "n_embd": 8}}
+    def _fake_load(out: Path, device: str) -> Tuple[_DummyModel, Any]:
+        # Create a mock checkpoint object
+        class MockCheckpoint:
+            pass
+        mock_ckpt = MockCheckpoint()
+        return dummy, mock_ckpt
 
-    monkeypatch.setattr(sampler, "_load_checkpoint", _fake_load)
+    monkeypatch.setattr(sampler, "load_checkpoint", _fake_load)
 
     # Build SampleExperiment
     rt = RuntimeConfig(
         out_dir=out_dir, device="cpu", dtype="float32", compile=False, seed=1
     )
-    sc = SampleConfig(
+    sample_conf = SampleConfig(
         start=f"FILE:{prompt_path}",
-        num_samples=1,
-        max_new_tokens=3,
-        temperature=0.5,
-        top_k=10,
+        num_samples=2,
+        max_new_tokens=4,
+        temperature=0.1,
+        top_k=1,
     )
-    exp = SamplerConfig(runtime=rt, sample=sc)
+    exp = SamplerConfig(runtime=rt, sample=sample_conf)
 
+    # Run
     sampler.sample(exp)
-    out = capsys.readouterr().out
-    assert "---------------" in out
-    # Ensure some printed content; decode uses our char mapping
-    assert out.count("---------------") == 1
+
+    # Verify
+    captured = capsys.readouterr()
+    # Check that the output contains the expected elements
+    assert "Hi" in captured.out
+    assert "HHHH" in captured.out  # This is what the dummy model generates
 
 
 def test_sample_with_compile_flag_uses_compiled_model(
@@ -302,13 +324,17 @@ def test_sample_with_compile_flag_uses_compiled_model(
 
     # Stub torch.compile
     monkeypatch.setattr(torch, "compile", lambda m: _Compiled())  # type: ignore[attr-defined]
-    # Patch _load_checkpoint to return a baseline model that will be "compiled"
+    # Patch load_checkpoint to return a baseline model that will be "compiled"
     dummy = _DummyModel()
 
-    def _fake_load(out: Path, device: str) -> Tuple[_DummyModel, dict[str, Any]]:
-        return dummy, {"model_args": {"block_size": 128, "vocab_size": 16, "n_layer": 1, "n_head": 1, "n_embd": 8}}
+    def _fake_load(out: Path, device: str) -> Tuple[_DummyModel, Any]:
+        # Create a mock checkpoint object
+        class MockCheckpoint:
+            pass
+        mock_ckpt = MockCheckpoint()
+        return dummy, mock_ckpt
 
-    monkeypatch.setattr(sampler, "_load_checkpoint", _fake_load)
+    monkeypatch.setattr(sampler, "load_checkpoint", _fake_load)
 
     rt = RuntimeConfig(
         out_dir=out_dir, device="cpu", dtype="float32", compile=True, seed=1
@@ -318,5 +344,6 @@ def test_sample_with_compile_flag_uses_compiled_model(
     )
     exp = SamplerConfig(runtime=rt, sample=sc)
 
+    # Call sample function directly without passing model
     sampler.sample(exp)
     assert called["compiled"] == 1

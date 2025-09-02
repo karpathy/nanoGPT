@@ -45,6 +45,61 @@ class _FrozenStrictModel(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", validate_default=True)
 
 
+class RuntimeConfig(_FrozenStrictModel):
+    """
+    Configuration for runtime/environment, checkpointing, logging, early stopping,
+    device+seed settings, and advanced training options.
+    """
+
+    out_dir: Path
+    max_iters: int = 600_000
+    eval_interval: int = 2_000
+    eval_iters: int = 200
+    log_interval: int = 1
+    eval_only: bool = False
+    seed: int = 1337
+    device: DeviceKind = "cpu"
+    dtype: DTypeKind = "float32"
+    compile: bool = False
+    # TensorBoard logging toggle (default: enabled)
+    tensorboard_enabled: bool = True
+
+    # Optional epoch semantics (experiment-scoped)
+    iters_per_epoch: Optional[int] = None
+    max_epochs: Optional[int] = None
+
+    # Checkpoint policy
+    ckpt_last_filename: str = "ckpt_last.pt"
+    ckpt_best_filename: str = "ckpt_best.pt"
+    ckpt_metric: Literal["val_loss", "perplexity"] = "val_loss"
+    ckpt_greater_is_better: bool = False
+    ckpt_atomic: bool = True
+    ckpt_write_metadata: bool = True
+    ckpt_time_interval_minutes: int = 0
+    
+    class Checkpointing(_FrozenStrictModel):
+        class Keep(_FrozenStrictModel):
+            last: int = 1
+            best: int = 1
+            
+            @field_validator("last", "best")
+            @classmethod
+            def _validate_positive(cls, v: int) -> int:
+                if v < 0:
+                    raise ValueError("must be >= 0")
+                return int(v)
+        
+        keep: Keep = Keep()
+    
+    checkpointing: Checkpointing = Checkpointing()
+    
+    # Smoothed improvement + early stopping
+    best_smoothing_alpha: float = 0.0
+    early_stop_patience: int = 0
+    # Exponential moving average of weights
+    ema_decay: float = 0.0
+
+
 class TrainerConfig(_FrozenStrictModel):
     """
     Top-level configuration for a training session, encapsulating model, data, optimizer,
@@ -58,6 +113,7 @@ class TrainerConfig(_FrozenStrictModel):
     runtime: RuntimeConfig
     extras: dict[str, Any] = Field(default_factory=dict)
     logger: Any | None = Field(default=None)
+    checkpointing: RuntimeConfig.Checkpointing = RuntimeConfig.Checkpointing()
 
 
 class SamplerConfig(_FrozenStrictModel):
@@ -202,83 +258,6 @@ class DataConfig(_FrozenStrictModel):
         return int(v)
 
 
-class RuntimeConfig(_FrozenStrictModel):
-    """
-    Configuration for runtime/environment, checkpointing, logging, early stopping,
-    device+seed settings, and advanced training options.
-    """
-
-    out_dir: Path
-    max_iters: int = 600_000
-    eval_interval: int = 2_000
-    eval_iters: int = 200
-    log_interval: int = 1
-    eval_only: bool = False
-    always_save_checkpoint: bool = True
-    seed: int = 1337
-    device: DeviceKind = "cpu"
-    dtype: DTypeKind = "float32"
-    compile: bool = False
-    # TensorBoard logging toggle (default: enabled)
-    tensorboard_enabled: bool = True
-
-    # Optional epoch semantics (experiment-scoped)
-    iters_per_epoch: Optional[int] = None
-    max_epochs: Optional[int] = None
-
-    # Checkpoint policy
-    ckpt_last_filename: str = "ckpt_last.pt"
-    ckpt_best_filename: str = "ckpt_best.pt"
-    ckpt_top_k: int = 0
-    ckpt_metric: Literal["val_loss", "perplexity"] = "val_loss"
-    ckpt_greater_is_better: bool = False
-    ckpt_atomic: bool = True
-    ckpt_write_metadata: bool = True
-    ckpt_time_interval_minutes: int = 0
-    # Smoothed improvement + early stopping
-    best_smoothing_alpha: float = 0.0
-    early_stop_patience: int = 0
-    # Exponential moving average of weights
-    ema_decay: float = 0.0
-
-    @field_validator("out_dir", mode="before")
-    @classmethod
-    def _coerce_path(cls, v: Path | str) -> Path:
-        return Path(v)
-
-    @field_validator(
-        "max_iters",
-        "eval_interval",
-        "eval_iters",
-        "log_interval",
-        "seed",
-        "ckpt_top_k",
-        "ckpt_time_interval_minutes",
-        "early_stop_patience",
-    )
-    @classmethod
-    def _non_negative_int(cls, v: int) -> int:
-        if v < 0:
-            raise ValueError("must be >= 0")
-        return int(v)
-
-    @field_validator("iters_per_epoch", "max_epochs")
-    @classmethod
-    def _positive_optional_int(cls, v: Optional[int]) -> Optional[int]:
-        if v is None:
-            return None
-        if v <= 0:
-            raise ValueError("must be > 0 if provided")
-        return int(v)
-
-    @field_validator("best_smoothing_alpha", "ema_decay")
-    @classmethod
-    def _in_unit_range(cls, v: float) -> float:
-        if not (0.0 <= v <= 1.0):
-            raise ValueError("must be in [0, 1]")
-        return float(v)
-
-
 class SampleConfig(_FrozenStrictModel):
     """
     Configuration for sampling and text generation parameters, including temperature, nucleus/top-k sampling,
@@ -407,9 +386,20 @@ TrainExperiment = TrainerConfig
 SampleExperiment = SamplerConfig
 
 
-def validate_config_field(value: Any, field_name: str, expected_type: type, required: bool = True, min_value: Any = None, max_value: Any = None) -> None:
-    """Validate a configuration field with type and range checks.
-    
+def validate_config_field(
+    value: Any,
+    field_name: str,
+    expected_type: type,
+    required: bool = True,
+    min_value: Any = None,
+    max_value: Any = None,
+) -> None:
+    """
+    Validate a configuration field with type and range checks.
+
+    This function checks if the provided value is of the expected type and within the specified range.
+    It raises a ValueError if the validation fails.
+
     Args:
         value: The value to validate
         field_name: Name of the field (for error messages)
@@ -417,25 +407,25 @@ def validate_config_field(value: Any, field_name: str, expected_type: type, requ
         required: Whether the field is required (cannot be None)
         min_value: Minimum allowed value (for numeric types)
         max_value: Maximum allowed value (for numeric types)
-    
+
     Raises:
         ValueError: If validation fails
     """
     # Check if required
     if required and value is None:
         raise ValueError(f"Required configuration field '{field_name}' is missing")
-    
+
     # Skip further validation if None and not required
     if value is None:
         return
-    
+
     # Type check
     if not isinstance(value, expected_type):
         raise ValueError(
             f"Configuration field '{field_name}' must be of type {expected_type.__name__}, "
             f"got {type(value).__name__}"
         )
-    
+
     # Range checks for numeric types
     if isinstance(value, (int, float)):
         if min_value is not None and value < min_value:
@@ -448,26 +438,34 @@ def validate_config_field(value: Any, field_name: str, expected_type: type, requ
             )
 
 
-def validate_path_exists(path: Path, field_name: str, must_be_file: bool = False, must_be_dir: bool = False) -> None:
-    """Validate that a path exists and optionally check if it's a file or directory.
-    
+def validate_path_exists(
+    path: Path, field_name: str, must_be_file: bool = False, must_be_dir: bool = False
+) -> None:
+    """
+    Validate that a path exists and optionally check if it's a file or directory.
+
+    This function checks if the provided path exists and optionally checks if it's a file or directory.
+    It raises a ValueError if the validation fails.
+
     Args:
         path: Path to validate
         field_name: Name of the field (for error messages)
         must_be_file: If True, path must exist and be a file
         must_be_dir: If True, path must exist and be a directory
-    
+
     Raises:
         ValueError: If validation fails
     """
     if not path.exists():
         raise ValueError(f"Path specified in '{field_name}' does not exist: {path}")
-    
+
     if must_be_file and not path.is_file():
         raise ValueError(f"Path specified in '{field_name}' must be a file: {path}")
-    
+
     if must_be_dir and not path.is_dir():
-        raise ValueError(f"Path specified in '{field_name}' must be a directory: {path}")
+        raise ValueError(
+            f"Path specified in '{field_name}' must be a directory: {path}"
+        )
 
 
 # Expose utility functions

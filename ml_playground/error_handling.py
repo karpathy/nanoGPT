@@ -9,41 +9,48 @@ from typing import Any, Callable, Optional, Type, TypeVar
 from pathlib import Path
 
 # Type variable for generic error handling
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class MLPlaygroundError(Exception):
     """Base exception class for ml_playground framework errors."""
+
     pass
 
 
 class ConfigurationError(MLPlaygroundError):
     """Raised when there are configuration-related errors."""
+
     pass
 
 
 class DataError(MLPlaygroundError):
     """Raised when there are data-related errors."""
+
     pass
 
 
 class ModelError(MLPlaygroundError):
     """Raised when there are model-related errors."""
+
     pass
 
 
 class CheckpointError(MLPlaygroundError):
     """Raised when there are checkpoint-related errors."""
+
     pass
 
 
 class ValidationError(MLPlaygroundError):
     """Raised when there are validation-related errors."""
+
     pass
 
 
 class FileOperationError(MLPlaygroundError):
     """Raised when file operations fail."""
+
     pass
 
 
@@ -52,7 +59,9 @@ def setup_logging(name: str, level: int = logging.INFO) -> logging.Logger:
     logger = logging.getLogger(name)
     if not logger.handlers:
         handler = logging.StreamHandler()
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
         handler.setFormatter(formatter)
         logger.addHandler(handler)
     logger.setLevel(level)
@@ -60,38 +69,35 @@ def setup_logging(name: str, level: int = logging.INFO) -> logging.Logger:
 
 
 def handle_exception(
-    exc_type: Type[BaseException], 
-    exc_value: BaseException, 
+    exc_type: Type[BaseException],
+    exc_value: BaseException,
     exc_traceback: Any,
-    logger: Optional[logging.Logger] = None
+    logger: Optional[logging.Logger] = None,
 ) -> None:
     """Handle uncaught exceptions with logging."""
     if logger is None:
-        logger = logging.getLogger('ml_playground')
-    
+        logger = logging.getLogger("ml_playground")
+
     if issubclass(exc_type, KeyboardInterrupt):
         # Handle keyboard interrupt gracefully
         logger.info("Received keyboard interrupt, exiting...")
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
         return
-    
-    logger.error(
-        "Uncaught exception",
-        exc_info=(exc_type, exc_value, exc_traceback)
-    )
+
+    logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
 
 
 def safe_call(
-    func: Callable[..., T], 
-    *args: Any, 
+    func: Callable[..., T],
+    *args: Any,
     default: Optional[T] = None,
     logger: Optional[logging.Logger] = None,
-    **kwargs: Any
+    **kwargs: Any,
 ) -> T:
     """Safely call a function, catching and logging any exceptions."""
     if logger is None:
-        logger = logging.getLogger('ml_playground')
-        
+        logger = logging.getLogger("ml_playground")
+
     try:
         return func(*args, **kwargs)
     except Exception as e:
@@ -102,7 +108,12 @@ def safe_call(
         raise
 
 
-def safe_file_operation(func: Callable[..., T], *args: Any, logger: Optional[logging.Logger] = None, **kwargs: Any) -> T:
+def safe_file_operation(
+    func: Callable[..., T],
+    *args: Any,
+    logger: Optional[logging.Logger] = None,
+    **kwargs: Any,
+) -> T:
     """Safely execute a file operation, catching and logging FileOperationError exceptions."""
     try:
         return func(*args, **kwargs)
@@ -132,7 +143,9 @@ def validate_directory_exists(path: Path, description: str = "Directory") -> Non
         raise DataError(f"{description} path {path} exists but is not a directory")
 
 
-def validate_config_value(value: Any, name: str, expected_type: Type, required: bool = True) -> None:
+def validate_config_value(
+    value: Any, name: str, expected_type: Type, required: bool = True
+) -> None:
     """Validate a configuration value's type and presence."""
     if required and value is None:
         raise ValidationError(f"Required configuration value '{name}' is missing")
@@ -153,23 +166,25 @@ def format_error_message(error: Exception, context: str = "") -> str:
 
 class ProgressReporter:
     """A utility class for reporting progress during long-running operations."""
-    
-    def __init__(self, logger: Optional[logging.Logger] = None, total_steps: Optional[int] = None):
+
+    def __init__(
+        self, logger: Optional[logging.Logger] = None, total_steps: Optional[int] = None
+    ):
         self.logger = logger or logging.getLogger(__name__)
         self.total_steps = total_steps
         self.current_step = 0
         self.last_reported_percent = 0
-    
+
     def start(self, message: str = "Starting operation") -> None:
         """Report the start of an operation."""
         self.logger.info(f"{message}...")
         self.current_step = 0
         self.last_reported_percent = 0
-    
+
     def update(self, step: int = 1, message: str = "") -> None:
         """Update progress by the specified number of steps."""
         self.current_step += step
-        
+
         if self.total_steps:
             percent = int((self.current_step / self.total_steps) * 100)
             # Only report every 10% to avoid spam
@@ -181,7 +196,7 @@ class ProgressReporter:
                 self.logger.info(msg)
         elif message:
             self.logger.info(f"Step {self.current_step}: {message}")
-    
+
     def finish(self, message: str = "Operation completed") -> None:
         """Report the completion of an operation."""
         if self.total_steps and self.current_step < self.total_steps:
@@ -189,7 +204,9 @@ class ProgressReporter:
         self.logger.info(message)
 
 
-def log_operation_start(logger: logging.Logger, operation: str, details: str = "") -> None:
+def log_operation_start(
+    logger: logging.Logger, operation: str, details: str = ""
+) -> None:
     """Log the start of an operation."""
     msg = f"Starting {operation}"
     if details:
@@ -197,12 +214,16 @@ def log_operation_start(logger: logging.Logger, operation: str, details: str = "
     logger.info(msg)
 
 
-def log_operation_progress(logger: logging.Logger, operation: str, progress: str) -> None:
+def log_operation_progress(
+    logger: logging.Logger, operation: str, progress: str
+) -> None:
     """Log progress of an operation."""
     logger.info(f"{operation}: {progress}")
 
 
-def log_operation_complete(logger: logging.Logger, operation: str, result: str = "") -> None:
+def log_operation_complete(
+    logger: logging.Logger, operation: str, result: str = ""
+) -> None:
     """Log the completion of an operation."""
     msg = f"Completed {operation}"
     if result:
@@ -210,9 +231,12 @@ def log_operation_complete(logger: logging.Logger, operation: str, result: str =
     logger.info(msg)
 
 
-def log_operation_error(logger: logging.Logger, operation: str, error: Exception) -> None:
+def log_operation_error(
+    logger: logging.Logger, operation: str, error: Exception
+) -> None:
     """Log an error during an operation."""
     logger.error(f"Error during {operation}: {error}")
+
 
 # Expose the progress reporting utilities
 ProgressReporter = ProgressReporter

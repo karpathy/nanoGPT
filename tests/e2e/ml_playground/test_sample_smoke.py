@@ -3,7 +3,7 @@ from pathlib import Path
 import torch
 from ml_playground.model import GPTConfig, GPT
 from ml_playground.sampler import sample
-from ml_playground.config import SamplerConfig, SampleConfig, RuntimeConfig
+from ml_playground.config import SamplerConfig, SampleConfig, RuntimeConfig, RuntimeConfig as RC
 
 
 def test_sample_smoke(tmp_path: Path) -> None:
@@ -62,7 +62,12 @@ def test_sample_smoke(tmp_path: Path) -> None:
             eval_iters=1,
             log_interval=1,
             eval_only=False,
-            always_save_checkpoint=False,
+            checkpointing=RC.Checkpointing(
+                keep=RC.Checkpointing.Keep(
+                    last=1,
+                    best=1,
+                )
+            ),
             seed=123,
             device="cpu",
             dtype="float32",

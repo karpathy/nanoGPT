@@ -18,6 +18,7 @@ Minimal experiment to prepare, train, and sample on the Tiny Shakespeare corpus 
 - Model: Small GPT configured in TOML (n_layer, n_head, n_embd, block_size, etc.)
 - Checkpoints: ckpt_best.pt and ckpt_last.pt managed by trainer
 - Logging: TensorBoard enabled at out_dir/logs/tb
+This experiment uses the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../../docs/framework_utilities.md).
 
 ## Environment Setup (UV-only)
 ```bash

@@ -48,7 +48,6 @@ device = "cpu"
 dtype = "float32"
 compile = false
 # No checkpoint churn for speed
-ckpt_top_k = 0
 ckpt_write_metadata = false
 ckpt_time_interval_minutes = 0
 ckpt_atomic = false
@@ -57,6 +56,10 @@ early_stop_patience = 0
 ema_decay = 0.0
 # Keep relative out_dir to be overridden by experiment config in tests if needed
 out_dir = "out"
+
+[train.runtime.checkpointing.keep]
+last = 1
+best = 1
 
 [sample.runtime]
 # Keep sampling lightweight

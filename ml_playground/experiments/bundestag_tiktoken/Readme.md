@@ -20,6 +20,7 @@ Byte-Pair Encoding (BPE) experiment using tiktoken to tokenize Bundestag speeche
 - Tokenize with tiktoken (cl100k_base by default) into uint32 arrays
 - Model hyperparameters and runtime behavior controlled by TOML
 - TensorBoard logs written to out_dir/logs/tb
+This experiment uses the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../../docs/framework_utilities.md).
 
 ## Environment Setup (UV-only)
 ```bash
