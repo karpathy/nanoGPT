@@ -271,6 +271,7 @@ def test_sample_happy_path_with_file_prompt_and_char_meta(
         # Create a mock checkpoint object
         class MockCheckpoint:
             pass
+
         mock_ckpt = MockCheckpoint()
         return dummy, mock_ckpt
 
@@ -331,6 +332,7 @@ def test_sample_with_compile_flag_uses_compiled_model(
         # Create a mock checkpoint object
         class MockCheckpoint:
             pass
+
         mock_ckpt = MockCheckpoint()
         return dummy, mock_ckpt
 

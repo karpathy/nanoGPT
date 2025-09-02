@@ -22,7 +22,7 @@ def test_char_tokenizer():
     print(f"Original: {text}")
     print(f"Encoded: {encoded}")
     print(f"Decoded: {decoded}")
-    print(f"Vocab size: {tokenizer.get_vocab_size()}")
+    print(f"Vocab size: {tokenizer.vocab_size}")
 
     assert decoded == text, f"Expected '{text}', got '{decoded}'"
     print("CharTokenizer test passed!")
@@ -66,7 +66,7 @@ def test_tiktoken_tokenizer():
         print(f"Original: {text}")
         print(f"Encoded: {encoded}")
         print(f"Decoded: {decoded}")
-        print(f"Vocab size: {tokenizer.get_vocab_size()}")
+        print(f"Vocab size: {tokenizer.vocab_size}")
 
         assert decoded == text, f"Expected '{text}', got '{decoded}'"
         print("TiktokenTokenizer test passed!")

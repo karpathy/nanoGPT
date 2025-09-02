@@ -76,23 +76,23 @@ class RuntimeConfig(_FrozenStrictModel):
     ckpt_atomic: bool = True
     ckpt_write_metadata: bool = True
     ckpt_time_interval_minutes: int = 0
-    
+
     class Checkpointing(_FrozenStrictModel):
         class Keep(_FrozenStrictModel):
             last: int = 1
             best: int = 1
-            
+
             @field_validator("last", "best")
             @classmethod
             def _validate_positive(cls, v: int) -> int:
                 if v < 0:
                     raise ValueError("must be >= 0")
                 return int(v)
-        
+
         keep: Keep = Keep()
-    
+
     checkpointing: Checkpointing = Checkpointing()
-    
+
     # Smoothed improvement + early stopping
     best_smoothing_alpha: float = 0.0
     early_stop_patience: int = 0

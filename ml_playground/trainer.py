@@ -5,10 +5,10 @@ import os
 import json
 import hashlib
 from pathlib import Path
-from typing import Dict, Tuple, Protocol, Optional, List
+from typing import Any, Dict, Tuple, Protocol, Optional, List, cast
 import pickle
 import torch
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from ml_playground.model import GPTConfig, GPT
 from ml_playground.config import TrainerConfig
 from ml_playground.device import setup
@@ -60,6 +60,7 @@ class Trainer(Protocol):
 @dataclass(frozen=True)
 class Checkpoint:
     """A strongly-typed checkpoint object."""
+
     model: Dict[str, Any]
     optimizer: Dict[str, Any]
     model_args: Dict[str, Any]
@@ -67,7 +68,7 @@ class Checkpoint:
     best_val_loss: float
     config: Dict[str, Any]
     ema: Optional[Dict[str, Any]] = None
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert checkpoint to dictionary for serialization."""
         result = {
@@ -82,9 +83,19 @@ class Checkpoint:
             result["ema"] = self.ema
         return result
 
+    def __getitem__(self, key: str) -> Any:
+        """Allow dictionary-style access to attributes."""
+        return getattr(self, key)
+
+    def __contains__(self, key: str) -> bool:
+        """Allow 'in' operator to check for attribute existence."""
+        return hasattr(self, key)
+
+
 @dataclass
 class _CkptInfo:
     """Internal checkpoint metadata for management."""
+
     path: Path
     metric: float
     iter_num: int
@@ -94,7 +105,9 @@ class _CkptInfo:
 class CheckpointManager:
     """A utility class for managing checkpoints with advanced features."""
 
-    def __init__(self, out_dir: Path, atomic: bool = True, keep_last: int = 1, keep_best: int = 1):
+    def __init__(
+        self, out_dir: Path, atomic: bool = True, keep_last: int = 1, keep_best: int = 1
+    ):
         self.out_dir = out_dir
         self.atomic = atomic
         self.keep_last = keep_last
@@ -118,17 +131,23 @@ class CheckpointManager:
         _atomic_save(checkpoint.to_dict(), path, self.atomic)
 
         ckpt_info = _CkptInfo(path, metric, iter_num, time.time())
-        
+
         # Manage last checkpoints
         if self.keep_last > 0 and not is_best:
             # Remove any existing checkpoint with the same path
-            self.last_checkpoints = [ckpt for ckpt in self.last_checkpoints if ckpt.path != path]
+            self.last_checkpoints = [
+                ckpt for ckpt in self.last_checkpoints if ckpt.path != path
+            ]
             self.last_checkpoints.append(ckpt_info)
             # Keep only the specified number of last checkpoints
             if len(self.last_checkpoints) > self.keep_last:
                 # Remove oldest checkpoints
-                to_remove = self.last_checkpoints[:len(self.last_checkpoints) - self.keep_last]
-                self.last_checkpoints = self.last_checkpoints[len(self.last_checkpoints) - self.keep_last:]
+                to_remove = self.last_checkpoints[
+                    : len(self.last_checkpoints) - self.keep_last
+                ]
+                self.last_checkpoints = self.last_checkpoints[
+                    len(self.last_checkpoints) - self.keep_last :
+                ]
 
                 # Delete the files
                 for ckpt in to_remove:
@@ -145,20 +164,22 @@ class CheckpointManager:
                             logger.warning(
                                 f"Failed to remove old last checkpoint {ckpt.path}: {e}"
                             )
-        
+
         # Manage best checkpoints
         if is_best and self.keep_best > 0:
             # Remove any existing checkpoint with the same path
-            self.best_checkpoints = [ckpt for ckpt in self.best_checkpoints if ckpt.path != path]
+            self.best_checkpoints = [
+                ckpt for ckpt in self.best_checkpoints if ckpt.path != path
+            ]
             self.best_checkpoints.append(ckpt_info)
             # Sort by metric (assuming lower is better by default)
             self.best_checkpoints.sort(key=lambda x: x.metric, reverse=False)
-            
+
             # Keep only the specified number of best checkpoints
             if len(self.best_checkpoints) > self.keep_best:
                 # Remove worst checkpoints
-                to_remove = self.best_checkpoints[self.keep_best:]
-                self.best_checkpoints = self.best_checkpoints[:self.keep_best]
+                to_remove = self.best_checkpoints[self.keep_best :]
+                self.best_checkpoints = self.best_checkpoints[: self.keep_best]
 
                 # Delete the files
                 for ckpt in to_remove:
@@ -185,21 +206,28 @@ class CheckpointManager:
         """Load the latest checkpoint from the last checkpoints list."""
         if not self.last_checkpoints:
             return None
-            
+
         # Get the most recent checkpoint
         latest_ckpt = max(self.last_checkpoints, key=lambda x: x.created_at)
-        
+
         try:
             checkpoint_dict = torch.load(str(latest_ckpt.path), map_location=device)
             if not isinstance(checkpoint_dict, dict):
                 raise ValueError("Checkpoint file does not contain a dictionary")
-                
+
             # Validate required keys
-            required_keys = ["model", "optimizer", "model_args", "iter_num", "best_val_loss", "config"]
+            required_keys = [
+                "model",
+                "optimizer",
+                "model_args",
+                "iter_num",
+                "best_val_loss",
+                "config",
+            ]
             for key in required_keys:
                 if key not in checkpoint_dict:
                     raise ValueError(f"Checkpoint missing required key: {key}")
-            
+
             # Create Checkpoint object
             checkpoint = Checkpoint(
                 model=checkpoint_dict["model"],
@@ -210,7 +238,7 @@ class CheckpointManager:
                 config=checkpoint_dict["config"],
                 ema=checkpoint_dict.get("ema"),
             )
-            
+
             if logger:
                 logger.info(f"Loaded checkpoint from {latest_ckpt.path}")
             return checkpoint
@@ -225,21 +253,28 @@ class CheckpointManager:
         """Load the best checkpoint from the best checkpoints list."""
         if not self.best_checkpoints:
             return None
-            
+
         # Get the best checkpoint (lowest metric)
         best_ckpt = min(self.best_checkpoints, key=lambda x: x.metric)
-        
+
         try:
             checkpoint_dict = torch.load(str(best_ckpt.path), map_location=device)
             if not isinstance(checkpoint_dict, dict):
                 raise ValueError("Checkpoint file does not contain a dictionary")
-                
+
             # Validate required keys
-            required_keys = ["model", "optimizer", "model_args", "iter_num", "best_val_loss", "config"]
+            required_keys = [
+                "model",
+                "optimizer",
+                "model_args",
+                "iter_num",
+                "best_val_loss",
+                "config",
+            ]
             for key in required_keys:
                 if key not in checkpoint_dict:
                     raise ValueError(f"Checkpoint missing required key: {key}")
-            
+
             # Create Checkpoint object
             checkpoint = Checkpoint(
                 model=checkpoint_dict["model"],
@@ -250,14 +285,17 @@ class CheckpointManager:
                 config=checkpoint_dict["config"],
                 ema=checkpoint_dict.get("ema"),
             )
-            
+
             if logger:
                 logger.info(f"Loaded best checkpoint from {best_ckpt.path}")
             return checkpoint
         except Exception as e:
             if logger:
-                logger.error(f"Error loading best checkpoint from {best_ckpt.path}: {e}")
+                logger.error(
+                    f"Error loading best checkpoint from {best_ckpt.path}: {e}"
+                )
             return None
+
 
 def _atomic_save(obj, path: Path, atomic: bool) -> None:
     if not atomic:
@@ -355,20 +393,30 @@ class _EMA:
 
 
 def _estimate_loss(
-    model: GPT, batches: SimpleBatches, eval_iters: int, ctx
+    model: GPT, batches: SimpleBatches, eval_iters: int, ctx: Any
 ) -> Dict[str, float]:
     """Estimate loss on train/val splits."""
     out = {}
-    model.eval()
+    # Handle DDP model
+    if hasattr(model, "module"):
+        raw_model = model.module
+    else:
+        raw_model = model
+    
+    # Ensure raw_model is a GPT instance
+    if not isinstance(raw_model, GPT):
+        raise TypeError(f"Expected GPT model, got {type(raw_model)}")
+    
+    raw_model.eval()
     for split in ["train", "val"]:
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = batches.get_batch(split)
             with ctx:
-                logits, loss = model(X, Y)
+                logits, loss = raw_model(X, Y)
             losses[k] = loss.item()
         out[split] = losses.mean().item()
-    model.train()
+    raw_model.train()
     return out
 
 
@@ -497,14 +545,19 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
 
     # Init these up here so we can save checkpoints in the training loop
     ckpt_manager = CheckpointManager(
-        rt.out_dir, atomic=rt.ckpt_atomic, keep_last=rt.checkpointing.keep.last, keep_best=rt.checkpointing.keep.best
+        rt.out_dir,
+        atomic=rt.ckpt_atomic,
+        keep_last=rt.checkpointing.keep.last,
+        keep_best=rt.checkpointing.keep.best,
     )
     ema: _EMA | None = None
 
     if resume_from is not None:
         logger.info(f"[train] Resuming from checkpoint: {resume_from}")
         try:
-            checkpoint = torch.load(resume_from, map_location=device_type, weights_only=False)
+            checkpoint = torch.load(
+                resume_from, map_location=device_type, weights_only=False
+            )
         except Exception as e:
             raise CheckpointError(
                 f"Failed to load checkpoint from {resume_from}: {e}"
@@ -560,7 +613,7 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
     if rt.compile:
         logger.info("[train] Compiling model...")
         try:
-            model = torch.compile(model)  # type: ignore
+            model = cast(GPT, torch.compile(model))  # ensure type remains GPT for type checkers
         except Exception as e:
             logger.warning(f"Failed to compile model: {e}")
 
@@ -579,6 +632,11 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
     local_iter_num = 0
     running_mfu = -1.0
 
+    # Predefine optional variables for type-checker safety
+    loss: torch.Tensor | None = None
+    raw_model: GPT | None = None
+    original_weights: dict[str, torch.Tensor] | None = None
+
     # Training metrics tracking
     train_loss_tracker = 0.0
     train_loss_count = 0
@@ -586,6 +644,10 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
     # EMA metrics tracking
     ema_val_loss_tracker = 0.0
     ema_val_loss_count = 0
+
+    # Optional evaluation caches for safe later access
+    losses: Dict[str, float] | None = None
+    ema_losses: Dict[str, float] | None = None
 
     while True:
         # Determine and set the learning rate for this iteration
@@ -602,6 +664,7 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
         # Evaluate the loss on train/val sets
         if iter_num % rt.eval_interval == 0:
             try:
+                # model is GPT (may be compiled); safe to pass
                 losses = _estimate_loss(model, batches, rt.eval_iters, ctx)
                 logger.info(
                     f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
@@ -629,7 +692,7 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
                         logger.info(
                             f"[train] Saving first checkpoint at iter {iter_num} with val_loss {val_loss:.4f}"
                         )
-                    
+
                     checkpoint = Checkpoint(
                         model=model.state_dict(),
                         optimizer=optimizer.state_dict(),
@@ -642,17 +705,32 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
                     # Save as both best and last for the first checkpoint
                     if iter_num == 0:
                         ckpt_manager.save_checkpoint(
-                            checkpoint, rt.ckpt_best_filename, best_val_loss, iter_num, logger, is_best=True
+                            checkpoint,
+                            rt.ckpt_best_filename,
+                            best_val_loss,
+                            iter_num,
+                            logger,
+                            is_best=True,
                         )
                         ckpt_manager.save_checkpoint(
-                            checkpoint, rt.ckpt_last_filename, best_val_loss, iter_num, logger, is_best=False
+                            checkpoint,
+                            rt.ckpt_last_filename,
+                            best_val_loss,
+                            iter_num,
+                            logger,
+                            is_best=False,
                         )
                     else:
                         # Save as best checkpoint
                         ckpt_manager.save_checkpoint(
-                            checkpoint, rt.ckpt_best_filename, best_val_loss, iter_num, logger, is_best=True
+                            checkpoint,
+                            rt.ckpt_best_filename,
+                            best_val_loss,
+                            iter_num,
+                            logger,
+                            is_best=True,
                         )
-                        
+
                 # Save last checkpoint periodically
                 if iter_num % rt.eval_interval == 0 and iter_num > 0:
                     checkpoint = Checkpoint(
@@ -665,7 +743,12 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
                         ema=ema.shadow if ema is not None else None,
                     )
                     ckpt_manager.save_checkpoint(
-                        checkpoint, rt.ckpt_last_filename, best_val_loss, iter_num, logger, is_best=False
+                        checkpoint,
+                        rt.ckpt_last_filename,
+                        best_val_loss,
+                        iter_num,
+                        logger,
+                        is_best=False,
                     )
             except Exception as e:
                 logger.error(f"Error during evaluation: {e}")
@@ -675,19 +758,29 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
         if rt.ema_decay > 0 and iter_num % 100 == 0 and iter_num >= 100:
             try:
                 if ema is not None:
+                    # Handle DDP model
+                    if hasattr(model, "module"):
+                        raw_model = cast(GPT, model.module)
+                    else:
+                        raw_model = cast(GPT, model)
+                    
+                    # Ensure raw_model is a GPT instance
+                    if not isinstance(raw_model, GPT):
+                        raise TypeError(f"Expected GPT model, got {type(raw_model)}")
+                    
                     # Save original weights
                     original_weights = {
-                        k: v.detach().clone() for k, v in model.state_dict().items()
+                        k: v.detach().clone() for k, v in raw_model.state_dict().items()
                     }
                     # Apply EMA weights
-                    ema.apply_to(model)
+                    ema.apply_to(raw_model)
                     # Evaluate
-                    ema_losses = _estimate_loss(model, batches, rt.eval_iters, ctx)
+                    ema_losses = _estimate_loss(raw_model, batches, rt.eval_iters, ctx)
                     logger.info(
                         f"step {iter_num}: EMA val loss {ema_losses['val']:.4f}"
                     )
                     # Restore original weights
-                    model.load_state_dict(original_weights)
+                    raw_model.load_state_dict(original_weights)
 
                     # Update TensorBoard
                     writer.add_scalar("loss/ema_val", ema_losses["val"], iter_num)
@@ -698,9 +791,9 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
             except Exception as e:
                 logger.error(f"Error during EMA evaluation: {e}")
                 # Restore original weights even if evaluation fails
-                if "original_weights" in locals():
+                if raw_model is not None and original_weights is not None:
                     try:
-                        model.load_state_dict(original_weights)
+                        raw_model.load_state_dict(original_weights)
                     except Exception:
                         pass
 
@@ -710,21 +803,33 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
 
         # Forward backward update, with optional gradient accumulation to simulate larger batch size
         try:
+            # Handle DDP model
+            if hasattr(model, "module"):
+                raw_model = cast(GPT, model.module)
+            else:
+                raw_model = cast(GPT, model)
+            
+            # Ensure raw_model is a GPT instance
+            if not isinstance(raw_model, GPT):
+                raise TypeError(f"Expected GPT model, got {type(raw_model)}")
+            
             for micro_step in range(exp.data.grad_accum_steps):
                 if ddp:
                     # Not implemented yet
                     pass
                 else:
-                    logits, loss = model(X, Y)
-                    loss = loss / exp.data.grad_accum_steps
+                    logits, loss_t = raw_model(X, Y)
+                    loss = loss_t / exp.data.grad_accum_steps
                 X, Y = batches.get_batch("train")
                 optimizer.zero_grad(set_to_none=True)
+                if loss is None:
+                    raise RuntimeError("Loss is None before backward; this indicates an unhandled branch in training loop.")
                 loss.backward()
                 optimizer.step()
 
                 # Update EMA if enabled
                 if ema is not None:
-                    ema.update(model)
+                    ema.update(raw_model)
 
                 # Update tokens seen
                 tokens_seen += X.numel()
@@ -732,27 +837,26 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
             logger.error(f"Error during training step: {e}")
             raise
 
-        # Timing and logging
-        t1 = time.time()
-        dt = t1 - t0
-        t0 = t1
-        if iter_num % rt.log_interval == 0:
-            # Get loss as float. note: this is a CPU-GPU sync point
-            lossf = loss.item() * exp.data.grad_accum_steps
-            if local_iter_num >= 5:  # let the training loop settle a bit
-                mfu = model.estimate_mfu(
-                    exp.data.batch_size * exp.data.grad_accum_steps, dt
+        # Log metrics periodically
+        if iter_num % rt.log_interval == 0 and local_iter_num >= 1:
+            dt = time.time() - t0
+            t0 = time.time()
+            tokens_per_sec = tokens_seen / dt if dt > 0 else 0
+            tokens_seen = 0
+            if loss is not None:
+                logger.info(
+                    f"iter {iter_num}: loss {loss.item():.4f}, time {dt*1000:.2f}ms, tokens/sec {tokens_per_sec:.2f}"
                 )
-                running_mfu = (
-                    mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
-                )
-            logger.info(
-                f"iter {iter_num}: loss {lossf:.4f}, time {dt * 1000:.2f}ms, mfu {running_mfu * 100:.2f}%"
-            )
+            if iter_num >= 100:
+                mfu = raw_model.estimate_mfu(exp.data.batch_size * exp.data.grad_accum_steps, dt)
+                running_mfu = mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
+                logger.info(f"MFU: {running_mfu * 100:.2f}%")
 
             # Update TensorBoard
-            writer.add_scalar("loss/step", lossf, iter_num)
-            writer.add_scalar("time/step", dt * 1000, iter_num)
+            if loss is not None:
+                writer.add_scalar("train/loss", loss.item(), iter_num)
+                writer.add_scalar("train/tokens_per_sec", tokens_per_sec, iter_num)
+                writer.add_scalar("train/step_time_ms", dt * 1000, iter_num)
 
         # Save checkpoint periodically based on time interval
         if rt.ckpt_time_interval_minutes > 0:
@@ -787,13 +891,13 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
                     eval_iters=rt.eval_iters,
                     metric_name="val_loss",
                     greater_is_better=False,
-                    metric_raw=losses.get("val", 0.0),
+                    metric_raw=(losses["val"] if (losses is not None and "val" in losses) else 0.0),
                     smoothing_alpha=rt.best_smoothing_alpha,
                     decision_metric=best_val_loss,
                     ema_used_for_saved_model=False,
-                    eval_metric_on_ema=ema_losses.get("val", None)
-                    if "ema_losses" in locals()
-                    else None,
+                    eval_metric_on_ema=(
+                        ema_losses["val"] if (ema_losses is not None and "val" in ema_losses) else None
+                    ),
                     device=device_type,
                     dtype=str(ptdtype),
                     dataset_meta=getattr(batches, "meta", None),
@@ -831,7 +935,12 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
             ema=ema.shadow if ema is not None else None,
         )
         ckpt_manager.save_checkpoint(
-            checkpoint, rt.ckpt_last_filename, best_val_loss, iter_num, logger, is_best=False
+            checkpoint,
+            rt.ckpt_last_filename,
+            best_val_loss,
+            iter_num,
+            logger,
+            is_best=False,
         )
     except Exception as e:
         logger.error(f"Error saving final checkpoint: {e}")

@@ -1,12 +1,17 @@
 from __future__ import annotations
 from pathlib import Path
-from typing import Callable, Tuple, Protocol, Optional
+from typing import Callable, Tuple, Protocol, Optional, cast
 import pickle
 import torch
 from ml_playground.model import GPTConfig, GPT
-from ml_playground.config import SamplerConfig, RuntimeConfig
+from ml_playground.config import SamplerConfig
 from ml_playground.device import setup
-from ml_playground.tokenizer import CharTokenizer, WordTokenizer, TiktokenTokenizer, Tokenizer
+from ml_playground.tokenizer import (
+    CharTokenizer,
+    WordTokenizer,
+    TiktokenTokenizer,
+    Tokenizer,
+)
 from ml_playground.error_handling import (
     CheckpointError,
     DataError,
@@ -107,7 +112,7 @@ def load_checkpoint(
         optimizer=ckpt_dict.get("optimizer", {}),
         model_args=model_args,
         iter_num=ckpt_dict.get("iter_num", 0),
-        best_val_loss=ckpt_dict.get("best_val_loss", float('inf')),
+        best_val_loss=ckpt_dict.get("best_val_loss", float("inf")),
         config=ckpt_dict.get("config", {}),
         ema=ckpt_dict.get("ema"),
     )
@@ -160,7 +165,9 @@ def create_codec_from_tokenizer_type(
         elif tokenizer_type == "tiktoken":
             # For tiktoken tokenizer, we can use encoding_name
             encoding_name = kwargs.get("encoding_name", "gpt2")
-            tiktoken_tokenizer: Tokenizer = TiktokenTokenizer(encoding_name=encoding_name)
+            tiktoken_tokenizer: Tokenizer = TiktokenTokenizer(
+                encoding_name=encoding_name
+            )
             return (tiktoken_tokenizer.encode, tiktoken_tokenizer.decode)
         else:
             raise DataError(f"Unsupported tokenizer type: {tokenizer_type}")
@@ -276,7 +283,9 @@ def _codec_from_meta(
     elif kind == "tiktoken":
         enc_name = meta["encoding"]
         try:
-            tiktoken_tokenizer_meta: Tokenizer = TiktokenTokenizer(encoding_name=enc_name)
+            tiktoken_tokenizer_meta: Tokenizer = TiktokenTokenizer(
+                encoding_name=enc_name
+            )
             return (tiktoken_tokenizer_meta.encode, tiktoken_tokenizer_meta.decode)
         except ImportError as e:
             raise DataError(
@@ -321,15 +330,16 @@ def sample(exp: SamplerConfig) -> None:
     model.eval()
     model.to(device)
     if rt.compile:
-        model = torch.compile(model)  # type: ignore
+        model = cast(GPT, torch.compile(model))
 
     # Derive encode/decode functions from dataset metadata
     logger.info("[sample] Deriving codec from dataset metadata...")
     try:
         # Get meta_pkl path from the data config if available
-        meta_pkl_path = None
-        if hasattr(exp, "data") and exp.data and exp.data.meta_pkl:
-            meta_pkl_path = exp.data.dataset_dir / exp.data.meta_pkl
+        meta_pkl_path: Path | None = None
+        data_cfg = getattr(exp, "data", None)
+        if data_cfg is not None and getattr(data_cfg, "meta_pkl", None):
+            meta_pkl_path = data_cfg.dataset_dir / data_cfg.meta_pkl  # type: ignore[operator]
         elif rt.out_dir:
             # Fallback to out_dir if data config is not available
             meta_pkl_path = rt.out_dir / "meta.pkl"
@@ -370,11 +380,9 @@ def sample(exp: SamplerConfig) -> None:
                 )
             else:
                 for k in range(exp.sample.max_new_tokens):
-                    if "model_args" not in ckpt or not isinstance(
-                        ckpt["model_args"], dict
-                    ):
+                    if ckpt.model_args is None:
                         raise CheckpointError("Checkpoint missing valid model_args")
-                    model_args = ckpt["model_args"]
+                    model_args = ckpt.model_args
                     if "block_size" not in model_args:
                         raise CheckpointError(
                             "Checkpoint missing block_size in model_args"

@@ -137,16 +137,15 @@ def create_standardized_metadata(
     Returns:
         Standardized metadata dictionary
     """
-    meta = {
+    meta: dict[str, Any] = {
         "meta_version": 1,
-        "vocab_size": tokenizer.get_vocab_size(),
+        "vocab_size": tokenizer.vocab_size,
         "train_tokens": train_tokens,
         "val_tokens": val_tokens,
     }
 
-    # Add tokenizer-specific information
-    if hasattr(tokenizer, "name"):
-        meta["tokenizer"] = tokenizer.name
+    # Add tokenizer-specific information (mandatory name)
+    meta["tokenizer"] = tokenizer.name
 
     # Add encoding information if available
     if hasattr(tokenizer, "encode") and hasattr(tokenizer, "decode"):

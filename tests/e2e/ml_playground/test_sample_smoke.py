@@ -3,7 +3,12 @@ from pathlib import Path
 import torch
 from ml_playground.model import GPTConfig, GPT
 from ml_playground.sampler import sample
-from ml_playground.config import SamplerConfig, SampleConfig, RuntimeConfig, RuntimeConfig as RC
+from ml_playground.config import (
+    SamplerConfig,
+    SampleConfig,
+    RuntimeConfig,
+    RuntimeConfig as RC,
+)
 
 
 def test_sample_smoke(tmp_path: Path) -> None:
