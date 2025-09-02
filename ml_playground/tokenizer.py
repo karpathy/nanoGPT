@@ -1,10 +1,21 @@
 from __future__ import annotations
 
-from typing import Protocol, List, Dict, Optional
+from typing import Protocol, List, Dict, Optional, Mapping
+from types import MappingProxyType
 
 
 class Tokenizer(Protocol):
     """Protocol for tokenizers that can encode/decode text to/from token IDs."""
+
+    # A human-readable tokenizer identifier (e.g., "char", "word", "tiktoken")
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def vocab_size(self) -> int: ...
+
+    @property
+    def vocab(self) -> Mapping[str, int]: ...
 
     def encode(self, text: str) -> List[int]:
         """Encode text into a list of token IDs."""
@@ -14,19 +25,12 @@ class Tokenizer(Protocol):
         """Decode a list of token IDs back into text."""
         ...
 
-    def get_vocab_size(self) -> int:
-        """Get the vocabulary size of this tokenizer."""
-        ...
-
-    def get_vocab(self) -> Dict[str, int]:
-        """Get the vocabulary mapping (token -> ID)."""
-        ...
-
 
 class CharTokenizer:
     """Character-level tokenizer."""
 
     def __init__(self, vocab: Optional[Dict[str, int]] = None):
+        self._name = "char"
         if vocab is not None:
             self.stoi = vocab
             self.itos = {i: s for s, i in vocab.items()}
@@ -35,23 +39,32 @@ class CharTokenizer:
             self.stoi = {}
             self.itos = {}
 
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def vocab_size(self) -> int:
+        return len(self.stoi)
+
+    @property
+    def vocab(self) -> Mapping[str, int]:
+        return MappingProxyType(self.stoi)
+
     def encode(self, text: str) -> List[int]:
         return [self.stoi.get(ch, 0) for ch in text]
 
     def decode(self, token_ids: List[int]) -> str:
         return "".join([self.itos.get(i, "") for i in token_ids])
 
-    def get_vocab_size(self) -> int:
-        return len(self.stoi)
-
-    def get_vocab(self) -> Dict[str, int]:
-        return self.stoi.copy()
+    
 
 
 class WordTokenizer:
     """Word-level tokenizer."""
 
     def __init__(self, vocab: Optional[Dict[str, int]] = None):
+        self._name = "word"
         if vocab is not None:
             self.stoi = vocab
             self.itos = {i: s for s, i in vocab.items()}
@@ -59,6 +72,10 @@ class WordTokenizer:
             # Default word-level vocabulary will be built during training
             self.stoi = {}
             self.itos = {}
+
+    @property
+    def name(self) -> str:
+        return self._name
 
     def encode(self, text: str) -> List[int]:
         import re
@@ -70,11 +87,21 @@ class WordTokenizer:
     def decode(self, token_ids: List[int]) -> str:
         return " ".join([self.itos.get(i, "") for i in token_ids])
 
-    def get_vocab_size(self) -> int:
+    @property
+    def vocab_size(self) -> int:
         return len(self.stoi)
+
+    @property
+    def vocab(self) -> Mapping[str, int]:
+        return MappingProxyType(self.stoi)
+
+    # Backward compatibility methods
+    def get_vocab_size(self) -> int:
+        return self.vocab_size
 
     def get_vocab(self) -> Dict[str, int]:
         return self.stoi.copy()
+    
 
 
 class TiktokenTokenizer:
@@ -91,6 +118,11 @@ class TiktokenTokenizer:
 
         self.encoding_name = encoding_name
         self.encoder = tiktoken.get_encoding(encoding_name)
+        self._name = "tiktoken"
+
+    @property
+    def name(self) -> str:
+        return self._name
 
     def encode(self, text: str) -> List[int]:
         return self.encoder.encode(text, allowed_special={"<|endoftext|>"})
@@ -98,12 +130,18 @@ class TiktokenTokenizer:
     def decode(self, token_ids: List[int]) -> str:
         return self.encoder.decode(token_ids)
 
-    def get_vocab_size(self) -> int:
+    @property
+    def vocab_size(self) -> int:
         return self.encoder.n_vocab
 
-    def get_vocab(self) -> Dict[str, int]:
-        # Tiktoken doesn't expose vocab directly, but we can get the encoder mappings
-        return dict(self.encoder._special_tokens)
+    @property
+    def vocab(self) -> Mapping[str, int]:
+        # tiktoken exposes mergeable ranks as a dict[str, int]; use it when available
+        ranks = getattr(self.encoder, "_mergeable_ranks", None)
+        if isinstance(ranks, dict):
+            return MappingProxyType(ranks)
+        return MappingProxyType({})
+    
 
 
 def create_tokenizer(tokenizer_type: str, **kwargs) -> Tokenizer:
