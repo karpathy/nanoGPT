@@ -5,6 +5,7 @@ import os
 import json
 import hashlib
 from pathlib import Path
+import shutil
 from typing import Any, Dict, Tuple, Protocol, Optional, List, cast
 import pickle
 import torch
@@ -110,22 +111,92 @@ class CheckpointManager:
     ):
         self.out_dir = out_dir
         self.atomic = atomic
+        if keep_last < 0 or keep_best < 0:
+            raise CheckpointError(
+                f"Invalid checkpoint keep policy: keep_last={keep_last}, keep_best={keep_best} (must be >= 0)"
+            )
         self.keep_last = keep_last
         self.keep_best = keep_best
         self.last_checkpoints: List[_CkptInfo] = []
         self.best_checkpoints: List[_CkptInfo] = []
+        # Discover any existing checkpoints so behavior persists across restarts
+        self._discover_existing()
+
+    def _discover_existing(self) -> None:
+        """Scan filesystem for existing rotated checkpoints and rebuild state."""
+        try:
+            # last: ckpt_last_XXXXXXXX.pt
+            for p in sorted(self.out_dir.glob("ckpt_last_*.pt")):
+                try:
+                    # iter from filename suffix
+                    stem = p.stem  # e.g., ckpt_last_00000010
+                    iter_str = stem.split("_")[-1]
+                    it = int(iter_str)
+                except Exception:
+                    it = 0
+                created = p.stat().st_mtime
+                self.last_checkpoints.append(_CkptInfo(p, float("inf"), it, created))
+            # best: ckpt_best_XXXXXXXX_*.pt (metric may be encoded)
+            for p in sorted(self.out_dir.glob("ckpt_best_*.pt")):
+                stem = p.stem  # e.g., ckpt_best_00000010_1.234567
+                parts = stem.split("_")
+                it = 0
+                metric = float("inf")
+                if len(parts) >= 3:
+                    try:
+                        it = int(parts[2])
+                    except Exception:
+                        it = 0
+                    # try parse metric from suffix if present
+                    try:
+                        metric = float(parts[3]) if len(parts) >= 4 else float("inf")
+                    except Exception:
+                        metric = float("inf")
+                created = p.stat().st_mtime
+                self.best_checkpoints.append(_CkptInfo(p, metric, it, created))
+        except Exception:
+            # Best-effort; if anything fails, keep lists possibly partial
+            pass
+
+    def _update_stable_pointer(self, rotated_path: Path, stable_filename: str) -> None:
+        """Point the stable filename to the rotated file via symlink if possible, else copy."""
+        stable_path = self.out_dir / stable_filename
+        try:
+            if stable_path.exists() or stable_path.is_symlink():
+                try:
+                    stable_path.unlink()
+                except Exception:
+                    pass
+            # Create relative symlink if supported
+            try:
+                stable_path.symlink_to(rotated_path.name)
+                return
+            except Exception:
+                # Fallback: copy the file
+                shutil.copy2(rotated_path, stable_path)
+        except Exception:
+            # Do not fail training on pointer update issues
+            pass
 
     def save_checkpoint(
         self,
         checkpoint: Checkpoint,
-        filename: str,
+        base_filename: str,
         metric: float,
         iter_num: int,
         logger: Optional[logging.Logger] = None,
         is_best: bool = False,
-    ) -> None:
-        """Save a checkpoint with metadata and manage last and best checkpoints."""
-        path = self.out_dir / filename
+    ) -> Path:
+        """Save a checkpoint with metadata and manage last and best checkpoints.
+
+        Returns the rotated checkpoint path that was written.
+        """
+        # Determine rotated filename based on kind
+        if is_best:
+            rotated_name = f"ckpt_best_{iter_num:08d}_{metric:.6f}.pt"
+        else:
+            rotated_name = f"ckpt_last_{iter_num:08d}.pt"
+        path = self.out_dir / rotated_name
 
         # Save the checkpoint
         _atomic_save(checkpoint.to_dict(), path, self.atomic)
@@ -197,15 +268,34 @@ class CheckpointManager:
                                 f"Failed to remove old best checkpoint {ckpt.path}: {e}"
                             )
 
+        # Update stable pointer (symlink or copy) to an actually kept checkpoint under the base filename
+        try:
+            target_for_pointer: Path = path
+            if is_best:
+                if self.best_checkpoints:
+                    # best_checkpoints is sorted ascending by metric; choose the best
+                    target_for_pointer = self.best_checkpoints[0].path
+            else:
+                if self.last_checkpoints:
+                    # choose the most recent by created_at
+                    target_for_pointer = max(self.last_checkpoints, key=lambda x: x.created_at).path
+            self._update_stable_pointer(target_for_pointer, base_filename)
+        except Exception:
+            pass
+
         if logger:
             logger.info(f"Saved checkpoint to {path}")
+        return path
 
     def load_latest_checkpoint(
         self, device: str, logger: Optional[logging.Logger] = None
     ) -> Optional[Checkpoint]:
         """Load the latest checkpoint from the last checkpoints list."""
         if not self.last_checkpoints:
-            return None
+            # try discovering from disk
+            self._discover_existing()
+            if not self.last_checkpoints:
+                return None
 
         # Get the most recent checkpoint
         latest_ckpt = max(self.last_checkpoints, key=lambda x: x.created_at)
@@ -252,7 +342,9 @@ class CheckpointManager:
     ) -> Optional[Checkpoint]:
         """Load the best checkpoint from the best checkpoints list."""
         if not self.best_checkpoints:
-            return None
+            self._discover_existing()
+            if not self.best_checkpoints:
+                return None
 
         # Get the best checkpoint (lowest metric)
         best_ckpt = min(self.best_checkpoints, key=lambda x: x.metric)
@@ -563,9 +655,13 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
                 f"Failed to load checkpoint from {resume_from}: {e}"
             ) from e
 
+        # Validate checkpoint strictly
+        required = {"model", "optimizer", "model_args", "iter_num", "best_val_loss", "config"}
+        validate_checkpoint(checkpoint, required)
+
         # Resume training state
-        iter_num = checkpoint.get("iter_num", 0)
-        best_val_loss = checkpoint.get("best_val_loss", 1e9)
+        iter_num = checkpoint["iter_num"]
+        best_val_loss = checkpoint["best_val_loss"]
         tokens_seen = checkpoint.get("tokens_seen", 0)
 
         # Load model
@@ -680,75 +776,101 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
                 train_loss_tracker += losses["train"]
                 train_loss_count += 1
 
-                # Update best validation loss
+                # Decide and save best/last per policy
                 val_loss = losses["val"]
-                if val_loss < best_val_loss or iter_num == 0:
-                    if val_loss < best_val_loss:
-                        best_val_loss = val_loss
-                        logger.info(
-                            f"[train] Saving best checkpoint at iter {iter_num} with val_loss {val_loss:.4f}"
-                        )
-                    else:
-                        logger.info(
-                            f"[train] Saving first checkpoint at iter {iter_num} with val_loss {val_loss:.4f}"
-                        )
+                checkpoint = Checkpoint(
+                    model=model.state_dict(),
+                    optimizer=optimizer.state_dict(),
+                    model_args=model_args,
+                    iter_num=iter_num,
+                    best_val_loss=(val_loss if iter_num == 0 else best_val_loss),
+                    config=exp.model_dump(),
+                    ema=ema.shadow if ema is not None else None,
+                )
 
-                    checkpoint = Checkpoint(
-                        model=model.state_dict(),
-                        optimizer=optimizer.state_dict(),
-                        model_args=model_args,
-                        iter_num=iter_num,
-                        best_val_loss=best_val_loss,
-                        config=exp.model_dump(),
-                        ema=ema.shadow if ema is not None else None,
-                    )
-                    # Save as both best and last for the first checkpoint
-                    if iter_num == 0:
-                        ckpt_manager.save_checkpoint(
-                            checkpoint,
-                            rt.ckpt_best_filename,
-                            best_val_loss,
-                            iter_num,
-                            logger,
-                            is_best=True,
-                        )
-                        ckpt_manager.save_checkpoint(
-                            checkpoint,
-                            rt.ckpt_last_filename,
-                            best_val_loss,
-                            iter_num,
-                            logger,
-                            is_best=False,
-                        )
-                    else:
-                        # Save as best checkpoint
-                        ckpt_manager.save_checkpoint(
-                            checkpoint,
-                            rt.ckpt_best_filename,
-                            best_val_loss,
-                            iter_num,
-                            logger,
-                            is_best=True,
-                        )
+                # Sidecar payload builder
+                def _sidecar(kind: str, ema_used: bool = False) -> Dict[str, Any]:
+                    return {
+                        "kind": kind,
+                        "iter_num": iter_num,
+                        "tokens_seen": tokens_seen,
+                        "lr": lr,
+                        "eval_iters": rt.eval_iters,
+                        "metric_name": "val_loss",
+                        "greater_is_better": False,
+                        "metric_raw": val_loss,
+                        "smoothing_alpha": rt.best_smoothing_alpha,
+                        "decision_metric": (val_loss if kind == "best" else best_val_loss),
+                        "ema_used_for_saved_model": ema_used,
+                        "eval_metric_on_ema": (ema_losses["val"] if (ema_losses is not None and "val" in ema_losses) else None),
+                        "device": device_type,
+                        "dtype": str(ptdtype),
+                        "dataset_meta": getattr(batches, "meta", None) or {},
+                        "progress": {
+                            "train_loss_avg": train_loss_tracker / train_loss_count if train_loss_count > 0 else 0.0,
+                            "ema_val_loss_avg": ema_val_loss_tracker / ema_val_loss_count if ema_val_loss_count > 0 else 0.0,
+                        },
+                    }
 
-                # Save last checkpoint periodically
-                if iter_num % rt.eval_interval == 0 and iter_num > 0:
-                    checkpoint = Checkpoint(
-                        model=model.state_dict(),
-                        optimizer=optimizer.state_dict(),
-                        model_args=model_args,
-                        iter_num=iter_num,
-                        best_val_loss=best_val_loss,
-                        config=exp.model_dump(),
-                        ema=ema.shadow if ema is not None else None,
+                if iter_num == 0:
+                    # First checkpoint: save both best and last
+                    best_val_loss = val_loss
+                    best_path = ckpt_manager.save_checkpoint(
+                        checkpoint,
+                        rt.ckpt_best_filename,
+                        best_val_loss,
+                        iter_num,
+                        logger,
+                        is_best=True,
                     )
-                    ckpt_manager.save_checkpoint(
+                    _write_sidecar(
+                        sidecar_path=best_path.with_suffix(best_path.suffix + ".json"),
+                        pt_path=best_path,
+                        **_sidecar("best", ema_used=False),
+                    )
+                    last_path = ckpt_manager.save_checkpoint(
                         checkpoint,
                         rt.ckpt_last_filename,
                         best_val_loss,
                         iter_num,
                         logger,
                         is_best=False,
+                    )
+                    _write_sidecar(
+                        sidecar_path=last_path.with_suffix(last_path.suffix + ".json"),
+                        pt_path=last_path,
+                        **_sidecar("last", ema_used=False),
+                    )
+                elif val_loss < best_val_loss:
+                    # Improvement: update best only; do NOT save last in same iteration
+                    best_val_loss = val_loss
+                    best_path = ckpt_manager.save_checkpoint(
+                        checkpoint,
+                        rt.ckpt_best_filename,
+                        best_val_loss,
+                        iter_num,
+                        logger,
+                        is_best=True,
+                    )
+                    _write_sidecar(
+                        sidecar_path=best_path.with_suffix(best_path.suffix + ".json"),
+                        pt_path=best_path,
+                        **_sidecar("best", ema_used=False),
+                    )
+                else:
+                    # No improvement: update last
+                    last_path = ckpt_manager.save_checkpoint(
+                        checkpoint,
+                        rt.ckpt_last_filename,
+                        best_val_loss,
+                        iter_num,
+                        logger,
+                        is_best=False,
+                    )
+                    _write_sidecar(
+                        sidecar_path=last_path.with_suffix(last_path.suffix + ".json"),
+                        pt_path=last_path,
+                        **_sidecar("last", ema_used=False),
                     )
             except Exception as e:
                 logger.error(f"Error during evaluation: {e}")
@@ -858,63 +980,9 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
                 writer.add_scalar("train/tokens_per_sec", tokens_per_sec, iter_num)
                 writer.add_scalar("train/step_time_ms", dt * 1000, iter_num)
 
-        # Save checkpoint periodically based on time interval
+        # Time-based checkpointing not implemented; explicit policies above handle persistence.
         if rt.ckpt_time_interval_minutes > 0:
-            # Save checkpoint every ckpt_time_interval_minutes
             pass
-        elif (
-            iter_num % 1000 == 0 and iter_num > 0
-        ):  # Default fallback: save every 1000 iterations
-            try:
-                checkpoint = Checkpoint(
-                    model=model.state_dict(),
-                    optimizer=optimizer.state_dict(),
-                    model_args=model_args,
-                    iter_num=iter_num,
-                    best_val_loss=best_val_loss,
-                    config=exp.model_dump(),
-                    ema=ema.shadow if ema is not None else None,
-                )
-                ckpt_manager.save_checkpoint(
-                    checkpoint, rt.ckpt_last_filename, best_val_loss, iter_num, logger
-                )
-
-                # Write sidecar with metadata
-                sidecar_path = rt.out_dir / (rt.ckpt_last_filename + ".json")
-                _write_sidecar(
-                    sidecar_path=sidecar_path,
-                    pt_path=rt.out_dir / rt.ckpt_last_filename,
-                    kind="last",
-                    iter_num=iter_num,
-                    tokens_seen=tokens_seen,
-                    lr=lr,
-                    eval_iters=rt.eval_iters,
-                    metric_name="val_loss",
-                    greater_is_better=False,
-                    metric_raw=(losses["val"] if (losses is not None and "val" in losses) else 0.0),
-                    smoothing_alpha=rt.best_smoothing_alpha,
-                    decision_metric=best_val_loss,
-                    ema_used_for_saved_model=False,
-                    eval_metric_on_ema=(
-                        ema_losses["val"] if (ema_losses is not None and "val" in ema_losses) else None
-                    ),
-                    device=device_type,
-                    dtype=str(ptdtype),
-                    dataset_meta=getattr(batches, "meta", None),
-                    progress={
-                        "train_loss_avg": train_loss_tracker / train_loss_count
-                        if train_loss_count > 0
-                        else 0.0,
-                        "ema_val_loss_avg": ema_val_loss_tracker / ema_val_loss_count
-                        if ema_val_loss_count > 0
-                        else 0.0,
-                    }
-                    if train_loss_count > 0 or ema_val_loss_count > 0
-                    else None,
-                )
-            except Exception as e:
-                logger.error(f"Error saving checkpoint: {e}")
-                raise
 
         iter_num += 1
         local_iter_num += 1
