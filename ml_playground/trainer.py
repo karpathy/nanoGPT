@@ -17,6 +17,7 @@ from ml_playground.config import (
     RuntimeConfig,
     TrainerConfig,
     LRSchedule,
+    READ_POLICY_BEST,
 )
 from ml_playground.data import SimpleBatches
 from ml_playground.ema import EMA
@@ -130,7 +131,7 @@ def train(cfg: TrainerConfig) -> tuple[int, float]:
 
     if runtime_cfg.out_dir.exists():
         try:
-            if runtime_cfg.checkpointing.read_policy == "best":
+            if runtime_cfg.checkpointing.read_policy == READ_POLICY_BEST:
                 checkpoint = ckpt_mgr.load_best_checkpoint(
                     device=runtime_cfg.device, logger=logger
                 )
