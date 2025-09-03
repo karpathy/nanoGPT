@@ -15,7 +15,7 @@ from torch import autocast
 
 from ml_playground.checkpoint import Checkpoint, CheckpointManager
 from ml_playground.config import ModelConfig, SamplerConfig
-from ml_playground.error_handling import CheckpointError, DataError, setup_logging
+from ml_playground.error_handling import DataError, setup_logging
 from ml_playground.model import GPT
 from ml_playground.prepare import setup_tokenizer
 from ml_playground.tokenizer import (
