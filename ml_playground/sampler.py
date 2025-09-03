@@ -7,24 +7,24 @@ device, dtype, and autocast contexts locally without exposing legacy shims.
 from __future__ import annotations
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Callable, Tuple, Protocol, Optional, cast, ContextManager, Any
+from typing import Callable, Tuple, Protocol, Optional
+import logging
 import pickle
 import torch
-from ml_playground.model import GPTConfig, GPT
-from ml_playground.config import SamplerConfig
+from torch import autocast
+
+from ml_playground.checkpoint import Checkpoint, CheckpointManager
+from ml_playground.config import ModelConfig, SamplerConfig
+from ml_playground.error_handling import CheckpointError, DataError, setup_logging
+from ml_playground.model import GPT
+from ml_playground.prepare import setup_tokenizer
 from ml_playground.tokenizer import (
     CharTokenizer,
     WordTokenizer,
     TiktokenTokenizer,
     Tokenizer,
 )
-from ml_playground.error_handling import (
-    CheckpointError,
-    DataError,
-    ModelError,
-    setup_logging,
-)
-from ml_playground.trainer import Checkpoint
+
 
 """
 Centralized sampling utilities for ml_playground experiments.
@@ -43,96 +43,107 @@ class Sampler(Protocol):
     def __call__(self, cfg: SamplerConfig) -> None: ...
 
 
-def load_checkpoint(
+def _load_checkpoint(
     out_dir: Path,
     device: str,
-    best_name: str = "ckpt_best.pt",
-    last_name: str = "ckpt_last.pt",
-) -> Tuple[GPT, Checkpoint]:
-    """Load a checkpoint and instantiate the corresponding model.
+    logger: logging.Logger,
+    use_best: bool,
+) -> Checkpoint:
+    """Load model checkpoint.
 
-    Args:
-        out_dir: Directory containing checkpoints
-        device: Device to load model to
-        best_name: Filename for best checkpoint
-        last_name: Filename for last checkpoint
-
-    Returns:
-        Tuple of (model, checkpoint) where checkpoint is a Checkpoint object
-
-    Raises:
-        CheckpointError: If no checkpoint is found or loading fails
-        ModelError: If model instantiation or state loading fails
+    Strict: surface errors to caller.
     """
-    candidates = [
-        out_dir / best_name,
-        out_dir / last_name,
-    ]
-    ckpt_path = next((p for p in candidates if p.exists()), None)
-    if ckpt_path is None:
-        tried = ", ".join(str(p) for p in candidates)
-        raise CheckpointError(
-            f"No checkpoint found in {out_dir} (tried: {tried}). "
-            "Ensure training has produced checkpoints or configure RuntimeConfig filenames."
-        )
+    ckpt_mgr = CheckpointManager(out_dir=out_dir)
+    if use_best:
+        return ckpt_mgr.load_best_checkpoint(device=device, logger=logger)
+    # Prefer latest; if none found, fall back to best, then raise
     try:
-        ckpt_dict = torch.load(ckpt_path, map_location=device, weights_only=False)
-    except Exception as e:
-        raise CheckpointError(f"Failed to load checkpoint at {ckpt_path}: {e}") from e
-    if not isinstance(ckpt_dict, dict):
-        raise CheckpointError(
-            f"Checkpoint at {ckpt_path} is not a dict; got {type(ckpt_dict).__name__}. "
-            "Expected a trainer-produced checkpoint."
-        )
-    required = {"model", "model_args"}
-    missing = required - set(ckpt_dict.keys())
-    if missing:
-        raise CheckpointError(
-            f"Checkpoint at {ckpt_path} missing required keys: {missing}"
-        )
-    model_args = extract_model_args_from_checkpoint(ckpt_dict)
-    # Check that model_args contains required keys
-    required_model_args = {"block_size"}
-    missing_model_args = required_model_args - set(model_args.keys())
-    if missing_model_args:
-        raise CheckpointError(
-            f"Checkpoint at {ckpt_path} missing required model_args keys: {missing_model_args}"
-        )
-    # Instantiate model from checkpoint
-    try:
-        model = GPT(GPTConfig(**model_args))
-    except Exception as e:
-        raise ModelError(
-            f"Failed to instantiate model from checkpoint at {ckpt_path}: {e}"
-        ) from e
-    # Load state dict
-    try:
-        model.load_state_dict(ckpt_dict["model"])
-    except Exception as e:
-        raise ModelError(
-            f"Failed to load model state_dict from checkpoint at {ckpt_path}: {e}"
-        ) from e
-    # Create Checkpoint object
-    checkpoint = Checkpoint(
-        model=ckpt_dict["model"],
-        optimizer=ckpt_dict.get("optimizer", {}),
-        model_args=model_args,
-        iter_num=ckpt_dict.get("iter_num", 0),
-        best_val_loss=ckpt_dict.get("best_val_loss", float("inf")),
-        config=ckpt_dict.get("config", {}),
-        ema=ckpt_dict.get("ema"),
+        return ckpt_mgr.load_latest_checkpoint(device=device, logger=logger)
+    except CheckpointError as e_latest:
+        # try best as a secondary rotated source
+        return ckpt_mgr.load_best_checkpoint(device=device, logger=logger)
+
+
+    # No stable-file fallback – strict mode requires rotated checkpoints.
+
+
+def sample(cfg: SamplerConfig) -> None:
+    """Sample from a trained model."""
+    # --- Setup -------------------------------------------------------------------
+    runtime_cfg = cfg.runtime
+    sample_cfg = cfg.sample
+    if not runtime_cfg:
+        raise ValueError("Runtime configuration is missing")
+
+    setup_logging(str(runtime_cfg.out_dir))
+    logger = logging.getLogger(__name__)
+
+    # --- Set random seeds -------------------------------------------------------
+    torch.manual_seed(runtime_cfg.seed)
+    torch.cuda.manual_seed(runtime_cfg.seed)
+
+    # --- Device setup -----------------------------------------------------------
+    device_type = "cuda" if "cuda" in runtime_cfg.device else "cpu"
+    pt_dtype = {
+        "float32": torch.float32,
+        "bfloat16": torch.bfloat16,
+        "float16": torch.float16,
+    }[runtime_cfg.dtype]
+    ctx = (
+        nullcontext()
+        if device_type == "cpu"
+        else autocast(device_type=device_type, dtype=pt_dtype)
     )
-    return model, checkpoint
 
+    # --- Load checkpoint --------------------------------------------------------
+    checkpoint = _load_checkpoint(
+        runtime_cfg.out_dir,
+        runtime_cfg.device,
+        logger,
+        use_best=getattr(sample_cfg, "use_best_checkpoint", False),
+    )
 
-def extract_model_args_from_checkpoint(checkpoint: dict) -> dict:
-    """Extract model arguments from a checkpoint.
+    # --- Model setup ------------------------------------------------------------
+    model_cfg = ModelConfig(**checkpoint.model_args)
+    model = GPT(model_cfg)
+    model.load_state_dict(checkpoint.model, strict=False)
+    model.eval()
+    model.to(runtime_cfg.device)
+    if runtime_cfg.compile:
+        model = torch.compile(model)  # type: ignore
 
-    Strict policy: model_args must be present. No backward compatibility or fallbacks.
-    """
-    if "model_args" not in checkpoint:
-        raise CheckpointError("Checkpoint missing required 'model_args'")
-    return checkpoint["model_args"]
+    # --- Tokenizer setup --------------------------------------------------------
+    tokenizer = setup_tokenizer(runtime_cfg.out_dir)
+    if not tokenizer:
+        raise DataError(
+            f"Tokenizer metadata not found in {runtime_cfg.out_dir} (expected meta.pkl)."
+        )
+
+    # --- Sampling ---------------------------------------------------------------
+    start_text = sample_cfg.start
+    if isinstance(start_text, str) and start_text.startswith("FILE:"):
+        prompt_path = Path(start_text[5:])
+        try:
+            start_text = prompt_path.read_text(encoding="utf-8")
+        except Exception as e:  # pragma: no cover - robust IO guard
+            logger.error(f"Failed to read prompt file {prompt_path}: {e}")
+            return
+    start_ids = tokenizer.encode(start_text)
+    x = torch.tensor(start_ids, dtype=torch.long, device=runtime_cfg.device)[None, ...]
+
+    logger.info("Sampling...")
+    with torch.no_grad():
+        with ctx:
+            for k in range(sample_cfg.num_samples):
+                y = model.generate(  # type: ignore
+                    x,
+                    sample_cfg.max_new_tokens,
+                    temperature=sample_cfg.temperature,
+                    top_k=sample_cfg.top_k,
+                )
+                output = tokenizer.decode(y[0].tolist())
+                logger.info(output)
+                logger.info("---------------")
 
 
 def create_codec_from_tokenizer_type(
@@ -283,145 +294,3 @@ def _codec_from_meta(
         return (word_tokenizer.encode, word_tokenizer.decode)
     else:
         raise DataError(f"Unsupported meta 'kind': {kind!r}")
-
-
-def sample(exp: SamplerConfig) -> None:
-    if exp.runtime is None:
-        raise Exception(
-            "SamplerConfig.runtime is not resolved; use load_experiment_toml or provide [sample.runtime]."
-        )
-    # Provide a sensible default logger if none was supplied in the config
-    if exp.logger is None:
-        logger = setup_logging("ml_playground.sample")
-    else:
-        logger = exp.logger
-    rt = exp.runtime
-    # Early progress: device/context
-    logger.info("[sample] Initializing device and context...")
-    # Resolve device availability (no seeding or TF32 here; CLI initializes globally)
-    if rt.device == "cuda" and torch.cuda.is_available():
-        device_type = "cuda"
-    elif (
-        rt.device == "mps"
-        and getattr(torch.backends, "mps", None)
-        and torch.backends.mps.is_available()
-    ):
-        device_type = "mps"
-    else:
-        device_type = "cpu"
-    # Map dtype kind to torch dtype
-    _DTYPE_MAP: dict[str, torch.dtype] = {
-        "float32": torch.float32,
-        "bfloat16": torch.bfloat16,
-        "float16": torch.float16,
-    }
-    ptdtype = _DTYPE_MAP[rt.dtype]
-    # Build autocast context per device (use ContextManager[Any] for mypy)
-    if device_type == "cpu":
-        _ctx: ContextManager[Any] = torch.autocast(
-            "cpu", enabled=ptdtype != torch.float32, dtype=ptdtype
-        )
-    elif device_type == "cuda":
-        _ctx = torch.autocast(device_type="cuda", dtype=ptdtype)
-    else:  # mps
-        if ptdtype == torch.float16:
-            _ctx = torch.autocast(device_type="mps", dtype=ptdtype)
-        else:
-            _ctx = nullcontext()
-    ctx: ContextManager[Any] = _ctx
-    device = device_type  # for legacy compat
-    logger.info(f"[sample] Using device: {device}")
-
-    # Load model from checkpoint
-    logger.info("[sample] Loading model from checkpoint...")
-    try:
-        model, ckpt = load_checkpoint(rt.out_dir, device)
-    except Exception as e:
-        logger.error(f"[sample] Failed to load checkpoint: {e}")
-        raise
-
-    model.eval()
-    model.to(device)
-    if rt.compile:
-        model = cast(GPT, torch.compile(model))
-
-    # Derive encode/decode functions from dataset metadata
-    logger.info("[sample] Deriving codec from dataset metadata...")
-    try:
-        # Get meta_pkl path from the data config if available
-        meta_pkl_path: Path | None = None
-        data_cfg = getattr(exp, "data", None)
-        if data_cfg is not None and getattr(data_cfg, "meta_pkl", None):
-            meta_pkl_path = data_cfg.dataset_dir / data_cfg.meta_pkl  # type: ignore[operator]
-        elif rt.out_dir:
-            # Fallback to out_dir if data config is not available
-            meta_pkl_path = rt.out_dir / "meta.pkl"
-        codec_manager = CodecManager(meta_pkl_path)
-        codec_manager.initialize_codec()
-        encode, decode = codec_manager.encode, codec_manager.decode
-    except Exception as e:
-        logger.error(f"[sample] Failed to derive codec: {e}")
-        raise
-
-    # Sample loop
-    start = exp.sample.start
-    if start is None:
-        start_ids = [encode("\n")[-1]]  # Default to newline
-    elif start.startswith("FILE:"):
-        # Read prompt from file
-        prompt_path = Path(start[5:])
-        with open(prompt_path, "r", encoding="utf-8") as f:
-            prompt_text = f.read()
-        start_ids = encode(prompt_text)
-        # Print separator for FILE: prompts
-        print("---------------")
-    else:
-        start_ids = encode(start)
-    x = torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...]
-
-    # Run generation
-    logger.info(f"[sample] Generating {exp.sample.max_new_tokens} tokens...")
-    with torch.no_grad():
-        with ctx:
-            # Use generate method if available
-            if hasattr(model, "generate"):
-                x = model.generate(
-                    x,
-                    exp.sample.max_new_tokens,
-                    exp.sample.temperature,
-                    exp.sample.top_k or 0,
-                )
-            else:
-                for k in range(exp.sample.max_new_tokens):
-                    if ckpt.model_args is None:
-                        raise CheckpointError("Checkpoint missing valid model_args")
-                    model_args = ckpt.model_args
-                    if "block_size" not in model_args:
-                        raise CheckpointError(
-                            "Checkpoint missing block_size in model_args"
-                        )
-                    block_size = model_args["block_size"]
-                    if not isinstance(block_size, int):
-                        raise CheckpointError(
-                            f"block_size in checkpoint is not an integer: {type(block_size)}"
-                        )
-                    if x.size(1) >= block_size:
-                        x = x[:, -block_size:]
-                    logits, _ = model(x)
-                    logits = logits[0, -1, :] / exp.sample.temperature
-                    if exp.sample.top_k is not None and exp.sample.top_k > 0:
-                        v, _ = torch.topk(
-                            logits, min(exp.sample.top_k, logits.size(-1))
-                        )
-                        logits[logits < v[[-1]]] = -float("Inf")
-                    probs = torch.softmax(logits, dim=-1)
-                    next_id = torch.multinomial(probs, num_samples=1)
-                    # Ensure next_id has the same number of dimensions as x
-                    if next_id.dim() == 1:
-                        next_id = next_id.unsqueeze(1)
-                    x = torch.cat((x, next_id), dim=1)
-
-    # Decode and print result
-    output = decode(x[0].tolist())
-    print(output)
-    logger.info("[sample] Generation complete.")

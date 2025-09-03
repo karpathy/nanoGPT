@@ -68,8 +68,8 @@ class SimpleBatches:
     def __init__(self, data: DataConfig, device: str) -> None:
         self.data = data
         self.device = device
-        train_path = data.dataset_dir / data.train_bin
-        val_path = data.dataset_dir / data.val_bin
+        train_path = data.train_path
+        val_path = data.val_path
         if not train_path.exists() or not val_path.exists():
             raise FileNotFoundError(
                 f"Training data not found at {train_path} and/or {val_path}"
@@ -77,8 +77,8 @@ class SimpleBatches:
         # Determine dtype from meta.pkl if available; default to uint16
         dtype: np.dtype[Any] = np.dtype(np.uint16)
         try:
-            if data.meta_pkl is not None:
-                meta_path = data.dataset_dir / data.meta_pkl
+            if data.meta_path is not None:
+                meta_path = data.meta_path
                 if meta_path.exists():
                     with meta_path.open("rb") as f:
                         meta = pickle.load(f)

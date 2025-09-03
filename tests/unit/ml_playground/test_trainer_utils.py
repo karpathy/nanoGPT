@@ -2,40 +2,65 @@ from __future__ import annotations
 from pathlib import Path
 import torch
 
-from ml_playground.trainer import _sha256_of_file, _atomic_save
+from ml_playground.checkpoint import Checkpoint, CheckpointManager
 
 
-def test_sha256_of_file(tmp_path: Path):
-    p = tmp_path / "f.txt"
-    p.write_text("hello", encoding="utf-8")
-    h1 = _sha256_of_file(p)
-    # Deterministic and changes with content
-    p.write_text("hello!", encoding="utf-8")
-    h2 = _sha256_of_file(p)
-    assert h1 != h2
-    # Known value for simple content
-    p.write_text("abc", encoding="utf-8")
-    assert (
-        _sha256_of_file(p)
-        == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+def test_save_checkpoint_atomic_and_readback(tmp_path: Path):
+    # Atomic save via CheckpointManager should create only final file, no lingering .tmp
+    mgr = CheckpointManager(out_dir=tmp_path, atomic=True, keep_last=1, keep_best=0)
+    ckpt = Checkpoint(
+        model={"w": torch.tensor([1, 2])},
+        optimizer={"state": {}},
+        model_args={
+            "vocab_size": 16,
+            "block_size": 4,
+            "n_layer": 1,
+            "n_head": 1,
+            "n_embd": 8,
+        },
+        iter_num=1,
+        best_val_loss=1.0,
+        config={},
     )
+    rotated = mgr.save_checkpoint(
+        checkpoint=ckpt,
+        base_filename="ckpt_last.pt",
+        metric=float("inf"),
+        iter_num=1,
+        logger=None,
+        is_best=False,
+    )
+    assert rotated.exists()
+    # No lingering tmp from atomic save
+    assert not rotated.with_suffix(rotated.suffix + ".tmp").exists()
+    loaded = torch.load(rotated, map_location="cpu")
+    assert isinstance(loaded, dict) and "model" in loaded
 
 
-def test_atomic_save_and_readback(tmp_path: Path):
-    # atomic save should create only final file, no lingering .tmp
-    p = tmp_path / "ckpt.pt"
-    obj = {"a": 1, "b": [1, 2, 3]}
-    _atomic_save(obj, p, atomic=True)
-    assert p.exists()
-    assert not (tmp_path / "ckpt.pt.tmp").exists()
-    loaded = torch.load(p, map_location="cpu")
-    assert loaded == obj
-
-
-def test_non_atomic_save(tmp_path: Path):
-    p = tmp_path / "ckpt2.pt"
-    obj = {"x": 42}
-    _atomic_save(obj, p, atomic=False)
-    assert p.exists()
-    loaded = torch.load(p, map_location="cpu")
-    assert loaded == obj
+def test_save_checkpoint_non_atomic(tmp_path: Path):
+    mgr = CheckpointManager(out_dir=tmp_path, atomic=False, keep_last=1, keep_best=0)
+    ckpt = Checkpoint(
+        model={"w": torch.tensor([3, 4])},
+        optimizer={"state": {}},
+        model_args={
+            "vocab_size": 16,
+            "block_size": 4,
+            "n_layer": 1,
+            "n_head": 1,
+            "n_embd": 8,
+        },
+        iter_num=2,
+        best_val_loss=1.0,
+        config={},
+    )
+    rotated = mgr.save_checkpoint(
+        checkpoint=ckpt,
+        base_filename="ckpt_last.pt",
+        metric=float("inf"),
+        iter_num=2,
+        logger=None,
+        is_best=False,
+    )
+    assert rotated.exists()
+    loaded = torch.load(rotated, map_location="cpu")
+    assert isinstance(loaded, dict) and loaded["iter_num"] == 2

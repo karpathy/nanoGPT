@@ -1,21 +1,21 @@
-Feature: Checkpointing policy and rotation
+Feature: Checkpointing policy and rotation (strict, rotated-only)
   As a user of ml_playground
-  I want checkpoints to rotate and enforce keep policies with stable pointers
-  So that resuming and model selection are reliable across restarts
+  I want checkpoints to rotate and enforce keep policies without stable pointers
+  So that only rotated checkpoints are produced and used
 
   Scenario: Keep policy enforcement for last checkpoints
     Given a fresh checkpoints directory
     And a checkpoint manager with keep_last 2 and keep_best 2
     When I save 3 last checkpoints sequentially
     Then only the 2 most recent last checkpoints exist
-    And a stable last pointer exists
+    And no stable last pointer exists
 
   Scenario: Keep policy enforcement for best checkpoints
     Given a fresh checkpoints directory
     And a checkpoint manager with keep_last 2 and keep_best 2
     When I save 3 best checkpoints with metrics 1.0, 0.9, 1.1
     Then only the 2 best checkpoints by metric exist
-    And a stable best pointer exists
+    And no stable best pointer exists
 
   Scenario: Filesystem discovery after restart
     Given a fresh checkpoints directory

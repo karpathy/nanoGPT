@@ -76,10 +76,10 @@ def assert_two_last(manager: CheckpointManager):
     assert files[-1].startswith("ckpt_last_00000002")
 
 
-@then("a stable last pointer exists")
+@then("no stable last pointer exists")
 def stable_last_pointer(manager: CheckpointManager):
     p = manager.out_dir / "ckpt_last.pt"
-    assert p.exists()
+    assert not p.exists()
 
 
 @when(parsers.parse("I save 3 best checkpoints with metrics {m1:f}, {m2:f}, {m3:f}"))
@@ -106,10 +106,10 @@ def assert_two_best(manager: CheckpointManager):
     assert not any("_1.100000.pt" in n for n in names)
 
 
-@then("a stable best pointer exists")
+@then("no stable best pointer exists")
 def stable_best_pointer(manager: CheckpointManager):
     p = manager.out_dir / "ckpt_best.pt"
-    assert p.exists()
+    assert not p.exists()
 
 
 @when("I save 2 last checkpoints sequentially")

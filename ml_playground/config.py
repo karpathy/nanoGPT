@@ -6,7 +6,6 @@ from typing import Literal, Optional, Any
 import tomllib
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from .prepare import PreparerConfig
 
 
 def _deep_merge_dicts(base: Any, override: Any) -> dict[str, Any]:
@@ -42,7 +41,36 @@ class _FrozenStrictModel(BaseModel):
     Base model that is immutable (frozen) and forbids extra fields. Used to enforce strict schema in all configs.
     """
 
-    model_config = ConfigDict(frozen=True, extra="forbid", validate_default=True)
+    model_config = ConfigDict(frozen=False, extra="forbid", validate_default=True)
+
+
+class PreparerConfig(_FrozenStrictModel):
+    """Strict config for data preparation (owner-local)."""
+
+    dataset_dir: Optional[Path] = None
+    raw_dir: Optional[Path] = None
+    add_structure_tokens: Optional[bool] = None
+    doc_separator: Optional[str] = None
+    extras: dict[str, Any] = Field(default_factory=dict)
+    logger: Any | None = Field(default=None)
+
+    @field_validator("dataset_dir", "raw_dir", mode="before")
+    @classmethod
+    def _coerce_path(cls, v: Path | str | None) -> Optional[Path]:
+        if v is None:
+            return None
+        return Path(v)
+
+    @field_validator("dataset_dir", "raw_dir", mode="after")
+    @classmethod
+    def _resolve_path(cls, v: Optional[Path]) -> Optional[Path]:
+        if v is None:
+            return None
+        try:
+            return v.resolve()
+        except Exception:
+            # Best-effort normalization; leave as-is if resolve fails
+            return v
 
 
 class RuntimeConfig(_FrozenStrictModel):
@@ -98,6 +126,25 @@ class RuntimeConfig(_FrozenStrictModel):
     early_stop_patience: int = 0
     # Exponential moving average of weights
     ema_decay: float = 0.0
+
+    @field_validator("out_dir", mode="before")
+    @classmethod
+    def _coerce_out_dir(cls, v: Path | str) -> Path:
+        return Path(v)
+
+    @field_validator("out_dir", mode="after")
+    @classmethod
+    def _resolve_out_dir(cls, v: Path) -> Path:
+        # Preserve as provided (relative or absolute). Resolution is handled by loaders when desired.
+        return v
+
+    @property
+    def ckpt_last_path(self) -> Path:
+        return self.out_dir / self.ckpt_last_filename
+
+    @property
+    def ckpt_best_path(self) -> Path:
+        return self.out_dir / self.ckpt_best_filename
 
 
 class TrainerConfig(_FrozenStrictModel):
@@ -250,12 +297,36 @@ class DataConfig(_FrozenStrictModel):
     def _coerce_path(cls, v: Path | str) -> Path:
         return Path(v)
 
+    @field_validator("dataset_dir", mode="after")
+    @classmethod
+    def _resolve_dataset_dir(cls, v: Path) -> Path:
+        try:
+            return v.resolve()
+        except Exception:
+            return v
+
     @field_validator("batch_size", "block_size", "grad_accum_steps", "ngram_size")
     @classmethod
     def _positive_int(cls, v: int) -> int:
         if v <= 0:
             raise ValueError("must be > 0")
         return int(v)
+
+
+    # Computed, read-only paths
+    @property
+    def train_path(self) -> Path:
+        return self.dataset_dir / self.train_bin
+
+    @property
+    def val_path(self) -> Path:
+        return self.dataset_dir / self.val_bin
+
+    @property
+    def meta_path(self) -> Optional[Path]:
+        if self.meta_pkl is None:
+            return None
+        return self.dataset_dir / self.meta_pkl
 
 
 class SampleConfig(_FrozenStrictModel):

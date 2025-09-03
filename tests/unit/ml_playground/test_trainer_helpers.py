@@ -1,43 +1,62 @@
 from __future__ import annotations
 
-from pathlib import Path
-import pickle
-
 import pytest
 
-import ml_playground.trainer as tr
+from ml_playground.trainer import get_lr
+from ml_playground.config import LRSchedule, OptimConfig
 
 
-def test_validate_checkpoint_missing_keys_raises():
-    with pytest.raises(tr.CheckpointError, match="missing required keys"):
-        tr.validate_checkpoint({"a": 1}, {"model", "optimizer"})
+def test_get_lr_no_decay():
+    """If decay_lr is False, LR should be constant."""
+    schedule = LRSchedule(decay_lr=False)
+    optim = OptimConfig(learning_rate=0.1)
+    lr = get_lr(0, schedule, optim)
+    assert lr == 0.1
+
+
+def test_get_lr_warmup_phase():
+    """During warmup, LR should increase linearly."""
+    schedule = LRSchedule(warmup_iters=10, lr_decay_iters=20, min_lr=0.01)
+    optim = OptimConfig(learning_rate=0.1)
+    # At half of warmup, LR should be half of learning_rate
+    lr = get_lr(5, schedule, optim)
+    assert lr == pytest.approx(0.05)
+
+    # At the end of warmup, LR should be learning_rate
+    lr = get_lr(10, schedule, optim)
+    assert lr == 0.1
+
+
+def test_get_lr_decay_phase():
+    """After warmup, LR should decay towards min_lr."""
+    schedule = LRSchedule(warmup_iters=10, lr_decay_iters=20, min_lr=0.01)
+    optim = OptimConfig(learning_rate=0.1)
+    # After warmup, at half of decay, LR should be halfway between learning_rate and min_lr
+    lr = get_lr(15, schedule, optim)
+    assert lr > 0.01 and lr < 0.1
+
+    # At the end of decay, LR should be min_lr
+    lr = get_lr(20, schedule, optim)
+    assert lr == 0.01
+
+
+def test_get_lr_past_decay():
+    """After decay phase, LR should remain at min_lr."""
+    schedule = LRSchedule(warmup_iters=10, lr_decay_iters=20, min_lr=0.01)
+    optim = OptimConfig(learning_rate=0.1)
+    lr = get_lr(25, schedule, optim)
+    assert lr == 0.01
 
 
 def test_get_lr_warmup_decay_edges():
-    # warmup region
-    assert tr._get_lr(0, warmup=10, decay_iters=100, min_lr=1e-4, base_lr=1e-3) == 0.0
-    assert tr._get_lr(
-        5, warmup=10, decay_iters=100, min_lr=1e-4, base_lr=1e-3
-    ) == pytest.approx(0.0005)
-    # after decay_iters -> min_lr
-    assert tr._get_lr(
-        150, warmup=10, decay_iters=100, min_lr=1e-4, base_lr=1e-3
-    ) == pytest.approx(1e-4)
-    # at boundaries should be within range [min_lr, base_lr]
-    lr_at_warmup = tr._get_lr(10, warmup=10, decay_iters=100, min_lr=1e-4, base_lr=1e-3)
-    assert 1e-4 <= lr_at_warmup <= 1e-3
-
-
-def test_load_meta_vocab_size_variants(tmp_path: Path):
-    p = tmp_path / "meta.pkl"
-    # valid dict
-    with p.open("wb") as f:
-        pickle.dump({"vocab_size": 42}, f)
-    assert tr._load_meta_vocab_size(p) == 42
-    # non-dict content
-    with p.open("wb") as f:
-        pickle.dump([1, 2, 3], f)
-    assert tr._load_meta_vocab_size(p) is None
-    # corrupted/unreadable
-    p.write_bytes(b"not a pickle")
-    assert tr._load_meta_vocab_size(p) is None
+    """Test edge cases for LR calculation."""
+    schedule = LRSchedule(warmup_iters=10, lr_decay_iters=20, min_lr=0.01)
+    optim = OptimConfig(learning_rate=0.1)
+    # it=0 -> 0
+    assert get_lr(0, schedule, optim) == 0.0
+    # it=warmup_iters -> learning_rate
+    assert get_lr(10, schedule, optim) == 0.1
+    # it=lr_decay_iters -> min_lr
+    assert get_lr(20, schedule, optim) == 0.01
+    # it > lr_decay_iters -> min_lr
+    assert get_lr(100, schedule, optim) == 0.01

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import Protocol, Any, Optional, Iterable, Tuple
+from typing import Protocol, Any, Iterable
 from pathlib import Path
 import pickle
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field, field_validator
 from ml_playground.tokenizer import Tokenizer, create_tokenizer
 from ml_playground.error_handling import DataError
+from ml_playground.config import DataConfig, PreparerConfig
 
 
 """
@@ -22,26 +22,6 @@ All experiments should use these utilities to ensure consistency and proper erro
 """
 
 
-class PreparerConfig(BaseModel):
-    """Strict config for data preparation (owner-local)."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid", validate_default=True)
-
-    dataset_dir: Optional[Path] = None
-    raw_dir: Optional[Path] = None
-    add_structure_tokens: Optional[bool] = None
-    doc_separator: Optional[str] = None
-    extras: dict[str, Any] = Field(default_factory=dict)
-    logger: Any | None = Field(default=None)
-
-    @field_validator("dataset_dir", "raw_dir", mode="before")
-    @classmethod
-    def _coerce_path(cls, v: Path | str | None) -> Optional[Path]:
-        if v is None:
-            return None
-        return Path(v)
-
-
 class Encoder(Protocol):
     def encode_ordinary(self, text: str) -> list[int]: ...
 
@@ -52,8 +32,11 @@ class Preparer(Protocol):
     def __call__(self) -> None: ...
 
 
-def _snapshot(paths: Iterable[Path]) -> dict[Path, tuple[bool, float, int]]:
-    """Take a snapshot of file states (existence, mtime, size) for diffing later."""
+def snapshot_files(paths: Iterable[Path]) -> dict[Path, tuple[bool, float, int]]:
+    """Public utility to take a snapshot of file states for diffing later.
+
+    Returns a dict mapping each path to (exists, mtime, size).
+    """
     m: dict[Path, tuple[bool, float, int]] = {}
     for p in paths:
         try:
@@ -67,56 +50,29 @@ def _snapshot(paths: Iterable[Path]) -> dict[Path, tuple[bool, float, int]]:
     return m
 
 
-def snapshot_files(paths: Iterable[Path]) -> dict[Path, tuple[bool, float, int]]:
-    """Public utility to take a snapshot of file states for diffing later.
-
-    Returns a dict mapping each path to (exists, mtime, size).
-    """
-    return _snapshot(paths)
-
-
-def _diff(
-    paths: Iterable[Path], before: dict[Path, tuple[bool, float, int]]
-) -> tuple[list[Path], list[Path], list[Path]]:
-    """Compare file states before and after an operation to determine what changed."""
-    after = _snapshot(paths)
-    created: list[Path] = []
-    updated: list[Path] = []
-    skipped: list[Path] = []
-    for p in paths:
-        b = before.get(p, (False, 0.0, 0))
-        a = after.get(p, (False, 0.0, 0))
-        if not b[0] and a[0]:
-            created.append(p)
-        elif b[0] and a[0] and a[1] > b[1]:
-            updated.append(p)
-        elif b[0] and a[0]:
-            skipped.append(p)
-    return created, updated, skipped
-
-
 def diff_files(
     paths: Iterable[Path], before: dict[Path, tuple[bool, float, int]]
-) -> Tuple[set[Path], set[Path], set[Path]]:
+) -> tuple[set[Path], set[Path], set[Path]]:
     """Public utility to compare file states and determine what changed.
 
     Returns (created, updated, skipped) as sets of paths.
     """
-    after = _snapshot(paths)
+    after = snapshot_files(paths)
     created, updated, skipped = set(), set(), set()
 
-    for p in paths:
-        if not before.get(p, (False, 0.0, 0))[0]:  # didn't exist before
-            if after.get(p, (False, 0.0, 0))[0]:  # exists now
-                created.add(p)
-        else:  # existed before
-            if not after.get(p, (False, 0.0, 0))[0]:  # doesn't exist now
-                # This case shouldn't happen in normal usage
-                pass
-            elif (
-                before[p][1] != after[p][1]  # mtime changed
-                or before[p][2] != after[p][2]  # size changed
-            ):
+    all_paths = set(before.keys()) | set(after.keys())
+
+    for p in all_paths:
+        b_exists, b_mtime, b_size = before.get(p, (False, 0.0, 0))
+        a_exists, a_mtime, a_size = after.get(p, (False, 0.0, 0))
+
+        if not b_exists and a_exists:
+            created.add(p)
+        elif b_exists and not a_exists:
+            # File was deleted, not typically expected in this workflow
+            pass
+        elif b_exists and a_exists:
+            if b_mtime != a_mtime or b_size != a_size:
                 updated.add(p)
             else:
                 skipped.add(p)
@@ -197,55 +153,23 @@ class _PreparerInstance:
         self, ds_dir: Path, train: np.ndarray, val: np.ndarray, meta: dict
     ) -> None:
         """Write train.bin, val.bin, and meta.pkl atomically and idempotently."""
-        ds_dir.mkdir(parents=True, exist_ok=True)
-
-        train_path = ds_dir / "train.bin"
-        val_path = ds_dir / "val.bin"
-        meta_path = ds_dir / "meta.pkl"
-
-        before = _snapshot([train_path, val_path, meta_path])
-
-        if train_path.exists() and val_path.exists() and meta_path.exists():
-            # Strict: Do not regenerate silently; meta.pkl must be valid or we fail.
-            try:
-                with meta_path.open("rb") as f:
-                    existing_meta = pickle.load(f)
-            except Exception as e:
-                raise DataError(
-                    f"Failed to read existing meta.pkl at {meta_path}: {e}"
-                ) from e
-            if isinstance(existing_meta, dict) and "meta_version" in existing_meta:
-                return
-            raise DataError(
-                f"Invalid existing meta.pkl at {meta_path}: expected dict with 'meta_version'"
-            )
-
-        tmp_train = ds_dir / ".train.bin.tmp"
-        tmp_val = ds_dir / ".val.bin.tmp"
-        tmp_meta = ds_dir / ".meta.pkl.tmp"
-
-        tmp_train.write_bytes(train.tobytes())
-        tmp_val.write_bytes(val.tobytes())
-        with tmp_meta.open("wb") as f:
-            pickle.dump(meta, f)
-
-        tmp_train.replace(train_path)
-        tmp_val.replace(val_path)
-        tmp_meta.replace(meta_path)
-
-        created, updated, skipped = _diff([train_path, val_path, meta_path], before)
-        logger = getattr(self.cfg, "logger", None)
-        if logger is not None:
-            try:
-                logger.info(f"[prepare] Created: {created}")
-                logger.info(f"[prepare] Updated: {updated}")
-                logger.info(f"[prepare] Skipped: {skipped}")
-            except Exception:
-                pass
-        else:
-            print(f"[prepare] Created: {created}")
-            print(f"[prepare] Updated: {updated}")
-            print(f"[prepare] Skipped: {skipped}")
+        # Optionally accept DataConfig via extras to control filenames
+        data_cfg = None
+        try:
+            extras = getattr(self.cfg, "extras", {}) or {}
+            maybe_dc = extras.get("data_config")
+            if isinstance(maybe_dc, DataConfig):
+                data_cfg = maybe_dc
+        except Exception:
+            data_cfg = None
+        write_bin_and_meta(
+            ds_dir,
+            train,
+            val,
+            meta,
+            logger=getattr(self.cfg, "logger", None),
+            data_cfg=data_cfg,
+        )
 
 
 def make_preparer(cfg: PreparerConfig) -> Preparer:
@@ -297,7 +221,12 @@ def prepare_with_tokenizer(
 
 
 def write_bin_and_meta(
-    ds_dir: Path, train: np.ndarray, val: np.ndarray, meta: dict
+    ds_dir: Path,
+    train: np.ndarray,
+    val: np.ndarray,
+    meta: dict,
+    logger: Any | None = None,
+    data_cfg: DataConfig | None = None,
 ) -> None:
     """Write train.bin, val.bin, and meta.pkl atomically and idempotently.
 
@@ -306,11 +235,18 @@ def write_bin_and_meta(
     """
     ds_dir.mkdir(parents=True, exist_ok=True)
 
-    train_path = ds_dir / "train.bin"
-    val_path = ds_dir / "val.bin"
-    meta_path = ds_dir / "meta.pkl"
+    # Use DataConfig-computed paths when provided, otherwise default filenames
+    if data_cfg is not None:
+        train_path = data_cfg.train_path
+        val_path = data_cfg.val_path
+        # meta may be optional
+        meta_path = data_cfg.meta_path if data_cfg.meta_path is not None else ds_dir / "meta.pkl"
+    else:
+        train_path = ds_dir / "train.bin"
+        val_path = ds_dir / "val.bin"
+        meta_path = ds_dir / "meta.pkl"
 
-    before = _snapshot([train_path, val_path, meta_path])
+    before = snapshot_files([train_path, val_path, meta_path])
 
     if train_path.exists() and val_path.exists() and meta_path.exists():
         # Strict: meta.pkl must be valid; do not regenerate silently
@@ -327,23 +263,40 @@ def write_bin_and_meta(
             f"Invalid existing meta.pkl at {meta_path}: expected dict with 'meta_version'"
         )
 
-    tmp_train = ds_dir / ".train.bin.tmp"
-    tmp_val = ds_dir / ".val.bin.tmp"
-    tmp_meta = ds_dir / ".meta.pkl.tmp"
+    tmp_train = train_path.with_name("." + train_path.name + ".tmp")
+    tmp_val = val_path.with_name("." + val_path.name + ".tmp")
+    tmp_meta = meta_path.with_name("." + meta_path.name + ".tmp")
 
-    tmp_train.write_bytes(train.tobytes())
-    tmp_val.write_bytes(val.tobytes())
-    with tmp_meta.open("wb") as f:
-        pickle.dump(meta, f)
+    try:
+        tmp_train.write_bytes(train.tobytes())
+        tmp_val.write_bytes(val.tobytes())
+        with tmp_meta.open("wb") as f:
+            pickle.dump(meta, f)
 
-    tmp_train.replace(train_path)
-    tmp_val.replace(val_path)
-    tmp_meta.replace(meta_path)
+        tmp_train.replace(train_path)
+        tmp_val.replace(val_path)
+        tmp_meta.replace(meta_path)
+    finally:
+        # Ensure temporary files are cleaned up on error
+        tmp_train.unlink(missing_ok=True)
+        tmp_val.unlink(missing_ok=True)
+        tmp_meta.unlink(missing_ok=True)
 
-    created, updated, skipped = _diff([train_path, val_path, meta_path], before)
-    print(f"[prepare] Created: {created}")
-    print(f"[prepare] Updated: {updated}")
-    print(f"[prepare] Skipped: {skipped}")
+    created, updated, skipped = diff_files([train_path, val_path, meta_path], before)
+
+    log_func = None
+    if logger and hasattr(logger, "info"):
+        log_func = logger.info
+    elif logger is None:
+        log_func = print
+
+    if log_func:
+        try:
+            log_func(f"[prepare] Created: {list(created) if created else '[]'}")
+            log_func(f"[prepare] Updated: {list(updated) if updated else '[]'}")
+            log_func(f"[prepare] Skipped: {list(skipped) if skipped else '[]'}")
+        except Exception:
+            pass  # Logging should not fail the operation
 
 
 def seed_text_file(dst: Path, candidates: list[Path]) -> None:
@@ -363,3 +316,29 @@ def seed_text_file(dst: Path, candidates: list[Path]) -> None:
     raise FileNotFoundError(
         f"seed_text_file: none of the candidate paths exist: {candidates}"
     )
+
+
+def setup_tokenizer(
+    out_dir: Path, data_cfg: DataConfig | None = None
+) -> Tokenizer | None:
+    """Set up the tokenizer, loading from file if it exists."""
+    meta_path = out_dir / "meta.pkl"
+    if not meta_path.exists():
+        return None
+    with meta_path.open("rb") as f:
+        meta = pickle.load(f)
+    tokenizer_type = meta.get("tokenizer_type")
+    if tokenizer_type is None:
+        raise DataError(
+            f"Invalid meta.pkl at {meta_path}: missing 'tokenizer_type'"
+        )
+    # Prefer vocab/encoding settings from meta when available
+    if tokenizer_type in ("char", "word"):
+        vocab = meta.get("stoi") or meta.get("vocab")
+        tokenizer = create_tokenizer(tokenizer_type, vocab=vocab)
+    elif tokenizer_type == "tiktoken":
+        encoding_name = meta.get("encoding_name", "cl100k_base")
+        tokenizer = create_tokenizer(tokenizer_type, encoding_name=encoding_name)
+    else:
+        tokenizer = create_tokenizer(tokenizer_type)
+    return tokenizer

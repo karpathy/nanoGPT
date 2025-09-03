@@ -34,6 +34,7 @@ def test_sample_smoke(tmp_path: Path) -> None:
     meta = {
         "meta_version": 1,
         "kind": "char",
+        "tokenizer_type": "char",
         "dtype": "uint16",
         "stoi": stoi,
         "itos": itos,
@@ -41,9 +42,12 @@ def test_sample_smoke(tmp_path: Path) -> None:
     with (out_dir / "meta.pkl").open("wb") as f:
         pickle.dump(meta, f)
 
+    # Write a rotated best checkpoint to satisfy strict loader
+    ckpt_best_rotated = out_dir / "ckpt_best_00000000_0.000000.pt"
     torch.save(
         {
             "model": model.state_dict(),
+            "optimizer": {},
             "model_args": {
                 "n_layer": 1,
                 "n_head": 1,
@@ -55,8 +59,9 @@ def test_sample_smoke(tmp_path: Path) -> None:
             },
             "iter_num": 0,
             "best_val_loss": 0.0,
+            "config": {},
         },
-        out_dir / "ckpt_best.pt",
+        ckpt_best_rotated,
     )
 
     exp = SamplerConfig(

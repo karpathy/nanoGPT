@@ -8,6 +8,7 @@ import pytest
 import typer
 
 import ml_playground.cli as cli
+import ml_playground.config_loader as config_loader
 from ml_playground.prepare import PreparerConfig
 from ml_playground.config import (
     TrainerConfig,
@@ -573,25 +574,13 @@ def test_cmd_sample_happy_calls_runner(monkeypatch: pytest.MonkeyPatch, tmp_path
     assert called["n"] == 1 and called["arg"] is scfg
 
 
-def test__load_sample_config_missing_sample_block(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-):
-    # Disable defaults so missing [sample] is not filled from defaults
-    orig_load = cli.tomllib.load
+def test__load_sample_config_missing_sample_block(tmp_path: Path):
+    # Config with no [sample] block at all
+    cfg_path = tmp_path / "config.toml"
+    cfg_path.write_text("[train]\n")
 
-    def _no_defaults_load(f):  # noqa: D401
-        name = getattr(f, "name", "")
-        if isinstance(name, str) and name.endswith("default_config.toml"):
-            return {}
-        return orig_load(f)
-
-    monkeypatch.setattr(cli.tomllib, "load", _no_defaults_load)
-    p = tmp_path / "exp" / "config.toml"
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text("[train]\n")
-    with pytest.raises(Exception) as ei:
-        cli._load_sample_config(p)
-    assert "[sample] block" in str(ei.value)
+    with pytest.raises(ValueError, match=r"must contain a \[sample\] section"):
+        config_loader.load_sample_config(cfg_path)
 
 
 def test__load_sample_config_unknown_top_key(tmp_path: Path):

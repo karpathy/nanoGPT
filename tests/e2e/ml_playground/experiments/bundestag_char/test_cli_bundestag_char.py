@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import json as _json
 
 import numpy as np
 import pytest
@@ -20,6 +19,7 @@ def tmp_dataset(tmp_path: Path) -> Path:
     meta = {
         "meta_version": 1,
         "kind": "char",
+        "tokenizer_type": "char",
         "dtype": "uint16",
         "stoi": {chr(i): i for i in range(256)},
         "itos": {i: chr(i) for i in range(256)},
@@ -31,116 +31,133 @@ def tmp_dataset(tmp_path: Path) -> Path:
     return ds
 
 
-def _train_overrides(out_dir: Path, dataset_dir: Path) -> str:
-    ov = {
-        "runtime": {
-            "out_dir": str(out_dir),
-            "max_iters": 2,
-            "eval_interval": 1,
-            "eval_iters": 1,
-            "log_interval": 1,
-            "eval_only": False,
-            "checkpointing": {"keep": {"last": 1, "best": 1}},
-            "ckpt_time_interval_minutes": 0,
-            "device": "cpu",
-            "dtype": "float32",
-            "compile": False,
-        },
-        # Keep training tiny
-        "data": {
-            "dataset_dir": str(dataset_dir),
-            "train_bin": "train.bin",
-            "val_bin": "val.bin",
-            "batch_size": 4,
-            "block_size": 64,
-            "grad_accum_steps": 1,
-        },
-        "model": {
-            "n_layer": 1,
-            "n_head": 2,
-            "n_embd": 64,
-            "block_size": 64,
-            "dropout": 0.0,
-            "bias": False,
-        },
-        "schedule": {
-            "decay_lr": True,
-            "warmup_iters": 1,
-            "lr_decay_iters": 2,
-            "min_lr": 0.00008,
-        },
-    }
-    return _json.dumps(ov)
+def _write_exp_config(tmp_dir: Path, out_dir: Path, dataset_dir: Path) -> Path:
+    """Create a minimal, strict experiment config TOML pointing to tmp paths."""
+    cfg = f'''
+[train.model]
+n_layer = 1
+n_head = 2
+n_embd = 64
+block_size = 64
+dropout = 0.0
+bias = false
+vocab_size = 256
+
+[train.data]
+dataset_dir = "{dataset_dir}"
+train_bin = "train.bin"
+val_bin = "val.bin"
+batch_size = 4
+block_size = 64
+grad_accum_steps = 1
+
+[train.optim]
+learning_rate = 0.0005
+weight_decay = 0.0
+beta1 = 0.9
+beta2 = 0.95
+grad_clip = 0.0
+
+[train.schedule]
+decay_lr = true
+warmup_iters = 1
+lr_decay_iters = 2
+min_lr = 0.00008
+
+[train.runtime]
+out_dir = "{out_dir}"
+max_iters = 2
+eval_interval = 1
+eval_iters = 1
+log_interval = 1
+eval_only = false
+device = "cpu"
+dtype = "float32"
+compile = false
+ckpt_time_interval_minutes = 0
+
+[train.runtime.checkpointing.keep]
+last = 1
+best = 1
+
+[sample.runtime]
+out_dir = "{out_dir}"
+device = "cpu"
+dtype = "float32"
+compile = false
+eval_only = false
+max_iters = 0
+eval_interval = 1
+eval_iters = 1
+log_interval = 1
+
+[sample.sample]
+start = "Hi"
+num_samples = 1
+max_new_tokens = 8
+temperature = 0.9
+top_k = 50
+'''
+    p = tmp_dir / "config.toml"
+    p.write_text(cfg)
+    return p
 
 
-def _sample_overrides(out_dir: Path) -> str:
-    ov = {
-        "runtime": {
-            "out_dir": str(out_dir),
-            "device": "cpu",
-            "dtype": "float32",
-            "compile": False,
-        },
-        "sample": {
-            "num_samples": 1,
-            "max_new_tokens": 8,
-            "temperature": 0.9,
-            "top_k": 50,
-        },
-    }
-    return _json.dumps(ov)
+def _write_sample_only_config(tmp_dir: Path, out_dir: Path) -> Path:
+    cfg = f'''
+[sample.runtime]
+out_dir = "{out_dir}"
+device = "cpu"
+dtype = "float32"
+compile = false
+eval_only = false
+max_iters = 0
+eval_interval = 1
+eval_iters = 1
+log_interval = 1
+
+[sample.sample]
+start = "Hi"
+num_samples = 1
+max_new_tokens = 8
+temperature = 0.9
+top_k = 50
+'''
+    p = tmp_dir / "config.toml"
+    p.write_text(cfg)
+    return p
 
 
 def test_train_bundestag_char_quick(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tmp_dataset: Path
+    tmp_path: Path, tmp_dataset: Path
 ) -> None:
     out_dir = tmp_path / "out_train"
-    monkeypatch.setenv(
-        "ML_PLAYGROUND_TRAIN_OVERRIDES", _train_overrides(out_dir, tmp_dataset)
-    )
-    # Use tiny e2e defaults to minimize runtime
-    test_defaults = Path(__file__).resolve().parent.parent / "test_default_config.toml"
-    main(
-        ["--exp-config", str(test_defaults), "train", "bundestag_char"]
-    )  # should run few iterations and save checkpoints
-    # Check for expected artifacts
-    assert (out_dir / "ckpt_last.pt").exists()
-    assert (out_dir / "ckpt_best.pt").exists()
+    cfg = _write_exp_config(tmp_path, out_dir, tmp_dataset)
+    main(["--exp-config", str(cfg), "train", "bundestag_char"])  # run quickly
+    # Check for expected rotated checkpoint artifacts
+    assert any(out_dir.glob("ckpt_last_*.pt")), "no rotated last checkpoint found"
+    assert any(out_dir.glob("ckpt_best_*.pt")), "no rotated best checkpoint found"
     # meta.pkl should be propagated for sampling
     assert (out_dir / "meta.pkl").exists()
 
 
 def test_sample_bundestag_char_quick(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tmp_dataset: Path
+    tmp_path: Path, tmp_dataset: Path
 ) -> None:
     out_dir = tmp_path / "out_sample"
-    # Ensure a tiny checkpoint exists by training quickly first
-    monkeypatch.setenv(
-        "ML_PLAYGROUND_TRAIN_OVERRIDES", _train_overrides(out_dir, tmp_dataset)
-    )
-    test_defaults = Path(__file__).resolve().parent.parent / "test_default_config.toml"
-    main(
-        ["--exp-config", str(test_defaults), "train", "bundestag_char"]
-    )  # produce checkpoint
-    # Now sample with small settings
-    monkeypatch.setenv("ML_PLAYGROUND_SAMPLE_OVERRIDES", _sample_overrides(out_dir))
-    main(
-        ["--exp-config", str(test_defaults), "sample", "bundestag_char"]
-    )  # should not raise and print some text
+    # Train small to produce a checkpoint
+    train_cfg = _write_exp_config(tmp_path, out_dir, tmp_dataset)
+    main(["--exp-config", str(train_cfg), "train", "bundestag_char"])
+    # Sample with minimal config pointing to same out_dir
+    sample_cfg = _write_sample_only_config(tmp_path, out_dir)
+    main(["--exp-config", str(sample_cfg), "sample", "bundestag_char"])
 
 
 def test_loop_bundestag_char_quick(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tmp_dataset: Path
+    tmp_path: Path, tmp_dataset: Path
 ) -> None:
     out_dir = tmp_path / "out_loop"
-    # Both train and sample should pick up the out_dir via overrides
-    monkeypatch.setenv(
-        "ML_PLAYGROUND_TRAIN_OVERRIDES", _train_overrides(out_dir, tmp_dataset)
-    )
-    monkeypatch.setenv("ML_PLAYGROUND_SAMPLE_OVERRIDES", _sample_overrides(out_dir))
-    test_defaults = Path(__file__).resolve().parent.parent / "test_default_config.toml"
-    main(
-        ["--exp-config", str(test_defaults), "loop", "bundestag_char"]
-    )  # end-to-end pipeline
-    # Check that training produced checkpoints in the designated directory
-    assert (out_dir / "ckpt_last.pt").exists()
+    cfg = _write_exp_config(tmp_path, out_dir, tmp_dataset)
+    main(["--exp-config", str(cfg), "loop", "bundestag_char"])  # end-to-end
+    # Check that training produced rotated checkpoints in the designated directory
+    assert any(out_dir.glob("ckpt_last_*.pt")), "no rotated last checkpoint found"
