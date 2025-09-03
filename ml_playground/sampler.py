@@ -14,7 +14,11 @@ import torch
 from torch import autocast
 
 from ml_playground.checkpoint import Checkpoint, CheckpointManager
-from ml_playground.config import ModelConfig, SamplerConfig
+from ml_playground.config import (
+    ModelConfig,
+    SamplerConfig,
+    READ_POLICY_BEST,
+)
 from ml_playground.error_handling import DataError, setup_logging
 from ml_playground.model import GPT
 from ml_playground.prepare import setup_tokenizer
@@ -54,7 +58,7 @@ def _load_checkpoint(
     Strict: surface errors to caller.
     """
     ckpt_mgr = CheckpointManager(out_dir=out_dir)
-    if read_policy == "best":
+    if read_policy == READ_POLICY_BEST:
         return ckpt_mgr.load_best_checkpoint(device=device, logger=logger)
     # Strict: default/latest only
     return ckpt_mgr.load_latest_checkpoint(device=device, logger=logger)
