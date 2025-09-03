@@ -244,8 +244,8 @@ class CheckpointManager:
                             f"Failed to remove old best checkpoint {ckpt.path}: {e}"
                         ) from e
 
-        # Strict mode: do NOT create or update any stable checkpoint pointers
-        # such as ckpt_last.pt or ckpt_best.pt. Only rotated checkpoints are produced.
+        # Strict mode: do NOT create or update any stable checkpoint pointers.
+        # Only rotated checkpoints are produced.
 
         if logger:
             logger.info(f"Saved checkpoint to {path}")
