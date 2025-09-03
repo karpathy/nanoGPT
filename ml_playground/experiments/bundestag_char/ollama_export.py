@@ -82,8 +82,7 @@ def _fail(msg: str, code: int = 2) -> NoReturn:
 def convert(
     export_cfg: OllamaExportConfig,
     out_dir: Path,
-    ckpt_best_filename: str = "ckpt_best.pt",
-    ckpt_last_filename: str = "ckpt_last.pt",
+    read_policy: str = "latest",
 ) -> None:
     """Convert and quantize using injected config and resolved runtime paths.
 
@@ -111,12 +110,41 @@ def convert(
         )
     print(f"[export] export_dir ready: {export_cfg.export_dir}")
 
-    # Resolve checkpoint from injected runtime
-    candidates = [out_dir / ckpt_best_filename, out_dir / ckpt_last_filename]
-    ckpt_path: Optional[Path] = next((p for p in candidates if p.exists()), None)
+    # Resolve checkpoint from injected runtime using rotated-only policy
+    def _resolve_rotated_ckpt(dir_: Path, policy: str) -> Optional[Path]:
+        if policy == "best":
+            best_files = sorted(dir_.glob("ckpt_best_*.pt"))
+            if not best_files:
+                return None
+            # Choose lowest metric if present in name; otherwise pick newest
+            def _best_key(p: Path) -> tuple[float, float]:
+                try:
+                    parts = p.stem.split("_")
+                    metric = float(parts[3]) if len(parts) >= 4 else float("inf")
+                except Exception:
+                    metric = float("inf")
+                try:
+                    return (metric, p.stat().st_mtime)
+                except Exception:
+                    return (metric, 0.0)
+
+            return sorted(best_files, key=_best_key)[0]
+        # latest
+        last_files = list(dir_.glob("ckpt_last_*.pt"))
+        if not last_files:
+            return None
+        try:
+            return max(last_files, key=lambda p: p.stat().st_mtime)
+        except Exception:
+            return sorted(last_files)[-1]
+
+    ckpt_path: Optional[Path] = _resolve_rotated_ckpt(out_dir, read_policy)
     if ckpt_path is None:
+        wanted = (
+            "ckpt_best_XXXXXXXX_*.pt" if read_policy == "best" else "ckpt_last_XXXXXXXX.pt"
+        )
         _fail(
-            f"export: no checkpoint found. Expected one of: {', '.join(str(p) for p in candidates)}"
+            f"export: no rotated checkpoint found in {out_dir}. Expected pattern: {wanted}"
         )
     print(f"[export] checkpoint={ckpt_path}")
 
