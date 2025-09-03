@@ -873,9 +873,11 @@ def cmd_convert(ctx: typer.Context, experiment: str) -> None:
             template=Path(export_raw["template"]) if "template" in export_raw else None,
         )
         out_dir = Path(train_rt.get("out_dir", cfg_path.parent))
-        best_name = train_rt.get("ckpt_best_filename", "ckpt_best.pt")
-        last_name = train_rt.get("ckpt_last_filename", "ckpt_last.pt")
-        conv(export_cfg, out_dir, best_name, last_name)
+        read_policy = (
+            ((train_rt.get("checkpointing") or {}).get("read_policy"))
+            or "latest"
+        )
+        conv(export_cfg, out_dir, read_policy)
     except SystemExit as e:
         print(e.code)
         # Forward verbatim, even if not int (tests expect echo and same value)
