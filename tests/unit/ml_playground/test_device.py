@@ -49,3 +49,12 @@ def test_setup_cuda_branch(monkeypatch: pytest.MonkeyPatch):
     assert device_type == "cuda"
     with ctx:
         pass
+
+
+def test_ampcontext_mps_non_fp16_uses_nullcontext(monkeypatch: pytest.MonkeyPatch):
+    # Simulate MPS available and verify bfloat16 path uses nullcontext branch
+    fake_mps = types.SimpleNamespace(is_available=lambda: True)
+    monkeypatch.setattr(torch.backends, "mps", fake_mps, raising=False)
+    with AmpContext("mps", torch.bfloat16):
+        # Should enter and exit without trying to enable autocast for non-fp16
+        pass
