@@ -62,24 +62,15 @@ class BundestagCharPreparer(_PreparerProto):
         ]
         seed_text_file(input_file_path, candidates)
 
-        n: int = 1
+        # Do not read config files here; experiments receive fully-resolved config via CLI.
+        # Allow overriding n-gram size via cfg.extras["ngram_size"], defaulting to 1.
+        raw_n = cfg.extras.get("ngram_size", 1)
         try:
-            cfg_path = exp_dir / "config.toml"
-            if cfg_path.exists():
-                import tomllib as _tomllib
-
-                with cfg_path.open("rb") as _f:
-                    _raw = _tomllib.load(_f)
-                if isinstance(_raw, dict):
-                    _tr = _raw.get("train")
-                    if isinstance(_tr, dict):
-                        _dt = _tr.get("data")
-                        if isinstance(_dt, dict) and "ngram_size" in _dt:
-                            n = int(_dt.get("ngram_size", 1))
-        except Exception:
-            n = 1
+            n = int(raw_n)
+        except (TypeError, ValueError) as e:
+            raise DataError(f"Invalid ngram_size in extras: {raw_n!r} ({e})") from e
         if n < 1:
-            n = 1
+            raise DataError(f"ngram_size must be >= 1, got {n}")
 
         validate_config_field(n, "ngram_size", int, min_value=1)
 

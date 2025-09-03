@@ -9,8 +9,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional, NoReturn, cast
 
-import tomllib
-
 
 @dataclass(frozen=True)
 class OllamaExportConfig:
@@ -21,11 +19,6 @@ class OllamaExportConfig:
     template: Optional[Path]
     convert_bin: Optional[str]
     quant_bin: Optional[str]
-
-
-def _read_toml_dict(path: Path) -> dict[str, Any]:
-    with path.open("rb") as f:
-        return tomllib.load(f)
 
 
 def _sha256_of_file(path: Path) -> str:
@@ -41,83 +34,19 @@ def _write_text(path: Path, text: str) -> None:
 
 
 def _is_writable_directory(path: Path) -> bool:
-    try:
-        path.mkdir(parents=True, exist_ok=True)
-        test_file = path / ".__write_test__"
-        test_file.write_text("ok", encoding="utf-8")
-        test_file.unlink(missing_ok=True)
-        return True
-    except Exception:
-        return False
+    # Strict: let filesystem errors propagate to callers
+    path.mkdir(parents=True, exist_ok=True)
+    test_file = path / ".__write_test__"
+    test_file.write_text("ok", encoding="utf-8")
+    test_file.unlink(missing_ok=True)
+    return True
 
 
 def _which(name: str) -> Optional[str]:
-    try:
-        return shutil.which(name)
-    except Exception:
-        return None
+    # shutil.which should not raise; return value indicates presence
+    return shutil.which(name)
 
 
-def _resolve_ckpt(cfg_raw: dict[str, Any], exp_root: Path) -> Path:
-    # Prefer train.runtime; fallback to sample.runtime
-    train_rt = (cfg_raw.get("train") or {}).get("runtime") or {}
-    sample_rt = (cfg_raw.get("sample") or {}).get("runtime") or {}
-    out_dir_val = train_rt.get("out_dir") or sample_rt.get("out_dir")
-    if not out_dir_val:
-        raise SystemExit(
-            "export: could not resolve out_dir from config [train.runtime] or [sample.runtime]."
-        )
-    out_dir = Path(out_dir_val)
-    if not out_dir.is_absolute():
-        # If path looks repo-root relative (e.g., starts with 'ml_playground/...'), resolve from repo root
-        parts = out_dir.parts
-        if parts and parts[0] == "ml_playground":
-            repo_root = (
-                exp_root.parent.parent.parent
-            )  # project root containing 'ml_playground'
-            out_dir = (repo_root / out_dir).resolve()
-        else:
-            # Resolve relative to experiment root
-            out_dir = (exp_root / out_dir).resolve()
-    # Determine checkpoint filenames
-    best_name = train_rt.get("ckpt_best_filename", "ckpt_best.pt")
-    last_name = train_rt.get("ckpt_last_filename", "ckpt_last.pt")
-    candidates = [out_dir / best_name, out_dir / last_name]
-    for p in candidates:
-        if p.exists():
-            return p
-    raise SystemExit(
-        f"export: no checkpoint found. Expected one of: {', '.join(str(p) for p in candidates)}"
-    )
-
-
-def _load_export_cfg(cfg_path: Path, raw: dict[str, Any]) -> OllamaExportConfig:
-    exp_root = cfg_path.parent
-    exp_block = (raw.get("export") or {}).get("ollama") or {}
-    enabled = bool(exp_block.get("enabled", False))
-    # default export dir to exp_root/export if not provided
-    export_dir_val = exp_block.get("export_dir")
-    if export_dir_val:
-        export_dir = Path(str(export_dir_val))
-        if not export_dir.is_absolute():
-            export_dir = (exp_root / export_dir).resolve()
-    else:
-        export_dir = (exp_root / "export").resolve()
-    model_name = str(exp_block.get("model_name") or "bundestag-char")
-    quant = str(exp_block.get("quant") or "q4_K_M")
-    template = exp_block.get("template") or ""
-    template_path = Path(template).resolve() if template else None
-    convert_bin = str(exp_block.get("convert_bin") or "").strip() or None
-    quant_bin = str(exp_block.get("quant_bin") or "").strip() or None
-    return OllamaExportConfig(
-        enabled=enabled,
-        export_dir=export_dir,
-        model_name=model_name,
-        quant=quant,
-        template=template_path,
-        convert_bin=convert_bin,
-        quant_bin=quant_bin,
-    )
 
 
 def _inputs_stamp(cfg: OllamaExportConfig, ckpt: Path) -> dict[str, Any]:
@@ -139,17 +68,12 @@ def _inputs_stamp(cfg: OllamaExportConfig, ckpt: Path) -> dict[str, Any]:
 def _load_stamp(path: Path) -> Optional[dict[str, Any]]:
     if not path.exists():
         return None
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return None
+    # Strict: invalid stamp is an error
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _same_stamp(a: dict[str, Any], b: dict[str, Any]) -> bool:
-    try:
-        return a == b
-    except Exception:
-        return False
+    return a == b
 
 
 def _fail(msg: str, code: int = 2) -> NoReturn:
@@ -157,36 +81,45 @@ def _fail(msg: str, code: int = 2) -> NoReturn:
     raise SystemExit(code)
 
 
-def convert_from_toml(cfg_path: Path) -> None:
-    exp_root = cfg_path.parent
-    print(f"[export] start: cfg={cfg_path} cwd={os.getcwd()}")
-    try:
-        raw = _read_toml_dict(cfg_path)
-    except Exception as e:
-        _fail(f"export: failed to read config at {cfg_path}: {e}")
-        return
+def convert(
+    export_cfg: OllamaExportConfig,
+    out_dir: Path,
+    ckpt_best_filename: str = "ckpt_best.pt",
+    ckpt_last_filename: str = "ckpt_last.pt",
+) -> None:
+    """Convert and quantize using injected config and resolved runtime paths.
 
-    print(f"[export] experiment_root={exp_root}")
-    export_cfg = _load_export_cfg(cfg_path, raw)
+    Experiments must not read config files; callers (CLI) inject a fully-validated
+    export config and runtime out_dir/filenames here.
+    """
+    print(f"[export] start (injected): out_dir={out_dir} cwd={os.getcwd()}")
     print(
         f"[export] enabled={export_cfg.enabled} export_dir={export_cfg.export_dir} model_name={export_cfg.model_name} quant={export_cfg.quant}"
     )
 
     if not export_cfg.enabled:
         _fail(
-            "export.ollama is disabled or missing. Enable it in the experiment's config.toml under [export.ollama].",
+            "export.ollama is disabled. Enable it by injecting an enabled OllamaExportConfig.",
             code=2,
         )
 
     # Ensure export dir writable (also creates it)
-    if not _is_writable_directory(export_cfg.export_dir):
-        _fail(f"export: directory not writable: {export_cfg.export_dir}")
-    else:
-        print(f"[export] export_dir ready: {export_cfg.export_dir}")
+    try:
+        if not _is_writable_directory(export_cfg.export_dir):
+            _fail(f"export: directory not writable: {export_cfg.export_dir}")
+    except Exception as e:
+        _fail(
+            f"export: failed to prepare export directory {export_cfg.export_dir}: {e}"
+        )
+    print(f"[export] export_dir ready: {export_cfg.export_dir}")
 
-    # Resolve checkpoint
-    print("[export] resolving checkpoint from config...")
-    ckpt_path = _resolve_ckpt(raw, exp_root)
+    # Resolve checkpoint from injected runtime
+    candidates = [out_dir / ckpt_best_filename, out_dir / ckpt_last_filename]
+    ckpt_path: Optional[Path] = next((p for p in candidates if p.exists()), None)
+    if ckpt_path is None:
+        _fail(
+            f"export: no checkpoint found. Expected one of: {', '.join(str(p) for p in candidates)}"
+        )
     print(f"[export] checkpoint={ckpt_path}")
 
     # Paths
@@ -219,20 +152,19 @@ def convert_from_toml(cfg_path: Path) -> None:
 
     if not convert_bin:
         _fail(
-            "export: conversion tool not found. Configure [export.ollama].convert_bin with a path to llama.cpp's convert-hf-to-gguf.py or ensure it is on PATH.",
+            "export: conversion tool not found. Configure convert_bin or ensure it is on PATH.",
             code=2,
         )
     if not quant_bin:
         _fail(
-            "export: quantization tool not found. Configure [export.ollama].quant_bin with a path to llama.cpp's quantize or ensure it is on PATH.",
+            "export: quantization tool not found. Configure quant_bin or ensure it is on PATH.",
             code=2,
         )
     conv_bin: str = cast(str, convert_bin)
     q_bin: str = cast(str, quant_bin)
 
-    # Run conversion to FP16 GGUF (best-effort: expect tool signature 'convert <in> <out>')
+    # Run conversion to FP16 GGUF
     try:
-        # Clean prior fp16 artifact to avoid confusion
         if fp16_path.exists():
             fp16_path.unlink()
         cmd_convert: list[str] = [conv_bin, str(ckpt_path), str(fp16_path)]
@@ -279,16 +211,9 @@ def convert_from_toml(cfg_path: Path) -> None:
     # Write Modelfile
     lines = ["FROM ./model.gguf"]
     if export_cfg.template and export_cfg.template.exists():
-        try:
-            shutil.copyfile(export_cfg.template, template_dst)
-            lines.append("TEMPLATE file ./template.txt")
-            print(f"[export] copied template to {template_dst}")
-        except Exception:
-            # If template fails to copy, continue without TEMPLATE
-            print(
-                "[export] warning: failed to copy template; continuing without TEMPLATE"
-            )
-            pass
+        shutil.copyfile(export_cfg.template, template_dst)
+        lines.append("TEMPLATE file ./template.txt")
+        print(f"[export] copied template to {template_dst}")
     _write_text(modelfile_path, "\n".join(lines) + "\n")
 
     # Write README
@@ -302,25 +227,17 @@ def convert_from_toml(cfg_path: Path) -> None:
     _write_text(readme_path, readme)
 
     # Write checksums
-    try:
-        sums = [
-            f"{_sha256_of_file(model_path)}  model.gguf",
-            f"{_sha256_of_file(modelfile_path)}  Modelfile",
-        ]
-        _write_text(sums_path, "\n".join(sums) + "\n")
-    except Exception:
-        print("[export] warning: failed to write SHA256SUMS.txt")
-        pass
+    sums = [
+        f"{_sha256_of_file(model_path)}  model.gguf",
+        f"{_sha256_of_file(modelfile_path)}  Modelfile",
+    ]
+    _write_text(sums_path, "\n".join(sums) + "\n")
 
     # Persist stamp for idempotency
-    try:
-        stamp_path.write_text(json.dumps(inputs_now, indent=2), encoding="utf-8")
-        print(f"[export] wrote stamp {stamp_path}")
-    except Exception:
-        print("[export] warning: failed to write idempotency stamp")
-        pass
+    stamp_path.write_text(json.dumps(inputs_now, indent=2), encoding="utf-8")
+    print(f"[export] wrote stamp {stamp_path}")
 
     print(f"export: wrote {model_path}")
     print(f"export: wrote {modelfile_path}")
-    print(f"export: wrote {readme_path}")
-    print(f"export: wrote {sums_path}")
+    print(f"[export] wrote: {sums_path}")
+    print("[export] done")
