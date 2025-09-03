@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Literal, Optional, Any
-
 import tomllib
-
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+# Read policy constants to avoid hardcoded strings in code/tests
+READ_POLICY_LATEST: Literal["latest"] = "latest"
+READ_POLICY_BEST: Literal["best"] = "best"
+DEFAULT_READ_POLICY: Literal["latest"] = READ_POLICY_LATEST
 
 
 def _deep_merge_dicts(base: Any, override: Any) -> dict[str, Any]:
@@ -117,7 +120,7 @@ class RuntimeConfig(_FrozenStrictModel):
 
         keep: Keep = Keep()
         # Which rotated checkpoint to read when loading: latest or best
-        read_policy: Literal["latest", "best"] = "latest"
+        read_policy: Literal["latest", "best"] = DEFAULT_READ_POLICY
 
     checkpointing: Checkpointing = Checkpointing()
 
