@@ -8,6 +8,7 @@ from ml_playground.config import (
     SampleConfig,
     RuntimeConfig,
     RuntimeConfig as RC,
+    READ_POLICY_BEST,
 )
 
 
@@ -77,7 +78,7 @@ def test_sample_smoke(tmp_path: Path) -> None:
                     last=1,
                     best=1,
                 ),
-                read_policy="best",
+                read_policy=READ_POLICY_BEST,
             ),
             seed=123,
             device="cpu",

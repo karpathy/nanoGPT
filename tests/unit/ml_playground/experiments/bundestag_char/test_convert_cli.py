@@ -7,6 +7,7 @@ import pytest
 
 from ml_playground.cli import main
 import ml_playground.cli as cli
+from ml_playground.config import READ_POLICY_LATEST
 
 
 def _make_exec_script(path: Path, body: str) -> Path:
@@ -73,7 +74,7 @@ outp.write_bytes(b'Q-GGUF')
             "train": {
                 "runtime": {
                     "out_dir": str(out_dir),
-                    "checkpointing": {"read_policy": "latest"},
+                    "checkpointing": {"read_policy": READ_POLICY_LATEST},
                 }
             },
             "export": {

@@ -10,6 +10,7 @@ from ml_playground.config import (
     SampleConfig,
     RuntimeConfig,
     RuntimeConfig as RC,
+    READ_POLICY_BEST,
 )
 from ml_playground.model import GPTConfig, GPT
 from ml_playground.sampler import sample
@@ -63,7 +64,7 @@ def _sampler_cfg(out_dir: Path) -> SamplerConfig:
             log_interval=1,
             eval_only=False,
             checkpointing=RC.Checkpointing(
-                keep=RC.Checkpointing.Keep(last=1, best=1), read_policy="best"
+                keep=RC.Checkpointing.Keep(last=1, best=1), read_policy=READ_POLICY_BEST
             ),
             seed=123,
             device="cpu",
