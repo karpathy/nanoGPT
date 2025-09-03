@@ -7,7 +7,8 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, NoReturn, cast
+from typing import Any, Optional, NoReturn, cast, Literal
+from ml_playground.config import READ_POLICY_BEST, READ_POLICY_LATEST
 
 
 @dataclass(frozen=True)
@@ -82,7 +83,7 @@ def _fail(msg: str, code: int = 2) -> NoReturn:
 def convert(
     export_cfg: OllamaExportConfig,
     out_dir: Path,
-    read_policy: str = "latest",
+    read_policy: Literal["latest", "best"] = READ_POLICY_LATEST,
 ) -> None:
     """Convert and quantize using injected config and resolved runtime paths.
 
@@ -111,8 +112,8 @@ def convert(
     print(f"[export] export_dir ready: {export_cfg.export_dir}")
 
     # Resolve checkpoint from injected runtime using rotated-only policy
-    def _resolve_rotated_ckpt(dir_: Path, policy: str) -> Optional[Path]:
-        if policy == "best":
+    def _resolve_rotated_ckpt(dir_: Path, policy: Literal["latest", "best"]) -> Optional[Path]:
+        if policy == READ_POLICY_BEST:
             best_files = sorted(dir_.glob("ckpt_best_*.pt"))
             if not best_files:
                 return None
@@ -141,7 +142,7 @@ def convert(
     ckpt_path: Optional[Path] = _resolve_rotated_ckpt(out_dir, read_policy)
     if ckpt_path is None:
         wanted = (
-            "ckpt_best_XXXXXXXX_*.pt" if read_policy == "best" else "ckpt_last_XXXXXXXX.pt"
+            "ckpt_best_XXXXXXXX_*.pt" if read_policy == READ_POLICY_BEST else "ckpt_last_XXXXXXXX.pt"
         )
         _fail(
             f"export: no rotated checkpoint found in {out_dir}. Expected pattern: {wanted}"
