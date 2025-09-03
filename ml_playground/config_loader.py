@@ -57,7 +57,7 @@ def deep_merge_dicts(base: dict, override: dict) -> dict:
 
 
 def log_config_provenance(
-    out_dir: Path, source_path: Path, raw_config: dict, final_config: BaseModel
+    out_dir: Path, _source_path: Path, raw_config: dict, final_config: BaseModel
 ) -> None:
     """Write config provenance files to the output directory."""
     out_dir.mkdir(parents=True, exist_ok=True)
