@@ -11,6 +11,7 @@ import tomllib
 import logging
 from pathlib import Path
 from typing import Any, Annotated, cast, Union
+import torch
 
 from ml_playground.config import (
     TrainerConfig,
@@ -34,6 +35,24 @@ ConfigModel = Union[TrainerConfig, SamplerConfig]
 
 # Module-level logger
 logger = logging.getLogger(__name__)
+
+
+# --- Global device setup ---------------------------------------------------
+def _global_device_setup(device: str, dtype: str, seed: int) -> None:
+    """Set global seeds and enable TF32 as needed.
+
+    Centralizes side-effectful setup so other modules don't repeat it.
+    """
+    try:
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(seed)
+            # Enable TF32 for better perf on Ampere+ when using CUDA
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.allow_tf32 = True
+    except Exception:
+        # Never fail CLI due to environment-specific torch issues
+        pass
 
 
 # --- Typer helpers ---------------------------------------------------------
@@ -1237,6 +1256,16 @@ def _run_loop(
     sample_cfg: SamplerConfig,
     config_path: Path,
 ) -> None:
+    # Initialize global device state once for the loop based on training runtime
+    try:
+        if train_cfg.runtime is not None:
+            _global_device_setup(
+                train_cfg.runtime.device,
+                train_cfg.runtime.dtype,
+                train_cfg.runtime.seed,
+            )
+    except Exception:
+        pass
     preparer: ExpPreparer = _experiment_loader.load_preparer(experiment)
     trainer: ExpTrainer = _experiment_loader.load_trainer(experiment)
     sampler: ExpSampler = _experiment_loader.load_sampler(experiment)
@@ -1273,6 +1302,16 @@ def _run_loop(
 
 
 def _run_train(experiment: str, train_cfg: TrainerConfig, config_path: Path) -> None:
+    # Initialize global device state once for this command
+    try:
+        if train_cfg.runtime is not None:
+            _global_device_setup(
+                train_cfg.runtime.device,
+                train_cfg.runtime.dtype,
+                train_cfg.runtime.seed,
+            )
+    except Exception:
+        pass
     _log_command_status("train", train_cfg)
     trainer: ExpTrainer = _experiment_loader.load_trainer(experiment)
     report = trainer.train(train_cfg)
@@ -1299,6 +1338,16 @@ def _run_train(experiment: str, train_cfg: TrainerConfig, config_path: Path) -> 
 
 
 def _run_sample(experiment: str, sample_cfg: SamplerConfig, config_path: Path) -> None:
+    # Initialize global device state once for this command
+    try:
+        if sample_cfg.runtime is not None:
+            _global_device_setup(
+                sample_cfg.runtime.device,
+                sample_cfg.runtime.dtype,
+                sample_cfg.runtime.seed,
+            )
+    except Exception:
+        pass
     _log_command_status("sample", sample_cfg)
     sampler: ExpSampler = _experiment_loader.load_sampler(experiment)
     report = sampler.sample(sample_cfg)

@@ -6,13 +6,12 @@ import json
 import hashlib
 from pathlib import Path
 import shutil
-from typing import Any, Dict, Tuple, Protocol, Optional, List, cast
+from typing import Any, Dict, Tuple, Protocol, Optional, List, cast, ContextManager
 import pickle
 import torch
 from dataclasses import dataclass
 from ml_playground.model import GPTConfig, GPT
 from ml_playground.config import TrainerConfig
-from ml_playground.device import setup
 from ml_playground.data import SimpleBatches
 from ml_playground.error_handling import (
     DataError,
@@ -21,6 +20,7 @@ from ml_playground.error_handling import (
     setup_logging,
 )
 import logging
+from contextlib import nullcontext
 
 """
 Centralized training utilities for ml_playground experiments.
@@ -623,7 +623,37 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
                 f"Failed to copy dataset metadata from {src_meta} to {dst_meta}: {e}"
             ) from e
 
-    device_type, ptdtype, ctx = setup(rt.device, rt.dtype, rt.seed)
+    # Resolve device (CLI already performed seeding/TF32 setup)
+    if rt.device == "cuda" and torch.cuda.is_available():
+        device_type = "cuda"
+    elif (
+        rt.device == "mps"
+        and getattr(torch.backends, "mps", None)
+        and torch.backends.mps.is_available()
+    ):
+        device_type = "mps"
+    else:
+        device_type = "cpu"
+    _DTYPE_MAP: dict[str, torch.dtype] = {
+        "float32": torch.float32,
+        "bfloat16": torch.bfloat16,
+        "float16": torch.float16,
+    }
+    ptdtype = _DTYPE_MAP[rt.dtype]
+    # Use ContextManager[Any] to accommodate both torch.autocast and nullcontext
+    ctx: ContextManager[Any]
+    if device_type == "cpu":
+        _ctx: ContextManager[Any] = torch.autocast(
+            "cpu", enabled=ptdtype != torch.float32, dtype=ptdtype
+        )
+    elif device_type == "cuda":
+        _ctx = torch.autocast(device_type="cuda", dtype=ptdtype)
+    else:  # mps
+        if ptdtype == torch.float16:
+            _ctx = torch.autocast(device_type="mps", dtype=ptdtype)
+        else:
+            _ctx = nullcontext()
+    ctx = _ctx
 
     # Data
     try:

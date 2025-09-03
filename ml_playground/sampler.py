@@ -1,11 +1,17 @@
+"""ml_playground.sampler: sampling utilities.
+
+Device seeding/TF32 is centrally handled in the CLI. This module constructs
+device, dtype, and autocast contexts locally without exposing legacy shims.
+"""
+
 from __future__ import annotations
+from contextlib import nullcontext
 from pathlib import Path
-from typing import Callable, Tuple, Protocol, Optional, cast
+from typing import Callable, Tuple, Protocol, Optional, cast, ContextManager, Any
 import pickle
 import torch
 from ml_playground.model import GPTConfig, GPT
 from ml_playground.config import SamplerConfig
-from ml_playground.device import setup
 from ml_playground.tokenizer import (
     CharTokenizer,
     WordTokenizer,
@@ -292,7 +298,37 @@ def sample(exp: SamplerConfig) -> None:
     rt = exp.runtime
     # Early progress: device/context
     logger.info("[sample] Initializing device and context...")
-    device_type, ptdtype, ctx = setup(rt.device, rt.dtype, rt.seed)
+    # Resolve device availability (no seeding or TF32 here; CLI initializes globally)
+    if rt.device == "cuda" and torch.cuda.is_available():
+        device_type = "cuda"
+    elif (
+        rt.device == "mps"
+        and getattr(torch.backends, "mps", None)
+        and torch.backends.mps.is_available()
+    ):
+        device_type = "mps"
+    else:
+        device_type = "cpu"
+    # Map dtype kind to torch dtype
+    _DTYPE_MAP: dict[str, torch.dtype] = {
+        "float32": torch.float32,
+        "bfloat16": torch.bfloat16,
+        "float16": torch.float16,
+    }
+    ptdtype = _DTYPE_MAP[rt.dtype]
+    # Build autocast context per device (use ContextManager[Any] for mypy)
+    if device_type == "cpu":
+        _ctx: ContextManager[Any] = torch.autocast(
+            "cpu", enabled=ptdtype != torch.float32, dtype=ptdtype
+        )
+    elif device_type == "cuda":
+        _ctx = torch.autocast(device_type="cuda", dtype=ptdtype)
+    else:  # mps
+        if ptdtype == torch.float16:
+            _ctx = torch.autocast(device_type="mps", dtype=ptdtype)
+        else:
+            _ctx = nullcontext()
+    ctx: ContextManager[Any] = _ctx
     device = device_type  # for legacy compat
     logger.info(f"[sample] Using device: {device}")
 

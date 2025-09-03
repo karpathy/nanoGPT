@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import builtins
 import pickle
-from contextlib import nullcontext
 from pathlib import Path
 from typing import Any, Tuple
 
@@ -260,12 +259,7 @@ def test_sample_happy_path_with_file_prompt_and_char_meta(
     prompt_path = tmp_path / "prompt.txt"
     prompt_path.write_text("Hi\n", encoding="utf-8")
 
-    # Fake setup() to avoid device/tensor dtype concerns
-    monkeypatch.setattr(
-        sampler,
-        "setup",
-        lambda device, dtype, seed: ("cpu", torch.float32, nullcontext()),
-    )
+    # Device/dtype context is handled internally by sampler; no monkeypatching needed.
 
     # Patch load_checkpoint to return a dummy model and fake checkpoint
     dummy = _DummyModel()
@@ -311,12 +305,7 @@ def test_sample_with_compile_flag_uses_compiled_model(
     out_dir.mkdir(parents=True, exist_ok=True)
     _write_char_meta(out_dir / "meta.pkl")
 
-    # Fake setup context
-    monkeypatch.setattr(
-        sampler,
-        "setup",
-        lambda device, dtype, seed: ("cpu", torch.float32, nullcontext()),
-    )
+    # Device/dtype context is handled internally by sampler; no monkeypatching needed.
 
     # Observe whether compiled model's generate was invoked
     called: dict[str, int] = {"compiled": 0}

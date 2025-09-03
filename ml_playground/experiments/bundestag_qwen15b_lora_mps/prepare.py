@@ -470,4 +470,6 @@ def sample_from_toml(config_path: Path) -> None:
 
 
 def loop(config_path: Path) -> None:
-    raise SystemExit("loop has been removed. Use explicit CLI steps with injected config.")
+    raise SystemExit(
+        "loop has been removed. Use explicit CLI steps with injected config."
+    )

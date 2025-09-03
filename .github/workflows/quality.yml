@@ -1,0 +1,27 @@
+name: Quality Gates
+
+on:
+  push:
+    branches: [ main, master, develop, '**' ]
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Sync dependencies (dev group)
+        run: uv sync --group dev
+
+      - name: Run quality gates
+        run: uv run bash tools/quality_gate.sh

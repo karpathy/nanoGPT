@@ -47,8 +47,6 @@ def _which(name: str) -> Optional[str]:
     return shutil.which(name)
 
 
-
-
 def _inputs_stamp(cfg: OllamaExportConfig, ckpt: Path) -> dict[str, Any]:
     stamp: dict[str, Any] = {
         "ckpt_path": str(ckpt),
