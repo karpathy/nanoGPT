@@ -47,21 +47,17 @@ def _load_checkpoint(
     out_dir: Path,
     device: str,
     logger: logging.Logger,
-    use_best: bool,
+    read_policy: str,
 ) -> Checkpoint:
     """Load model checkpoint.
 
     Strict: surface errors to caller.
     """
     ckpt_mgr = CheckpointManager(out_dir=out_dir)
-    if use_best:
+    if read_policy == "best":
         return ckpt_mgr.load_best_checkpoint(device=device, logger=logger)
-    # Prefer latest; if none found, fall back to best, then raise
-    try:
-        return ckpt_mgr.load_latest_checkpoint(device=device, logger=logger)
-    except CheckpointError:
-        # try best as a secondary rotated source
-        return ckpt_mgr.load_best_checkpoint(device=device, logger=logger)
+    # Strict: default/latest only
+    return ckpt_mgr.load_latest_checkpoint(device=device, logger=logger)
 
     # No stable-file fallback – strict mode requires rotated checkpoints.
 
@@ -99,7 +95,7 @@ def sample(cfg: SamplerConfig) -> None:
         runtime_cfg.out_dir,
         runtime_cfg.device,
         logger,
-        use_best=getattr(sample_cfg, "use_best_checkpoint", False),
+        read_policy=runtime_cfg.checkpointing.read_policy,
     )
 
     # --- Model setup ------------------------------------------------------------
