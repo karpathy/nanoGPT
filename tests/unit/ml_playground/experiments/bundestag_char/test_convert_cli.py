@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from ml_playground.cli import main
+import ml_playground.cli as cli
 
 
 def _make_exec_script(path: Path, body: str) -> Path:
@@ -65,26 +66,39 @@ outp.write_bytes(b'Q-GGUF')
 """,
     )
 
-    # Patch exporter TOML reader to inject our temp paths and fake tool binaries
-    from ml_playground.experiments.bundestag_char import ollama_export as exp
-
-    real_read = exp._read_toml_dict
-
-    def _patched_read_toml_dict(path: Path):  # type: ignore[no-untyped-def]
-        raw = real_read(path)
-        raw.setdefault("train", {}).setdefault("runtime", {})["out_dir"] = str(out_dir)
-        raw.setdefault("export", {}).setdefault("ollama", {})
-        raw["export"]["ollama"]["enabled"] = True
-        raw["export"]["ollama"]["export_dir"] = str(export_dir)
-        raw["export"]["ollama"]["convert_bin"] = str(convert_py)
-        raw["export"]["ollama"]["quant_bin"] = str(quant_py)
-        return raw
+    # Patch CLI config resolution to inject our temp paths and fake tool binaries
+    def _patched_resolve_and_load_configs(exp_name: str, exp_cfg: Path | None):  # noqa: D401
+        # Minimal raw dicts to satisfy cmd_convert
+        raw: dict = {
+            "train": {
+                "runtime": {
+                    "out_dir": str(out_dir),
+                    "ckpt_best_filename": "ckpt_best.pt",
+                    "ckpt_last_filename": "ckpt_last.pt",
+                }
+            },
+            "export": {
+                "ollama": {
+                    "enabled": True,
+                    "export_dir": str(export_dir),
+                    "convert_bin": str(convert_py),
+                    "quant_bin": str(quant_py),
+                    "model_name": "bundestag-char",
+                    "quant": "q4_K_M",
+                }
+            },
+        }
+        return Path("/dev/null"), raw, {}
 
     monkeypatch.setattr(
-        "ml_playground.experiments.bundestag_char.ollama_export._read_toml_dict",
-        _patched_read_toml_dict,
-        raising=True,
+        cli, "_resolve_and_load_configs", _patched_resolve_and_load_configs
     )
+
+    # Also patch ensure_loaded to avoid heavy config parsing; only path is used later
+    def _patched_ensure_loaded(ctx, exp_name: str):  # noqa: D401
+        return Path("/dev/null"), object(), object()
+
+    monkeypatch.setattr(cli, "ensure_loaded", _patched_ensure_loaded)
 
     # Act: run CLI (no SystemExit on success)
     main(["convert", "bundestag_char"])
