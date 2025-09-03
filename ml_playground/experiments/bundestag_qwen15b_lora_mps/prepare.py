@@ -4,7 +4,6 @@ import json
 import math
 import os
 import random
-import time
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,28 +11,19 @@ from typing import List, Optional, Tuple, Literal, cast
 
 import torch
 from torch import nn
-from torch.utils.data import DataLoader, Dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from torch.utils.data import Dataset
 
 from typing import TYPE_CHECKING
+import importlib.util
 
 # TensorBoard is required when this module is used for training. Fail fast if missing.
-try:
-    from torch.utils.tensorboard import SummaryWriter  # type: ignore
-except ImportError as e:  # pragma: no cover - explicit dependency error
+if importlib.util.find_spec("torch.utils.tensorboard") is None:  # pragma: no cover
     raise SystemExit(
         "tensorboard is required for this experiment. Install via UV: `uv add tensorboard`."
-    ) from e
+    )
 
 
 # PyTorch profiler → TensorBoard (lightweight, scheduled)
-from datetime import datetime
-from torch.profiler import (
-    profile,
-    schedule,
-    ProfilerActivity,
-    tensorboard_trace_handler,
-)
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from peft import LoraConfig, PeftModel  # noqa: F401
