@@ -96,7 +96,7 @@ uv run pytest -n auto -W error --strict-markers --strict-config -v
 ### Checkpoint resume issues
 
 **Model shape mismatches**: 
-- Start with fresh `out_dir` or delete existing `ckpt_last.pt`/`ckpt_best.pt`
+- Start with fresh `out_dir` or delete existing checkpoints
 - Checkpointed `model_args` override TOML for compatibility
 
 ### Device configuration

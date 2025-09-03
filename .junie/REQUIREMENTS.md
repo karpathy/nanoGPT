@@ -13,21 +13,19 @@ The checkpointing system manages model snapshots during training to enable resum
 - Both values must be >= 0
 
 ### Checkpoint Files
-- `ckpt_last.pt`: Last checkpoint (periodically updated during training)
-- `ckpt_best.pt`: Best checkpoint (updated when validation metric improves)
+- Rotated-only checkpointing is enforced.
+- Supported patterns:
+  - Last: `ckpt_last_XXXXXXXX.pt`
+  - Best: `ckpt_best_XXXXXXXX_<metric>.pt`
 
 ## Behavior
 
 ### Initialization
-- First checkpoint is always saved immediately after model initialization
-- Both `ckpt_last.pt` and `ckpt_best.pt` are created with the same initial model state
+- First rotated checkpoint is always saved immediately after model initialization
 
 ### During Training
-- Last checkpoint (`ckpt_last.pt`) is updated periodically based on training progress
-- Best checkpoint (`ckpt_best.pt`) is updated whenever the validation metric improves
-- When saving a checkpoint:
-  - If it's the best so far, update `ckpt_best.pt`
-  - Always update `ckpt_last.pt` (unless it's the same iteration as the best)
+- Last rotated checkpoints are saved periodically based on training progress
+- Best rotated checkpoints are saved whenever the validation metric improves
 
 ### Checkpoint Management
 - Strict enforcement of keep policies:

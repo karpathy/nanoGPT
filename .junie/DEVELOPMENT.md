@@ -291,9 +291,11 @@ Ruff automatically applies modern Python best practices:
 ## Architecture Notes
 
 ### Checkpointing and Resume
-- Trainer writes `ckpt_last.pt` every eval; updates `ckpt_best.pt` on improvement
-- On resume, checkpointed `model_args` override TOML for compatibility
-- To change model shapes: start with fresh `out_dir` or delete existing checkpoints
+ Checkpoints are strictly rotated-only.
+ - Last checkpoints are saved with a timestamped suffix, e.g., `ckpt_last_XXXXXXXX.pt`.
+ - Best checkpoints are saved with a timestamped suffix and metric, e.g., `ckpt_best_XXXXXXXX_<metric>.pt`.
+ - On resume, checkpointed `model_args` override TOML for compatibility.
+ - To change model shapes: start with fresh `out_dir` or delete existing checkpoints.
 
 ### Dataset Notes
 - Char-level Bundestag dataset autoseeds from bundled sample resource

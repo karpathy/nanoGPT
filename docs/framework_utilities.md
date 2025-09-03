@@ -242,7 +242,7 @@ The framework enforces strict behavior across configuration, checkpoints, and to
   - Supported patterns:
     - Last: `ckpt_last_XXXXXXXX.pt`
     - Best: `ckpt_best_XXXXXXXX_<metric>.pt`
-  - Stable filenames `ckpt_last.pt` / `ckpt_best.pt` are NOT used.
+  - Stable, non-rotated filenames are not used.
   - If no rotated checkpoints exist, a `CheckpointError` is raised.
 
 - **Tokenizer Metadata (required fields)**
