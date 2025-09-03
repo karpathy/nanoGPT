@@ -130,11 +130,16 @@ def train(cfg: TrainerConfig) -> tuple[int, float]:
 
     if runtime_cfg.out_dir.exists():
         try:
-            checkpoint = ckpt_mgr.load_latest_checkpoint(
-                device=runtime_cfg.device, logger=logger
-            )
+            if runtime_cfg.checkpointing.read_policy == "best":
+                checkpoint = ckpt_mgr.load_best_checkpoint(
+                    device=runtime_cfg.device, logger=logger
+                )
+            else:
+                checkpoint = ckpt_mgr.load_latest_checkpoint(
+                    device=runtime_cfg.device, logger=logger
+                )
         except CheckpointError as e:
-            logger.warning(f"Could not load latest checkpoint: {e}")
+            logger.warning(f"Could not load checkpoint ({runtime_cfg.checkpointing.read_policy}): {e}")
 
     if checkpoint:
         logger.info("Resuming training from latest checkpoint")
@@ -204,7 +209,8 @@ def train(cfg: TrainerConfig) -> tuple[int, float]:
                             config=cfg.model_dump(),
                             ema=ema.shadow if ema else None,
                         ),
-                        base_filename=runtime_cfg.ckpt_best_path.name,
+                        # Base filename is unused in strict rotated mode; preserved for signature compatibility
+                        base_filename="ckpt_best.pt",
                         metric=best_val_loss,
                         iter_num=iter_num,
                         logger=logger,
@@ -279,7 +285,8 @@ def train(cfg: TrainerConfig) -> tuple[int, float]:
             config=cfg.model_dump(),
             ema=ema.shadow if ema else None,
         ),
-        base_filename=runtime_cfg.ckpt_last_path.name,
+        # Base filename is unused in strict rotated mode; preserved for signature compatibility
+        base_filename="ckpt_last.pt",
         metric=best_val_loss,
         iter_num=iter_num,
         logger=logger,
