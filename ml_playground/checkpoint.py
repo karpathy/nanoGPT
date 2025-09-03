@@ -88,7 +88,6 @@ class CheckpointManager:
 
     def _discover_existing(self) -> None:
         """Scan filesystem for existing rotated checkpoints and rebuild state."""
-        # last: ckpt_last_XXXXXXXX.pt
         for p in sorted(self.out_dir.glob("ckpt_last_*.pt")):
             # iter from filename suffix
             stem = p.stem  # e.g., ckpt_last_00000010
@@ -107,7 +106,6 @@ class CheckpointManager:
             except Exception as e:
                 raise CheckpointError(f"Failed to stat checkpoint file {p}: {e}") from e
             self.last_checkpoints.append(_CkptInfo(p, float("inf"), it, created))
-        # best: ckpt_best_XXXXXXXX_*.pt (metric may be encoded)
         for p in sorted(self.out_dir.glob("ckpt_best_*.pt")):
             stem = p.stem  # e.g., ckpt_best_00000010_1.234567
             parts = stem.split("_")
@@ -169,6 +167,8 @@ class CheckpointManager:
 
         Returns the rotated checkpoint path that was written.
         """
+        # API compatibility: base_filename kept but unused with rotated-only scheme
+        _ = base_filename
         # Determine rotated filename based on kind
         if is_best:
             rotated_name = f"ckpt_best_{iter_num:08d}_{metric:.6f}.pt"
