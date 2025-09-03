@@ -69,7 +69,10 @@ uv run python -m ml_playground.cli loop bundestag_char
 
 ## Outputs
 - Data artifacts: ml_playground/experiments/bundestag_char/datasets/{train.bin,val.bin,meta.pkl}
-- Training: out_dir contains ckpt_best.pt, ckpt_last.pt, logs/tb
+- Training: out_dir contains rotated checkpoints only, e.g.:
+  - ckpt_last_XXXXXXXX.pt
+  - ckpt_best_XXXXXXXX_<metric>.pt
+  - logs/tb
 
 ## Troubleshooting
 - If meta.pkl is missing at sampling, the CLI loop copies it to out_dir automatically; otherwise, place meta.pkl next to checkpoints.
@@ -157,7 +160,10 @@ Notes:
 
 ## Outputs
 - Data artifacts: ml_playground/experiments/bundestag_char/datasets/{train.bin,val.bin,meta.pkl}
-- Training: out_dir contains ckpt_best.pt, ckpt_last.pt, logs/tb
+- Training: out_dir contains rotated checkpoints only, e.g.:
+  - ckpt_last_XXXXXXXX.pt
+  - ckpt_best_XXXXXXXX_<metric>.pt
+  - logs/tb
 
 ## Troubleshooting
 - If meta.pkl is missing at sampling, the CLI loop copies it to out_dir automatically; otherwise, place meta.pkl next to checkpoints.

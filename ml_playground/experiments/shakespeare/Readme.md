@@ -16,7 +16,9 @@ Minimal experiment to prepare, train, and sample on the Tiny Shakespeare corpus 
 ## Method/Model
 - Tokenization: GPT-2 BPE (tiktoken)
 - Model: Small GPT configured in TOML (n_layer, n_head, n_embd, block_size, etc.)
-- Checkpoints: ckpt_best.pt and ckpt_last.pt managed by trainer
+- Checkpoints: rotated files only managed by trainer
+  - ckpt_last_XXXXXXXX.pt
+  - ckpt_best_XXXXXXXX_<metric>.pt
 - Logging: TensorBoard enabled at out_dir/logs/tb
 This experiment uses the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../../docs/framework_utilities.md).
 
@@ -60,7 +62,9 @@ uv run python -m ml_playground.cli loop shakespeare
   - out_dir should match train.runtime.out_dir
 
 ## Outputs
-- Training: out_dir contains ckpt_best.pt, ckpt_last.pt, logs/tb
+- Training: out_dir contains rotated checkpoints and logs/tb, e.g.:
+  - ckpt_last_XXXXXXXX.pt
+  - ckpt_best_XXXXXXXX_<metric>.pt
 - Data: ml_playground/experiments/shakespeare/datasets/{train.bin, val.bin}
 
 ## Troubleshooting

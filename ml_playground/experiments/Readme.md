@@ -109,7 +109,9 @@ Paste the following into `ml_playground/experiments/<name>/Readme.md` and replac
 
 ## Method/Model
 - &lt;Briefly describe tokenization/model. Example: "Tokenization: GPT-2 BPE (tiktoken). Model: small GPT configured via TOML (n_layer, n_head, n_embd, block_size)."&gt;
-- Checkpoints: &lt;e.g., ckpt_best.pt, ckpt_last.pt or adapters under out_dir/adapters/{best,last,final}&gt;
+- Checkpoints (rotated-only):
+  - `ckpt_last_XXXXXXXX.pt`
+  - `ckpt_best_XXXXXXXX_<metric>.pt`
 - Logging: TensorBoard at `out_dir/logs/tb`
 
 ## Environment Setup (UV-only)
