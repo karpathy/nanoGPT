@@ -19,7 +19,7 @@ def run_server_bundestag_char(
         from lit_nlp.api import model as lit_model  # type: ignore
         from lit_nlp.api import types as lit_types  # type: ignore
         from lit_nlp import server as lit_server  # type: ignore
-    except Exception as e:  # pragma: no cover - import-guard path
+    except ImportError as e:  # pragma: no cover - import-guard path
         raise RuntimeError(
             "LIT is not available. Install the optional dependency first:\n"
             "  uv sync --extra lit\n"
