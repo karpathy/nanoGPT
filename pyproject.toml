@@ -30,7 +30,6 @@ dependencies = [
     "typer==0.17.3",
     "sentencepiece>=0.2.1",
     "pandas-stubs==2.3.2.250827",
-    "pytest-bdd>=8.1.0",
 ]
 
 [project.optional-dependencies]
@@ -61,7 +60,7 @@ packages = ["ml_playground"]
 dev = [
     "pytest>=8.4.1",
     "pytest-xdist>=3.8.0",
-    "pytest-bdd>=7.1.2",
+    "pytest-bdd>=8.1.0",
     "pytest-cov>=6.2.1",
     "pytest-mock>=3.14.1",
     "coverage[toml]>=7.10.6",
