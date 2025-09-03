@@ -128,9 +128,7 @@ top_k = 50
     return p
 
 
-def test_train_bundestag_char_quick(
-    tmp_path: Path, tmp_dataset: Path
-) -> None:
+def test_train_bundestag_char_quick(tmp_path: Path, tmp_dataset: Path) -> None:
     out_dir = tmp_path / "out_train"
     cfg = _write_exp_config(tmp_path, out_dir, tmp_dataset)
     main(["--exp-config", str(cfg), "train", "bundestag_char"])  # run quickly
@@ -141,9 +139,7 @@ def test_train_bundestag_char_quick(
     assert (out_dir / "meta.pkl").exists()
 
 
-def test_sample_bundestag_char_quick(
-    tmp_path: Path, tmp_dataset: Path
-) -> None:
+def test_sample_bundestag_char_quick(tmp_path: Path, tmp_dataset: Path) -> None:
     out_dir = tmp_path / "out_sample"
     # Train small to produce a checkpoint
     train_cfg = _write_exp_config(tmp_path, out_dir, tmp_dataset)
@@ -153,9 +149,7 @@ def test_sample_bundestag_char_quick(
     main(["--exp-config", str(sample_cfg), "sample", "bundestag_char"])
 
 
-def test_loop_bundestag_char_quick(
-    tmp_path: Path, tmp_dataset: Path
-) -> None:
+def test_loop_bundestag_char_quick(tmp_path: Path, tmp_dataset: Path) -> None:
     out_dir = tmp_path / "out_loop"
     cfg = _write_exp_config(tmp_path, out_dir, tmp_dataset)
     main(["--exp-config", str(cfg), "loop", "bundestag_char"])  # end-to-end

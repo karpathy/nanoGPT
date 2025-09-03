@@ -6,7 +6,7 @@ from contextlib import nullcontext
 
 import torch
 from torch import autocast
-from torch.amp import GradScaler
+from torch.amp.grad_scaler import GradScaler
 from torch.utils.tensorboard import SummaryWriter
 
 from ml_playground.checkpoint import Checkpoint, CheckpointManager
@@ -150,7 +150,9 @@ def train(cfg: TrainerConfig) -> tuple[int, float]:
 
     # --- GradScaler setup -------------------------------------------------------
     # Use CUDA GradScaler via torch.amp; enable only when on CUDA and using float16.
-    scaler = GradScaler(enabled=(device_type == "cuda" and runtime_cfg.dtype == "float16"))
+    scaler = GradScaler(
+        enabled=(device_type == "cuda" and runtime_cfg.dtype == "float16")
+    )
 
     # --- EMA (Exponential Moving Average) setup ------------------------------
     ema: EMA | None = None

@@ -59,10 +59,9 @@ def _load_checkpoint(
     # Prefer latest; if none found, fall back to best, then raise
     try:
         return ckpt_mgr.load_latest_checkpoint(device=device, logger=logger)
-    except CheckpointError as e_latest:
+    except CheckpointError:
         # try best as a secondary rotated source
         return ckpt_mgr.load_best_checkpoint(device=device, logger=logger)
-
 
     # No stable-file fallback – strict mode requires rotated checkpoints.
 

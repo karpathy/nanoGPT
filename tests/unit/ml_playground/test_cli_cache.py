@@ -1,18 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
 
 from ml_playground import config_loader
-from ml_playground.config import (
-    TrainerConfig,
-    ModelConfig,
-    DataConfig,
-    OptimConfig,
-    LRSchedule,
-    RuntimeConfig,
-)
 
 
 def test_strict_mode_has_no_override_functions() -> None:

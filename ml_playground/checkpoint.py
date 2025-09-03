@@ -253,7 +253,7 @@ class CheckpointManager:
 
     def load_latest_checkpoint(
         self, device: str, logger: Optional[logging.Logger] = None
-    ) -> Optional[Checkpoint]:
+    ) -> Checkpoint:
         """Load the latest checkpoint from the last checkpoints list."""
         if not self.last_checkpoints:
             # try discovering from disk
@@ -308,7 +308,7 @@ class CheckpointManager:
 
     def load_best_checkpoint(
         self, device: str, logger: Optional[logging.Logger] = None
-    ) -> Optional[Checkpoint]:
+    ) -> Checkpoint:
         """Load the best checkpoint from the best checkpoints list."""
         if not self.best_checkpoints:
             self._discover_existing()

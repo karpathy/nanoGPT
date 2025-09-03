@@ -240,7 +240,11 @@ def write_bin_and_meta(
         train_path = data_cfg.train_path
         val_path = data_cfg.val_path
         # meta may be optional
-        meta_path = data_cfg.meta_path if data_cfg.meta_path is not None else ds_dir / "meta.pkl"
+        meta_path = (
+            data_cfg.meta_path
+            if data_cfg.meta_path is not None
+            else ds_dir / "meta.pkl"
+        )
     else:
         train_path = ds_dir / "train.bin"
         val_path = ds_dir / "val.bin"
@@ -329,9 +333,7 @@ def setup_tokenizer(
         meta = pickle.load(f)
     tokenizer_type = meta.get("tokenizer_type")
     if tokenizer_type is None:
-        raise DataError(
-            f"Invalid meta.pkl at {meta_path}: missing 'tokenizer_type'"
-        )
+        raise DataError(f"Invalid meta.pkl at {meta_path}: missing 'tokenizer_type'")
     # Prefer vocab/encoding settings from meta when available
     if tokenizer_type in ("char", "word"):
         vocab = meta.get("stoi") or meta.get("vocab")

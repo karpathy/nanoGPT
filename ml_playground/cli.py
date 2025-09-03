@@ -4,8 +4,6 @@ import typer
 from typer.main import get_command
 
 import logging
-import os
-import json
 import importlib
 import tomllib
 from pathlib import Path
@@ -387,8 +385,8 @@ def _log_command_status(tag: str, cfg: Any) -> None:
 
 def _run_prepare(
     experiment: str,
-    config_path: Path,
     prepare_cfg: PreparerConfig,
+    config_path: Path,
 ) -> None:
     """Run the full prepare flow for an experiment."""
     print(f"---\nRunning preparer for experiment: {experiment}")
@@ -399,8 +397,8 @@ def _run_prepare(
 
 def _run_train(
     experiment: str,
-    config_path: Path,
     train_cfg: TrainerConfig,
+    config_path: Path,
 ) -> None:
     """Run the full training flow for an experiment."""
     # Global setup
@@ -424,8 +422,8 @@ def _run_train(
 
 def _run_sample(
     experiment: str,
-    config_path: Path,
     sample_cfg: SamplerConfig,
+    config_path: Path,
 ) -> None:
     """Run the full sampling flow for an experiment."""
     if not sample_cfg.runtime:
@@ -481,9 +479,9 @@ def _run_loop(
     except Exception:
         skip_prepare = False
     if not skip_prepare:
-        _run_prepare(experiment, config_path, prepare_cfg)
-    _run_train(experiment, config_path, train_cfg)
-    _run_sample(experiment, config_path, sample_cfg)
+        _run_prepare(experiment, prepare_cfg, config_path)
+    _run_train(experiment, train_cfg, config_path)
+    _run_sample(experiment, sample_cfg, config_path)
 
 
 # --- CLI definition --------------------------------------------------------
@@ -545,13 +543,10 @@ def prepare_command(
 ) -> None:
     """Prepare data for an experiment."""
     exp_config_path = _extract_exp_config(ctx)
-    run_or_exit(
-        lambda: _run_prepare(
-            experiment,
-            *def_load_effective_prepare(experiment, exp_config_path),
-        ),
-        keyboard_interrupt_msg="\nPreparation cancelled.",
-    )
+    def _run() -> None:
+        cfg_path, prep_cfg = def_load_effective_prepare(experiment, exp_config_path)
+        _run_prepare(experiment, prep_cfg, cfg_path)
+    run_or_exit(_run, keyboard_interrupt_msg="\nPreparation cancelled.")
 
 
 @app.command(name="train")
@@ -567,13 +562,10 @@ def train_command(
 ) -> None:
     """Train a model for an experiment."""
     exp_config_path = _extract_exp_config(ctx)
-    run_or_exit(
-        lambda: _run_train(
-            experiment,
-            *def_load_effective_train(experiment, exp_config_path),
-        ),
-        keyboard_interrupt_msg="\nTraining cancelled.",
-    )
+    def _run() -> None:
+        cfg_path, train_cfg = def_load_effective_train(experiment, exp_config_path)
+        _run_train(experiment, train_cfg, cfg_path)
+    run_or_exit(_run, keyboard_interrupt_msg="\nTraining cancelled.")
 
 
 @app.command(name="sample")
@@ -589,13 +581,10 @@ def sample_command(
 ) -> None:
     """Sample from a trained model."""
     exp_config_path = _extract_exp_config(ctx)
-    run_or_exit(
-        lambda: _run_sample(
-            experiment,
-            *def_load_effective_sample(experiment, exp_config_path),
-        ),
-        keyboard_interrupt_msg="\nSampling cancelled.",
-    )
+    def _run() -> None:
+        cfg_path, sample_cfg = def_load_effective_sample(experiment, exp_config_path)
+        _run_sample(experiment, sample_cfg, cfg_path)
+    run_or_exit(_run, keyboard_interrupt_msg="\nSampling cancelled.")
 
 
 @app.command(name="analyze")

@@ -5,7 +5,12 @@ import pickle
 import torch
 import pytest
 
-from ml_playground.config import SamplerConfig, SampleConfig, RuntimeConfig, RuntimeConfig as RC
+from ml_playground.config import (
+    SamplerConfig,
+    SampleConfig,
+    RuntimeConfig,
+    RuntimeConfig as RC,
+)
 from ml_playground.model import GPTConfig, GPT
 from ml_playground.sampler import sample
 from ml_playground.error_handling import DataError, CheckpointError
@@ -57,15 +62,15 @@ def _sampler_cfg(out_dir: Path) -> SamplerConfig:
             eval_iters=1,
             log_interval=1,
             eval_only=False,
-            checkpointing=RC.Checkpointing(
-                keep=RC.Checkpointing.Keep(last=1, best=1)
-            ),
+            checkpointing=RC.Checkpointing(keep=RC.Checkpointing.Keep(last=1, best=1)),
             seed=123,
             device="cpu",
             dtype="float32",
             compile=False,
         ),
-        sample=SampleConfig(start="\n", num_samples=1, max_new_tokens=1, temperature=1.0, top_k=10),
+        sample=SampleConfig(
+            start="\n", num_samples=1, max_new_tokens=1, temperature=1.0, top_k=10
+        ),
     )
 
 

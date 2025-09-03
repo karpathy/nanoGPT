@@ -312,7 +312,6 @@ class DataConfig(_FrozenStrictModel):
             raise ValueError("must be > 0")
         return int(v)
 
-
     # Computed, read-only paths
     @property
     def train_path(self) -> Path:
