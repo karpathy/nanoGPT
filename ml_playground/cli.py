@@ -15,6 +15,7 @@ from ml_playground.config import (
     SamplerConfig,
     PreparerConfig,
     AppConfig,
+    READ_POLICY_LATEST,
 )
 import ml_playground.prepare as prepare_mod
 import ml_playground.sampler as sampler_mod
@@ -875,7 +876,7 @@ def cmd_convert(ctx: typer.Context, experiment: str) -> None:
         out_dir = Path(train_rt.get("out_dir", cfg_path.parent))
         read_policy = (
             ((train_rt.get("checkpointing") or {}).get("read_policy"))
-            or "latest"
+            or READ_POLICY_LATEST
         )
         conv(export_cfg, out_dir, read_policy)
     except SystemExit as e:
