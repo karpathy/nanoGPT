@@ -76,7 +76,8 @@ def test_sample_smoke(tmp_path: Path) -> None:
                 keep=RC.Checkpointing.Keep(
                     last=1,
                     best=1,
-                )
+                ),
+                read_policy="best",
             ),
             seed=123,
             device="cpu",

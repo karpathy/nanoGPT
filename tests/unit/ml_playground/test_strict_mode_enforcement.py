@@ -62,7 +62,9 @@ def _sampler_cfg(out_dir: Path) -> SamplerConfig:
             eval_iters=1,
             log_interval=1,
             eval_only=False,
-            checkpointing=RC.Checkpointing(keep=RC.Checkpointing.Keep(last=1, best=1)),
+            checkpointing=RC.Checkpointing(
+                keep=RC.Checkpointing.Keep(last=1, best=1), read_policy="best"
+            ),
             seed=123,
             device="cpu",
             dtype="float32",

@@ -412,9 +412,9 @@ def test_cmd_convert_success_and_error_paths(
     class OkMod:
         OllamaExportConfig = _ExportCfg
 
-        def convert(self, export_cfg, out_dir, best_name, last_name):  # noqa: D401
+        def convert(self, export_cfg, out_dir, read_policy):  # noqa: D401
             called["ok"] += 1
-            called["args"] = (export_cfg, out_dir, best_name, last_name)
+            called["args"] = (export_cfg, out_dir, read_policy)
 
     # Success path
     monkeypatch.setattr(
@@ -436,7 +436,7 @@ def test_cmd_convert_success_and_error_paths(
     class ExitMod:
         OllamaExportConfig = _ExportCfg
 
-        def convert(self, export_cfg, out_dir, best_name, last_name):  # noqa: D401
+        def convert(self, export_cfg, out_dir, read_policy):  # noqa: D401
             raise SystemExit("inner-msg")
 
     monkeypatch.setattr(
@@ -452,7 +452,7 @@ def test_cmd_convert_success_and_error_paths(
     class ErrMod:
         OllamaExportConfig = _ExportCfg
 
-        def convert(self, export_cfg, out_dir, best_name, last_name):  # noqa: D401
+        def convert(self, export_cfg, out_dir, read_policy):  # noqa: D401
             raise RuntimeError("boom")
 
     monkeypatch.setattr(

@@ -34,8 +34,8 @@ def test_convert_creates_ollama_export_with_fake_tools(
     out_dir.mkdir(parents=True, exist_ok=True)
     export_dir = tmp_path / "export"
 
-    # Fake checkpoint expected by exporter
-    ckpt = out_dir / "ckpt_last.pt"
+    # Fake rotated checkpoint expected by exporter (latest policy)
+    ckpt = out_dir / "ckpt_last_00000001.pt"
     ckpt.write_bytes(b"dummy-checkpoint")
 
     # Fake external tools: write simple Python scripts that create the expected outputs
@@ -73,8 +73,7 @@ outp.write_bytes(b'Q-GGUF')
             "train": {
                 "runtime": {
                     "out_dir": str(out_dir),
-                    "ckpt_best_filename": "ckpt_best.pt",
-                    "ckpt_last_filename": "ckpt_last.pt",
+                    "checkpointing": {"read_policy": "latest"},
                 }
             },
             "export": {
