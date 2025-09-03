@@ -96,9 +96,7 @@ class RuntimeConfig(_FrozenStrictModel):
     iters_per_epoch: Optional[int] = None
     max_epochs: Optional[int] = None
 
-    # Checkpoint policy
-    ckpt_last_filename: str = "ckpt_last.pt"
-    ckpt_best_filename: str = "ckpt_best.pt"
+    # Checkpoint policy (rotated-only)
     ckpt_metric: Literal["val_loss", "perplexity"] = "val_loss"
     ckpt_greater_is_better: bool = False
     ckpt_atomic: bool = True
@@ -118,6 +116,8 @@ class RuntimeConfig(_FrozenStrictModel):
                 return int(v)
 
         keep: Keep = Keep()
+        # Which rotated checkpoint to read when loading: latest or best
+        read_policy: Literal["latest", "best"] = "latest"
 
     checkpointing: Checkpointing = Checkpointing()
 
@@ -138,13 +138,7 @@ class RuntimeConfig(_FrozenStrictModel):
         # Preserve as provided (relative or absolute). Resolution is handled by loaders when desired.
         return v
 
-    @property
-    def ckpt_last_path(self) -> Path:
-        return self.out_dir / self.ckpt_last_filename
-
-    @property
-    def ckpt_best_path(self) -> Path:
-        return self.out_dir / self.ckpt_best_filename
+    # No stable filename paths; reading is selected via checkpointing.read_policy
 
 
 class TrainerConfig(_FrozenStrictModel):
