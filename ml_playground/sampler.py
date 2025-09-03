@@ -120,16 +120,13 @@ def load_checkpoint(
 
 
 def extract_model_args_from_checkpoint(checkpoint: dict) -> dict:
-    """Extract model arguments from a checkpoint, with backward compatibility."""
-    if "model_args" in checkpoint:
-        return checkpoint["model_args"]
+    """Extract model arguments from a checkpoint.
 
-    # Backward compatibility: try to extract from config
-    if "config" in checkpoint and "model" in checkpoint["config"]:
-        return checkpoint["config"]["model"]
-
-    # If we can't find model args, return empty dict
-    return {}
+    Strict policy: model_args must be present. No backward compatibility or fallbacks.
+    """
+    if "model_args" not in checkpoint:
+        raise CheckpointError("Checkpoint missing required 'model_args'")
+    return checkpoint["model_args"]
 
 
 def create_codec_from_tokenizer_type(
@@ -182,30 +179,16 @@ def create_codec_from_tokenizer_type(
 def validate_and_create_codec(
     meta_path: Path | None, tokenizer_type: str = "auto", **kwargs
 ) -> Tuple[Callable[[str], list[int]], Callable[[list[int]], str]]:
-    """Validate and create encode/decode callables with flexible fallback options.
+    """Validate and create encode/decode callables with strict behavior.
 
-    Args:
-        meta_path: Path to meta.pkl file
-        tokenizer_type: Type of tokenizer ('auto', 'char', 'word', 'tiktoken')
-        **kwargs: Additional arguments for tokenizer initialization
-
-    Returns:
-        Tuple of (encode_func, decode_func)
+    Strict policy:
+    - tokenizer_type == 'auto' requires a valid meta.pkl path; no fallbacks.
+    - explicit tokenizer types must provide required kwargs; no defaults inferred.
     """
-    # If tokenizer_type is 'auto', try to infer from meta
-    if tokenizer_type == "auto" and meta_path is not None and meta_path.exists():
-        try:
-            return _codec_from_meta(meta_path)
-        except Exception:
-            # Fall through to default handling
-            pass
+    if tokenizer_type == "auto":
+        return _codec_from_meta(meta_path)
 
-    # If we have a specific tokenizer type, use it
-    if tokenizer_type != "auto":
-        return create_codec_from_tokenizer_type(tokenizer_type, **kwargs)
-
-    # Default fallback behavior (same as original _codec_from_meta)
-    return _codec_from_meta(meta_path)
+    return create_codec_from_tokenizer_type(tokenizer_type, **kwargs)
 
 
 class CodecManager:
@@ -245,18 +228,12 @@ class CodecManager:
 def _codec_from_meta(
     meta_path: Path | None,
 ) -> Tuple[Callable[[str], list[int]], Callable[[list[int]], str]]:
-    """Derive encode/decode callables for sampling using the new tokenizer protocol."""
+    """Derive encode/decode callables for sampling using tokenizer meta.
+
+    Strict policy: meta_path must be provided and exist. No fallbacks to other tokenizers.
+    """
     if meta_path is None or not meta_path.exists():
-        # Use tiktoken as default fallback
-        try:
-            tiktoken_codec: Tokenizer = TiktokenTokenizer(encoding_name="gpt2")
-            return (tiktoken_codec.encode, tiktoken_codec.decode)
-        except ImportError as e:
-            raise DataError(
-                "No usable dataset meta found. "
-                "As a fallback we require 'tiktoken' to use GPT-2 BPE ('gpt2') encoding, but it is not installed. "
-                "Install tiktoken or provide a valid meta.pkl."
-            ) from e
+        raise DataError("meta.pkl is required to derive codec (no fallback allowed)")
 
     # Load meta from pickle file
     try:

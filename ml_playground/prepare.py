@@ -6,6 +6,7 @@ import pickle
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from ml_playground.tokenizer import Tokenizer, create_tokenizer
+from ml_playground.error_handling import DataError
 
 
 """
@@ -205,29 +206,19 @@ class _PreparerInstance:
         before = _snapshot([train_path, val_path, meta_path])
 
         if train_path.exists() and val_path.exists() and meta_path.exists():
+            # Strict: Do not regenerate silently; meta.pkl must be valid or we fail.
             try:
                 with meta_path.open("rb") as f:
                     existing_meta = pickle.load(f)
-                if isinstance(existing_meta, dict) and "meta_version" in existing_meta:
-                    return
-                else:
-                    logger = getattr(self.cfg, "logger", None)
-                    msg = f"[prepare] Detected invalid meta.pkl at {meta_path}; regenerating dataset artifacts."
-                    if logger is not None:
-                        try:
-                            logger.warning(msg)
-                        except Exception:
-                            pass
-            except Exception:
-                logger = getattr(self.cfg, "logger", None)
-                msg = f"[prepare] Could not read existing meta.pkl at {meta_path}; regenerating dataset artifacts."
-                if logger is not None:
-                    try:
-                        logger.warning(msg)
-                    except Exception:
-                        pass
-                else:
-                    print(msg)
+            except Exception as e:
+                raise DataError(
+                    f"Failed to read existing meta.pkl at {meta_path}: {e}"
+                ) from e
+            if isinstance(existing_meta, dict) and "meta_version" in existing_meta:
+                return
+            raise DataError(
+                f"Invalid existing meta.pkl at {meta_path}: expected dict with 'meta_version'"
+            )
 
         tmp_train = ds_dir / ".train.bin.tmp"
         tmp_val = ds_dir / ".val.bin.tmp"
@@ -322,19 +313,19 @@ def write_bin_and_meta(
     before = _snapshot([train_path, val_path, meta_path])
 
     if train_path.exists() and val_path.exists() and meta_path.exists():
+        # Strict: meta.pkl must be valid; do not regenerate silently
         try:
             with meta_path.open("rb") as f:
                 existing_meta = pickle.load(f)
-            if isinstance(existing_meta, dict) and "meta_version" in existing_meta:
-                return
-            else:
-                print(
-                    f"[prepare] Detected invalid meta.pkl at {meta_path}; regenerating dataset artifacts."
-                )
-        except Exception:
-            print(
-                f"[prepare] Could not read existing meta.pkl at {meta_path}; regenerating dataset artifacts."
-            )
+        except Exception as e:
+            raise DataError(
+                f"Failed to read existing meta.pkl at {meta_path}: {e}"
+            ) from e
+        if isinstance(existing_meta, dict) and "meta_version" in existing_meta:
+            return
+        raise DataError(
+            f"Invalid existing meta.pkl at {meta_path}: expected dict with 'meta_version'"
+        )
 
     tmp_train = ds_dir / ".train.bin.tmp"
     tmp_val = ds_dir / ".val.bin.tmp"

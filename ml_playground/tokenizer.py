@@ -57,8 +57,6 @@ class CharTokenizer:
     def decode(self, token_ids: List[int]) -> str:
         return "".join([self.itos.get(i, "") for i in token_ids])
 
-    
-
 
 class WordTokenizer:
     """Word-level tokenizer."""
@@ -101,7 +99,6 @@ class WordTokenizer:
 
     def get_vocab(self) -> Dict[str, int]:
         return self.stoi.copy()
-    
 
 
 class TiktokenTokenizer:
@@ -141,7 +138,6 @@ class TiktokenTokenizer:
         if isinstance(ranks, dict):
             return MappingProxyType(ranks)
         return MappingProxyType({})
-    
 
 
 def create_tokenizer(tokenizer_type: str, **kwargs) -> Tokenizer:

@@ -124,59 +124,73 @@ class CheckpointManager:
 
     def _discover_existing(self) -> None:
         """Scan filesystem for existing rotated checkpoints and rebuild state."""
-        try:
-            # last: ckpt_last_XXXXXXXX.pt
-            for p in sorted(self.out_dir.glob("ckpt_last_*.pt")):
+        # last: ckpt_last_XXXXXXXX.pt
+        for p in sorted(self.out_dir.glob("ckpt_last_*.pt")):
+            # iter from filename suffix
+            stem = p.stem  # e.g., ckpt_last_00000010
+            parts = stem.split("_")
+            if len(parts) < 3:
+                raise CheckpointError(f"Malformed last-checkpoint filename: {p.name}")
+            iter_str = parts[-1]
+            try:
+                it = int(iter_str)
+            except Exception as e:
+                raise CheckpointError(
+                    f"Could not parse iteration from last-checkpoint filename {p.name}: {e}"
+                ) from e
+            try:
+                created = p.stat().st_mtime
+            except Exception as e:
+                raise CheckpointError(f"Failed to stat checkpoint file {p}: {e}") from e
+            self.last_checkpoints.append(_CkptInfo(p, float("inf"), it, created))
+        # best: ckpt_best_XXXXXXXX_*.pt (metric may be encoded)
+        for p in sorted(self.out_dir.glob("ckpt_best_*.pt")):
+            stem = p.stem  # e.g., ckpt_best_00000010_1.234567
+            parts = stem.split("_")
+            if len(parts) < 3:
+                raise CheckpointError(f"Malformed best-checkpoint filename: {p.name}")
+            try:
+                it = int(parts[2])
+            except Exception as e:
+                raise CheckpointError(
+                    f"Could not parse iteration from best-checkpoint filename {p.name}: {e}"
+                ) from e
+            metric = float("inf")
+            if len(parts) >= 4:
                 try:
-                    # iter from filename suffix
-                    stem = p.stem  # e.g., ckpt_last_00000010
-                    iter_str = stem.split("_")[-1]
-                    it = int(iter_str)
-                except Exception:
-                    it = 0
+                    metric = float(parts[3])
+                except Exception as e:
+                    raise CheckpointError(
+                        f"Could not parse metric from best-checkpoint filename {p.name}: {e}"
+                    ) from e
+            try:
                 created = p.stat().st_mtime
-                self.last_checkpoints.append(_CkptInfo(p, float("inf"), it, created))
-            # best: ckpt_best_XXXXXXXX_*.pt (metric may be encoded)
-            for p in sorted(self.out_dir.glob("ckpt_best_*.pt")):
-                stem = p.stem  # e.g., ckpt_best_00000010_1.234567
-                parts = stem.split("_")
-                it = 0
-                metric = float("inf")
-                if len(parts) >= 3:
-                    try:
-                        it = int(parts[2])
-                    except Exception:
-                        it = 0
-                    # try parse metric from suffix if present
-                    try:
-                        metric = float(parts[3]) if len(parts) >= 4 else float("inf")
-                    except Exception:
-                        metric = float("inf")
-                created = p.stat().st_mtime
-                self.best_checkpoints.append(_CkptInfo(p, metric, it, created))
-        except Exception:
-            # Best-effort; if anything fails, keep lists possibly partial
-            pass
+            except Exception as e:
+                raise CheckpointError(f"Failed to stat checkpoint file {p}: {e}") from e
+            self.best_checkpoints.append(_CkptInfo(p, metric, it, created))
 
     def _update_stable_pointer(self, rotated_path: Path, stable_filename: str) -> None:
         """Point the stable filename to the rotated file via symlink if possible, else copy."""
         stable_path = self.out_dir / stable_filename
-        try:
-            if stable_path.exists() or stable_path.is_symlink():
-                try:
-                    stable_path.unlink()
-                except Exception:
-                    pass
-            # Create relative symlink if supported
+        if stable_path.exists() or stable_path.is_symlink():
             try:
-                stable_path.symlink_to(rotated_path.name)
-                return
-            except Exception:
-                # Fallback: copy the file
+                stable_path.unlink()
+            except Exception as e:
+                raise CheckpointError(
+                    f"Failed to remove existing stable checkpoint pointer {stable_path}: {e}"
+                ) from e
+        # Try to create a relative symlink; on failure, try hard copy; if both fail, raise
+        try:
+            stable_path.symlink_to(rotated_path.name)
+            return
+        except Exception as symlink_err:
+            try:
                 shutil.copy2(rotated_path, stable_path)
-        except Exception:
-            # Do not fail training on pointer update issues
-            pass
+                return
+            except Exception as copy_err:
+                raise CheckpointError(
+                    f"Failed to update stable checkpoint pointer {stable_path}: symlink error={symlink_err}; copy error={copy_err}"
+                ) from copy_err
 
     def save_checkpoint(
         self,
@@ -231,10 +245,9 @@ class CheckpointManager:
                         if logger:
                             logger.info(f"Removed old last checkpoint: {ckpt.path}")
                     except Exception as e:
-                        if logger:
-                            logger.warning(
-                                f"Failed to remove old last checkpoint {ckpt.path}: {e}"
-                            )
+                        raise CheckpointError(
+                            f"Failed to remove old last checkpoint {ckpt.path}: {e}"
+                        ) from e
 
         # Manage best checkpoints
         if is_best and self.keep_best > 0:
@@ -263,25 +276,23 @@ class CheckpointManager:
                         if logger:
                             logger.info(f"Removed old best checkpoint: {ckpt.path}")
                     except Exception as e:
-                        if logger:
-                            logger.warning(
-                                f"Failed to remove old best checkpoint {ckpt.path}: {e}"
-                            )
+                        raise CheckpointError(
+                            f"Failed to remove old best checkpoint {ckpt.path}: {e}"
+                        ) from e
 
         # Update stable pointer (symlink or copy) to an actually kept checkpoint under the base filename
-        try:
-            target_for_pointer: Path = path
-            if is_best:
-                if self.best_checkpoints:
-                    # best_checkpoints is sorted ascending by metric; choose the best
-                    target_for_pointer = self.best_checkpoints[0].path
-            else:
-                if self.last_checkpoints:
-                    # choose the most recent by created_at
-                    target_for_pointer = max(self.last_checkpoints, key=lambda x: x.created_at).path
-            self._update_stable_pointer(target_for_pointer, base_filename)
-        except Exception:
-            pass
+        target_for_pointer: Path = path
+        if is_best:
+            if self.best_checkpoints:
+                # best_checkpoints is sorted ascending by metric; choose the best
+                target_for_pointer = self.best_checkpoints[0].path
+        else:
+            if self.last_checkpoints:
+                # choose the most recent by created_at
+                target_for_pointer = max(
+                    self.last_checkpoints, key=lambda x: x.created_at
+                ).path
+        self._update_stable_pointer(target_for_pointer, base_filename)
 
         if logger:
             logger.info(f"Saved checkpoint to {path}")
@@ -295,47 +306,52 @@ class CheckpointManager:
             # try discovering from disk
             self._discover_existing()
             if not self.last_checkpoints:
-                return None
+                raise CheckpointError(
+                    f"No last checkpoints discovered in {self.out_dir}"
+                )
 
         # Get the most recent checkpoint
         latest_ckpt = max(self.last_checkpoints, key=lambda x: x.created_at)
 
         try:
             checkpoint_dict = torch.load(str(latest_ckpt.path), map_location=device)
-            if not isinstance(checkpoint_dict, dict):
-                raise ValueError("Checkpoint file does not contain a dictionary")
-
-            # Validate required keys
-            required_keys = [
-                "model",
-                "optimizer",
-                "model_args",
-                "iter_num",
-                "best_val_loss",
-                "config",
-            ]
-            for key in required_keys:
-                if key not in checkpoint_dict:
-                    raise ValueError(f"Checkpoint missing required key: {key}")
-
-            # Create Checkpoint object
-            checkpoint = Checkpoint(
-                model=checkpoint_dict["model"],
-                optimizer=checkpoint_dict["optimizer"],
-                model_args=checkpoint_dict["model_args"],
-                iter_num=checkpoint_dict["iter_num"],
-                best_val_loss=checkpoint_dict["best_val_loss"],
-                config=checkpoint_dict["config"],
-                ema=checkpoint_dict.get("ema"),
-            )
-
-            if logger:
-                logger.info(f"Loaded checkpoint from {latest_ckpt.path}")
-            return checkpoint
         except Exception as e:
             if logger:
                 logger.error(f"Error loading checkpoint from {latest_ckpt.path}: {e}")
-            return None
+            raise CheckpointError(
+                f"Failed to load checkpoint from {latest_ckpt.path}: {e}"
+            ) from e
+
+        if not isinstance(checkpoint_dict, dict):
+            raise CheckpointError("Checkpoint file does not contain a dictionary")
+
+        # Validate required keys
+        required_keys = [
+            "model",
+            "optimizer",
+            "model_args",
+            "iter_num",
+            "best_val_loss",
+            "config",
+        ]
+        for key in required_keys:
+            if key not in checkpoint_dict:
+                raise CheckpointError(f"Checkpoint missing required key: {key}")
+
+        # Create Checkpoint object
+        checkpoint = Checkpoint(
+            model=checkpoint_dict["model"],
+            optimizer=checkpoint_dict["optimizer"],
+            model_args=checkpoint_dict["model_args"],
+            iter_num=checkpoint_dict["iter_num"],
+            best_val_loss=checkpoint_dict["best_val_loss"],
+            config=checkpoint_dict["config"],
+            ema=checkpoint_dict.get("ema"),
+        )
+
+        if logger:
+            logger.info(f"Loaded checkpoint from {latest_ckpt.path}")
+        return checkpoint
 
     def load_best_checkpoint(
         self, device: str, logger: Optional[logging.Logger] = None
@@ -344,49 +360,54 @@ class CheckpointManager:
         if not self.best_checkpoints:
             self._discover_existing()
             if not self.best_checkpoints:
-                return None
+                raise CheckpointError(
+                    f"No best checkpoints discovered in {self.out_dir}"
+                )
 
         # Get the best checkpoint (lowest metric)
         best_ckpt = min(self.best_checkpoints, key=lambda x: x.metric)
 
         try:
             checkpoint_dict = torch.load(str(best_ckpt.path), map_location=device)
-            if not isinstance(checkpoint_dict, dict):
-                raise ValueError("Checkpoint file does not contain a dictionary")
-
-            # Validate required keys
-            required_keys = [
-                "model",
-                "optimizer",
-                "model_args",
-                "iter_num",
-                "best_val_loss",
-                "config",
-            ]
-            for key in required_keys:
-                if key not in checkpoint_dict:
-                    raise ValueError(f"Checkpoint missing required key: {key}")
-
-            # Create Checkpoint object
-            checkpoint = Checkpoint(
-                model=checkpoint_dict["model"],
-                optimizer=checkpoint_dict["optimizer"],
-                model_args=checkpoint_dict["model_args"],
-                iter_num=checkpoint_dict["iter_num"],
-                best_val_loss=checkpoint_dict["best_val_loss"],
-                config=checkpoint_dict["config"],
-                ema=checkpoint_dict.get("ema"),
-            )
-
-            if logger:
-                logger.info(f"Loaded best checkpoint from {best_ckpt.path}")
-            return checkpoint
         except Exception as e:
             if logger:
                 logger.error(
                     f"Error loading best checkpoint from {best_ckpt.path}: {e}"
                 )
-            return None
+            raise CheckpointError(
+                f"Failed to load best checkpoint from {best_ckpt.path}: {e}"
+            ) from e
+
+        if not isinstance(checkpoint_dict, dict):
+            raise CheckpointError("Checkpoint file does not contain a dictionary")
+
+        # Validate required keys
+        required_keys = [
+            "model",
+            "optimizer",
+            "model_args",
+            "iter_num",
+            "best_val_loss",
+            "config",
+        ]
+        for key in required_keys:
+            if key not in checkpoint_dict:
+                raise CheckpointError(f"Checkpoint missing required key: {key}")
+
+        # Create Checkpoint object
+        checkpoint = Checkpoint(
+            model=checkpoint_dict["model"],
+            optimizer=checkpoint_dict["optimizer"],
+            model_args=checkpoint_dict["model_args"],
+            iter_num=checkpoint_dict["iter_num"],
+            best_val_loss=checkpoint_dict["best_val_loss"],
+            config=checkpoint_dict["config"],
+            ema=checkpoint_dict.get("ema"),
+        )
+
+        if logger:
+            logger.info(f"Loaded best checkpoint from {best_ckpt.path}")
+        return checkpoint
 
 
 def _atomic_save(obj, path: Path, atomic: bool) -> None:
@@ -494,11 +515,11 @@ def _estimate_loss(
         raw_model = model.module
     else:
         raw_model = model
-    
+
     # Ensure raw_model is a GPT instance
     if not isinstance(raw_model, GPT):
         raise TypeError(f"Expected GPT model, got {type(raw_model)}")
-    
+
     raw_model.eval()
     for split in ["train", "val"]:
         losses = torch.zeros(eval_iters)
@@ -546,16 +567,13 @@ def validate_checkpoint(checkpoint: dict, required_keys: set) -> None:
 
 
 def extract_model_args_from_checkpoint(checkpoint: dict) -> dict:
-    """Extract model arguments from a checkpoint, with backward compatibility."""
-    if "model_args" in checkpoint:
-        return checkpoint["model_args"]
+    """Extract model arguments from a checkpoint.
 
-    # Backward compatibility: try to extract from config
-    if "config" in checkpoint and "model" in checkpoint["config"]:
-        return checkpoint["config"]["model"]
-
-    # If we can't find model args, return empty dict
-    return {}
+    Strict policy: model_args must be present. No backward compatibility or fallbacks.
+    """
+    if "model_args" not in checkpoint:
+        raise CheckpointError("Checkpoint missing required 'model_args'")
+    return checkpoint["model_args"]
 
 
 def train(exp: TrainerConfig) -> Tuple[int, float]:
@@ -588,7 +606,22 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
 
         writer = _NoopTB()  # type: ignore[assignment]
 
-    # meta.pkl fallback copying removed - sampling must find meta.pkl in the expected location
+    # Strictly propagate dataset metadata to out_dir for sampling.
+    # This is NOT a fallback; it's an explicit requirement to make sampling deterministic.
+    # If configured meta is missing or copy fails, fail fast.
+    if exp.data.meta_pkl is not None:
+        src_meta = exp.data.dataset_dir / exp.data.meta_pkl
+        dst_meta = rt.out_dir / "meta.pkl"
+        if not src_meta.exists():
+            raise DataError(
+                f"Expected dataset metadata at {src_meta} but it does not exist"
+            )
+        try:
+            shutil.copy2(src_meta, dst_meta)
+        except Exception as e:
+            raise DataError(
+                f"Failed to copy dataset metadata from {src_meta} to {dst_meta}: {e}"
+            ) from e
 
     device_type, ptdtype, ctx = setup(rt.device, rt.dtype, rt.seed)
 
@@ -656,7 +689,14 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
             ) from e
 
         # Validate checkpoint strictly
-        required = {"model", "optimizer", "model_args", "iter_num", "best_val_loss", "config"}
+        required = {
+            "model",
+            "optimizer",
+            "model_args",
+            "iter_num",
+            "best_val_loss",
+            "config",
+        }
         validate_checkpoint(checkpoint, required)
 
         # Resume training state
@@ -709,7 +749,9 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
     if rt.compile:
         logger.info("[train] Compiling model...")
         try:
-            model = cast(GPT, torch.compile(model))  # ensure type remains GPT for type checkers
+            model = cast(
+                GPT, torch.compile(model)
+            )  # ensure type remains GPT for type checkers
         except Exception as e:
             logger.warning(f"Failed to compile model: {e}")
 
@@ -800,15 +842,26 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
                         "greater_is_better": False,
                         "metric_raw": val_loss,
                         "smoothing_alpha": rt.best_smoothing_alpha,
-                        "decision_metric": (val_loss if kind == "best" else best_val_loss),
+                        "decision_metric": (
+                            val_loss if kind == "best" else best_val_loss
+                        ),
                         "ema_used_for_saved_model": ema_used,
-                        "eval_metric_on_ema": (ema_losses["val"] if (ema_losses is not None and "val" in ema_losses) else None),
+                        "eval_metric_on_ema": (
+                            ema_losses["val"]
+                            if (ema_losses is not None and "val" in ema_losses)
+                            else None
+                        ),
                         "device": device_type,
                         "dtype": str(ptdtype),
                         "dataset_meta": getattr(batches, "meta", None) or {},
                         "progress": {
-                            "train_loss_avg": train_loss_tracker / train_loss_count if train_loss_count > 0 else 0.0,
-                            "ema_val_loss_avg": ema_val_loss_tracker / ema_val_loss_count if ema_val_loss_count > 0 else 0.0,
+                            "train_loss_avg": train_loss_tracker / train_loss_count
+                            if train_loss_count > 0
+                            else 0.0,
+                            "ema_val_loss_avg": ema_val_loss_tracker
+                            / ema_val_loss_count
+                            if ema_val_loss_count > 0
+                            else 0.0,
                         },
                     }
 
@@ -885,11 +938,11 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
                         raw_model = cast(GPT, model.module)
                     else:
                         raw_model = cast(GPT, model)
-                    
+
                     # Ensure raw_model is a GPT instance
                     if not isinstance(raw_model, GPT):
                         raise TypeError(f"Expected GPT model, got {type(raw_model)}")
-                    
+
                     # Save original weights
                     original_weights = {
                         k: v.detach().clone() for k, v in raw_model.state_dict().items()
@@ -930,11 +983,11 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
                 raw_model = cast(GPT, model.module)
             else:
                 raw_model = cast(GPT, model)
-            
+
             # Ensure raw_model is a GPT instance
             if not isinstance(raw_model, GPT):
                 raise TypeError(f"Expected GPT model, got {type(raw_model)}")
-            
+
             for micro_step in range(exp.data.grad_accum_steps):
                 if ddp:
                     # Not implemented yet
@@ -945,7 +998,9 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
                 X, Y = batches.get_batch("train")
                 optimizer.zero_grad(set_to_none=True)
                 if loss is None:
-                    raise RuntimeError("Loss is None before backward; this indicates an unhandled branch in training loop.")
+                    raise RuntimeError(
+                        "Loss is None before backward; this indicates an unhandled branch in training loop."
+                    )
                 loss.backward()
                 optimizer.step()
 
@@ -967,11 +1022,15 @@ def train(exp: TrainerConfig) -> Tuple[int, float]:
             tokens_seen = 0
             if loss is not None:
                 logger.info(
-                    f"iter {iter_num}: loss {loss.item():.4f}, time {dt*1000:.2f}ms, tokens/sec {tokens_per_sec:.2f}"
+                    f"iter {iter_num}: loss {loss.item():.4f}, time {dt * 1000:.2f}ms, tokens/sec {tokens_per_sec:.2f}"
                 )
             if iter_num >= 100:
-                mfu = raw_model.estimate_mfu(exp.data.batch_size * exp.data.grad_accum_steps, dt)
-                running_mfu = mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
+                mfu = raw_model.estimate_mfu(
+                    exp.data.batch_size * exp.data.grad_accum_steps, dt
+                )
+                running_mfu = (
+                    mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
+                )
                 logger.info(f"MFU: {running_mfu * 100:.2f}%")
 
             # Update TensorBoard
