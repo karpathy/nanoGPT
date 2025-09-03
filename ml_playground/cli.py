@@ -49,7 +49,6 @@ def _complete_experiments(ctx: typer.Context, incomplete: str) -> list[str]:
         return []
 
     try:
-        # Only catch exceptions from directory listing operations
         return sorted(
             [
                 p.name
@@ -60,7 +59,7 @@ def _complete_experiments(ctx: typer.Context, incomplete: str) -> list[str]:
             ]
         )
     except Exception:
-        # Only catch filesystem-related errors during directory listing
+        # Autocomplete is a non-critical UX nicety; return empty on FS errors
         return []
 
 
@@ -1324,7 +1323,11 @@ def _run_analyze(experiment: str, host: str, port: int, open_browser: bool) -> N
 # Typer-based CLI
 app = typer.Typer(
     no_args_is_help=True,
-    help="ML Playground CLI: prepare data, train models, and sample outputs.",
+    help=(
+        "ML Playground CLI: prepare data, train models, sample outputs, and export models.\n"
+        "This CLI loads and validates TOML configs and injects the resulting configuration\n"
+        "objects into experiment code. Experiments must not read TOML directly."
+    ),
 )
 
 
@@ -1371,7 +1374,11 @@ def cmd_prepare(
         ),
     ],
 ) -> None:
-    """Run the experiment-specific prepare step (config loaded once)."""
+    """Run the experiment-specific prepare step.
+
+    The CLI reads and validates TOML, then injects the resulting PreparerConfig into the
+    experiment's preparer. Experiments do not read TOML directly.
+    """
 
     def prepare_impl():
         cfg_path, app, prep_cfg = ensure_loaded(ctx, experiment)
@@ -1391,7 +1398,11 @@ def cmd_train(
         ),
     ],
 ) -> None:
-    """Validate config and run training for the given experiment (single-load)."""
+    """Validate config and run training for the given experiment.
+
+    The CLI reads and validates TOML, then injects the resulting TrainerConfig into the
+    experiment's trainer. Experiments do not read TOML directly.
+    """
 
     def train_impl():
         cfg_path, app, _prep = ensure_loaded(ctx, experiment)
@@ -1428,18 +1439,11 @@ def cmd_sample(
         ),
     ],
 ) -> None:
-    """Validate config and run sampling for the given experiment (single-load)."""
-    # Special-case integration for 'speakger': delegate to its sampler entrypoint
-    if experiment == "speakger":
+    """Validate config and run sampling for the given experiment.
 
-        def speakger_impl():
-            exp_config = _extract_exp_config(ctx)
-            cfg_path = get_cfg_path(experiment, exp_config)
-            mod = importlib.import_module("ml_playground.experiments.speakger.sampler")
-            getattr(mod, "sample_from_toml")(cfg_path)
-
-        run_or_exit(speakger_impl, exception_exit_code=2)
-        return
+    The CLI reads and validates TOML, then injects the resulting SamplerConfig into the
+    experiment's sampler. Experiments do not read TOML directly.
+    """
 
     def sample_impl():
         cfg_path, app, _prep = ensure_loaded(ctx, experiment)
@@ -1481,12 +1485,94 @@ def cmd_convert(
         raise typer.Exit(code=2)
 
     def convert_impl():
+        # Load/resolve configs and compute runtime parameters
         cfg_path, _app, _prep = ensure_loaded(ctx, experiment)
         try:
+            # Read raw config dicts
+            _cfg_path, config_raw, defaults_raw = _resolve_and_load_configs(
+                experiment, cast(Path | None, getattr(ctx, "obj", {}).get("exp_config"))
+            )
+            exp_root = _cfg_path.parent
+
+            # Helper: deep get with fallback to defaults
+            def _get(path: str, default: Any | None = None) -> Any | None:
+                def dig(d: dict[str, Any] | None, p: str) -> Any | None:
+                    cur: Any = d
+                    for key in p.split("."):
+                        if not isinstance(cur, dict) or key not in cur:
+                            return None
+                        cur = cur[key]
+                    return cur
+
+                v = dig(config_raw, path)
+                if v is None:
+                    v = dig(defaults_raw, path)
+                return v if v is not None else default
+
+            # Build export config fields from [export.ollama.*]
+            enabled = bool(_get("export.ollama.enabled", False))
+            export_dir_val = _get("export.ollama.export_dir")
+            if not export_dir_val:
+                raise RuntimeError(
+                    "export: missing required field export.ollama.export_dir"
+                )
+            export_dir = Path(export_dir_val)
+            if not export_dir.is_absolute():
+                export_dir = (exp_root / export_dir).resolve()
+            model_name = str(_get("export.ollama.model_name", "model-name"))
+            quant = str(_get("export.ollama.quant", "Q4_K_M"))
+            template_val = _get("export.ollama.template")
+            template = (
+                (exp_root / Path(template_val)).resolve() if template_val else None
+            )
+            convert_bin = _get("export.ollama.convert_bin")
+            quant_bin = _get("export.ollama.quant_bin")
+
+            # Determine runtime out_dir and checkpoint filenames
+            train_rt = _get("train.runtime") or {}
+            sample_rt = _get("sample.runtime") or {}
+            out_dir_val = (
+                train_rt.get("out_dir") if isinstance(train_rt, dict) else None
+            ) or (sample_rt.get("out_dir") if isinstance(sample_rt, dict) else None)
+            if not out_dir_val:
+                raise RuntimeError(
+                    "export: could not resolve out_dir from config [train.runtime] or [sample.runtime]."
+                )
+            out_dir = Path(out_dir_val)
+            if not out_dir.is_absolute():
+                parts = out_dir.parts
+                if parts and parts[0] == "ml_playground":
+                    repo_root = exp_root.parent.parent.parent
+                    out_dir = (repo_root / out_dir).resolve()
+                else:
+                    out_dir = (exp_root / out_dir).resolve()
+            best_name = (
+                train_rt.get("ckpt_best_filename")
+                if isinstance(train_rt, dict)
+                else None
+            ) or "ckpt_best.pt"
+            last_name = (
+                train_rt.get("ckpt_last_filename")
+                if isinstance(train_rt, dict)
+                else None
+            ) or "ckpt_last.pt"
+
+            # Import converter and call injected path
             mod = importlib.import_module(
                 "ml_playground.experiments.bundestag_char.ollama_export"
             )
-            getattr(mod, "convert_from_toml")(cfg_path)
+            ExportCfgCls = getattr(mod, "OllamaExportConfig")
+            convert_fn = getattr(mod, "convert")
+            export_cfg = ExportCfgCls(
+                enabled=enabled,
+                export_dir=export_dir,
+                model_name=model_name,
+                quant=quant,
+                template=template,
+                convert_bin=convert_bin,
+                quant_bin=quant_bin,
+            )
+            convert_fn(export_cfg, out_dir, str(best_name), str(last_name))
         except SystemExit as e:
             msg = str(e).strip()
             if msg:
