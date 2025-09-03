@@ -23,6 +23,10 @@ Conventions
 
 All experiments now use the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../docs/framework_utilities.md).
 
+Important: Strict configuration injection
+- Experiments must not read TOML directly. The CLI reads TOML and injects fully validated config objects into experiment code.
+- Any legacy helpers like `prepare_from_toml`, `train_from_toml`, `sample_from_toml`, or `convert_from_toml` have been removed or fail fast.
+
 Common CLI patterns
 - Prepare: `uv run python -m ml_playground.cli prepare <experiment_name>`
 - Train: `uv run python -m ml_playground.cli train <experiment_name>`
@@ -178,9 +182,8 @@ from ml_playground.experiments import register
 def main() -> None:
     """Prepare the &lt;name&gt; dataset."""
     config_path = Path(__file__).parent / "config.toml"
-    # Call your integration or custom code here.
-    # e.g., integ.prepare_from_toml(config_path)
-    print(f"[&lt;name&gt;.prepare] Using config: {config_path}")
+    # Do not read TOML here; the CLI injects validated configs into integration code.
+    print(f"[&lt;name&gt;.prepare] Config lives at: {config_path} (used by CLI)")
 ```
 
 Example `config.toml` (adapt to your integration):
