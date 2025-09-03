@@ -106,7 +106,6 @@ def stream_filter_to_file(
 
 
 @pytest.mark.integration
-@pytest.mark.skip("tv: Feature work in progress")
 def test_speakger_real_files_small_head(tmp_path: Path) -> None:
     base = Path("/ml_playground/datasets")
     speeches = base / "Bundestag.csv"

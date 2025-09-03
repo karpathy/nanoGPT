@@ -10,6 +10,7 @@ import pytest
 
 # Import the module under test
 from ml_playground.experiments.speakger import sampler as gm
+from ml_playground.config import SamplerConfig, RuntimeConfig, SampleConfig
 
 
 class DummyTokenizer:
@@ -91,43 +92,20 @@ class DummyPeftModel:
         return DummyModel()
 
 
-def write_minimal_config(tmp_path: Path, out_dir: Path) -> Path:
-    cfg = f"""
-[prepare]
-dataset = "gemma_finetuning_mps"
-raw_dir = "{(tmp_path / "raw").as_posix()}"
-dataset_dir = "{(tmp_path / "dataset").as_posix()}"
-
-[train.hf_model]
-model_name = "dummy"
-
-[train.data]
-dataset_dir = "{(tmp_path / "dataset").as_posix()}"
-
-[train.runtime]
-out_dir = "{out_dir.as_posix()}"
-device = "cpu"
-dtype = "float32"
-seed = 1
-
-[sample.runtime]
-out_dir = "{out_dir.as_posix()}"
-device = "cpu"
-dtype = "float32"
-seed = 1
-compile = false
-
-[sample.sample]
-start = "Hello"
-max_new_tokens = 5
-temperature = 0.0
-top_k = 0
-top_p = 1.0
-num_samples = 1
-"""
-    path = tmp_path / "config.toml"
-    path.write_text(cfg, encoding="utf-8")
-    return path
+def _make_sampler_cfg(out_dir: Path) -> SamplerConfig:
+    rt = RuntimeConfig(
+        out_dir=out_dir, device="cpu", dtype="float32", seed=1, compile=False
+    )
+    sample = SampleConfig(
+        start="Hello",
+        max_new_tokens=5,
+        temperature=0.01,
+        top_k=0,
+        top_p=1.0,
+        num_samples=1,
+    )
+    # SamplerConfig enforces runtime or runtime_ref; provide runtime directly
+    return SamplerConfig(runtime=rt, sample=sample, extras={"hf_model_name": "dummy"})
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
@@ -154,11 +132,9 @@ def test_sampler_writes_json_stats_and_prints_analysis(
     monkeypatch.setattr(gm, "AutoModelForCausalLM", DummyBaseModel)
     monkeypatch.setattr(gm, "PeftModel", DummyPeftModel)
 
-    # Create config TOML
-    config_path = write_minimal_config(tmp_path, out_dir)
-
-    # Act
-    gm.sample_from_toml(config_path)
+    # Act via injected config
+    cfg = _make_sampler_cfg(out_dir)
+    gm.SpeakGerSampler().sample(cfg)
 
     # Assert: files created
     samples_dir = out_dir / "samples"
