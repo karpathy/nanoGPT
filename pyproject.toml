@@ -113,7 +113,7 @@ extend-exclude = [
 # When invoked without explicit targets, analyze only the project code.
 files = ["ml_playground"]
 # Also exclude common ignored/artifact directories if mypy is invoked without args.
-exclude = '(^|.*/)(out/|data/|datasets/|checkpoints/|runs/|wandb/|lightning_logs/|artifacts/|mlruns/|htmlcov/|\.idea/|\.vscode/|\.venv/|env/|\.pytest_cache/|\.mypy_cache/|\.ruff_cache/|\.hf_cache/|\.cache/|\.git/)'
+exclude = '(^|.*/)(out/|data/|datasets/|checkpoints/|runs/|wandb/|lightning_logs/|artifacts/|mlruns/|htmlcov/|ml_playground/experiments/|\.idea/|\.vscode/|\.venv/|env/|\.pytest_cache/|\.mypy_cache/|\.ruff_cache/|\.hf_cache/|\.cache/|\.git/)'
 
 
 [tool.pytest.ini_options]
