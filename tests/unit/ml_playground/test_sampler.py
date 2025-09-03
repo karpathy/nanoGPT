@@ -217,7 +217,10 @@ def test_codec_from_meta_meta_json_tiktoken_without_dep_raises(
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", _no_tiktoken)
-    with pytest.raises(DataError, match="tiktoken is required|No usable dataset meta"):
+    with pytest.raises(
+        DataError,
+        match="required to derive codec|tiktoken is required|No usable dataset meta",
+    ):
         sampler._codec_from_meta(meta_path)
 
 
@@ -235,7 +238,7 @@ def test_codec_from_meta_no_meta_and_no_tiktoken_fallback_raises(
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", _no_tiktoken)
-    with pytest.raises(DataError, match="No usable dataset meta"):
+    with pytest.raises(DataError, match="required to derive codec"):
         sampler._codec_from_meta(meta_path)
 
 

@@ -7,11 +7,14 @@ from pytest_mock import MockerFixture
 from ml_playground.cli import main
 
 
-def test_sample_routes_to_speakger_integration(
+def test_sample_routes_to_injected_sampler(
     monkeypatch: pytest.MonkeyPatch, mocker: MockerFixture
 ) -> None:
-    """CLI should dispatch 'sample speakger' to the SpeakGer integration sampler, not classic sampler."""
-    # Patch the integration's sampler entrypoint directly to avoid heavy deps
+    """CLI should dispatch 'sample speakger' to the unified injected-config sampler path (_run_sample)."""
+    # Patch the unified run path; we don't want to import heavy experiment deps
+    run_sample = mocker.patch("ml_playground.cli._run_sample")
+
+    # Also ensure legacy entrypoint is NOT consulted anymore
     called = {"count": 0}
 
     def _fake_sample_from_toml(path):  # type: ignore[no-untyped-def]
@@ -23,13 +26,9 @@ def test_sample_routes_to_speakger_integration(
         raising=False,
     )
 
-    # Ensure classic sampler path (internal) is not used on this path
-    classic_sample = mocker.patch("ml_playground.cli._run_sample")
-
     # Act: run CLI with experiment auto-resolved config (no SystemExit on success)
     main(["sample", "speakger"])
 
-    # Assert: integration sampler called once
-    assert called["count"] == 1
-    # Classic path must not be used
-    classic_sample.assert_not_called()
+    # Assert: unified path called once; legacy path not invoked
+    run_sample.assert_called_once()
+    assert called["count"] == 0
