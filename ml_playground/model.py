@@ -7,7 +7,9 @@ from torch.nn import functional as F
 
 
 class _AdamWFactory(Protocol):
-    def __call__(self, params, lr: float, betas, **kwargs) -> torch.optim.Optimizer: ...
+    def __call__(
+        self, _params, lr: float, betas, **kwargs
+    ) -> torch.optim.Optimizer: ...
 
 
 class LayerNorm(nn.Module):
@@ -49,12 +51,6 @@ class CausalSelfAttention(nn.Module):
             1, 2
         )  # (B, nh, T, hs)
 
-        # manual implementation of scaled dot product attention
-        #
-        # att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-        # att = torch.softmax(att, dim=-1)
-        # y = att @ v  # (B, nh, T, hs)
-        #
         # allow PyTorch to decide whether to use the optimized TransformerEngine or not
         y = F.scaled_dot_product_attention(
             q,
