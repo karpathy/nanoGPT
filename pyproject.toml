@@ -168,20 +168,6 @@ omit = [
     "**/.cache/*",
     # Temporarily exclude analysis (LIT integration) due to dependency issues
     "ml_playground/analysis/*",
-    # Exclude experiment-specific code from global coverage gates
-    "ml_playground/experiments/*",
-    # Exclude any stray tests mistakenly placed under source tree
-    "ml_playground/test_*.py",
-    # Exclude heavy runtime/CLI modules from strict coverage for now
-    "ml_playground/cli.py",
-    "ml_playground/trainer.py",
-    "ml_playground/sampler.py",
-    "ml_playground/prepare.py",
-    "ml_playground/tokenizer.py",
-    "ml_playground/model.py",
-    "ml_playground/error_handling.py",
-    "ml_playground/data.py",
-    "ml_playground/config.py",
 ]
 
 [tool.coverage.report]
@@ -195,19 +181,6 @@ show_missing = true
 omit = [
     # Temporarily exclude analysis (LIT integration) due to dependency issues
     "ml_playground/analysis/*",
-    # Match runtime omit for experiments and stray test files
-    "ml_playground/experiments/*",
-    "ml_playground/test_*.py",
-    # Match runtime omit for heavy runtime/CLI modules
-    "ml_playground/cli.py",
-    "ml_playground/trainer.py",
-    "ml_playground/sampler.py",
-    "ml_playground/prepare.py",
-    "ml_playground/tokenizer.py",
-    "ml_playground/model.py",
-    "ml_playground/error_handling.py",
-    "ml_playground/data.py",
-    "ml_playground/config.py",
 ]
 skip_covered = false
 # STRICT REQUIREMENT: 100% coverage, no compromises
