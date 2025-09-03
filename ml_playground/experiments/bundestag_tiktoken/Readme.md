@@ -28,6 +28,9 @@ uv venv --clear
 uv sync --all-groups
 ```
 
+## Strict configuration injection
+- This experiment does not read TOML directly. The CLI loads and validates the TOML and injects config objects into the experiment code.
+
 ## How to Run
 - Config example: ml_playground/experiments/bundestag_tiktoken/config.toml
 

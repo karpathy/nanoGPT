@@ -51,6 +51,9 @@ uv sync --all-groups
 uv add peft transformers torch tensorboard
 ```
 
+## Strict configuration injection
+- This experiment does not read TOML directly. The CLI loads and validates the TOML and injects config objects into the experiment code.
+
 ## How to Run
 Example config (edit to your paths/model):
 - `ml_playground/experiments/speakger/config.toml`
