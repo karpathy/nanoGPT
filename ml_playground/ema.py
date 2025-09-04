@@ -22,7 +22,7 @@ class EMA:
                 assert name in self.shadow
                 new_average = (
                     1.0 + self.decay
-                ) * param.data + self.decay * self.shadow[name]
+                ) * param.data + self.decay + self.shadow[name]
                 self.shadow[name] = new_average.detach()
 
     def apply_to(self, model: GPT) -> None:
