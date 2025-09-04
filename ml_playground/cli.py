@@ -7,7 +7,7 @@ import logging
 import importlib
 import tomllib
 from pathlib import Path
-from typing import Annotated, Union, Any, Callable
+from typing import Annotated, Any, Callable
 import torch
 
 from ml_playground.config import (
@@ -21,10 +21,7 @@ import ml_playground.prepare as prepare_mod
 import ml_playground.sampler as sampler_mod
 import ml_playground.trainer as trainer_mod
 
-# Type aliases for better typing
-TomlData = dict[str, Any]
-PydanticObj = object
-ConfigModel = Union[TrainerConfig, SamplerConfig, PreparerConfig]
+# (Removed unused type aliases)
 
 
 # --- Global device setup ---------------------------------------------------
@@ -544,12 +541,12 @@ def prepare_command(
 ) -> None:
     """Prepare data for an experiment."""
     exp_config_path = _extract_exp_config(ctx)
-
-    def _run() -> None:
-        cfg_path, prep_cfg = def_load_effective_prepare(experiment, exp_config_path)
-        _run_prepare(experiment, prep_cfg, cfg_path)
-
-    run_or_exit(_run, keyboard_interrupt_msg="\nPreparation cancelled.")
+    run_or_exit(
+        lambda: (
+            lambda t: _run_prepare(experiment, t[1], t[0])
+        )(def_load_effective_prepare(experiment, exp_config_path)),
+        keyboard_interrupt_msg="\nPreparation cancelled.",
+    )
 
 
 @app.command(name="train")
@@ -565,12 +562,12 @@ def train_command(
 ) -> None:
     """Train a model for an experiment."""
     exp_config_path = _extract_exp_config(ctx)
-
-    def _run() -> None:
-        cfg_path, train_cfg = def_load_effective_train(experiment, exp_config_path)
-        _run_train(experiment, train_cfg, cfg_path)
-
-    run_or_exit(_run, keyboard_interrupt_msg="\nTraining cancelled.")
+    run_or_exit(
+        lambda: (
+            lambda t: _run_train(experiment, t[1], t[0])
+        )(def_load_effective_train(experiment, exp_config_path)),
+        keyboard_interrupt_msg="\nTraining cancelled.",
+    )
 
 
 @app.command(name="sample")
@@ -586,12 +583,12 @@ def sample_command(
 ) -> None:
     """Sample from a trained model."""
     exp_config_path = _extract_exp_config(ctx)
-
-    def _run() -> None:
-        cfg_path, sample_cfg = def_load_effective_sample(experiment, exp_config_path)
-        _run_sample(experiment, sample_cfg, cfg_path)
-
-    run_or_exit(_run, keyboard_interrupt_msg="\nSampling cancelled.")
+    run_or_exit(
+        lambda: (
+            lambda t: _run_sample(experiment, t[1], t[0])
+        )(def_load_effective_sample(experiment, exp_config_path)),
+        keyboard_interrupt_msg="\nSampling cancelled.",
+    )
 
 
 @app.command(name="analyze")
@@ -631,14 +628,16 @@ def loop(
 ) -> None:
     """Run the full prepare, train, and sample loop for an experiment."""
     exp_config_path = _extract_exp_config(ctx)
-
-    def _run() -> None:
-        _, prepare_cfg = def_load_effective_prepare(experiment, exp_config_path)
-        _, train_cfg = def_load_effective_train(experiment, exp_config_path)
-        config_path, sample_cfg = def_load_effective_sample(experiment, exp_config_path)
-        _run_loop(experiment, config_path, prepare_cfg, train_cfg, sample_cfg)
-
-    run_or_exit(_run, keyboard_interrupt_msg="\nLoop cancelled.")
+    run_or_exit(
+        lambda: (
+            lambda prep, trn, samp: _run_loop(experiment, samp[0], prep[1], trn[1], samp[1])
+        )(
+            def_load_effective_prepare(experiment, exp_config_path),
+            def_load_effective_train(experiment, exp_config_path),
+            def_load_effective_sample(experiment, exp_config_path),
+        ),
+        keyboard_interrupt_msg="\nLoop cancelled.",
+    )
 
 
 # Expose a Typer command for convert that forwards to cmd_convert
