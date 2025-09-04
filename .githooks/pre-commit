@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Pre-commit hook to run the quality gate. Fails the commit on any gate failure.
+# Requires uv; if uv is unavailable, try running via system python.
+
+set -euo pipefail
+
+if command -v uv >/dev/null 2>&1; then
+  echo "[pre-commit] Running quality gate via uv..."
+  uv run bash tools/quality_gate.sh
+else
+  echo "[pre-commit] uv not found; attempting to run quality gate directly..."
+  bash tools/quality_gate.sh
+fi
