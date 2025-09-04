@@ -121,6 +121,7 @@ class SimpleBatches:
                     cur = (cur + T) % L
                 else:
                     if cur + T + 1 <= L:
+                        # straight slice without wrap
                         x_seq = base[cur : cur + T].astype(np.int64, copy=False)
                         y_seq = base[cur + 1 : cur + 1 + T].astype(np.int64, copy=False)
                         cur = cur + T

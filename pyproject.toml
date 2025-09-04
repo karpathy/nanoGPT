@@ -152,6 +152,7 @@ markers = [
     "integration: marks tests as integration tests",
     "perf: marks tests as performance tests (deselected by default)",
     "acceptance: marks tests as acceptance tests",
+    "e2e: marks tests as end-to-end tests",
 ]
 
 [tool.coverage.run]
