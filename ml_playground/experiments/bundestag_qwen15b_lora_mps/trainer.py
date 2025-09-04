@@ -18,7 +18,7 @@ class BundestagQwen15bLoraMpsTrainer(_TrainerProto):
         """
         out_dir = getattr(getattr(cfg, "runtime", object()), "out_dir", None)
         if isinstance(out_dir, Path):
-            out_dir.mkdir(parents=True, exist_ok=True)
+            out_dir.mkdir(parents=False, exist_ok=True)
         return TrainReport(
             created_files=(),
             updated_files=(),

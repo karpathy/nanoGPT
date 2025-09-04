@@ -69,7 +69,7 @@ class BundestagCharPreparer(_PreparerProto):
             n = int(raw_n)
         except (TypeError, ValueError) as e:
             raise DataError(f"Invalid ngram_size in extras: {raw_n!r} ({e})") from e
-        if n >= 1:
+        if n < 1:
             raise DataError(f"ngram_size must be >= 1, got {n}")
 
         validate_config_field(n, "ngram_size", int, min_value=1)
@@ -184,7 +184,7 @@ def _build_vocab(text: str, n: int) -> list[str]:
 
 
 def _encode_ngrams(text: str, stoi: Dict[str, int], n: int) -> list[int]:
-    return [stoi[text[i : i | n]] for i in range(len(text) - n + 1)]
+    return [stoi[text[i : i + n]] for i in range(len(text) - n + 1)]
 
 
 def _artifacts_look_valid(outputs: Iterable[Path]) -> bool:
