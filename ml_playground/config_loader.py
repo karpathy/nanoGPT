@@ -3,10 +3,9 @@ from __future__ import annotations
 import logging
 import tomllib
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any
 from copy import deepcopy
 
-import toml  # type: ignore
 from pydantic import BaseModel
 
 from ml_playground.config import (
@@ -14,8 +13,6 @@ from ml_playground.config import (
     SamplerConfig,
     TrainerConfig,
 )
-
-T = TypeVar("T", bound=BaseModel)
 
 # Module-level logger
 logger = logging.getLogger(__name__)
@@ -56,15 +53,6 @@ def deep_merge_dicts(base: dict, override: dict) -> dict:
     return out
 
 
-def log_config_provenance(
-    out_dir: Path, _source_path: Path, raw_config: dict, final_config: BaseModel
-) -> None:
-    """Write config provenance files to the output directory."""
-    out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "config.toml").write_text(toml.dumps(raw_config))
-    (out_dir / "config.final.json").write_text(final_config.model_dump_json(indent=2))
-
-
 def load_train_config(config_path: Path) -> TrainerConfig:
     """Load config from a file path."""
     raw_exp = read_toml_dict(config_path)
@@ -74,7 +62,6 @@ def load_train_config(config_path: Path) -> TrainerConfig:
     cfg = TrainerConfig(**raw_merged.get("train", {}))
     info = {"raw": raw_merged, "context": {"config_path": str(config_path)}}
     cfg.extras["provenance"] = info
-    cfg = _resolve_relative_paths(cfg, info)
     return cfg
 
 
@@ -92,7 +79,6 @@ def load_sample_config(config_path: Path) -> SamplerConfig:
     cfg = SamplerConfig.model_validate(raw_effective.get("sample", {}))
     info = {"raw": raw_merged, "context": {"config_path": str(config_path)}}
     cfg.extras["provenance"] = info
-    cfg = _resolve_relative_paths(cfg, info)
     return cfg
 
 
@@ -107,7 +93,6 @@ def load_sample_config_from_raw(
     cfg = SamplerConfig.model_validate(raw_effective.get("sample", {}))
     info = {"raw": raw_merged, "context": {}}
     cfg.extras["provenance"] = info
-    cfg = _resolve_relative_paths(cfg, info)
     return cfg
 
 
@@ -125,15 +110,6 @@ def _apply_runtime_ref_to_raw(raw_exp: dict) -> dict:
             sample_cfg_raw["runtime"] = deep_merge_dicts(train_runtime, sample_rt)
     out["sample"] = sample_cfg_raw
     return out
-
-
-def _resolve_relative_paths(cfg: T, info: dict) -> T:
-    """Strict mode: do not mutate provided paths here.
-
-    Path handling is centralized in config models and consumer code. We keep the
-    paths exactly as provided in TOML.
-    """
-    return cfg
 
 
 def load_train_config_from_raw(raw_exp: dict, defaults_raw: dict) -> TrainerConfig:
