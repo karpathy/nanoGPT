@@ -3,6 +3,7 @@
 This keeps suite selection easy via `-m acceptance` and allows
 separate reporting/CI handling for acceptance tests.
 """
+
 from __future__ import annotations
 
 import pytest

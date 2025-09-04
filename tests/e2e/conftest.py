@@ -1,5 +1,5 @@
-"""Auto-mark all tests in tests/e2e/ as end-to-end tests.
-"""
+"""Auto-mark all tests in tests/e2e/ as end-to-end tests."""
+
 from __future__ import annotations
 
 import pytest
