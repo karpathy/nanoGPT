@@ -140,7 +140,9 @@ def train(cfg: TrainerConfig) -> tuple[int, float]:
                     device=runtime_cfg.device, logger=logger
                 )
         except CheckpointError as e:
-            logger.warning(f"Could not load checkpoint ({runtime_cfg.checkpointing.read_policy}): {e}")
+            logger.warning(
+                f"Could not load checkpoint ({runtime_cfg.checkpointing.read_policy}): {e}"
+            )
 
     if checkpoint:
         logger.info("Resuming training from latest checkpoint")

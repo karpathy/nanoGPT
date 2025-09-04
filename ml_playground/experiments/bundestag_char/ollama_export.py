@@ -112,11 +112,14 @@ def convert(
     print(f"[export] export_dir ready: {export_cfg.export_dir}")
 
     # Resolve checkpoint from injected runtime using rotated-only policy
-    def _resolve_rotated_ckpt(dir_: Path, policy: Literal["latest", "best"]) -> Optional[Path]:
+    def _resolve_rotated_ckpt(
+        dir_: Path, policy: Literal["latest", "best"]
+    ) -> Optional[Path]:
         if policy == READ_POLICY_BEST:
             best_files = sorted(dir_.glob("ckpt_best_*.pt"))
             if not best_files:
                 return None
+
             # Choose lowest metric if present in name; otherwise pick newest
             def _best_key(p: Path) -> tuple[float, float]:
                 try:
@@ -142,7 +145,9 @@ def convert(
     ckpt_path: Optional[Path] = _resolve_rotated_ckpt(out_dir, read_policy)
     if ckpt_path is None:
         wanted = (
-            "ckpt_best_XXXXXXXX_*.pt" if read_policy == READ_POLICY_BEST else "ckpt_last_XXXXXXXX.pt"
+            "ckpt_best_XXXXXXXX_*.pt"
+            if read_policy == READ_POLICY_BEST
+            else "ckpt_last_XXXXXXXX.pt"
         )
         _fail(
             f"export: no rotated checkpoint found in {out_dir}. Expected pattern: {wanted}"

@@ -544,9 +544,11 @@ def prepare_command(
 ) -> None:
     """Prepare data for an experiment."""
     exp_config_path = _extract_exp_config(ctx)
+
     def _run() -> None:
         cfg_path, prep_cfg = def_load_effective_prepare(experiment, exp_config_path)
         _run_prepare(experiment, prep_cfg, cfg_path)
+
     run_or_exit(_run, keyboard_interrupt_msg="\nPreparation cancelled.")
 
 
@@ -563,9 +565,11 @@ def train_command(
 ) -> None:
     """Train a model for an experiment."""
     exp_config_path = _extract_exp_config(ctx)
+
     def _run() -> None:
         cfg_path, train_cfg = def_load_effective_train(experiment, exp_config_path)
         _run_train(experiment, train_cfg, cfg_path)
+
     run_or_exit(_run, keyboard_interrupt_msg="\nTraining cancelled.")
 
 
@@ -582,9 +586,11 @@ def sample_command(
 ) -> None:
     """Sample from a trained model."""
     exp_config_path = _extract_exp_config(ctx)
+
     def _run() -> None:
         cfg_path, sample_cfg = def_load_effective_sample(experiment, exp_config_path)
         _run_sample(experiment, sample_cfg, cfg_path)
+
     run_or_exit(_run, keyboard_interrupt_msg="\nSampling cancelled.")
 
 
@@ -775,7 +781,6 @@ def _load_sample_config(path: Path):
     if unknown:
         raise ValueError("Unknown key(s) in [sample]")
 
-    # Missing [sample.sample]
     if "sample" not in sample or not isinstance(sample.get("sample"), dict):
         # Some tests expect this exact phrasing
         raise ValueError("Missing required section [sample]")
@@ -875,9 +880,8 @@ def cmd_convert(ctx: typer.Context, experiment: str) -> None:
         )
         out_dir = Path(train_rt.get("out_dir", cfg_path.parent))
         read_policy = (
-            ((train_rt.get("checkpointing") or {}).get("read_policy"))
-            or READ_POLICY_LATEST
-        )
+            (train_rt.get("checkpointing") or {}).get("read_policy")
+        ) or READ_POLICY_LATEST
         conv(export_cfg, out_dir, read_policy)
     except SystemExit as e:
         print(e.code)

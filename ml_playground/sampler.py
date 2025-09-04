@@ -7,9 +7,8 @@ device, dtype, and autocast contexts locally without exposing legacy shims.
 from __future__ import annotations
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Callable, Tuple, Protocol, Optional
+from typing import Protocol
 import logging
-import pickle
 import torch
 from torch import autocast
 
@@ -22,12 +21,6 @@ from ml_playground.config import (
 from ml_playground.error_handling import DataError, setup_logging
 from ml_playground.model import GPT
 from ml_playground.prepare import setup_tokenizer
-from ml_playground.tokenizer import (
-    CharTokenizer,
-    WordTokenizer,
-    TiktokenTokenizer,
-    Tokenizer,
-)
 
 
 """
@@ -35,8 +28,6 @@ Centralized sampling utilities for ml_playground experiments.
 
 This module provides standardized utilities for model sampling including:
 - Checkpoint loading with proper error handling
-- Codec management for different tokenizer types
-- Standardized encode/decode operations
 - Error handling with centralized exception types
 
 All experiments should use these utilities to ensure consistency and proper error handling.
@@ -145,151 +136,5 @@ def sample(cfg: SamplerConfig) -> None:
                 logger.info("---------------")
 
 
-def create_codec_from_tokenizer_type(
-    tokenizer_type: str, **kwargs
-) -> Tuple[Callable[[str], list[int]], Callable[[list[int]], str]]:
-    """Create encode/decode callables based on tokenizer type.
-
-    Args:
-        tokenizer_type: Type of tokenizer ('char', 'word', 'tiktoken')
-        **kwargs: Additional arguments for tokenizer initialization
-
-    Returns:
-        Tuple of (encode_func, decode_func)
-
-    Raises:
-        DataError: If tokenizer type is unsupported or dependencies are missing
-    """
-    try:
-        if tokenizer_type == "char":
-            # For char tokenizer, we need vocab
-            vocab = kwargs.get("vocab")
-            if vocab is None:
-                raise DataError("Char tokenizer requires 'vocab' parameter")
-            char_tokenizer: Tokenizer = CharTokenizer(vocab=vocab)
-            return (char_tokenizer.encode, char_tokenizer.decode)
-        elif tokenizer_type == "word":
-            # For word tokenizer, we need to pass the vocab
-            vocab = kwargs.get("vocab")
-            if vocab is None:
-                raise DataError("Word tokenizer requires 'vocab' parameter")
-            word_tokenizer: Tokenizer = WordTokenizer(vocab=vocab)
-            return (word_tokenizer.encode, word_tokenizer.decode)
-        elif tokenizer_type == "tiktoken":
-            # For tiktoken tokenizer, we can use encoding_name
-            encoding_name = kwargs.get("encoding_name", "gpt2")
-            tiktoken_tokenizer: Tokenizer = TiktokenTokenizer(
-                encoding_name=encoding_name
-            )
-            return (tiktoken_tokenizer.encode, tiktoken_tokenizer.decode)
-        else:
-            raise DataError(f"Unsupported tokenizer type: {tokenizer_type}")
-    except ImportError as e:
-        raise DataError(
-            f"Required dependency for {tokenizer_type} tokenizer is not installed: {e}"
-        ) from e
-    except Exception as e:
-        raise DataError(f"Failed to create {tokenizer_type} tokenizer: {e}") from e
-
-
-def validate_and_create_codec(
-    meta_path: Path | None, tokenizer_type: str = "auto", **kwargs
-) -> Tuple[Callable[[str], list[int]], Callable[[list[int]], str]]:
-    """Validate and create encode/decode callables with strict behavior.
-
-    Strict policy:
-    - tokenizer_type == 'auto' requires a valid meta.pkl path; no fallbacks.
-    - explicit tokenizer types must provide required kwargs; no defaults inferred.
-    """
-    if tokenizer_type == "auto":
-        return _codec_from_meta(meta_path)
-
-    return create_codec_from_tokenizer_type(tokenizer_type, **kwargs)
-
-
-class CodecManager:
-    """A utility class for managing encode/decode operations with multiple tokenizer types."""
-
-    def __init__(self, meta_path: Path | None = None):
-        self.meta_path = meta_path
-        self._encode_func: Optional[Callable[[str], list[int]]] = None
-        self._decode_func: Optional[Callable[[list[int]], str]] = None
-        self._tokenizer_type: Optional[str] = None
-
-    def initialize_codec(self, tokenizer_type: str = "auto", **kwargs) -> None:
-        """Initialize the codec with the specified tokenizer type."""
-        self._encode_func, self._decode_func = validate_and_create_codec(
-            self.meta_path, tokenizer_type, **kwargs
-        )
-        self._tokenizer_type = tokenizer_type
-
-    def encode(self, text: str) -> list[int]:
-        """Encode text to tokens."""
-        if self._encode_func is None:
-            raise DataError("Codec not initialized. Call initialize_codec() first.")
-        return self._encode_func(text)
-
-    def decode(self, tokens: list[int]) -> str:
-        """Decode tokens to text."""
-        if self._decode_func is None:
-            raise DataError("Codec not initialized. Call initialize_codec() first.")
-        return self._decode_func(tokens)
-
-    @property
-    def tokenizer_type(self) -> Optional[str]:
-        """Get the current tokenizer type."""
-        return self._tokenizer_type
-
-
-def _codec_from_meta(
-    meta_path: Path | None,
-) -> Tuple[Callable[[str], list[int]], Callable[[list[int]], str]]:
-    """Derive encode/decode callables for sampling using tokenizer meta.
-
-    Strict policy: meta_path must be provided and exist. No fallbacks to other tokenizers.
-    """
-    if meta_path is None or not meta_path.exists():
-        raise DataError("meta.pkl is required to derive codec (no fallback allowed)")
-
-    # Load meta from pickle file
-    try:
-        with meta_path.open("rb") as f:
-            meta = pickle.load(f)
-    except Exception as e:
-        raise DataError(f"Failed to load meta.pkl at {meta_path}: {e}") from e
-
-    # Validate required fields
-    mv = meta.get("meta_version")
-    if mv is None:
-        raise DataError("Missing required 'meta_version' in meta.pkl")
-
-    kind = meta.get("kind")
-    dtype = meta.get("dtype")
-    if dtype not in {"uint16", "uint32"}:
-        raise DataError(f"Unsupported or missing meta 'dtype': {dtype!r}")
-
-    # Create appropriate tokenizer based on meta
-    if kind == "char":
-        stoi = meta["stoi"]
-        char_codec: Tokenizer = CharTokenizer(vocab=stoi)
-        return (char_codec.encode, char_codec.decode)
-    elif kind == "tiktoken":
-        enc_name = meta["encoding"]
-        try:
-            tiktoken_tokenizer_meta: Tokenizer = TiktokenTokenizer(
-                encoding_name=enc_name
-            )
-            return (tiktoken_tokenizer_meta.encode, tiktoken_tokenizer_meta.decode)
-        except ImportError as e:
-            raise DataError(
-                "tiktoken is required to decode with the provided meta (kind='tiktoken'). "
-                "Install it or provide a char-level meta.pkl."
-            ) from e
-    elif kind == "word":
-        stoi_meta = meta.get("stoi")
-        if not isinstance(stoi_meta, dict):
-            raise DataError("Invalid meta for word: expected stoi dict")
-        word_tokenizer: Tokenizer = WordTokenizer(vocab=stoi_meta)
-        return (word_tokenizer.encode, word_tokenizer.decode)
-    else:
-        raise DataError(f"Unsupported meta 'kind': {kind!r}")
+# Codec helpers and legacy codec manager have been removed. Tokenization is
+# handled via setup_tokenizer() using the centralized tokenizer protocol.
