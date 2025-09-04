@@ -45,7 +45,9 @@ def run_server_bundestag_char(
 
     # Try to read input.txt if it exists, but keep it optional and tiny.
     try:
-        exp_dir = Path(__file__).resolve().parents[2] / "experiments" / "bundestag_char"
+        # Resolve to the ml_playground/experiments/bundestag_char directory
+        base_dir = Path(__file__).resolve().parents[1]
+        exp_dir = base_dir / "experiments" / "bundestag_char"
         input = exp_dir / "datasets" / "input.txt"
         if input.exists():
             text = input.read_text(encoding="utf-8", errors="ignore")
