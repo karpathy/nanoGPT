@@ -4,8 +4,9 @@ This module provides a single, one-way interface to prepare data, train, and sam
 It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 
 Policy
-- UV is mandatory for all workflows (venv, dependency sync, running tools). Do not use pip, requirements.txt, or uvx.
-- Never set PYTHONPATH. Running inside the project, venv ensures ml_playground is importable.
+- UV is mandatory for all workflows (venv, dependency sync, running tools). Do not use pip or requirements.txt.
+- Prefer Makefile targets for common workflows. Under the hood, they call `uv run ...` consistently.
+- Never set PYTHONPATH. Running inside the project venv ensures `ml_playground` is importable.
 - Quality tooling is mandatory before commit (ruff, mypy, pyright), and tests must pass.
 - Linear history for own work: rebase your branches and avoid merge commits; fast-forward only. See DEVELOPMENT.md → “Git Workflow: Linear history”.
 
@@ -14,18 +15,21 @@ Prerequisites
 
 Setup (required)
 - Create a venv and sync all dependency groups (runtime + dev):
-  uv run setup
+  make setup
+
+- Alternatively (manual):
+  uv venv --clear && uv sync --all-groups
 
 Quality gates (required before commit/PR)
 - Lint/format/imports:
-  uv run format
+  make format
 - Static analysis and typing:
-  uv run pyright
-  uv run mypy ml_playground
+  make pyright
+  make mypy
 - Full quality gate:
-  uv run quality
+  make quality
 - Tests:
-  uv run test
+  make test
 
 Datasets
 - Shakespeare (GPT-2 BPE; prepared via internal ml_playground.experiments.shakespeare)
@@ -34,25 +38,25 @@ Datasets
 
 Prepare
 - Shakespeare:
-  uv run prepare-shakespeare
+  uv run python -m ml_playground.cli prepare shakespeare
 
 - Bundestag (char-level):
-  uv run prepare-bundestag-char
+  uv run python -m ml_playground.cli prepare bundestag_char
 
 - Bundestag (tiktoken BPE):
-  uv run prepare-bundestag-tiktoken
+  uv run python -m ml_playground.cli prepare bundestag_tiktoken
 
 Train
 - Shakespeare:
-  uv run train-shakespeare-cpu
+  uv run python -m ml_playground.cli train shakespeare --exp-config ml_playground/configs/shakespeare_cpu.toml
 
 - Bundestag (char-level):
-  uv run train-bundestag-char-cpu
+  uv run python -m ml_playground.cli train bundestag_char --exp-config ml_playground/configs/bundestag_char_cpu.toml
 
 Sample
 - Using the experiment's config.toml (sampler tries ckpt_best.pt, then ckpt_last.pt, then legacy ckpt.pt in out_dir):
-  uv run sample-shakespeare-cpu
-  uv run sample-bundestag-char-cpu
+  uv run python -m ml_playground.cli sample shakespeare --exp-config ml_playground/configs/shakespeare_cpu.toml
+  uv run python -m ml_playground.cli sample bundestag_char --exp-config ml_playground/configs/bundestag_char_cpu.toml
 
 Notes
 - Dataset preparers are registered from ml_playground/experiments and the CLI discovers them automatically. The ml_playground/datasets package is optional and may be absent.
@@ -64,10 +68,10 @@ Notes
 
 Loop
 - End-to-end in one command (bundestag_char):
-  uv run loop-bundestag-char-cpu
+  uv run python -m ml_playground.cli loop bundestag_char --exp-config ml_playground/configs/bundestag_char_cpu.toml
 
 - Shakespeare end-to-end:
-  uv run loop-shakespeare-cpu
+  uv run python -m ml_playground.cli loop shakespeare --exp-config ml_playground/configs/shakespeare_cpu.toml
 
 
 TensorBoard (auto-enabled)
@@ -104,10 +108,10 @@ Testing
   - `e2e`
   - `acceptance`
 - Run examples
-  - All tests: `uv run test`
-  - Unit only: `uv run unit`
-  - Integration only: `uv run integration`
-  - E2E only: `uv run e2e`
+  - All tests: `make test` (or `uv run pytest -n auto -W error --strict-markers --strict-config -v`)
+  - Unit only: `make unit` (or `uv run pytest tests/unit -n auto -W error --strict-markers --strict-config -v`)
+  - Integration only: `uv run pytest -m integration -n auto -W error --strict-markers --strict-config -v`
+  - E2E only: `uv run pytest -m e2e -n auto -W error --strict-markers --strict-config -v`
   - Acceptance only: `uv run pytest -m acceptance -q`
   
 See `tests/unit/README.md`, `tests/integration/README.md`, and `tests/e2e/README.md` for scope and patterns.
