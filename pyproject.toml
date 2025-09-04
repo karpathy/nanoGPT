@@ -254,12 +254,12 @@ precision = 2
 [tool.coverage.html]
 directory = "htmlcov"
 
-[tool.cosmic-ray]
+[cosmic-ray]
 module-path = "ml_playground"
 timeout = 120.0
 excluded-modules = []
 test-command = "pytest -q -n auto tests"
 no-copy-source-files = false
 
-[tool.cosmic-ray.distributor]
+[cosmic-ray.distributor]
 name = "local"
