@@ -24,8 +24,7 @@ This experiment uses the centralized framework utilities for error handling, pro
 
 ## Environment Setup (UV-only)
 ```bash
-uv venv --clear
-uv sync --all-groups
+uv run setup
 ```
 
 ## How to Run
@@ -33,12 +32,12 @@ uv sync --all-groups
 
 Prepare:
 ```bash
-uv run python -m ml_playground.cli prepare shakespeare
+uv run prepare-shakespeare
 ```
 
 Train:
 ```bash
-uv run python -m ml_playground.cli train shakespeare
+uv run train-shakespeare-cpu
 ```
 
 Sample:

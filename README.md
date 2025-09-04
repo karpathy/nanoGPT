@@ -14,17 +14,18 @@ Prerequisites
 
 Setup (required)
 - Create a venv and sync all dependency groups (runtime + dev):
-  uv venv
-  uv sync --all-groups
+  uv run setup
 
 Quality gates (required before commit/PR)
 - Lint/format/imports:
-  uv run ruff check --fix . && uv run ruff format .
+  uv run format
 - Static analysis and typing:
   uv run pyright
   uv run mypy ml_playground
+- Full quality gate:
+  uv run quality
 - Tests:
-  uv run pytest -n auto -W error --strict-markers --strict-config -v
+  uv run test
 
 Datasets
 - Shakespeare (GPT-2 BPE; prepared via internal ml_playground.experiments.shakespeare)
@@ -33,25 +34,25 @@ Datasets
 
 Prepare
 - Shakespeare:
-  uv run python -m ml_playground.cli prepare shakespeare
+  uv run prepare-shakespeare
 
 - Bundestag (char-level):
-  uv run python -m ml_playground.cli prepare bundestag_char
+  uv run prepare-bundestag-char
 
 - Bundestag (tiktoken BPE):
-  uv run python -m ml_playground.cli prepare bundestag_tiktoken
+  uv run prepare-bundestag-tiktoken
 
 Train
 - Shakespeare:
-  uv run python -m ml_playground.cli train shakespeare
+  uv run train-shakespeare-cpu
 
 - Bundestag (char-level):
-  uv run python -m ml_playground.cli train bundestag_char
+  uv run train-bundestag-char-cpu
 
 Sample
 - Using the experiment's config.toml (sampler tries ckpt_best.pt, then ckpt_last.pt, then legacy ckpt.pt in out_dir):
-  uv run python -m ml_playground.cli sample shakespeare
-  uv run python -m ml_playground.cli sample bundestag_char
+  uv run sample-shakespeare-cpu
+  uv run sample-bundestag-char-cpu
 
 Notes
 - Dataset preparers are registered from ml_playground/experiments and the CLI discovers them automatically. The ml_playground/datasets package is optional and may be absent.
@@ -63,10 +64,10 @@ Notes
 
 Loop
 - End-to-end in one command (bundestag_char):
-  uv run python -m ml_playground.cli loop bundestag_char
+  uv run loop-bundestag-char-cpu
 
 - Shakespeare end-to-end:
-  uv run python -m ml_playground.cli loop shakespeare
+  uv run loop-shakespeare-cpu
 
 
 TensorBoard (auto-enabled)
@@ -103,11 +104,10 @@ Testing
   - `e2e`
   - `acceptance`
 - Run examples
-  - All tests: `uv run pytest -q`
-  - Unit only: `uv run pytest -q tests/unit`
-  - Integration only: `uv run pytest -m integration -q`
-  - E2E only: `uv run pytest -m e2e -q`
+  - All tests: `uv run test`
+  - Unit only: `uv run unit`
+  - Integration only: `uv run integration`
+  - E2E only: `uv run e2e`
   - Acceptance only: `uv run pytest -m acceptance -q`
-  - Exclude e2e/acceptance: `uv run pytest -m 'not (e2e or acceptance)' -q`
   
 See `tests/unit/README.md`, `tests/integration/README.md`, and `tests/e2e/README.md` for scope and patterns.

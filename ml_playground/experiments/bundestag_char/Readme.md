@@ -24,8 +24,7 @@ This experiment uses the centralized framework utilities for error handling, pro
 
 ## Environment Setup (UV-only)
 ```bash
-uv venv --clear
-uv sync --all-groups
+uv run setup
 ```
 
 ## Strict configuration injection
@@ -36,22 +35,22 @@ uv sync --all-groups
 
 Prepare:
 ```bash
-uv run python -m ml_playground.cli prepare bundestag_char
+uv run prepare-bundestag-char
 ```
 
 Train:
 ```bash
-uv run python -m ml_playground.cli train bundestag_char
+uv run train-bundestag-char-cpu
 ```
 
 Sample:
 ```bash
-uv run python -m ml_playground.cli sample bundestag_char
+uv run sample-bundestag-char-cpu
 ```
 
 End-to-end loop:
 ```bash
-uv run python -m ml_playground.cli loop bundestag_char
+uv run loop-bundestag-char-cpu
 ```
 
 ## Configuration Highlights
@@ -106,8 +105,7 @@ This experiment uses the centralized framework utilities for error handling, pro
 
 ## Environment Setup (UV-only)
 ```bash
-uv venv --clear
-uv sync --all-groups
+uv run setup
 ```
 
 ## How to Run
@@ -115,33 +113,33 @@ uv sync --all-groups
 
 Prepare:
 ```bash
-uv run python -m ml_playground.cli prepare bundestag_char
+uv run prepare-bundestag-char
 ```
 
 Train:
 ```bash
-uv run python -m ml_playground.cli train bundestag_char
+uv run train-bundestag-char-cpu
 ```
 
 Sample:
 ```bash
-uv run python -m ml_playground.cli sample bundestag_char
+uv run sample-bundestag-char-cpu
 ```
 
 End-to-end loop:
 ```bash
-uv run python -m ml_playground.cli loop bundestag_char
+uv run loop-bundestag-char-cpu
 ```
 
 ## Analyze with LIT (PoC)
 Start an interactive UI (Learning Interpretability Tool) to explore a tiny sample of the dataset and a trivial echo model. This is optional and intended for quick inspection.
 
 ```bash
-uv run python -m ml_playground.cli analyze bundestag_char --port 5432
+uv run analyze-bundestag-char
 ```
 
 Notes:
-- Requires optional extra 'lit'; install via `uv sync --extra lit`.
+- Requires optional extra 'lit'; install via `uv run setup-lit`.
 - The server prefers reading datasets/page1.txt if present; otherwise uses embedded samples.
 - CPU-only; no CUDA assumptions.
 

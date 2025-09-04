@@ -28,10 +28,10 @@ Important: Strict configuration injection
 - Any legacy helpers like `prepare_from_toml`, `train_from_toml`, `sample_from_toml`, or `convert_from_toml` have been removed or fail fast.
 
 Common CLI patterns
-- Prepare: `uv run python -m ml_playground.cli prepare <experiment_name>`
-- Train: `uv run python -m ml_playground.cli train <experiment_name>`
-- Sample: `uv run python -m ml_playground.cli sample <experiment_name>`
-- End‑to‑end: `uv run python -m ml_playground.cli loop <experiment_name>`
+- Prepare: prefer uv scripts like `uv run prepare-shakespeare` (or generally: `uv run <your-experiment-script>`).
+- Train: `uv run python -m ml_playground.cli train <experiment_name>` (or a uv script, e.g., `uv run train-shakespeare-cpu`)
+- Sample: `uv run python -m ml_playground.cli sample <experiment_name>` (or a uv script, e.g., `uv run sample-shakespeare-cpu`)
+- End‑to‑end: `uv run python -m ml_playground.cli loop <experiment_name>` (or a uv script, e.g., `uv run loop-bundestag-char-cpu`)
 
 Implemented experiments (current)
 - shakespeare — Tiny Shakespeare with GPT‑2 BPE (tiktoken)

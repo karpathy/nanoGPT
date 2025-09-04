@@ -94,7 +94,7 @@ The `ml_playground/cli.py` module provides the command-line interface for the fr
 ### Usage
 
 ```bash
-uv run python -m ml_playground.cli prepare shakespeare
+uv run prepare-shakespeare
 uv run python -m ml_playground.cli train shakespeare --exp-config ml_playground/configs/shakespeare_cpu.toml
 ```
 
