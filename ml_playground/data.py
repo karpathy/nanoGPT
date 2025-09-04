@@ -77,6 +77,7 @@ class SimpleBatches:
         # Determine dtype from meta.pkl if available; default to uint16
         dtype: np.dtype[Any] = np.dtype(np.uint16)
         try:
+            # Only attempt to read meta if a path was provided
             if data.meta_path is not None:
                 meta_path = data.meta_path
                 if meta_path.exists():
