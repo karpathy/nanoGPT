@@ -261,7 +261,7 @@ def test_get_lr_warmup_decay_edges() -> None:
 
 
 def test_extract_model_args_prefers_model_args_key() -> None:
-    checkpoint_data = {
+    checkpoint_data: Dict[str, Any] = {
         "model_args": {"n_layer": 1},
         "config": {"model_args": {"n_layer": 2}},
         "optimizer": {},
@@ -274,7 +274,7 @@ def test_extract_model_args_prefers_model_args_key() -> None:
 
 
 def test_extract_model_args_falls_back_to_config_model_args() -> None:
-    checkpoint_data = {
+    checkpoint_data: Dict[str, Any] = {
         "config": {"model_args": {"n_layer": 2}},
         "optimizer": {},
         "iter_num": 0,
@@ -290,7 +290,7 @@ def test_extract_model_args_falls_back_to_config_model_args() -> None:
 
 
 def test_extract_model_args_missing_raises_strict() -> None:
-    checkpoint_data = {
+    checkpoint_data: Dict[str, Any] = {
         "config": {},
         "optimizer": {},
         "iter_num": 0,

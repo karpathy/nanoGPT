@@ -66,7 +66,7 @@ def _extract_header(lines: list[str]) -> Header:
         if s.startswith("Sprecher:") and speaker is None:
             speaker = s.split("Sprecher:", 1)[1].strip() or None
         elif s.startswith("Thema:") and topic is None:
-            topic = s.split("Thema:", 2)[1].strip() or None
+            topic = s.split("Thema:", 1)[1].strip() or None
         elif s.startswith("Jahr:"):
             year_count += 1
             if year is None:
