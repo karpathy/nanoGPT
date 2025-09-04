@@ -6,11 +6,20 @@ from typing import Any, Tuple
 
 import pytest
 import torch
+import numpy as np
 
-from ml_playground.config import RuntimeConfig, SampleConfig, SamplerConfig
+from ml_playground.config import (
+    RuntimeConfig,
+    SampleConfig,
+    SamplerConfig,
+    DataConfig,
+    READ_POLICY_BEST,
+)
 import ml_playground.sampler as sampler
-from ml_playground.error_handling import CheckpointError
+from ml_playground.error_handling import DataError, CheckpointError
 from ml_playground.checkpoint import CheckpointManager
+from ml_playground.data import SimpleBatches
+from ml_playground.model import GPTConfig, GPT
 
 
 # ---------------------------
@@ -31,6 +40,89 @@ def _write_char_meta(meta_path: Path) -> None:
         "itos": itos,
     }
     meta_path.write_bytes(pickle.dumps(meta))
+
+
+# ---------------------------
+# SimpleBatches tests (consolidated from test_batches_sampler.py)
+# ---------------------------
+
+
+def _write_bin(path: Path, arr: np.ndarray) -> None:
+    path.write_bytes(arr.tobytes())
+
+
+def _prepare_dataset(tmp_path: Path, L: int, dtype: str = "uint16") -> Path:
+    ddir = tmp_path / "ds"
+    ddir.mkdir(parents=True, exist_ok=True)
+    arr = (np.arange(L) % np.iinfo(np.uint16).max).astype(dtype)
+    _write_bin(ddir / "train.bin", arr)
+    _write_bin(ddir / "val.bin", arr)
+    return ddir
+
+
+def _make_batches(
+    ddir: Path,
+    *,
+    batch_size: int,
+    block_size: int,
+    sampler: str,
+) -> SimpleBatches:
+    cfg = DataConfig(
+        dataset_dir=ddir,
+        batch_size=batch_size,
+        block_size=block_size,
+        grad_accum_steps=1,
+        sampler=sampler,  # type: ignore[arg-type]
+    )
+    return SimpleBatches(cfg, device="cpu")
+
+
+def test_random_mode_basic(tmp_path: Path) -> None:
+    ddir = _prepare_dataset(tmp_path, L=100)
+    batches = _make_batches(ddir, batch_size=4, block_size=8, sampler="random")
+    x, y = batches.get_batch("train")
+    assert x.shape == (4, 8)
+    assert y.shape == (4, 8)
+    # For contiguous windows, y is x shifted by 1 with one next token appended
+    assert torch.equal(y[:, :-1], x[:, 1:])
+
+
+def test_sequential_progression_basic(tmp_path: Path) -> None:
+    L, T, B = 20, 5, 2
+    ddir = _prepare_dataset(tmp_path, L=L)
+    batches = _make_batches(ddir, batch_size=B, block_size=T, sampler="sequential")
+    # First call
+    x1, y1 = batches.get_batch("train")
+    # Expected sequences: starts at 0 and 5
+    exp_x0 = torch.tensor([[0, 1, 2, 3, 4], [5, 6, 7, 8, 9]], dtype=torch.long)
+    exp_y0 = torch.tensor([[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]], dtype=torch.long)
+    assert torch.equal(x1.cpu(), exp_x0)
+    assert torch.equal(y1.cpu(), exp_y0)
+
+    # Second call: cursor logic advances; first sample at 10..14, second wraps
+    x2, y2 = batches.get_batch("train")
+    exp_x1 = torch.tensor([[10, 11, 12, 13, 14], [16, 17, 18, 19, 0]], dtype=torch.long)
+    exp_y1 = torch.tensor([[11, 12, 13, 14, 15], [17, 18, 19, 0, 1]], dtype=torch.long)
+    assert torch.equal(x2.cpu(), exp_x1)
+    assert torch.equal(y2.cpu(), exp_y1)
+
+
+def test_sequential_wrap_small_L_leq_T(tmp_path: Path) -> None:
+    # L <= T path must wrap within a single sequence
+    L, T, B = 4, 6, 1
+    ddir = _prepare_dataset(tmp_path, L=L)
+    batches = _make_batches(ddir, batch_size=B, block_size=T, sampler="sequential")
+    x1, y1 = batches.get_batch("train")
+    exp_x1 = torch.tensor([[0, 1, 2, 3, 0, 1]], dtype=torch.long)
+    exp_y1 = torch.tensor([[1, 2, 3, 0, 1, 2]], dtype=torch.long)
+    assert torch.equal(x1.cpu(), exp_x1)
+    assert torch.equal(y1.cpu(), exp_y1)
+    # Next call starts from cursor advanced by T mod L
+    x2, y2 = batches.get_batch("train")
+    exp_x2 = torch.tensor([[2, 3, 0, 1, 2, 3]], dtype=torch.long)
+    exp_y2 = torch.tensor([[3, 0, 1, 2, 3, 0]], dtype=torch.long)
+    assert torch.equal(x2.cpu(), exp_x2)
+    assert torch.equal(y2.cpu(), exp_y2)
 
 
 class _DummyModel:
@@ -167,7 +259,7 @@ def test_load_checkpoint_load_state_error_is_wrapped(
         def __init__(self, config: Any) -> None:  # match GPT(conf)
             super().__init__()
 
-        def load_state_dict(self, state_dict: dict) -> None:
+        def load_state_dict(self, sd: dict) -> None:
             # Force an error to be raised
             raise RuntimeError("Forced load error for testing")
 
@@ -298,3 +390,113 @@ def test_sample_with_compile_flag_uses_compiled_model(
     # Call sample function directly without passing model
     sampler.sample(exp)
     assert called["compiled"] == 1
+
+
+# ---------------------------
+# Strict-mode enforcement tests (merged from test_strict_mode_enforcement.py)
+# ---------------------------
+
+
+def _make_minimal_model() -> GPT:
+    conf = GPTConfig(
+        n_layer=1,
+        n_head=1,
+        n_embd=32,
+        block_size=16,
+        bias=False,
+        vocab_size=256,
+        dropout=0.0,
+    )
+    return GPT(conf)
+
+
+def _rotated_best(out_dir: Path, model: GPT) -> Path:
+    p = out_dir / "ckpt_best_00000000_0.000000.pt"
+    torch.save(
+        {
+            "model": model.state_dict(),
+            "optimizer": {},
+            "model_args": {
+                "n_layer": 1,
+                "n_head": 1,
+                "n_embd": 32,
+                "block_size": 16,
+                "bias": False,
+                "vocab_size": 256,
+                "dropout": 0.0,
+            },
+            "iter_num": 0,
+            "best_val_loss": 0.0,
+            "config": {},
+        },
+        p,
+    )
+    return p
+
+
+def _sampler_cfg(out_dir: Path) -> SamplerConfig:
+    return SamplerConfig(
+        runtime=RuntimeConfig(
+            out_dir=out_dir,
+            max_iters=0,
+            eval_interval=1,
+            eval_iters=1,
+            log_interval=1,
+            eval_only=False,
+            checkpointing=RuntimeConfig.Checkpointing(
+                keep=RuntimeConfig.Checkpointing.Keep(last=1, best=1),
+                read_policy=READ_POLICY_BEST,
+            ),
+            seed=123,
+            device="cpu",
+            dtype="float32",
+            compile=False,
+        ),
+        sample=SampleConfig(
+            start="\n", num_samples=1, max_new_tokens=1, temperature=1.0, top_k=10
+        ),
+    )
+
+
+def test_setup_tokenizer_requires_tokenizer_type(tmp_path: Path) -> None:
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    # valid rotated checkpoint so we reach tokenizer stage
+    model = _make_minimal_model()
+    _rotated_best(out_dir, model)
+    # meta without tokenizer_type
+    meta = {
+        "meta_version": 1,
+        "kind": "char",
+        "dtype": "uint16",
+        "stoi": {chr(i): i for i in range(256)},
+        "itos": {i: chr(i) for i in range(256)},
+    }
+    with (out_dir / "meta.pkl").open("wb") as f:
+        pickle.dump(meta, f)
+
+    cfg = _sampler_cfg(out_dir)
+    with pytest.raises(DataError):
+        sampler.sample(cfg)
+
+
+def test_sampler_requires_rotated_checkpoints(tmp_path: Path) -> None:
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    # Provide strict meta so tokenizer would succeed, but omit rotated checkpoints
+    meta = {
+        "meta_version": 1,
+        "kind": "char",
+        "tokenizer_type": "char",
+        "dtype": "uint16",
+        "stoi": {chr(i): i for i in range(256)},
+        "itos": {i: chr(i) for i in range(256)},
+    }
+    with (out_dir / "meta.pkl").open("wb") as f:
+        pickle.dump(meta, f)
+    # Write only stable file (should be ignored) to prove strictness
+    torch.save({"model": {}}, out_dir / "ckpt_best.pt")
+
+    cfg = _sampler_cfg(out_dir)
+    with pytest.raises(CheckpointError):
+        sampler.sample(cfg)
