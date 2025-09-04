@@ -267,8 +267,10 @@ def train(cfg: TrainerConfig) -> tuple[int, float]:
                 running_mfu = (
                     mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
                 )
+            # Clamp MFU into [0, 100] for display and format as percentage
+            mfu_pct = max(0.0, min(float(running_mfu), 100.0))
             logger.info(
-                f"iter {iter_num}: loss {lossf:.4f}, time {dt * 1000:.2f}ms, mfu {running_mfu * 100:.2f}%"
+                f"iter {iter_num}: loss {lossf:.4f}, time {dt * 1000:.2f}ms, mfu {mfu_pct:.2f}%"
             )
         iter_num += 1
         local_iter_num += 1

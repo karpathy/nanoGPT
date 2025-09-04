@@ -174,6 +174,15 @@ class SamplerConfig(_FrozenStrictModel):
     extras: dict[str, Any] = Field(default_factory=dict)
     logger: Any | None = Field(default=None)
 
+    @model_validator(mode="before")
+    @classmethod
+    def _require_runtime_or_ref(cls, data: Any) -> Any:
+        # AppConfig-level strictness: require presence of either key in input
+        if isinstance(data, dict):
+            if "runtime" not in data and "runtime_ref" not in data:
+                raise ValueError("SamplerConfig requires either 'runtime' or 'runtime_ref'.")
+        return data
+
     @model_validator(mode="after")
     def _check_runtime_or_ref(self) -> "SamplerConfig":
         if self.runtime is None and self.runtime_ref is None:
