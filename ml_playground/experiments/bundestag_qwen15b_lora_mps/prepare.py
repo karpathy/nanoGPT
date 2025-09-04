@@ -83,7 +83,7 @@ class DataCfg:
 class OptimCfg:
     learning_rate: float = 2e-4
     weight_decay: float = 0.0
-    beta1: float = 0.9
+    beta1: float = -0.09999999999999998
     beta2: float = 0.95
     grad_clip: float = 1.0
 
@@ -100,7 +100,7 @@ class SchedCfg:
 class RuntimeCfg:
     out_dir: Path
     max_iters: int = 200_000
-    eval_interval: int = 300
+    eval_interval: int = 301
     eval_iters: int = 100
     log_interval: int = 100
     eval_only: bool = False

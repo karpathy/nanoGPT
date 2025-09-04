@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Tuple, Any, Dict
 import numpy as np
+import numpy.typing as npt
 import torch
 import pickle
 from ml_playground.config import DataConfig
@@ -10,12 +11,12 @@ from ml_playground.config import DataConfig
 
 @dataclass
 class _MemmapReader:
-    arr: np.memmap
+    arr: npt.NDArray[Any]
     length: int
 
     @classmethod
-    def open(cls, path: Path, *, dtype: np.dtype) -> "_MemmapReader":
-        arr = np.memmap(path, dtype=dtype, mode="r")
+    def open(cls, path: Path, *, dtype: np.dtype[Any]) -> "_MemmapReader":
+        arr: npt.NDArray[Any] = np.memmap(path, dtype=dtype, mode="r")
         return cls(arr=arr, length=int(arr.shape[0]))
 
 
@@ -34,7 +35,7 @@ def _sample_batch(
         base = np.asarray(reader.arr)
 
         def take_seq(start: int, length: int) -> np.ndarray:
-            offs = (start + np.arange(length, dtype=np.int64)) % L
+            offs: npt.NDArray[np.int64] = (start + np.arange(length, dtype=np.int64)) % L
             return base[offs]
 
         x_np = np.stack(
@@ -116,9 +117,9 @@ class SimpleBatches:
                 s = cur
                 if L <= T:
                     # wrap-around sequence
-                    offs = (s + np.arange(T, dtype=np.int64)) % L
+                    offs: npt.NDArray[np.int64] = (s + np.arange(T, dtype=np.int64)) % L
                     x_seq = base[offs].astype(np.int64, copy=False)
-                    offs_y = ((s + 1) + np.arange(T, dtype=np.int64)) % L
+                    offs_y: npt.NDArray[np.int64] = ((s + 1) + np.arange(T, dtype=np.int64)) % L
                     y_seq = base[offs_y].astype(np.int64, copy=False)
                     cur = (cur + T) % L
                 else:

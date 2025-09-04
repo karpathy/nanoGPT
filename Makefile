@@ -74,7 +74,7 @@ pyright:
 	uv run pyright
 
 mypy:
-	uv run mypy --no-incremental ml_playground
+	uv run mypy --incremental ml_playground
 
 typecheck: pyright mypy
 

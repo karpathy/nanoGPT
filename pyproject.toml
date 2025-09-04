@@ -168,7 +168,14 @@ extend-exclude = [
 # When invoked without explicit targets, analyze only the project code.
 files = ["ml_playground"]
 # Also exclude common ignored/artifact directories if mypy is invoked without args.
-exclude = '(^|.*/)(out/|data/|datasets/|checkpoints/|runs/|wandb/|lightning_logs/|artifacts/|mlruns/|htmlcov/|ml_playground/experiments/|\.idea/|\.vscode/|\.venv/|env/|\.pytest_cache/|\.mypy_cache/|\.ruff_cache/|\.hf_cache/|\.cache/|\.git/)'
+# Additionally exclude analysis (LIT integration) to avoid pulling heavy third-party types
+# that slow down type checking and are not part of core runtime.
+exclude = '(^|.*/)(out/|data/|datasets/|checkpoints/|runs/|wandb/|lightning_logs/|artifacts/|mlruns/|htmlcov/|ml_playground/experiments/|ml_playground/analysis/|\\.idea/|\\.vscode/|\\.venv/|env/|\\.pytest_cache/|\\.mypy_cache/|\\.ruff_cache/|\\.hf_cache/|\\.cache/|\\.git/)'
+
+# Speed up type checking by not following imports into third-party libraries
+follow_imports = "skip"
+# Avoid spending time resolving missing type stubs for external deps (torch, transformers, etc.)
+ignore_missing_imports = true
 
 
 [tool.pytest.ini_options]
