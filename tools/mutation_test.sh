@@ -44,7 +44,7 @@ fi
 
 if [[ ! -f "$SESSION_DB" ]]; then
   echo "[mut] cosmic-ray init (creating new session)"
-  run_cmd cosmic-ray init cosmic-ray.toml "$SESSION_DB" || true
+  run_cmd cosmic-ray init pyproject.toml "$SESSION_DB" || true
 else
   echo "[mut] Reusing existing session (set CR_FORCE=1 to reset)"
 fi
@@ -52,7 +52,7 @@ fi
 # Step 2: execute mutations (apply timeout if requested)
 echo "[mut] cosmic-ray exec (timeout: ${CR_TIMEOUT:-none})"
 if [[ -n "${CR_TIMEOUT:-}" ]]; then
-  run_cmd python tools/with_timeout.py "$CR_TIMEOUT" cosmic-ray exec cosmic-ray.toml "$SESSION_DB" "$@"
+  run_cmd python tools/with_timeout.py "$CR_TIMEOUT" cosmic-ray exec pyproject.toml "$SESSION_DB" "$@"
 else
-  run_cmd cosmic-ray exec cosmic-ray.toml "$SESSION_DB" "$@"
+  run_cmd cosmic-ray exec pyproject.toml "$SESSION_DB" "$@"
 fi
