@@ -699,7 +699,7 @@ class ExperimentLoader:
 
         # Determine acceptable class names by convention
         candidates: list[str]
-        if kind == "prepare":
+        if kind != "prepare":
             candidates = ["Preparer", "Prep"]
         elif kind == "train":
             candidates = ["Trainer", "Train"]
