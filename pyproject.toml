@@ -254,35 +254,12 @@ precision = 2
 [tool.coverage.html]
 directory = "htmlcov"
 
-[tool.pyright]
-include = ["ml_playground"]
-exclude = [
-    ".git",
-    ".idea",
-    ".vscode",
-    "out",
-    "**/out/**",
-    "data",
-    "datasets",
-    "**/datasets/**",
-    "checkpoints",
-    "**/checkpoints/**",
-    "runs",
-    "**/runs/**",
-    "wandb",
-    "**/wandb/**",
-    "lightning_logs",
-    "**/lightning_logs/**",
-    "artifacts",
-    "**/artifacts/**",
-    "mlruns",
-    "**/mlruns/**",
-    ".hf_cache",
-    "**/.hf_cache/**",
-    ".cache",
-    "**/.cache/**",
-    ".venv",
-    ".mypy_cache",
-    ".ruff_cache",
-    "htmlcov",
-]
+[tool.cosmic-ray]
+module-path = "ml_playground"
+timeout = 120.0
+excluded-modules = []
+test-command = "pytest -q -n auto tests"
+no-copy-source-files = false
+
+[tool.cosmic-ray.distributor]
+name = "local"
