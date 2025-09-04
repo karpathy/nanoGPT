@@ -86,10 +86,10 @@ def run_server_bundestag_char(
             return {"generated": lit_types.TextSegment()}
 
         def predict(
-            self, inputs: Iterable[Mapping[str, object]], **kwargs: object
+            self, _inputs: Iterable[Mapping[str, object]], **kwargs: object
         ) -> List[Mapping[str, object]]:
             outs: List[Mapping[str, object]] = []
-            for ex in inputs:
+            for ex in _inputs:
                 s = str(ex.get("text", ""))
                 # Simple deterministic transform to show change
                 gen = s + "\n\n[echo] " + s[::-1]
