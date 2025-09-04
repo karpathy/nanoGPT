@@ -62,7 +62,7 @@ def sample(cfg: SamplerConfig) -> None:
     # --- Setup -------------------------------------------------------------------
     runtime_cfg = cfg.runtime
     sample_cfg = cfg.sample
-    if not runtime_cfg:
+    if runtime_cfg is None:
         raise ValueError("Runtime configuration is missing")
 
     setup_logging(str(runtime_cfg.out_dir))
