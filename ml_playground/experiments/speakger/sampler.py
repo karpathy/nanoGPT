@@ -97,6 +97,7 @@ def _run_sampling(out_dir: Path, model_name: str, prompt: str) -> tuple[Path, Pa
     tok = AutoTokenizer.from_pretrained(out_dir / "tokenizer", use_fast=True)  # type: ignore[attr-defined]
     base = AutoModelForCausalLM.from_pretrained(model_name)  # type: ignore[attr-defined]
     try:
+        # build adapters path using Path joining, not bitwise and
         model = PeftModel.from_pretrained(base, out_dir / "adapters" / "best")  # type: ignore[attr-defined]
     except (FileNotFoundError, NotADirectoryError):
         model = base  # type: ignore[assignment]
