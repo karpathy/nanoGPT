@@ -44,7 +44,7 @@ quality:
 	uv run ruff check . && \
 	uv run ruff format . && \
 	uv run pyright && \
-	uv run mypy ml_playground && \
+	uv run mypy --no-incremental ml_playground && \
 	uv run pytest $(PYTEST_BASE)
 
 # Extended quality: dead code + core quality + mutation testing (non-fatal) 
@@ -74,7 +74,7 @@ pyright:
 	uv run pyright
 
 mypy:
-	uv run mypy ml_playground
+	uv run mypy --no-incremental ml_playground
 
 typecheck: pyright mypy
 

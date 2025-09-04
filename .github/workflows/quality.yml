@@ -2,7 +2,7 @@ name: Quality Gates
 
 on:
   push:
-    branches: [ main, master, develop, '**' ]
+    branches: [ master, '**' ]
   pull_request:
 
 jobs:
@@ -20,8 +20,8 @@ jobs:
       - name: Setup uv
         uses: astral-sh/setup-uv@v4
 
-      - name: Sync dependencies (dev group)
-        run: uv sync --group dev
+      - name: Sync dependencies (dev + project)
+        run: make sync
 
       - name: Run quality gates
-        run: uv run bash tools/quality_gate.sh
+        run: make quality
