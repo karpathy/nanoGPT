@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import shutil
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -122,7 +121,6 @@ class CheckpointManager:
             except Exception as e:
                 raise CheckpointError(f"Failed to stat checkpoint file {p}: {e}") from e
             self.best_checkpoints.append(_CkptInfo(p, metric, it, created))
-
 
     def save_checkpoint(
         self,

@@ -542,9 +542,9 @@ def prepare_command(
     """Prepare data for an experiment."""
     exp_config_path = _extract_exp_config(ctx)
     run_or_exit(
-        lambda: (
-            lambda t: _run_prepare(experiment, t[1], t[0])
-        )(def_load_effective_prepare(experiment, exp_config_path)),
+        lambda: (lambda t: _run_prepare(experiment, t[1], t[0]))(
+            def_load_effective_prepare(experiment, exp_config_path)
+        ),
         keyboard_interrupt_msg="\nPreparation cancelled.",
     )
 
@@ -563,9 +563,9 @@ def train_command(
     """Train a model for an experiment."""
     exp_config_path = _extract_exp_config(ctx)
     run_or_exit(
-        lambda: (
-            lambda t: _run_train(experiment, t[1], t[0])
-        )(def_load_effective_train(experiment, exp_config_path)),
+        lambda: (lambda t: _run_train(experiment, t[1], t[0]))(
+            def_load_effective_train(experiment, exp_config_path)
+        ),
         keyboard_interrupt_msg="\nTraining cancelled.",
     )
 
@@ -584,9 +584,9 @@ def sample_command(
     """Sample from a trained model."""
     exp_config_path = _extract_exp_config(ctx)
     run_or_exit(
-        lambda: (
-            lambda t: _run_sample(experiment, t[1], t[0])
-        )(def_load_effective_sample(experiment, exp_config_path)),
+        lambda: (lambda t: _run_sample(experiment, t[1], t[0]))(
+            def_load_effective_sample(experiment, exp_config_path)
+        ),
         keyboard_interrupt_msg="\nSampling cancelled.",
     )
 
@@ -630,7 +630,9 @@ def loop(
     exp_config_path = _extract_exp_config(ctx)
     run_or_exit(
         lambda: (
-            lambda prep, trn, samp: _run_loop(experiment, samp[0], prep[1], trn[1], samp[1])
+            lambda prep, trn, samp: _run_loop(
+                experiment, samp[0], prep[1], trn[1], samp[1]
+            )
         )(
             def_load_effective_prepare(experiment, exp_config_path),
             def_load_effective_train(experiment, exp_config_path),

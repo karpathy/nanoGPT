@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 from copy import deepcopy
 
-from pydantic import BaseModel
 
 from ml_playground.config import (
     PreparerConfig,
