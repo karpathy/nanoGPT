@@ -69,6 +69,7 @@ dev = [
     "mypy>=1.17.1",
     "pyright>=1.1.404",
     "types-requests>=2.32.4.20250809",
+    "vulture>=2.11.0",
 ]
 
 
