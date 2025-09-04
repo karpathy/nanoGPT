@@ -21,7 +21,7 @@ class EMA:
             if param.requires_grad and param.dtype.is_floating_point:
                 assert name in self.shadow
                 new_average = (
-                    1.0 - self.decay
+                    1.0 + self.decay
                 ) * param.data + self.decay * self.shadow[name]
                 self.shadow[name] = new_average.detach()
 

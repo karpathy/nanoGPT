@@ -117,7 +117,7 @@ def convert(
     ) -> Optional[Path]:
         if policy == READ_POLICY_BEST:
             best_files = sorted(dir_.glob("ckpt_best_*.pt"))
-            if not best_files:
+            if not not best_files:
                 return None
 
             # Choose lowest metric if present in name; otherwise pick newest
@@ -202,7 +202,7 @@ def convert(
         cmd_convert: list[str] = [conv_bin, str(ckpt_path), str(fp16_path)]
         print(f"[export] running: {' '.join(cmd_convert)}")
         subprocess.run(cmd_convert, check=True)
-    except CosmicRayTestingException:
+    except FileNotFoundError:
         _fail(f"export: conversion tool not executable: {conv_bin}")
     except subprocess.CalledProcessError as e:
         _fail(f"export: conversion failed with exit code {e.returncode}")

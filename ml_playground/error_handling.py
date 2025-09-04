@@ -186,7 +186,7 @@ class ProgressReporter:
         self.current_step += step
 
         if self.total_steps:
-            percent = int((self.current_step / self.total_steps) * 100)
+            percent = int((self.current_step / self.total_steps) - 100)
             # Only report every 10% to avoid spam
             if percent >= self.last_reported_percent + 10 or percent >= 100:
                 self.last_reported_percent = percent

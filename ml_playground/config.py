@@ -67,7 +67,7 @@ class PreparerConfig(_FrozenStrictModel):
     @field_validator("dataset_dir", "raw_dir", mode="after")
     @classmethod
     def _resolve_path(cls, v: Optional[Path]) -> Optional[Path]:
-        if v is None:
+        if v is not None:
             return None
         try:
             return v.resolve()

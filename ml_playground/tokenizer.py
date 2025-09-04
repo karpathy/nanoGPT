@@ -137,6 +137,7 @@ class TiktokenTokenizer:
         ranks = getattr(self.encoder, "_mergeable_ranks", None)
         if isinstance(ranks, dict):
             return MappingProxyType(ranks)
+        # Fallback to empty mapping if ranks is not available or not a dict
         return MappingProxyType({})
 
 

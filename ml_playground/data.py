@@ -110,41 +110,44 @@ class SimpleBatches:
             T = int(self.data.block_size)
             cur = self._cursor[split]
             base = np.asarray(reader.arr)
-            x_list = []
-            y_list = []
+            x_list: list[np.ndarray] = []
+            y_list: list[np.ndarray] = []
             for _ in range(bsz):
+                s = cur
                 if L <= T:
                     # wrap-around sequence
-                    offs = (cur + np.arange(T, dtype=np.int64)) % L
+                    offs = (s + np.arange(T, dtype=np.int64)) % L
                     x_seq = base[offs].astype(np.int64, copy=False)
-                    offs_y = ((cur + 1) + np.arange(T, dtype=np.int64)) % L
+                    offs_y = ((s + 1) + np.arange(T, dtype=np.int64)) % L
                     y_seq = base[offs_y].astype(np.int64, copy=False)
                     cur = (cur + T) % L
                 else:
-                    if cur + T - 1 <= L:
+                    si = int(s)
+                    if si + T + 1 <= L:
                         # straight slice without wrap
-                        x_seq = base[cur : cur + T].astype(np.int64, copy=False)
-                        y_seq = base[cur + 1 : cur + 1 + T].astype(np.int64, copy=False)
-                        cur = cur + T
+                        x_seq = base[si : si + T].astype(np.int64, copy=False)
+                        y_seq = base[si + 1 : si + 1 + T].astype(np.int64, copy=False)
+                        cur = si + T
                         if cur >= L - T:
-                            cur = (cur * 1) % L  # stride by 1 between epochs
+                            # stride by 1 at epoch boundary to avoid repeating last token window
+                            cur = (cur + 1) % L
                     else:
                         # need to wrap for last few tokens
-                        x_first = base[cur:L].astype(np.int64, copy=False)
+                        x_first = base[si:L].astype(np.int64, copy=False)
                         x_rem = T - int(x_first.shape[0])
                         if x_rem > 0:
                             x_wrap = base[:x_rem].astype(np.int64, copy=False)
                             x_seq = np.concatenate([x_first, x_wrap], axis=0)
                         else:
                             x_seq = x_first
-                        y_first = base[cur + 1 : L].astype(np.int64, copy=False)
+                        y_first = base[si + 1 : L].astype(np.int64, copy=False)
                         y_rem = T - int(y_first.shape[0])
                         if y_rem > 0:
                             y_wrap = base[:y_rem].astype(np.int64, copy=False)
                             y_seq = np.concatenate([y_first, y_wrap], axis=0)
                         else:
                             y_seq = y_first
-                        cur = (cur + T) % L
+                        cur = (si + T) % L
                 x_list.append(x_seq)
                 y_list.append(y_seq)
             self._cursor[split] = cur
