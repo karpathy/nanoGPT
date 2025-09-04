@@ -448,6 +448,7 @@ def _run_analyze(experiment: str, host: str, port: int, open_browser: bool) -> N
 
     Only 'bundestag_char' is currently supported.
     """
+    # Raise for any experiment other than 'bundestag_char'
     if experiment != "bundestag_char":
         raise RuntimeError("analyze currently supports only 'bundestag_char'")
     # Placeholder for actual analysis logic for bundestag_char
