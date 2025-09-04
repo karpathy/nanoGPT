@@ -57,12 +57,17 @@ lint = "ruff check ."
 pyright = "pyright"
 mypy = "mypy ml_playground"
 quality = "ruff check --fix . && ruff format . && pyright && mypy ml_playground && pytest -n auto -W error --strict-markers --strict-config -v"
+# Quality gate focusing on unit tests with coverage only from unit suite
+quality-unit = "ruff check --fix . && ruff format . && pyright && mypy ml_playground && pytest -n auto -W error --strict-markers --strict-config -v --cov=ml_playground --cov-report=term-missing tests/unit"
 
 # Tests
 test = "pytest -n auto -W error --strict-markers --strict-config -v"
 unit = "pytest -n auto -W error --strict-markers --strict-config -v tests/unit"
-integration = "pytest -n auto -W error --strict-markers --strict-config -v -m integration"
-e2e = "pytest -n auto -W error --strict-markers --strict-config -v -m e2e"
+# Unit-only coverage: enforce coverage using only unit tests
+unit-cov = "pytest -n auto -W error --strict-markers --strict-config -v --cov=ml_playground --cov-report=term-missing tests/unit"
+# Ensure non-unit suites do not affect coverage metrics
+integration = "pytest -n auto -W error --strict-markers --strict-config -v -m integration --no-cov"
+e2e = "pytest -n auto -W error --strict-markers --strict-config -v -m e2e --no-cov"
 
 # Runtime entry points for ml_playground
 prepare-shakespeare = "python -m ml_playground.cli prepare shakespeare"
@@ -115,7 +120,7 @@ dev = [
     "coverage[toml]>=7.10.6",
     "ruff>=0.12.11",
     "mypy>=1.17.1",
-    "pyright>=1.1.404",
+    "pyright>=1.1.405",
     "types-requests>=2.32.4.20250809",
     "vulture>=2.11.0",
     "cosmic-ray>=8.3.0",
