@@ -35,7 +35,9 @@ def _sample_batch(
         base = np.asarray(reader.arr)
 
         def take_seq(start: int, length: int) -> np.ndarray:
-            offs: npt.NDArray[np.int64] = (start + np.arange(length, dtype=np.int64)) % L
+            offs: npt.NDArray[np.int64] = (
+                start + np.arange(length, dtype=np.int64)
+            ) % L
             return base[offs]
 
         x_np = np.stack(
@@ -119,7 +121,9 @@ class SimpleBatches:
                     # wrap-around sequence
                     offs: npt.NDArray[np.int64] = (s + np.arange(T, dtype=np.int64)) % L
                     x_seq = base[offs].astype(np.int64, copy=False)
-                    offs_y: npt.NDArray[np.int64] = ((s + 1) + np.arange(T, dtype=np.int64)) % L
+                    offs_y: npt.NDArray[np.int64] = (
+                        (s + 1) + np.arange(T, dtype=np.int64)
+                    ) % L
                     y_seq = base[offs_y].astype(np.int64, copy=False)
                     cur = (cur + T) % L
                 else:
