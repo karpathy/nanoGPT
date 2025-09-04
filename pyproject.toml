@@ -70,6 +70,7 @@ dev = [
     "pyright>=1.1.404",
     "types-requests>=2.32.4.20250809",
     "vulture>=2.11.0",
+    "cosmic-ray>=8.3.0",
 ]
 
 
