@@ -1,29 +1,11 @@
-# Cosmic Ray configuration for ml_playground
-# This config aims to be minimal and fast-ish for local runs.
+# Cosmic Ray configuration for ml_playground (v8 schema)
 
 [cosmic-ray]
-# Where to store the mutation testing session database
-session-file = "out/cosmic-ray/session.sqlite"
+module-path = "ml_playground"
+timeout = 120.0
+excluded-modules = []
+# Kept quiet-ish; our wrapper may invoke via `uv run`.
+test-command = "pytest -q -n auto tests"
 
-# Timeout for each test run (seconds)
-timeout = 120
-
-# Execution engine
-[cosmic-ray.engine]
+[cosmic-ray.distributor]
 name = "local"
-
-# What to mutate: top-level package module path(s)
-[cosmic-ray.modules]
-paths = [
-  "ml_playground",
-]
-
-# Command to run tests. Keep it deterministic and quiet-ish.
-[cosmic-ray.test]
-# Uses uv if present; the helper script will wrap with `uv run` automatically.
-command = ["pytest", "-q", "-n", "auto", "tests"]
-
-# Operators: keep default set; override selectively if you want to focus runs.
-# Example to focus only on arithmetic ops:
-# [cosmic-ray.operator-filter]
-# only = ["core/NumberReplacer", "core/ArithmeticOperatorDeletion"]
