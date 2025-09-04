@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import builtins
 import pickle
 from pathlib import Path
 from typing import Any, Tuple
@@ -10,7 +9,7 @@ import torch
 
 from ml_playground.config import RuntimeConfig, SampleConfig, SamplerConfig
 import ml_playground.sampler as sampler
-from ml_playground.error_handling import CheckpointError, DataError
+from ml_playground.error_handling import CheckpointError
 from ml_playground.checkpoint import CheckpointManager
 
 
@@ -180,87 +179,7 @@ def test_load_checkpoint_load_state_error_is_wrapped(
     assert ckpt_obj is not None
 
 
-# ---------------------------
-# _codec_from_meta tests
-# ---------------------------
-
-
-def test_codec_from_meta_char_success(tmp_path: Path) -> None:
-    """Char-level meta.pkl should yield working encode/decode callables."""
-    meta_path = tmp_path / "meta.pkl"
-    _write_char_meta(meta_path)
-    encode, decode = sampler._codec_from_meta(meta_path)
-    ids = encode("Hi\n")
-    assert isinstance(ids, list)
-    assert decode(ids).endswith("\n")
-
-
-def test_codec_from_meta_missing_meta_version_raises(tmp_path: Path) -> None:
-    """meta.pkl without meta_version should raise DataError."""
-    meta_path = tmp_path / "meta.pkl"
-    meta = {"kind": "char", "dtype": "uint32", "stoi": {"a": 1}, "itos": {1: "a"}}
-    meta_path.write_bytes(pickle.dumps(meta))
-    with pytest.raises(DataError, match="meta_version"):
-        sampler._codec_from_meta(meta_path)
-
-
-def test_codec_from_meta_unsupported_dtype_raises(tmp_path: Path) -> None:
-    """meta.pkl with unsupported dtype should raise DataError."""
-    meta_path = tmp_path / "meta.pkl"
-    meta = {
-        "meta_version": 1,
-        "kind": "char",
-        "dtype": "float64",
-        "stoi": {"a": 1},
-        "itos": {1: "a"},
-    }
-    meta_path.write_bytes(pickle.dumps(meta))
-    with pytest.raises(DataError, match="dtype"):
-        sampler._codec_from_meta(meta_path)
-
-
-def test_codec_from_meta_meta_json_tiktoken_without_dep_raises(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """meta.json specifying tiktoken without tiktoken installed should raise DataError."""
-    # No meta.pkl, but write meta.json next to it
-    meta_path = tmp_path / "meta.pkl"  # missing on purpose
-    (tmp_path / "meta.json").write_text(
-        '{"kind": "tiktoken", "encoding": "gpt2"}', encoding="utf-8"
-    )
-
-    # Force ImportError for tiktoken regardless of environment
-    real_import = builtins.__import__
-
-    def _no_tiktoken(name: str, *args: Any, **kwargs: Any):  # type: ignore[no-untyped-def]
-        if name == "tiktoken":
-            raise ImportError("forced for test")
-        return real_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", _no_tiktoken)
-    with pytest.raises(
-        DataError,
-        match="required to derive codec|tiktoken is required|No usable dataset meta",
-    ):
-        sampler._codec_from_meta(meta_path)
-
-
-def test_codec_from_meta_no_meta_and_no_tiktoken_fallback_raises(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """When no meta files are present and tiktoken import fails, raise DataError."""
-    meta_path = tmp_path / "meta.pkl"  # missing
-    # Force ImportError
-    real_import = builtins.__import__
-
-    def _no_tiktoken(name: str, *args: Any, **kwargs: Any):  # type: ignore[no-untyped-def]
-        if name == "tiktoken":
-            raise ImportError("forced for test")
-        return real_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", _no_tiktoken)
-    with pytest.raises(DataError, match="required to derive codec"):
-        sampler._codec_from_meta(meta_path)
+# Removed tests for internal _codec_from_meta as the codec helpers were dropped
 
 
 # ---------------------------
