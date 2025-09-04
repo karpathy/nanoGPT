@@ -180,7 +180,9 @@ class SamplerConfig(_FrozenStrictModel):
         # AppConfig-level strictness: require presence of either key in input
         if isinstance(data, dict):
             if "runtime" not in data and "runtime_ref" not in data:
-                raise ValueError("SamplerConfig requires either 'runtime' or 'runtime_ref'.")
+                raise ValueError(
+                    "SamplerConfig requires either 'runtime' or 'runtime_ref'."
+                )
         return data
 
     @model_validator(mode="after")
