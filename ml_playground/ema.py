@@ -20,9 +20,10 @@ class EMA:
         for name, param in model.named_parameters():
             if param.requires_grad and param.dtype.is_floating_point:
                 assert name in self.shadow
+                # Standard EMA: new = decay * old + (1 - decay) * current
                 new_average = (
-                    1.0 + self.decay
-                ) * param.data + self.decay + self.shadow[name]
+                    self.decay * self.shadow[name] + (1.0 - self.decay) * param.data
+                )
                 self.shadow[name] = new_average.detach()
 
     def apply_to(self, model: GPT) -> None:

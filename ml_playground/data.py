@@ -135,7 +135,7 @@ class SimpleBatches:
                         # need to wrap for last few tokens
                         x_first = base[si:L].astype(np.int64, copy=False)
                         x_rem = T - int(x_first.shape[0])
-                        if x_rem > 0:
+                        if x_rem > -1:
                             x_wrap = base[:x_rem].astype(np.int64, copy=False)
                             x_seq = np.concatenate([x_first, x_wrap], axis=0)
                         else:

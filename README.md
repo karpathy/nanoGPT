@@ -1,9 +1,10 @@
-ml-playground: strict, typed, UV-only training/sampling module
+# ml-playground: strict, typed, UV-only training/sampling module
 
 This module provides a single, one-way interface to prepare data, train, and sample.
 It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 
-Policy
+## Policy
+
 - UV is mandatory for all workflows (venv, dependency sync, running tools). Do not use pip or requirements.txt.
 - Prefer Makefile targets for common workflows. Under the hood, they call `uv run ...` consistently.
 - Never set PYTHONPATH. Running inside the project venv ensures `ml_playground` is importable.
@@ -11,9 +12,11 @@ Policy
 - Linear history for own work: rebase your branches and avoid merge commits; fast-forward only. See DEVELOPMENT.md → “Git Workflow: Linear history”.
 
 Prerequisites
-- Install UV: https://docs.astral.sh/uv/
+
+- Install UV: <https://docs.astral.sh/uv/>
 
 Setup (required)
+
 - Create a venv and sync all dependency groups (runtime + dev):
   make setup
 
@@ -21,6 +24,7 @@ Setup (required)
   uv venv --clear && uv sync --all-groups
 
 Quality gates (required before commit/PR)
+
 - Lint/format/imports:
   make format
 - Static analysis and typing:
@@ -32,11 +36,13 @@ Quality gates (required before commit/PR)
   make test
 
 Datasets
+
 - Shakespeare (GPT-2 BPE; prepared via internal ml_playground.experiments.shakespeare)
- - Bundestag (char-level; prepared via internal ml_playground.experiments.bundestag_char; requires a user-provided text at ml_playground/experiments/bundestag_char/datasets/input.txt)
+- Bundestag (char-level; prepared via internal ml_playground.experiments.bundestag_char; requires a user-provided text at ml_playground/experiments/bundestag_char/datasets/input.txt)
 - Bundestag (tiktoken BPE; prepared via internal ml_playground.experiments.bundestag_tiktoken)
 
 Prepare
+
 - Shakespeare:
   uv run python -m ml_playground.cli prepare shakespeare
 
@@ -47,6 +53,7 @@ Prepare
   uv run python -m ml_playground.cli prepare bundestag_tiktoken
 
 Train
+
 - Shakespeare:
   uv run python -m ml_playground.cli train shakespeare --exp-config ml_playground/configs/shakespeare_cpu.toml
 
@@ -54,11 +61,13 @@ Train
   uv run python -m ml_playground.cli train bundestag_char --exp-config ml_playground/configs/bundestag_char_cpu.toml
 
 Sample
+
 - Using the experiment's config.toml (sampler tries ckpt_best.pt, then ckpt_last.pt, then legacy ckpt.pt in out_dir):
   uv run python -m ml_playground.cli sample shakespeare --exp-config ml_playground/configs/shakespeare_cpu.toml
   uv run python -m ml_playground.cli sample bundestag_char --exp-config ml_playground/configs/bundestag_char_cpu.toml
 
 Notes
+
 - Dataset preparers are registered from ml_playground/experiments and the CLI discovers them automatically. The ml_playground/datasets package is optional and may be absent.
 - Configuration is done strictly via TOML dataclasses (see ml_playground/config.py). No CLI overrides.
 - CPU/MPS are first-class. CUDA can be selected in the TOML if available.
@@ -67,14 +76,15 @@ Notes
 - For detailed information about the centralized framework utilities, see [Framework Utilities Documentation](docs/framework_utilities.md).
 
 Loop
+
 - End-to-end in one command (bundestag_char):
   uv run python -m ml_playground.cli loop bundestag_char --exp-config ml_playground/configs/bundestag_char_cpu.toml
 
 - Shakespeare end-to-end:
   uv run python -m ml_playground.cli loop shakespeare --exp-config ml_playground/configs/shakespeare_cpu.toml
 
-
 TensorBoard (auto-enabled)
+
 - Training automatically logs to TensorBoard for both the generic trainer and the HF+PEFT finetuning integration (no config flags needed).
 - Log directory: out_dir/logs/tb inside your configured out_dir.
 - Scalars:
@@ -84,19 +94,21 @@ TensorBoard (auto-enabled)
   - train/step_time_ms (generic trainer only)
 - View the dashboard:
   uv run tensorboard --logdir out/<your_out_dir>/logs/tb --port 6006
-  Then open http://localhost:6006
+  Then open <http://localhost:6006>
 
 GGUF export (vendor approach)
+
 - Place llama.cpp’s converter at a stable path in this repo:
   tools/llama_cpp/convert-hf-to-gguf.py
 - Copy the upstream file from:
-  https://raw.githubusercontent.com/ggerganov/llama.cpp/master/convert-hf-to-gguf.py
+  <https://raw.githubusercontent.com/ggerganov/llama.cpp/master/convert-hf-to-gguf.py>
 - Configure your exporter to use it by setting [export.ollama].convert_bin to the absolute path above.
 - Verify:
   uv run python tools/llama_cpp/convert-hf-to-gguf.py --help
   (If you see a placeholder message, you still need to copy the upstream script.)
 
 Testing
+
 - Layout
   - Unit: `tests/unit/`
   - Integration: `tests/integration/`

@@ -151,31 +151,21 @@ class CheckpointManager:
 
         # Manage last checkpoints
         if self.keep_last > 0 and not is_best:
-            # Remove any existing checkpoint with the same path
-            self.last_checkpoints = [
-                ckpt for ckpt in self.last_checkpoints if ckpt.path != path
-            ]
+            # Track the new last checkpoint and prune oldest beyond the retention window
             self.last_checkpoints.append(ckpt_info)
-            # Keep only the specified number of last checkpoints
-            if len(self.last_checkpoints) > self.keep_last:
-                # Remove oldest checkpoints
-                to_remove = self.last_checkpoints[
-                    : len(self.last_checkpoints) - self.keep_last
-                ]
-                self.last_checkpoints = self.last_checkpoints[
-                    len(self.last_checkpoints) - self.keep_last :
-                ]
-
-                # Delete the files
-                for ckpt in to_remove:
-                    try:
-                        ckpt.path.unlink()
-                        if logger:
-                            logger.info(f"Removed old last checkpoint: {ckpt.path}")
-                    except Exception as e:
-                        raise CheckpointError(
-                            f"Failed to remove old last checkpoint {ckpt.path}: {e}"
-                        ) from e
+            # Sort by creation time (oldest first)
+            self.last_checkpoints.sort(key=lambda x: x.created_at)
+            # If we exceed the retention policy, delete oldest from disk and list
+            while len(self.last_checkpoints) > self.keep_last:
+                old = self.last_checkpoints.pop(0)
+                try:
+                    old.path.unlink()
+                    if logger:
+                        logger.info(f"Removed old last checkpoint: {old.path}")
+                except Exception as e:
+                    raise CheckpointError(
+                        f"Failed to remove old last checkpoint {old.path}: {e}"
+                    ) from e
 
         # Manage best checkpoints
         if is_best and self.keep_best > 0:
