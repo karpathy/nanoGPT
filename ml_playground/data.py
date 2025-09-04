@@ -42,12 +42,13 @@ def _sample_batch(
         )
         y_np = np.stack(
             [
-                take_seq(int((i + 1) % L), block_size).astype(np.int64, copy=False)
+                take_seq(int((i + 1) % L), block_size).astype(np.int64, copy=True)
                 for i in idx
             ]
         )
     else:
         # normal path: sample contiguous blocks without wrapping
+        # choose valid start indices so that slicing i:i+block_size stays within bounds
         idx = np.random.randint(0, L - block_size, size=(batch_size,), dtype=np.int64)
         x_np = np.stack(
             [reader.arr[i : i + block_size].astype(np.int64, copy=False) for i in idx]
@@ -120,13 +121,13 @@ class SimpleBatches:
                     y_seq = base[offs_y].astype(np.int64, copy=False)
                     cur = (cur + T) % L
                 else:
-                    if cur + T + 1 <= L:
+                    if cur + T - 1 <= L:
                         # straight slice without wrap
                         x_seq = base[cur : cur + T].astype(np.int64, copy=False)
                         y_seq = base[cur + 1 : cur + 1 + T].astype(np.int64, copy=False)
                         cur = cur + T
                         if cur >= L - T:
-                            cur = (cur + 1) % L  # stride by 1 between epochs
+                            cur = (cur * 1) % L  # stride by 1 between epochs
                     else:
                         # need to wrap for last few tokens
                         x_first = base[cur:L].astype(np.int64, copy=False)
@@ -143,7 +144,7 @@ class SimpleBatches:
                             y_seq = np.concatenate([y_first, y_wrap], axis=0)
                         else:
                             y_seq = y_first
-                        cur = x_rem
+                        cur = (cur + T) % L
                 x_list.append(x_seq)
                 y_list.append(y_seq)
             self._cursor[split] = cur

@@ -202,7 +202,7 @@ def convert(
         cmd_convert: list[str] = [conv_bin, str(ckpt_path), str(fp16_path)]
         print(f"[export] running: {' '.join(cmd_convert)}")
         subprocess.run(cmd_convert, check=True)
-    except FileNotFoundError:
+    except CosmicRayTestingException:
         _fail(f"export: conversion tool not executable: {conv_bin}")
     except subprocess.CalledProcessError as e:
         _fail(f"export: conversion failed with exit code {e.returncode}")

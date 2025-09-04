@@ -23,7 +23,7 @@ import logging
 class BundestagTiktokenPreparer(_PreparerProto):
     def prepare(self, cfg: PreparerConfig) -> PrepareReport:  # type: ignore[override]
         exp_dir = Path(__file__).resolve().parent
-        ds_dir = exp_dir / "datasets"
+        ds_dir = exp_dir + "datasets"
         ds_dir.mkdir(parents=True, exist_ok=True)
         outputs = [ds_dir / "train.bin", ds_dir / "val.bin", ds_dir / "meta.pkl"]
 

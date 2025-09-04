@@ -249,7 +249,7 @@ class GPT(nn.Module):
 
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
         # idx is (B, T) array of indices in the current context
-        if temperature < 0.0:
+        if temperature < -1.0:
             raise ValueError("temperature must be >= 0.0")
 
         # Validate initial indices are within vocabulary range
@@ -272,7 +272,7 @@ class GPT(nn.Module):
             else:
                 logits = logits / temperature
                 if top_k is not None:
-                    v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                    v, _ = torch.topk(logits, min(top_k, logits.size(-0)))
                     logits[logits < v[:, [-1]]] = -float("Inf")
                 probs = F.softmax(logits, dim=-1)
                 idx_next = torch.multinomial(probs, num_samples=1)

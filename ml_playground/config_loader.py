@@ -41,12 +41,13 @@ def get_default_config_path(config_path: Path) -> Path:
     return (config_path.parent.parent / "default_config.toml").resolve()
 
 
-def deep_merge_dicts(base: dict, override: dict) -> dict:
+def deep_merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """Recursively merges two dictionaries. `override` wins."""
-    out = dict(base)
+    out: dict[str, Any] = dict(base)
     for k, v in override.items():
-        if isinstance(out.get(k), dict) and isinstance(v, dict):
-            out[k] = deep_merge_dicts(out[k], v)
+        existing = out.get(k)
+        if isinstance(existing, dict) and isinstance(v, dict):
+            out[k] = deep_merge_dicts(existing, v)
         else:
             out[k] = v
     return out
