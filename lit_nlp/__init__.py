@@ -33,11 +33,11 @@ except PackageNotFoundError as e:  # No real lit-nlp installed
 pkg_root: Path | None = None
 for f in dist.files or ():  # type: ignore[arg-type]
     if str(f).endswith("lit_nlp/__init__.py"):
-        pkg_root = Path(dist.locate_file(f)).parent
+        pkg_root = Path(str(dist.locate_file(f))).parent
         break
 if pkg_root is None:
     # Fallback: try common site-packages location based on distribution location
-    loc = Path(dist.locate_file(".")).resolve()
+    loc = Path(str(dist.locate_file("."))).resolve()
     candidate = loc / "lit_nlp"
     if (candidate / "__init__.py").exists():
         pkg_root = candidate

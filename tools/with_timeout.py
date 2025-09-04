@@ -18,15 +18,15 @@ def run_with_timeout(timeout_s: int, cmd: List[str]) -> int:
             return proc.returncode
         finally:
             signal.alarm(0)
+    except TimeoutError:
+        return 124
     except (AttributeError, ValueError, OSError):
         # Fallback: no SIGALRM (e.g., Windows) or not supported
         try:
             proc = subprocess.run(cmd, timeout=timeout_s, check=False)
             return proc.returncode
         except subprocess.TimeoutExpired:
-            return 124  # conventional timeout code
-    except TimeoutError:
-        return 124
+            return 124
 
 
 def main(argv: List[str]) -> int:
