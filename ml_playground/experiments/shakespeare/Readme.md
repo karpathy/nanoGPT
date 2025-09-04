@@ -42,12 +42,12 @@ uv run train-shakespeare-cpu
 
 Sample:
 ```bash
-uv run python -m ml_playground.cli sample shakespeare
+uv run sample-shakespeare-cpu
 ```
 
 End-to-end loop:
 ```bash
-uv run python -m ml_playground.cli loop shakespeare
+uv run loop-shakespeare-cpu
 ```
 
 ## Configuration Highlights

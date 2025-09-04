@@ -45,8 +45,7 @@ Configure these paths in the TOML under `[prepare]`:
 
 ## Environment Setup (UV-only)
 ```bash
-uv venv --clear
-uv sync --all-groups
+uv run setup
 # Install PEFT/Transformers if not already present in your env
 uv add peft transformers torch tensorboard
 ```
@@ -60,19 +59,19 @@ Example config (edit to your paths/model):
 
 End-to-end pipeline (prepare → train → sample):
 ```bash
-uv run python -m ml_playground.cli loop speakger
+uv run loop-speakger
 ```
 
 Run individual steps:
 ```bash
 # Prepare dataset
-uv run python -m ml_playground.cli prepare speakger
+uv run prepare-speakger
 
 # Train
-uv run python -m ml_playground.cli train speakger
+uv run train-speakger
 
 # Sample
-uv run python -m ml_playground.cli sample speakger
+uv run sample-speakger
 ```
 
 ## Configuration Highlights

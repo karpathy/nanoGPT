@@ -14,19 +14,13 @@ References:
 - Extend by plugging your own dataset or model adapter with minimal boilerplate.
 
 ## Install (UV-only)
-This project uses UV exclusively. LIT is optional. Install it via the dedicated optional extra:
+This project uses UV exclusively. LIT is optional. Install it via the dedicated script:
 
 ```
-uv venv --clear
-uv sync --extra lit
+uv run setup-lit
 ```
 
-Alternatively, add it explicitly:
-
-```
-uv add lit-nlp
-uv sync --extra lit
-```
+If you prefer manual installation, install `lit-nlp` in a compatible environment following the upstream docs.
 
 Note: Some transitive dependencies (e.g., llvmlite via umap-learn/pynndescent) may not support every Python version. On Python 3.13, the optional `lit` extra is intentionally a no-op to avoid incompatible packages. If you need to use LIT, create a separate virtual environment with a compatible Python (<3.13) and install `lit-nlp` there, or skip this integration.
 
@@ -36,7 +30,7 @@ Python version: 3.13.x
 Launch the local LIT UI for the bundestag_char PoC (default host 127.0.0.1, port 5432):
 
 ```
-uv run python -m ml_playground.cli analyze bundestag_char --port 5432
+uv run analyze-bundestag-char --port 5432
 ```
 
 Flags:

@@ -28,10 +28,10 @@ Important: Strict configuration injection
 - Any legacy helpers like `prepare_from_toml`, `train_from_toml`, `sample_from_toml`, or `convert_from_toml` have been removed or fail fast.
 
 Common CLI patterns
-- Prepare: prefer uv scripts like `uv run prepare-shakespeare` (or generally: `uv run <your-experiment-script>`).
-- Train: `uv run python -m ml_playground.cli train <experiment_name>` (or a uv script, e.g., `uv run train-shakespeare-cpu`)
-- Sample: `uv run python -m ml_playground.cli sample <experiment_name>` (or a uv script, e.g., `uv run sample-shakespeare-cpu`)
-- End‑to‑end: `uv run python -m ml_playground.cli loop <experiment_name>` (or a uv script, e.g., `uv run loop-bundestag-char-cpu`)
+- Prepare: prefer uv scripts like `uv run prepare-<name>` (e.g., `uv run prepare-shakespeare`).
+- Train: prefer uv scripts like `uv run train-<name>-cpu` (e.g., `uv run train-shakespeare-cpu`).
+- Sample: prefer uv scripts like `uv run sample-<name>-cpu` (e.g., `uv run sample-shakespeare-cpu`).
+- End‑to‑end: prefer uv scripts like `uv run loop-<name>-cpu` (e.g., `uv run loop-bundestag-char-cpu`).
 
 Implemented experiments (current)
 - shakespeare — Tiny Shakespeare with GPT‑2 BPE (tiktoken)
@@ -116,8 +116,7 @@ Paste the following into `ml_playground/experiments/<name>/Readme.md` and replac
 
 ## Environment Setup (UV-only)
 ```bash
-uv venv --clear
-uv sync --all-groups
+uv run setup
 # Optional: add runtime deps if needed by your integration
 # uv add peft transformers torch tensorboard
 ```
@@ -127,23 +126,23 @@ uv sync --all-groups
 
 Prepare dataset:
 ```bash
-uv run python -m ml_playground.cli prepare &lt;dataset_name&gt;
-# &lt;dataset_name&gt; is the registered name in prepare.py (often "&lt;name&gt;")
+uv run prepare-<name>
+# <dataset_name> equals the registered name in prepare.py (often "<name>")
 ```
 
 Train:
 ```bash
-uv run python -m ml_playground.cli train <dataset_name>
+uv run train-<name>-cpu  # or the experiment's train script (some are without -cpu)
 ```
 
 Sample:
 ```bash
-uv run python -m ml_playground.cli sample <dataset_name>
+uv run sample-<name>-cpu  # or the experiment's sample script
 ```
 
 End-to-end loop:
 ```bash
-uv run python -m ml_playground.cli loop <dataset_name>
+uv run loop-<name>-cpu  # or the experiment's loop script
 ```
 
 ## Configuration Highlights

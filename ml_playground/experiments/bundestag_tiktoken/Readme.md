@@ -24,8 +24,7 @@ This experiment uses the centralized framework utilities for error handling, pro
 
 ## Environment Setup (UV-only)
 ```bash
-uv venv --clear
-uv sync --all-groups
+uv run setup
 ```
 
 ## Strict configuration injection
@@ -36,22 +35,22 @@ uv sync --all-groups
 
 Prepare dataset:
 ```bash
-uv run python -m ml_playground.cli prepare bundestag_tiktoken
+uv run prepare-bundestag-tiktoken
 ```
 
 Train:
 ```bash
-uv run python -m ml_playground.cli train bundestag_tiktoken
+uv run train-bundestag-tiktoken
 ```
 
 Sample:
 ```bash
-uv run python -m ml_playground.cli sample bundestag_tiktoken
+uv run sample-bundestag-tiktoken
 ```
 
 End-to-end loop:
 ```bash
-uv run python -m ml_playground.cli loop bundestag_tiktoken
+uv run loop-bundestag-tiktoken
 ```
 
 ## Configuration Highlights
