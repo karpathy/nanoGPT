@@ -48,14 +48,6 @@ class Checkpoint:
             result["ema"] = self.ema
         return result
 
-    def __getitem__(self, key: str) -> Any:
-        """Allow dictionary-style access to attributes."""
-        return getattr(self, key)
-
-    def __contains__(self, key: str) -> bool:
-        """Allow 'in' operator to check for attribute existence."""
-        return hasattr(self, key)
-
 
 @dataclass
 class _CkptInfo:
@@ -131,28 +123,6 @@ class CheckpointManager:
                 raise CheckpointError(f"Failed to stat checkpoint file {p}: {e}") from e
             self.best_checkpoints.append(_CkptInfo(p, metric, it, created))
 
-    def _update_stable_pointer(self, rotated_path: Path, stable_filename: str) -> None:
-        """Point the stable filename to the rotated file via symlink if possible, else copy."""
-        stable_path = self.out_dir / stable_filename
-        if stable_path.exists() or stable_path.is_symlink():
-            try:
-                stable_path.unlink()
-            except Exception as e:
-                raise CheckpointError(
-                    f"Failed to remove existing stable checkpoint pointer {stable_path}: {e}"
-                ) from e
-        # Try to create a relative symlink; on failure, try hard copy; if both fail, raise
-        try:
-            stable_path.symlink_to(rotated_path.name)
-            return
-        except Exception as symlink_err:
-            try:
-                shutil.copy2(rotated_path, stable_path)
-                return
-            except Exception as copy_err:
-                raise CheckpointError(
-                    f"Failed to update stable checkpoint pointer {stable_path}: symlink error={symlink_err}; copy error={copy_err}"
-                ) from copy_err
 
     def save_checkpoint(
         self,
@@ -202,10 +172,6 @@ class CheckpointManager:
                 for ckpt in to_remove:
                     try:
                         ckpt.path.unlink()
-                        # Also remove sidecar file if it exists
-                        sidecar = ckpt.path.with_suffix(ckpt.path.suffix + ".json")
-                        if sidecar.exists():
-                            sidecar.unlink()
                         if logger:
                             logger.info(f"Removed old last checkpoint: {ckpt.path}")
                     except Exception as e:
