@@ -122,3 +122,7 @@ ml_playground/datasets/**/meta.json
 ml_playground/datasets/**/train.jsonl
 ml_playground/datasets/**/val.jsonl
 ml_playground/datasets/**/tokenizer/
+
+.windsurf/
+
+.junie/
