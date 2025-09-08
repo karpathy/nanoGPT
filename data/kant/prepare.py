@@ -1,5 +1,6 @@
 import os
-import pickle
+import requests
+import tiktoken
 import numpy as np
 
 # download the tiny shakespeare dataset
