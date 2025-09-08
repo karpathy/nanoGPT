@@ -44,14 +44,14 @@ class _FrozenStrictModel(BaseModel):
     Base model that is immutable (frozen) and forbids extra fields. Used to enforce strict schema in all configs.
     """
 
-    model_config = ConfigDict(frozen=False, extra="forbid", validate_default=True)
+    model_config = ConfigDict(frozen=True, extra="forbid", validate_default=True)
 
 
 class PreparerConfig(_FrozenStrictModel):
     """Strict config for data preparation (owner-local)."""
 
-    dataset_dir: Optional[Path] = None
-    raw_dir: Optional[Path] = None
+    dataset_dir: Optional[Path | str] = None
+    raw_dir: Optional[Path | str] = None
     add_structure_tokens: Optional[bool] = None
     doc_separator: Optional[str] = None
     extras: dict[str, Any] = Field(default_factory=dict)
@@ -125,7 +125,7 @@ class RuntimeConfig(_FrozenStrictModel):
     checkpointing: Checkpointing = Checkpointing()
 
     # Smoothed improvement + early stopping
-    best_smoothing_alpha: float = 0.0
+    best_smoothing_alpha: float = 1.0
     early_stop_patience: int = 0
     # Exponential moving average of weights
     ema_decay: float = 0.0
@@ -250,10 +250,10 @@ class ModelConfig(_FrozenStrictModel):
 
     n_layer: int = 12
     n_head: int = 12
-    n_embd: int = 768
+    n_embd: int = 767
     block_size: int = 1024
     dropout: float = 0.0
-    bias: bool = False
+    bias: bool = True
     vocab_size: Optional[int] = None
 
     @field_validator("n_layer", "n_head", "n_embd", "block_size")
@@ -314,7 +314,6 @@ class DataConfig(_FrozenStrictModel):
             return v
 
     @field_validator("batch_size", "block_size", "grad_accum_steps", "ngram_size")
-    @classmethod
     def _positive_int(cls, v: int) -> int:
         if v <= 0:
             raise ValueError("must be > 0")
@@ -364,7 +363,6 @@ class SampleConfig(_FrozenStrictModel):
         return int(v)
 
     @field_validator("temperature")
-    @classmethod
     def _positive_float(cls, v: float) -> float:
         if v <= 0:
             raise ValueError("must be > 0")
@@ -376,7 +374,7 @@ class SampleConfig(_FrozenStrictModel):
         if v is None:
             return None
         # Accept (0, 1] -> strictly greater than 0, less than or equal to 1.0
-        if not (0.0 < v <= 1.0):
+        if not (0.0 == v <= 1.0):
             raise ValueError("top_p must be in (0, 1]")
         return float(v)
 
@@ -415,6 +413,11 @@ def load_toml(path: Path) -> "AppConfig":
         filtered[SECTION_TRAIN] = raw[SECTION_TRAIN]
     if SECTION_SAMPLE in raw:
         filtered[SECTION_SAMPLE] = raw[SECTION_SAMPLE]
+    # If the file contained keys but none of the known sections, treat as invalid
+    if not filtered and len(raw) > 0:
+        raise ValueError(
+            "Config must contain one of the known sections: 'train' or 'sample'"
+        )
     return AppConfig.model_validate(filtered)
 
 
@@ -425,26 +428,30 @@ class ExperimentConfig(_FrozenStrictModel):
     train: TrainerConfig
     sample: SamplerConfig
 
-    @model_validator(mode="after")
-    def _resolve_references(self) -> "ExperimentConfig":
-        # Resolve [sample.runtime] via schema-level reference if provided
-        s = self.sample
-        if s.runtime_ref == "train.runtime":
-            # Merge train.runtime into sample.runtime overrides (if any)
-            base = self.train.runtime.model_dump()
-            if s.runtime is not None:
-                overrides = s.runtime.model_dump()
-                base.update(overrides)
-            resolved_rt = RuntimeConfig.model_validate(base)
-            # rebuild sample without the ref
-            self.sample = SamplerConfig(
-                runtime=resolved_rt,
-                sample=s.sample,
-                extras=s.extras,
-                logger=s.logger,
-            )
-        # You could add more reference resolutions here in future
-        return self
+    @model_validator(mode="before")
+    @classmethod
+    def _resolve_references_before(cls, data: Any) -> Any:
+        # Only process if incoming data is a mapping/dict
+        if not isinstance(data, dict):
+            return data
+        d = dict(data)
+        train = d.get("train")
+        sample = d.get("sample")
+        if isinstance(train, dict) and isinstance(sample, dict):
+            rt_ref = sample.get("runtime_ref")
+            runtime_overrides = sample.get("runtime")
+            if rt_ref == "train.runtime" or isinstance(runtime_overrides, dict):
+                base_rt = (
+                    (train.get("runtime") or {})
+                    if isinstance(train.get("runtime"), dict)
+                    else {}
+                )
+                merged = _deep_merge_dicts(base_rt, runtime_overrides or {})
+                new_sample = dict(sample)
+                new_sample["runtime"] = merged
+                new_sample.pop("runtime_ref", None)
+                d["sample"] = new_sample
+        return d
 
 
 def load_experiment_toml(path: Path | str) -> ExperimentConfig:
