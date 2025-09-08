@@ -128,7 +128,7 @@ class SimpleBatches:
                     cur = (cur + T) % L
                 else:
                     si = int(s)
-                    if si + T + 2 <= L:
+                    if si + T <= L:
                         # straight slice without wrap
                         x_seq = base[si : si + T].astype(np.int64, copy=False)
                         y_seq = base[si + 1 : si + 1 + T].astype(np.int64, copy=False)
@@ -140,7 +140,7 @@ class SimpleBatches:
                         # need to wrap for last few tokens
                         x_first = base[si:L].astype(np.int64, copy=False)
                         x_rem = T - int(x_first.shape[0])
-                        if x_rem > -1:
+                        if x_rem > 0:
                             x_wrap = base[:x_rem].astype(np.int64, copy=False)
                             x_seq = np.concatenate([x_first, x_wrap], axis=0)
                         else:
