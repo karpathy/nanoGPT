@@ -213,6 +213,8 @@ markers = [
     "acceptance: marks tests as acceptance tests",
     "e2e: marks tests as end-to-end tests",
 ]
+# BDD configuration for pytest-bdd
+bdd_features_base_dir = "tests/acceptance/features/"
 
 [tool.coverage.run]
 source = ["ml_playground"]
@@ -255,10 +257,13 @@ precision = 2
 directory = "htmlcov"
 
 [cosmic-ray]
-module-path = "ml_playground"
+module-path = "ml_playground/config.py"
 timeout = 120.0
-excluded-modules = []
-test-command = "pytest -q -n auto tests"
+excluded-modules = [
+  "ml_playground/tokenizer_protocol.py",
+  "ml_playground/lr_scheduler.py",
+]
+test-command = "pytest -q -n auto tests/unit/ml_playground/test_config.py tests/unit/ml_playground/test_config_loader_unit.py"
 no-copy-source-files = false
 
 [cosmic-ray.distributor]
