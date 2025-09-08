@@ -1,7 +1,7 @@
 # Experiments (Mid‑Level Overview)
 
 This directory hosts self‑contained experiments. Each experiment bundles:
-- its data preparation logic (prepare.py),
+- its data preparation logic (`preparer.py`),
 - a TOML config (at the experiment root),
 - a local datasets/ area for seeds and prepared artifacts,
 - a focused Readme.md with step‑by‑step instructions,
@@ -11,10 +11,10 @@ Why self‑contained?
 - Portability: copy a single folder to reuse an experiment.
 - Reproducibility: config, code, and sample data paths live together.
 - Discoverability: each experiment explains itself in its own Readme.
-- Decoupling: no dependency on the legacy ml_playground/datasets package (the CLI falls back to experiment registries).
+- Decoupling: no dependency on any legacy `ml_playground/datasets` package (the CLI uses the experiment registry only).
 
 Conventions
-- Registration: experiment preparers register via ml_playground.experiments.register. The CLI discovers them automatically.
+- Discovery: an experiment must expose a `preparer.py` with a class that implements a `.prepare(...)` method. The CLI auto‑discovers these preparers.
 - Names: the experiment argument to `prepare`/`loop` equals the experiment’s registered name.
 - Config location: TOML lives at the experiment root (no configs/ subfolder).
 - Data location: experiment‑local prepared data lives under `<experiment>/datasets/`.
@@ -75,7 +75,7 @@ Add a new experiment (checklist)
 5) Write `<name>/Readme.md` following the common blueprint: Overview → Data → Method/Model → Environment → How to Run → Config Highlights → Outputs → Troubleshooting → Notes.
 
 Notes
-- The CLI first tries to import legacy `ml_playground.datasets.PREPARERS`; if absent, it uses `ml_playground.experiments.PREPARERS` (this directory). This lets you delete the legacy datasets package without breaking the CLI.
+- The CLI uses `ml_playground.experiments.PREPARERS` (auto‑discovered). Legacy `ml_playground/datasets` registries are not used.
 - Keep paths inside configs relative to the repo for portability.
 
 
@@ -83,7 +83,7 @@ Notes
 Use this copy-ready template to create a new experiment at `ml_playground/experiments/<name>/`.
 
 - Files to create:
-  - `ml_playground/experiments/<name>/prepare.py`
+  - `ml_playground/experiments/<name>/preparer.py`
   - `ml_playground/experiments/<name>/config.toml`
   - `ml_playground/experiments/<name>/Readme.md`
   - `ml_playground/experiments/<name>/datasets/` (created at runtime)
@@ -173,18 +173,21 @@ uv run loop-<name>-cpu  # or the experiment's loop script
 - Keep all paths in TOML relative to the repo root for portability.
 ```
 
-Example `prepare.py`:
+Example `preparer.py` (strict API):
 ```python
 from __future__ import annotations
 from pathlib import Path
-from ml_playground.experiments import register
+from ml_playground.prepare import PreparerConfig, write_bin_and_meta
+from ml_playground.experiments.protocol import Preparer as _PreparerProto, PrepareReport
 
-@register("&lt;dataset_name&gt;")
-def main() -> None:
-    """Prepare the &lt;name&gt; dataset."""
-    config_path = Path(__file__).parent / "config.toml"
-    # Do not read TOML here; the CLI injects validated configs into integration code.
-    print(f"[&lt;name&gt;.prepare] Config lives at: {config_path} (used by CLI)")
+class MyPreparer(_PreparerProto):
+    def prepare(self, cfg: PreparerConfig) -> PrepareReport:  # type: ignore[override]
+        exp_dir = Path(__file__).resolve().parent
+        ds_dir = exp_dir / "datasets"
+        ds_dir.mkdir(parents=True, exist_ok=True)
+        # ... your preparation logic ...
+        # write_bin_and_meta(ds_dir, train_ids, val_ids, meta)
+        return PrepareReport(created_files=(), updated_files=(), skipped_files=(), messages=("ok",))
 ```
 
 Example `config.toml` (adapt to your integration):
