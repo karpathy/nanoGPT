@@ -22,7 +22,7 @@ class BundestagQwen15bLoraMpsPreparer(_PreparerProto):
     def prepare(self, cfg: PreparerConfig) -> PrepareReport:  # type: ignore[override]
         # Determine dataset directory: prefer explicit cfg, fall back to local folder
         exp_dir = Path(__file__).resolve().parent
-        ds_dir = (cfg.dataset_dir or (exp_dir / "datasets")).resolve()
+        ds_dir = Path(cfg.dataset_dir or (exp_dir / "datasets")).resolve()
 
         # Track side-effects (creation/updates) for user feedback
         tracked: list[Path] = [ds_dir]
