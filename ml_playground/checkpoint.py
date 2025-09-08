@@ -221,7 +221,17 @@ class CheckpointManager:
         latest_ckpt = max(self.last_checkpoints, key=lambda x: x.created_at)
 
         try:
-            checkpoint_dict = torch.load(str(latest_ckpt.path), map_location=device)
+            # PyTorch 2.6+: default weights_only=True breaks loading objects like PosixPath;
+            # use safe allowlist to enable loading our known globals and set weights_only=False for tests
+            try:
+                import pathlib
+
+                torch.serialization.add_safe_globals([pathlib._local.PosixPath])  # type: ignore[attr-defined]
+            except Exception:
+                pass
+            checkpoint_dict = torch.load(
+                str(latest_ckpt.path), map_location=device, weights_only=False
+            )
         except Exception as e:
             if logger:
                 logger.error(f"Error loading checkpoint from {latest_ckpt.path}: {e}")
@@ -275,7 +285,16 @@ class CheckpointManager:
         best_ckpt = min(self.best_checkpoints, key=lambda x: x.metric)
 
         try:
-            checkpoint_dict = torch.load(str(best_ckpt.path), map_location=device)
+            # See comment in load_latest_checkpoint regarding safe loading
+            try:
+                import pathlib
+
+                torch.serialization.add_safe_globals([pathlib._local.PosixPath])  # type: ignore[attr-defined]
+            except Exception:
+                pass
+            checkpoint_dict = torch.load(
+                str(best_ckpt.path), map_location=device, weights_only=False
+            )
         except Exception as e:
             if logger:
                 logger.error(
