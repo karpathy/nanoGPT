@@ -10,16 +10,17 @@ set -euo pipefail
 #   CR_SESSION_SUFFIX=<label>  Use out/cosmic-ray/session-<label>.sqlite
 # Extra args are forwarded to `cosmic-ray exec`.
 
-ROOT_DIR="$(dirname "$0")/.."
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd -P)"
 cd "$ROOT_DIR"
 
-mkdir -p out/cosmic-ray
+# Prepare output directories
+mkdir -p "$ROOT_DIR/out/cosmic-ray"
 
 # Support custom session DB naming for matrix/parallel runs
 if [[ -n "${CR_SESSION_SUFFIX:-}" ]]; then
-  SESSION_DB="out/cosmic-ray/session-${CR_SESSION_SUFFIX}.sqlite"
+  SESSION_DB="$ROOT_DIR/out/cosmic-ray/session-${CR_SESSION_SUFFIX}.sqlite"
 else
-  SESSION_DB="out/cosmic-ray/session.sqlite"
+  SESSION_DB="$ROOT_DIR/out/cosmic-ray/session.sqlite"
 fi
 
 USE_UV=0
@@ -44,15 +45,19 @@ fi
 
 if [[ ! -f "$SESSION_DB" ]]; then
   echo "[mut] cosmic-ray init (creating new session)"
+  # Rely on pyproject.toml's [cosmic-ray] section. no-copy-source-files=false ensures CR uses a copy.
   run_cmd cosmic-ray init pyproject.toml "$SESSION_DB" || true
 else
   echo "[mut] Reusing existing session (set CR_FORCE=1 to reset)"
 fi
 
 # Step 2: execute mutations (apply timeout if requested)
+# Note: Cosmic Ray will copy sources unless explicitly disabled; this protects the repo from in-place edits.
+# Any extra args are forwarded to `cosmic-ray exec`.
+
 echo "[mut] cosmic-ray exec (timeout: ${CR_TIMEOUT:-none})"
 if [[ -n "${CR_TIMEOUT:-}" ]]; then
-  run_cmd python tools/with_timeout.py "$CR_TIMEOUT" cosmic-ray exec pyproject.toml "$SESSION_DB" "$@"
+  run_cmd python "$ROOT_DIR/tools/with_timeout.py" "$CR_TIMEOUT" cosmic-ray exec pyproject.toml "$SESSION_DB" "$@"
 else
   run_cmd cosmic-ray exec pyproject.toml "$SESSION_DB" "$@"
 fi
