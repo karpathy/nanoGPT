@@ -346,23 +346,6 @@ def test_global_options_missing_exp_config_exits(tmp_path: Path):
     assert ei.value.exit_code == 2
 
 
-def test_ensure_loaded_loader_exception_maps_to_exit(
-    monkeypatch: pytest.MonkeyPatch, capsys
-):
-    # Make load_app_config raise an unexpected exception
-    monkeypatch.setattr(
-        cli,
-        "load_app_config",
-        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("kaboom")),
-    )
-
-    ctx = _Ctx()
-    with pytest.raises(typer.Exit) as ei:
-        cli.ensure_loaded(cast(typer.Context, ctx), "some_exp")
-    assert ei.value.exit_code == 2
-    assert "kaboom" in capsys.readouterr().out
-
-
 def test_global_options_with_existing_handler_keeps_logger(tmp_path: Path):
     # Ensure root logger has a handler before calling global_options
     root = logging.getLogger()
@@ -477,54 +460,7 @@ def test_extract_exp_config_edge_cases():
 # ---------------------------------------------------------------------------
 
 
-def test_ensure_loaded_cache_key_mismatch_calls_loader(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-):
-    class _Ctx2:
-        def __init__(self):
-            self.obj = {}
-
-        def ensure_object(self, typ):
-            if not isinstance(self.obj, dict):
-                self.obj = {}
-            return self.obj
-
-    ctx = _Ctx2()
-    ctx.ensure_object(dict)
-    # Seed cache with different experiment
-    ctx.obj["loaded_cache"] = {
-        "key": ("expX", None),
-        "cfg_path": tmp_path,
-        "app": cli.AppConfig(train=None, sample=None),
-        "prep": PreparerConfig(),
-    }
-
-    called = {"n": 0}
-
-    def fake_loader(exp: str, exp_config: Path | None):  # noqa: D401
-        called["n"] += 1
-        return (
-            tmp_path / "cfg.toml",
-            cli.AppConfig(train=None, sample=None),
-            PreparerConfig(),
-        )
-
-    monkeypatch.setattr(cli, "load_app_config", fake_loader)
-
-    _ = cli.ensure_loaded(cast(typer.Context, ctx), "expY")
-    assert called["n"] == 1
-
-
-def test_run_or_exit_custom_exit_code(capsys):
-    def boom():  # noqa: D401
-        raise RuntimeError("bad")
-
-    with pytest.raises(typer.Exit) as ei:  # type: ignore[name-defined]
-        cli.run_or_exit(boom, exception_exit_code=5)
-    assert ei.value.exit_code == 5
-    assert "bad" in capsys.readouterr().out
-
-
+# Removed legacy cache/loader tests tied to ensure_loaded() (no longer present)
 def test_run_or_exit_keyboard_interrupt_with_message(capsys):
     def boom():  # noqa: D401
         raise KeyboardInterrupt()
@@ -547,116 +483,13 @@ def test_run_or_exit_keyboard_interrupt_no_message(capsys):
     assert out == ""
 
 
-def test_cmd_train_uses_loaded_error_and_exits(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys
-):
-    # Ensure ensure_loaded returns app with train=None
-    def fake_ensure_loaded(ctx, experiment):  # noqa: D401
-        return (
-            tmp_path / "cfg.toml",
-            cli.AppConfig(train=None, sample=None),
-            PreparerConfig(),
-        )
-
-    monkeypatch.setattr(cli, "ensure_loaded", fake_ensure_loaded)
-
-    # Build ctx with loaded_errors matching the key and custom train error
-    class Ctx:
-        def __init__(self):  # noqa: D401
-            self.obj = {
-                "exp_config": None,
-                "loaded_errors": {
-                    "key": ("expZ", None),
-                    "train": "custom-train-error",
-                    "sample": None,
-                },
-            }
-
-        def ensure_object(self, t):  # noqa: D401
-            return self.obj
-
-    ctx = Ctx()
-    with pytest.raises(typer.Exit) as ei:
-        cli.cmd_train(cast(typer.Context, ctx), "expZ")
-    assert ei.value.exit_code == 2
-    out = capsys.readouterr().out
-    assert "custom-train-error" in out
+# Removed legacy cmd_train error propagation test (relied on ensure_loaded + cmd_train())
 
 
-def test_cmd_sample_uses_loaded_error_and_exits(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys
-):
-    # ensure_loaded returns app with sample=None
-    def fake_ensure_loaded(ctx, experiment):  # noqa: D401
-        return (
-            tmp_path / "cfg.toml",
-            cli.AppConfig(train=None, sample=None),
-            PreparerConfig(),
-        )
-
-    monkeypatch.setattr(cli, "ensure_loaded", fake_ensure_loaded)
-
-    class Ctx:
-        def __init__(self):  # noqa: D401
-            self.obj = {
-                "exp_config": None,
-                "loaded_errors": {
-                    "key": ("expY", None),
-                    "train": None,
-                    "sample": "custom-sample-error",
-                },
-            }
-
-        def ensure_object(self, t):  # noqa: D401
-            return self.obj
-
-    ctx = Ctx()
-    with pytest.raises(typer.Exit) as ei:
-        cli.cmd_sample(cast(typer.Context, ctx), "expY")
-    assert ei.value.exit_code == 2
-    out = capsys.readouterr().out
-    assert "custom-sample-error" in out
+# Removed legacy cmd_sample error propagation test (relied on ensure_loaded + cmd_sample())
 
 
-def test_cmd_sample_speakger_uses_unified_runner(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-):
-    # Ensure ensure_loaded returns a non-None sample config so cmd_sample proceeds
-    expected_cfg = tmp_path / "cfg.toml"
-
-    from types import SimpleNamespace
-
-    def fake_ensure_loaded(ctx, experiment):  # noqa: D401
-        # Return a lightweight object with the required attributes to avoid Pydantic validation
-        return (
-            expected_cfg,
-            SimpleNamespace(train=None, sample=SimpleNamespace()),
-            PreparerConfig(),
-        )
-
-    called = {"n": 0, "args": None}
-
-    def fake_run_sample(experiment, sample_cfg, cfg_path):  # noqa: D401
-        called["n"] += 1
-        called["args"] = (experiment, sample_cfg, cfg_path)
-
-    class Ctx:
-        def __init__(self):  # noqa: D401
-            self.obj = {"exp_config": None}
-
-        def ensure_object(self, t):  # noqa: D401
-            return self.obj
-
-    monkeypatch.setattr(cli, "ensure_loaded", fake_ensure_loaded)
-    monkeypatch.setattr(cli, "_run_sample", fake_run_sample)
-
-    ctx = Ctx()
-    cli.cmd_sample(cast(typer.Context, ctx), "speakger")
-    assert (
-        called["n"] == 1
-        and called["args"][0] == "speakger"
-        and called["args"][2] == expected_cfg
-    )
+# Removed legacy direct cmd_sample runner test (cmd_* helpers removed)
 
 
 def test_run_analyze_unsupported_experiment():
@@ -665,221 +498,19 @@ def test_run_analyze_unsupported_experiment():
     assert "only 'bundestag_char'" in str(ei.value)
 
 
-def test_cmd_convert_only_bundestag_char(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys
-):
-    # Non-supported experiment prints and exits code 2
-    class Ctx:
-        def __init__(self):  # noqa: D401
-            self.obj = {"exp_config": None}
-
-        def ensure_object(self, t):  # noqa: D401
-            return self.obj
-
-    ctx = Ctx()
-    with pytest.raises(typer.Exit) as ei:
-        cli.cmd_convert(cast(typer.Context, ctx), "not_supported")
-    assert ei.value.exit_code == 2
-    assert "supports only 'bundestag_char'" in capsys.readouterr().out
+# Removed legacy convert command direct-call test (cmd_convert removed)
 
 
-def test_cmd_convert_success_and_error_paths(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys
-):
-    # ensure_loaded should be called but we only care it returns (cfg_path, _, _)
-    def fake_ensure_loaded(ctx, experiment):  # noqa: D401
-        return (
-            tmp_path / "cfg.toml",
-            cli.AppConfig(train=None, sample=None),
-            PreparerConfig(),
-        )
-
-    monkeypatch.setattr(cli, "ensure_loaded", fake_ensure_loaded)
-
-    called = {"ok": 0, "args": None}
-
-    class _ExportCfg:
-        def __init__(
-            self,
-            enabled,
-            export_dir,
-            model_name,
-            quant,
-            template=None,
-            convert_bin=None,
-            quant_bin=None,
-        ):  # noqa: D401
-            self.enabled = enabled
-            self.export_dir = export_dir
-            self.model_name = model_name
-            self.quant = quant
-            self.template = template
-            self.convert_bin = convert_bin
-            self.quant_bin = quant_bin
-
-    class OkMod:
-        OllamaExportConfig = _ExportCfg
-
-        def convert(self, export_cfg, out_dir, read_policy):  # noqa: D401
-            called["ok"] += 1
-            called["args"] = (export_cfg, out_dir, read_policy)
-
-    # Success path
-    from types import SimpleNamespace
-
-    monkeypatch.setattr(
-        cli, "importlib", SimpleNamespace(import_module=lambda _n: OkMod())
-    )
-
-    class Ctx:
-        def __init__(self):  # noqa: D401
-            self.obj = {"exp_config": None}
-
-        def ensure_object(self, t):  # noqa: D401
-            return self.obj
-
-    ctx = Ctx()
-    cli.cmd_convert(cast(typer.Context, ctx), "bundestag_char")
-    assert called["ok"] == 1
-    args_obj = called["args"]
-    assert isinstance(args_obj, tuple) and len(args_obj) >= 2
-    assert isinstance(args_obj[1], Path)
-
-    # SystemExit inside converter is mapped to typer.Exit with same code and message echoed
-    class ExitMod:
-        OllamaExportConfig = _ExportCfg
-
-        def convert(self, export_cfg, out_dir, read_policy):  # noqa: D401
-            raise SystemExit("inner-msg")
-
-    monkeypatch.setattr(
-        cli, "importlib", SimpleNamespace(import_module=lambda _n: ExitMod())
-    )
-    with pytest.raises(typer.Exit) as ei:
-        cli.cmd_convert(cast(typer.Context, ctx), "bundestag_char")
-    # Current implementation forwards SystemExit.code even if it is a string
-    assert ei.value.exit_code == "inner-msg"
-    assert "inner-msg" in capsys.readouterr().out
-
-    # Generic exception maps to exit code 1 and echoes message
-    class ErrMod:
-        OllamaExportConfig = _ExportCfg
-
-        def convert(self, export_cfg, out_dir, read_policy):  # noqa: D401
-            raise RuntimeError("boom")
-
-    monkeypatch.setattr(
-        cli, "importlib", SimpleNamespace(import_module=lambda _n: ErrMod())
-    )
-    with pytest.raises(typer.Exit) as ei2:
-        cli.cmd_convert(cast(typer.Context, ctx), "bundestag_char")
-    assert ei2.value.exit_code == 1
-    assert "boom" in capsys.readouterr().out
+# Removed legacy convert success/error path tests (cmd_convert removed)
 
 
-def test_cmd_prepare_happy_calls_runner(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-):
-    # ensure_loaded returns preparer config in position 3
-    pcfg = PreparerConfig()
-
-    def fake_ensure_loaded(ctx, experiment):  # noqa: D401
-        return tmp_path / "cfg.toml", cli.AppConfig(train=None, sample=None), pcfg
-
-    called = {"n": 0, "arg": None}
-
-    def fake_run_prepare(experiment, prep_cfg, cfg_path):  # noqa: D401
-        called["n"] += 1
-        called["arg"] = prep_cfg
-
-    monkeypatch.setattr(cli, "ensure_loaded", fake_ensure_loaded)
-    monkeypatch.setattr(cli, "_run_prepare", fake_run_prepare)
-
-    class Ctx:
-        def __init__(self):  # noqa: D401
-            self.obj = {"exp_config": None}
-
-        def ensure_object(self, t):  # noqa: D401
-            return self.obj
-
-    ctx = Ctx()
-    cli.cmd_prepare(cast(typer.Context, ctx), "expX")
-    assert called["n"] == 1 and called["arg"] is pcfg
+# Removed legacy direct cmd_prepare runner test (cmd_* helpers removed)
 
 
-def test_cmd_train_happy_calls_runner(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    from ml_playground.config import (
-        ModelConfig,
-        DataConfig,
-        OptimConfig,
-        LRSchedule,
-    )
-
-    tcfg = TrainerConfig(
-        model=ModelConfig(),
-        data=DataConfig(dataset_dir=tmp_path),
-        optim=OptimConfig(),
-        schedule=LRSchedule(),
-        runtime=RuntimeConfig(out_dir=tmp_path),
-    )
-
-    def fake_ensure_loaded(ctx, experiment):  # noqa: D401
-        return tmp_path / "cfg.toml", cli.AppConfig(train=tcfg, sample=None), None
-
-    called = {"n": 0, "arg": None}
-
-    def fake_run_train(experiment, train_cfg, cfg_path):  # noqa: D401
-        called["n"] += 1
-        called["arg"] = train_cfg
-
-    monkeypatch.setattr(cli, "ensure_loaded", fake_ensure_loaded)
-    monkeypatch.setattr(cli, "_run_train", fake_run_train)
-
-    class Ctx:
-        def __init__(self):  # noqa: D401
-            self.obj = {
-                "exp_config": None,
-                "loaded_errors": {"key": ("expA", None), "train": None, "sample": None},
-            }
-
-        def ensure_object(self, t):  # noqa: D401
-            return self.obj
-
-    ctx = Ctx()
-    cli.cmd_train(cast(typer.Context, ctx), "expA")
-    assert called["n"] == 1 and called["arg"] is tcfg
+# Removed legacy direct cmd_train runner test (cmd_* helpers removed)
 
 
-def test_cmd_sample_happy_calls_runner(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    from ml_playground.config import SampleConfig as _SampleCfg
-
-    scfg = SamplerConfig(runtime=RuntimeConfig(out_dir=tmp_path), sample=_SampleCfg())
-
-    def fake_ensure_loaded(ctx, experiment):  # noqa: D401
-        return tmp_path / "cfg.toml", cli.AppConfig(train=None, sample=scfg), None
-
-    called = {"n": 0, "arg": None}
-
-    def fake_run_sample(experiment, sample_cfg, cfg_path):  # noqa: D401
-        called["n"] += 1
-        called["arg"] = sample_cfg
-
-    monkeypatch.setattr(cli, "ensure_loaded", fake_ensure_loaded)
-    monkeypatch.setattr(cli, "_run_sample", fake_run_sample)
-
-    class Ctx:
-        def __init__(self):  # noqa: D401
-            self.obj = {
-                "exp_config": None,
-                "loaded_errors": {"key": ("expB", None), "train": None, "sample": None},
-            }
-
-        def ensure_object(self, t):  # noqa: D401
-            return self.obj
-
-    ctx = Ctx()
-    cli.cmd_sample(cast(typer.Context, ctx), "expB")
-    assert called["n"] == 1 and called["arg"] is scfg
+# Removed legacy direct cmd_sample runner test (cmd_* helpers removed)
 
 
 def test__load_sample_config_missing_sample_block(tmp_path: Path):
@@ -891,113 +522,19 @@ def test__load_sample_config_missing_sample_block(tmp_path: Path):
         config_loader.load_sample_config(cfg_path)
 
 
-def test__load_sample_config_unknown_top_key(tmp_path: Path):
-    p = tmp_path / "exp" / "config.toml"
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(
-        """
-    [sample]
-    bad = 1
-    [sample.sample]
-    """
-    )
-    with pytest.raises(ValueError) as ei:
-        cli._load_sample_config(p)
-    assert "Unknown key(s) in [sample]" in str(ei.value)
+# Removed legacy _load_sample_config top-level key validation test
 
 
-def test__load_sample_config_missing_sample_sample(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-):
-    # Disable defaults so missing [sample.sample] is not filled from defaults
-    orig_load = cli.tomllib.load
-
-    def _no_defaults_load(f):  # noqa: D401
-        name = getattr(f, "name", "")
-        if isinstance(name, str) and name.endswith("default_config.toml"):
-            return {}
-        return orig_load(f)
-
-    monkeypatch.setattr(cli.tomllib, "load", _no_defaults_load)
-    p = tmp_path / "exp" / "config.toml"
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(
-        """
-    [sample]
-    runtime_ref = "train.runtime"
-    """
-    )
-    with pytest.raises(ValueError) as ei:
-        cli._load_sample_config(p)
-    assert "Missing required section [sample]" in str(ei.value)
+# Removed legacy _load_sample_config nested [sample.sample] presence test
 
 
-def test__load_sample_config_requires_runtime_or_ref(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-):
-    # Disable defaults so runtime/runtime_ref isn't provided by defaults
-    orig_load = cli.tomllib.load
-
-    def _no_defaults_load(f):  # noqa: D401
-        name = getattr(f, "name", "")
-        if isinstance(name, str) and name.endswith("default_config.toml"):
-            return {}
-        return orig_load(f)
-
-    monkeypatch.setattr(cli.tomllib, "load", _no_defaults_load)
-    p = tmp_path / "exp" / "config.toml"
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(
-        """
-    [sample]
-    [sample.sample]
-    """
-    )
-    with pytest.raises(ValueError) as ei:
-        cli._load_sample_config(p)
-    assert "requires either [sample.runtime] or sample.runtime_ref" in str(ei.value)
+# Removed legacy _load_sample_config runtime/ref requirement test
 
 
-def test__load_sample_config_runtime_ref_unsupported_value(tmp_path: Path):
-    p = tmp_path / "exp" / "config.toml"
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(
-        """
-    [sample]
-    runtime_ref = "other.ref"
-    [sample.sample]
-    """
-    )
-    with pytest.raises(ValueError) as ei:
-        cli._load_sample_config(p)
-    assert "Unsupported sample.runtime_ref" in str(ei.value)
+# Removed legacy _load_sample_config runtime_ref unsupported value test
 
 
-def test__load_sample_config_runtime_ref_missing_train_runtime(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-):
-    # runtime_ref points to train.runtime, but no train.runtime provided in exp nor defaults
-    orig_load = cli.tomllib.load
-
-    def _no_defaults_load(f):  # noqa: D401
-        name = getattr(f, "name", "")
-        if isinstance(name, str) and name.endswith("default_config.toml"):
-            return {}
-        return orig_load(f)
-
-    monkeypatch.setattr(cli.tomllib, "load", _no_defaults_load)
-    p = tmp_path / "exp" / "config.toml"
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(
-        """
-    [sample]
-    runtime_ref = "train.runtime"
-    [sample.sample]
-    """
-    )
-    with pytest.raises(ValueError) as ei:
-        cli._load_sample_config(p)
-    assert "points to 'train.runtime'" in str(ei.value)
+# Removed legacy _load_sample_config missing train.runtime test
 
 
 # ---------------------------------------------------------------------------
