@@ -497,7 +497,7 @@ def validate_config_field(
     Raises:
         ValueError: If validation fails
     """
-    # Check if required
+    # Check if required and missing
     if required and value is None:
         raise ValueError(f"Required configuration field '{field_name}' is missing")
 

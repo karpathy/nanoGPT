@@ -1,180 +1,118 @@
 from __future__ import annotations
 from pytest_mock import MockerFixture
-from ml_playground.datasets.shakespeare import main
+
+# New strict API imports
+from ml_playground.experiments.shakespeare.preparer import ShakespearePreparer
+from ml_playground.prepare import PreparerConfig
 
 
-def test_shakespeare_download_and_encode(mocker: MockerFixture) -> None:
-    """Test shakespeare dataset downloads, splits, and encodes data."""
+def test_shakespeare_download_and_encode(tmp_path, mocker: MockerFixture) -> None:
+    """Test shakespeare preparer downloads, splits, encodes, and writes outputs."""
     test_text = "Hello world! This is test data for Shakespeare."
 
-    # Mock components
+    # Arrange: redirect preparer exp_dir via module __file__
+    import ml_playground.experiments.shakespeare.preparer as prep_mod
+
+    exp_dir = tmp_path / "experiments" / "shakespeare"
+    exp_dir.mkdir(parents=True, exist_ok=True)
+    ds_dir = exp_dir / "datasets"
+    # Point module __file__ to our temp exp_dir
+    monkey = mocker
+    monkey.patch.object(prep_mod, "__file__", str(exp_dir / "preparer.py"))
+
+    # Mock network and tokenizer
     mock_response = mocker.Mock()
     mock_response.text = test_text
     mock_response.raise_for_status.return_value = None
-
-    mock_encoder = mocker.Mock()
-    mock_encoder.encode_ordinary.side_effect = [
-        list(range(len(test_text[:42]))),  # Train data (90%)
-        list(range(len(test_text[42:]))),  # Val data (10%)
-    ]
-
-    mock_path = mocker.MagicMock()
-    mock_input_file = mocker.MagicMock()
-    mock_train_file = mocker.MagicMock()
-    mock_val_file = mocker.MagicMock()
-
-    # Setup path mocking
-    mock_path.return_value = mock_path
-    mock_path.mkdir.return_value = None
-    datasets_dir = mocker.MagicMock()
-    ds_dir = mocker.MagicMock()
-
-    def truediv_root(arg):
-        return datasets_dir if arg == "datasets" else mocker.MagicMock()
-
-    def truediv_datasets(arg):
-        return ds_dir if arg == "shakespeare" else mocker.MagicMock()
-
-    mock_path.__truediv__.side_effect = truediv_root
-    datasets_dir.__truediv__.side_effect = truediv_datasets
-
-    def truediv_ds(arg):
-        if arg == "input.txt":
-            return mock_input_file
-        if arg == "train.bin":
-            return mock_train_file
-        if arg == "val.bin":
-            return mock_val_file
-        return mocker.MagicMock()
-
-    ds_dir.__truediv__.side_effect = truediv_ds
-
-    # File doesn't exist initially
-    mock_input_file.exists.return_value = False
-    mock_input_file.write_text.return_value = None
-    mock_input_file.read_text.return_value = test_text
-
-    mocker.patch("ml_playground.datasets.shakespeare.Path", return_value=mock_path)
-    mocker.patch(
-        "ml_playground.datasets.shakespeare.requests.get", return_value=mock_response
+    get_mock = mocker.patch(
+        "ml_playground.experiments.shakespeare.preparer.requests.get",
+        return_value=mock_response,
     )
-    mocker.patch(
-        "ml_playground.datasets.shakespeare.tiktoken.get_encoding",
-        return_value=mock_encoder,
+
+    enc_calls: list[str] = []
+    mock_tok = mocker.Mock()
+
+    def _enc(x: str):
+        enc_calls.append(x)
+        return list(range(len(x)))
+
+    mock_tok.encode.side_effect = _enc
+    mocker.patch.object(prep_mod, "create_tokenizer", return_value=mock_tok)
+
+    # Spy on writer util to assert it's called
+    writer_spy = mocker.patch.object(prep_mod, "write_bin_and_meta")
+
+    # Act
+    report = ShakespearePreparer().prepare(PreparerConfig())
+
+    # Assert: download occurred and input file written
+    get_mock.assert_called_once()
+    assert (ds_dir / "input.txt").exists()
+
+    # Tokenizer used twice (train/val)
+    assert len(enc_calls) == 2
+
+    # Writer called once with ds_dir
+    writer_spy.assert_called_once()
+    args, kwargs = writer_spy.call_args
+    assert args and args[0] == ds_dir
+    # Report includes created or updated files tuples
+    assert hasattr(report, "created_files") and hasattr(report, "messages")
+
+
+def test_shakespeare_skip_download_if_exists(tmp_path, mocker: MockerFixture) -> None:
+    """Test preparer skips download when input file exists."""
+    import ml_playground.experiments.shakespeare.preparer as prep_mod
+
+    exp_dir = tmp_path / "experiments" / "shakespeare"
+    ds_dir = exp_dir / "datasets"
+    ds_dir.mkdir(parents=True, exist_ok=True)
+    (ds_dir / "input.txt").write_text("Existing Shakespeare data.")
+    mocker.patch.object(prep_mod, "__file__", str(exp_dir / "preparer.py"))
+
+    # Patch requests.get and ensure it's NOT called
+    get_mock = mocker.patch(
+        "ml_playground.experiments.shakespeare.preparer.requests.get"
     )
-    arr_mock = mocker.MagicMock()
-    arr_mock.tobytes.return_value = b""
-    mocker.patch("numpy.array", side_effect=lambda x, dtype: arr_mock)
 
-    main()
+    # Minimal tokenizer
+    mock_tok = mocker.Mock()
+    mock_tok.encode.side_effect = lambda s: list(range(len(s)))
+    mocker.patch.object(prep_mod, "create_tokenizer", return_value=mock_tok)
+    writer_spy = mocker.patch.object(prep_mod, "write_bin_and_meta")
 
-    # Verify download happened
-    mock_response.raise_for_status.assert_called_once()
-    mock_input_file.write_text.assert_called_once_with(test_text, encoding="utf-8")
+    ShakespearePreparer().prepare(PreparerConfig())
 
-    # Verify encoding calls
-    assert mock_encoder.encode_ordinary.call_count == 2
-
-    # Verify file writes
-    mock_train_file.write_bytes.assert_called_once()
-    mock_val_file.write_bytes.assert_called_once()
+    get_mock.assert_not_called()
+    writer_spy.assert_called_once()
+    assert mock_tok.encode.call_count == 2
 
 
-def test_shakespeare_skip_download_if_exists(mocker: MockerFixture) -> None:
-    """Test shakespeare dataset skips download when input file exists."""
-    test_text = "Existing Shakespeare data."
+def test_shakespeare_data_split_ratios(tmp_path, mocker: MockerFixture) -> None:
+    """Test that data is split into 90% train, 10% val before encoding."""
+    import ml_playground.experiments.shakespeare.preparer as prep_mod
 
-    mock_encoder = mocker.Mock()
-    mock_encoder.encode_ordinary.side_effect = [
-        list(range(len(test_text[:23]))),  # Train data (90%)
-        list(range(len(test_text[23:]))),  # Val data (10%)
-    ]
+    exp_dir = tmp_path / "experiments" / "shakespeare"
+    ds_dir = exp_dir / "datasets"
+    ds_dir.mkdir(parents=True, exist_ok=True)
+    test_text = "x" * 100
+    (ds_dir / "input.txt").write_text(test_text)
+    mocker.patch.object(prep_mod, "__file__", str(exp_dir / "preparer.py"))
 
-    mock_path = mocker.MagicMock()
-    mock_input_file = mocker.MagicMock()
-    mock_train_file = mocker.MagicMock()
-    mock_val_file = mocker.MagicMock()
+    captured: list[str] = []
+    mock_tok = mocker.Mock()
 
-    # Setup path mocking
-    mock_path.return_value = mock_path
-    mock_path.mkdir.return_value = None
-    mock_path.__truediv__.side_effect = [
-        mock_input_file,
-        mock_train_file,
-        mock_val_file,
-    ]
+    def _enc(s: str):
+        captured.append(s)
+        return list(range(len(s)))
 
-    # File exists
-    mock_input_file.exists.return_value = True
-    mock_input_file.read_text.return_value = test_text
+    mock_tok.encode.side_effect = _enc
+    mocker.patch.object(prep_mod, "create_tokenizer", return_value=mock_tok)
+    mocker.patch.object(prep_mod, "write_bin_and_meta")
 
-    mocker.patch("ml_playground.datasets.shakespeare.Path", return_value=mock_path)
-    mock_get = mocker.patch("ml_playground.datasets.shakespeare.requests.get")
-    mocker.patch(
-        "ml_playground.datasets.shakespeare.tiktoken.get_encoding",
-        return_value=mock_encoder,
-    )
-    arr_mock2 = mocker.MagicMock()
-    arr_mock2.tobytes.return_value = b""
-    mocker.patch("numpy.array", side_effect=lambda x, dtype: arr_mock2)
+    ShakespearePreparer().prepare(PreparerConfig())
 
-    main()
-
-    # Verify no download
-    mock_get.assert_not_called()
-    mock_input_file.write_text.assert_not_called()
-
-    # Verify processing still happens
-    mock_encoder.encode_ordinary.assert_called()
-    mock_train_file.write_bytes.assert_called_once()
-    mock_val_file.write_bytes.assert_called_once()
-
-
-def test_shakespeare_data_split_ratios(mocker: MockerFixture) -> None:
-    """Test that data is split correctly into 90% train, 10% val."""
-    test_text = "x" * 100  # Exactly 100 characters for easy math
-
-    mock_encoder = mocker.Mock()
-    # We'll capture what gets passed to encode_ordinary
-    encoded_texts = []
-
-    def capture_encode(text):
-        encoded_texts.append(text)
-        return list(range(len(text)))
-
-    mock_encoder.encode_ordinary.side_effect = capture_encode
-
-    mock_path = mocker.MagicMock()
-    mock_input_file = mocker.MagicMock()
-    mock_train_file = mocker.MagicMock()
-    mock_val_file = mocker.MagicMock()
-
-    mock_path.return_value = mock_path
-    mock_path.mkdir.return_value = None
-    mock_path.__truediv__.side_effect = [
-        mock_input_file,
-        mock_train_file,
-        mock_val_file,
-    ]
-
-    mock_input_file.exists.return_value = True
-    mock_input_file.read_text.return_value = test_text
-
-    mocker.patch("ml_playground.datasets.shakespeare.Path", return_value=mock_path)
-    mocker.patch(
-        "ml_playground.datasets.shakespeare.tiktoken.get_encoding",
-        return_value=mock_encoder,
-    )
-    arr_mock3 = mocker.MagicMock()
-    arr_mock3.tobytes.return_value = b""
-    mocker.patch("numpy.array", side_effect=lambda x, dtype: arr_mock3)
-
-    main()
-
-    # Should have captured train and val data
-    assert len(encoded_texts) == 2
-    train_text, val_text = encoded_texts
-
-    # Verify split ratios
-    assert len(train_text) == 90  # 90% of 100
-    assert len(val_text) == 10  # 10% of 100
+    assert len(captured) == 2
+    train_text, val_text = captured
+    assert len(train_text) == 90
+    assert len(val_text) == 10
