@@ -1,5 +1,7 @@
 ---
-apply: always
+trigger: always_on
+description: 
+globs: 
 ---
 
 # ml_playground Setup Guide

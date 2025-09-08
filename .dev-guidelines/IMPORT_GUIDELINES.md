@@ -1,5 +1,7 @@
 ---
-apply: always
+trigger: always_on
+description: 
+globs: 
 ---
 
 # Import Guidelines: Strict Policy and Rationale

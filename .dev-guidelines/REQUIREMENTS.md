@@ -1,3 +1,9 @@
+---
+trigger: model_decision
+description: when talking about requirements (checkpointing behavior)
+globs: *.py, *.md
+---
+
 # Checkpointing System Requirements
 
 ## Overview
