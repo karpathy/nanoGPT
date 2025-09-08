@@ -374,7 +374,7 @@ class SampleConfig(_FrozenStrictModel):
         if v is None:
             return None
         # Accept (0, 1] -> strictly greater than 0, less than or equal to 1.0
-        if not (0.0 == v <= 1.0):
+        if not (0.0 < v <= 1.0):
             raise ValueError("top_p must be in (0, 1]")
         return float(v)
 
