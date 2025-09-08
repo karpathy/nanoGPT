@@ -4,7 +4,8 @@ from typing import Protocol, Any, Iterable
 from pathlib import Path
 import pickle
 import numpy as np
-from ml_playground.tokenizer import Tokenizer, create_tokenizer
+from ml_playground.tokenizer_protocol import Tokenizer
+from ml_playground.tokenizer import create_tokenizer
 from ml_playground.error_handling import DataError
 from ml_playground.config import DataConfig, PreparerConfig
 
