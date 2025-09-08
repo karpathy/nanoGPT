@@ -1,4 +1,5 @@
 import builtins
+from collections.abc import Mapping
 import pytest
 
 from ml_playground.tokenizer import (
@@ -110,6 +111,11 @@ def test_char_tokenizer_roundtrip_proto() -> None:
     assert ids == [1, 2, 3, 1]
     back = tk.decode(ids)
     assert back == text
+    # vocab mapping should be read-only
+    v = tk.vocab
+    assert isinstance(v, Mapping)
+    with pytest.raises(TypeError):
+        v["z"] = 9  # type: ignore[index]  # MappingProxyType is immutable
 
 
 def test_word_tokenizer_roundtrip_proto() -> None:
@@ -121,6 +127,10 @@ def test_word_tokenizer_roundtrip_proto() -> None:
     assert ids == [1, 2, 3, 4]
     # decode joins with spaces by design
     assert tk.decode(ids) == "Hello , world !"
+    # additional property checks to catch decorator removals
+    assert tk.vocab_size == len(vocab)
+    v = tk.vocab
+    assert isinstance(v, Mapping)
 
 
 @pytest.mark.parametrize(
@@ -151,6 +161,56 @@ def test_tiktoken_tokenizer_import_error_proto(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(builtins, "__import__", fake_import)
     with pytest.raises(ImportError):
         TiktokenTokenizer()
+
+
+def test_tiktoken_tokenizer_properties_with_fake_module(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Provide a fake tiktoken module to validate TiktokenTokenizer properties without installing tiktoken.
+    This helps kill decorator removal mutants on TiktokenTokenizer.* properties.
+    """
+
+    class FakeEncoder:
+        def __init__(self):
+            self.n_vocab = 3
+            self._mergeable_ranks = {"a": 1, "b": 2, "c": 3}
+
+        def encode(self, text, allowed_special=None):
+            return [1, 2]
+
+        def decode(self, ids):
+            return "ab"
+
+    class FakeTiktokenModule:
+        @staticmethod
+        def get_encoding(name):
+            return FakeEncoder()
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "tiktoken":
+            return FakeTiktokenModule
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    tk = TiktokenTokenizer()
+    assert tk.name == "tiktoken"
+    assert tk.vocab_size == 3
+    assert tk.decode(tk.encode("hi")) == "ab"
+    v = tk.vocab
+    # Mapping with expected keys
+    assert hasattr(v, "__getitem__") and "a" in v and v["a"] == 1
+
+
+@pytest.mark.parametrize(
+    "bad", ["charz", "wordz", "tiktokenz"]
+)  # avoid real tiktoken import
+def test_create_tokenizer_lexicographic_non_matches_raise(bad) -> None:
+    """Ensure strings that are lexicographically >= but not equal still raise, killing Eq->GtE mutants."""
+    with pytest.raises(ValueError):
+        create_tokenizer(bad)
 
 
 def main():
