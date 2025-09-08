@@ -1,9 +1,19 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal, Optional, Any
+from typing import Literal, Optional, Any, Annotated
 import tomllib
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+    PositiveInt,
+    NonNegativeInt,
+    StrictFloat,
+    AfterValidator,
+)
 
 # Read policy constants to avoid hardcoded strings in code/tests
 READ_POLICY_LATEST: Literal["latest"] = "latest"
@@ -44,7 +54,24 @@ class _FrozenStrictModel(BaseModel):
     Base model that is immutable (frozen) and forbids extra fields. Used to enforce strict schema in all configs.
     """
 
-    model_config = ConfigDict(frozen=True, extra="forbid", validate_default=True)
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+        validate_default=True,
+        strict=True,  # zero coercion across all models
+    )
+
+
+# Reusable strict type aliases
+def _no_nan(v: float) -> float:
+    if v != v:  # NaN check
+        raise ValueError("must not be NaN")
+    return v
+
+NonNaNNonNegativeStrictFloat = Annotated[StrictFloat, AfterValidator(_no_nan), Field(ge=0)]
+UnitIntervalStrictFloat = Annotated[StrictFloat, Field(ge=0, le=1)]  # [0, 1]
+PosUnitIntervalStrictFloat = Annotated[StrictFloat, Field(gt=0, le=1)]  # (0, 1]
+PositiveStrictFloat = Annotated[StrictFloat, Field(gt=0)]
 
 
 class PreparerConfig(_FrozenStrictModel):
@@ -108,15 +135,8 @@ class RuntimeConfig(_FrozenStrictModel):
 
     class Checkpointing(_FrozenStrictModel):
         class Keep(_FrozenStrictModel):
-            last: int = 1
-            best: int = 1
-
-            @field_validator("last", "best")
-            @classmethod
-            def _validate_positive(cls, v: int) -> int:
-                if v < 0:
-                    raise ValueError("must be >= 0")
-                return int(v)
+            last: NonNegativeInt = 1
+            best: NonNegativeInt = 1
 
         keep: Keep = Keep()
         # Which rotated checkpoint to read when loading: latest or best
@@ -200,20 +220,11 @@ class OptimConfig(_FrozenStrictModel):
     Includes validation to enforce non-negative values.
     """
 
-    learning_rate: float = 6e-4
-    weight_decay: float = 1e-1
-    beta1: float = 0.9
-    beta2: float = 0.95
-    grad_clip: float = 1.0
-
-    @field_validator("learning_rate", "weight_decay", "beta1", "beta2", "grad_clip")
-    @classmethod
-    def _non_negative(cls, v: float) -> float:
-        if v != v:  # NaN
-            raise ValueError("must not be NaN")
-        if v < 0:
-            raise ValueError("must be >= 0")
-        return float(v)
+    learning_rate: NonNaNNonNegativeStrictFloat = 6e-4
+    weight_decay: NonNaNNonNegativeStrictFloat = 1e-1
+    beta1: NonNaNNonNegativeStrictFloat = 0.9
+    beta2: NonNaNNonNegativeStrictFloat = 0.95
+    grad_clip: NonNaNNonNegativeStrictFloat = 1.0
 
 
 class LRSchedule(_FrozenStrictModel):
@@ -222,16 +233,9 @@ class LRSchedule(_FrozenStrictModel):
     """
 
     decay_lr: bool = True
-    warmup_iters: int = 2_000
-    lr_decay_iters: int = 600_000
-    min_lr: float = 6e-5
-
-    @field_validator("warmup_iters", "lr_decay_iters")
-    @classmethod
-    def _non_negative_int(cls, v: int) -> int:
-        if v < 0:
-            raise ValueError("must be >= 0")
-        return int(v)
+    warmup_iters: NonNegativeInt = 2000
+    lr_decay_iters: NonNegativeInt = 600_000
+    min_lr: NonNaNNonNegativeStrictFloat = 6e-5
 
     @model_validator(mode="after")
     def _check_warmup_le_decay(self) -> "LRSchedule":
@@ -248,36 +252,13 @@ class ModelConfig(_FrozenStrictModel):
     Provides validation to ensure non-negativity and valid ranges.
     """
 
-    n_layer: int = 12
-    n_head: int = 12
-    n_embd: int = 767
-    block_size: int = 1024
-    dropout: float = 0.0
+    n_layer: PositiveInt = 12
+    n_head: PositiveInt = 12
+    n_embd: PositiveInt = 767
+    block_size: PositiveInt = 1024
+    dropout: UnitIntervalStrictFloat = 0.0
     bias: bool = True
-    vocab_size: Optional[int] = None
-
-    @field_validator("n_layer", "n_head", "n_embd", "block_size")
-    @classmethod
-    def _positive_int(cls, v: int) -> int:
-        if v <= 0:
-            raise ValueError("must be > 0")
-        return int(v)
-
-    @field_validator("dropout")
-    @classmethod
-    def _dropout_range(cls, v: float) -> float:
-        if not (0.0 <= v <= 1.0):
-            raise ValueError("dropout must be in [0, 1]")
-        return float(v)
-
-    @field_validator("vocab_size")
-    @classmethod
-    def _vocab_positive(cls, v: Optional[int]) -> Optional[int]:
-        if v is None:
-            return None
-        if v <= 0:
-            raise ValueError("vocab_size must be > 0 if provided")
-        return int(v)
+    vocab_size: Optional[PositiveInt] = None
 
 
 class DataConfig(_FrozenStrictModel):
@@ -290,13 +271,13 @@ class DataConfig(_FrozenStrictModel):
     train_bin: str = "train.bin"
     val_bin: str = "val.bin"
     meta_pkl: Optional[str] = "meta.pkl"
-    batch_size: int = 12
-    block_size: int = 1024
-    grad_accum_steps: int = 40
+    batch_size: PositiveInt = 12
+    block_size: PositiveInt = 1024
+    grad_accum_steps: PositiveInt = 40
     # Tokenizer selection for bundestag_char-like datasets
     tokenizer: Literal["char", "word", "tiktoken"] = "char"
     # n-gram tokenization size for character datasets (1 = pure char-level)
-    ngram_size: int = 1
+    ngram_size: PositiveInt = 1
     # Sampling policy: random (default) or sequential (deterministic coverage)
     sampler: Literal["random", "sequential"] = "random"
 
@@ -313,11 +294,7 @@ class DataConfig(_FrozenStrictModel):
         except Exception:
             return v
 
-    @field_validator("batch_size", "block_size", "grad_accum_steps", "ngram_size")
-    def _positive_int(cls, v: int) -> int:
-        if v <= 0:
-            raise ValueError("must be > 0")
-        return int(v)
+    # type constraints handle positivity; keep path validators above
 
     # Computed, read-only paths
     @property
@@ -342,41 +319,11 @@ class SampleConfig(_FrozenStrictModel):
     """
 
     start: str = "\n"
-    num_samples: int = 3
-    max_new_tokens: int = 200
-    temperature: float = 0.8
-    top_k: int = 200
-    top_p: Optional[float] = None
-
-    @field_validator("num_samples", "max_new_tokens")
-    @classmethod
-    def _positive_int(cls, v: int) -> int:
-        if v <= 0:
-            raise ValueError("must be > 0")
-        return int(v)
-
-    @field_validator("top_k")
-    @classmethod
-    def _non_negative(cls, v: int) -> int:
-        if v < 0:
-            raise ValueError("must be >= 0")
-        return int(v)
-
-    @field_validator("temperature")
-    def _positive_float(cls, v: float) -> float:
-        if v <= 0:
-            raise ValueError("must be > 0")
-        return float(v)
-
-    @field_validator("top_p")
-    @classmethod
-    def _unit_range_exclusive_zero(cls, v: Optional[float]) -> Optional[float]:
-        if v is None:
-            return None
-        # Accept (0, 1] -> strictly greater than 0, less than or equal to 1.0
-        if not (0.0 < v <= 1.0):
-            raise ValueError("top_p must be in (0, 1]")
-        return float(v)
+    num_samples: PositiveInt = 3
+    max_new_tokens: PositiveInt = 200
+    temperature: PositiveStrictFloat = 0.8
+    top_k: NonNegativeInt = 200
+    top_p: Optional[PosUnitIntervalStrictFloat] = None
 
 
 class AppConfig(_FrozenStrictModel):
