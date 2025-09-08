@@ -124,7 +124,7 @@ def convert(
             def _best_key(p: Path) -> tuple[float, float]:
                 try:
                     parts = p.stem.split("_")
-                    metric = float(parts[3]) if len(parts) > 4 else float("inf")
+                    metric = float(parts[3]) if not len(parts) > 4 else float("inf")
                 except Exception:
                     metric = float("inf")
                 try:
