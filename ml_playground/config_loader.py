@@ -56,7 +56,12 @@ def read_toml_dict(path: Path) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {path}")
     text = path.read_text(encoding="utf-8")
-    return tomllib.loads(text)
+    try:
+        return tomllib.loads(text)
+    except tomllib.TOMLDecodeError as e:
+        # Include the filename in the error message for clearer diagnostics
+        # and to satisfy tests that assert the offending filename is present.
+        raise Exception(f"{path.name}: {e}")
 
 
 # Centralized filesystem query helpers (single FS boundary policy)
@@ -187,13 +192,20 @@ def load_full_experiment_config(config_path: Path) -> ExperimentConfig:
 
     raw_exp = read_toml_dict(config_path)
     defaults_path = get_default_config_path(config_path)
+    defaults_raw = {}
     if defaults_path.exists():
         try:
             defaults_raw = read_toml_dict(defaults_path)
         except Exception as e:
             raise Exception(f"default_config.toml: {e}")
     else:
-        defaults_raw = {}
+        # Also support defaults placed as a sibling to the experiments/ directory
+        alt_defaults = config_path.parent.parent.parent / "default_config.toml"
+        if alt_defaults.exists():
+            try:
+                defaults_raw = read_toml_dict(alt_defaults)
+            except Exception as e:
+                raise Exception(f"default_config.toml: {e}")
     merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
     merged = _resolve_relative_paths(merged, config_path)
     effective = _coerce_known_paths_to_path(merged)
@@ -209,7 +221,21 @@ def load_train_config(config_path: Path) -> TrainerConfig:
     """Load config from a file path."""
     raw_exp = read_toml_dict(config_path)
     defaults_path = get_default_config_path(config_path)
-    defaults_raw = read_toml_dict(defaults_path) if defaults_path.exists() else {}
+    if defaults_path.exists():
+        try:
+            defaults_raw = read_toml_dict(defaults_path)
+        except Exception as e:
+            raise Exception(f"default_config.toml: {e}")
+    else:
+        # Also support defaults placed as a sibling to the experiments/ directory
+        alt_defaults = config_path.parent.parent.parent / "default_config.toml"
+        if alt_defaults.exists():
+            try:
+                defaults_raw = read_toml_dict(alt_defaults)
+            except Exception as e:
+                raise Exception(f"default_config.toml: {e}")
+        else:
+            defaults_raw = {}
     raw_merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
     eff = _coerce_known_paths_to_path(raw_merged)
     td = dict(eff.get("train", {}))
@@ -245,7 +271,20 @@ def load_sample_config(config_path: Path) -> SamplerConfig:
     """Load config from a file path."""
     raw_exp = read_toml_dict(config_path)
     defaults_path = get_default_config_path(config_path)
-    defaults_raw = read_toml_dict(defaults_path) if defaults_path.exists() else {}
+    if defaults_path.exists():
+        try:
+            defaults_raw = read_toml_dict(defaults_path)
+        except Exception as e:
+            raise Exception(f"default_config.toml: {e}")
+    else:
+        alt_defaults = config_path.parent.parent.parent / "default_config.toml"
+        if alt_defaults.exists():
+            try:
+                defaults_raw = read_toml_dict(alt_defaults)
+            except Exception as e:
+                raise Exception(f"default_config.toml: {e}")
+        else:
+            defaults_raw = {}
     raw_merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
     # Provide strict error when [sample] section is absent
     if "sample" not in raw_merged:
