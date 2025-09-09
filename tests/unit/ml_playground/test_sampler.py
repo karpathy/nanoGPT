@@ -280,11 +280,13 @@ def test_load_checkpoint_load_state_error_is_wrapped(
 
 
 def test_sample_happy_path_with_file_prompt_and_char_meta(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    out_dir: Path,
 ) -> None:
     """sample() should print decoded text and separators using FILE: prompt and char meta."""
-    out_dir = tmp_path / "out"
-    out_dir.mkdir(parents=True, exist_ok=True)
+    # out_dir provided by fixture
     meta_path = out_dir / "meta.pkl"
     _write_char_meta(meta_path)
 
@@ -339,11 +341,9 @@ def test_sample_happy_path_with_file_prompt_and_char_meta(
 
 
 def test_sample_with_compile_flag_uses_compiled_model(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: Any
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: Any, out_dir: Path
 ) -> None:
     """When compile=True, sample should use torch.compile(model)."""
-    out_dir = tmp_path / "out"
-    out_dir.mkdir(parents=True, exist_ok=True)
     _write_char_meta(out_dir / "meta.pkl")
 
     # Device/dtype context is handled internally by sampler; no monkeypatching needed.
@@ -458,9 +458,7 @@ def _sampler_cfg(out_dir: Path) -> SamplerConfig:
     )
 
 
-def test_setup_tokenizer_requires_tokenizer_type(tmp_path: Path) -> None:
-    out_dir = tmp_path / "out"
-    out_dir.mkdir()
+def test_setup_tokenizer_requires_tokenizer_type(out_dir: Path) -> None:
     # valid rotated checkpoint so we reach tokenizer stage
     model = _make_minimal_model()
     _rotated_best(out_dir, model)
@@ -480,9 +478,7 @@ def test_setup_tokenizer_requires_tokenizer_type(tmp_path: Path) -> None:
         sampler.sample(cfg)
 
 
-def test_sampler_requires_rotated_checkpoints(tmp_path: Path) -> None:
-    out_dir = tmp_path / "out"
-    out_dir.mkdir()
+def test_sampler_requires_rotated_checkpoints(out_dir: Path) -> None:
     # Provide strict meta so tokenizer would succeed, but omit rotated checkpoints
     meta = {
         "meta_version": 1,

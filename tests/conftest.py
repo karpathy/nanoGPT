@@ -68,7 +68,7 @@ def minimal_full_experiment_toml(
     Parameters allow injecting extra lines per section via string snippets
     (already properly indented TOML lines).
     """
-    base = f"""
+    base = """
     [prepare]
 
     [train.model]
@@ -110,6 +110,7 @@ def toml_minimal_factory() -> Callable[[Path, Path], str]:
         text = toml_minimal_factory(dataset_dir, out_dir)
     For overrides, call minimal_full_experiment_toml directly if needed.
     """
+
     def _factory(dataset_dir: Path, out_dir: Path) -> str:
         return minimal_full_experiment_toml(dataset_dir, out_dir)
 

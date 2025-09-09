@@ -190,7 +190,7 @@ def test_load_experiment_toml_strict_sections(tmp_path: Path) -> None:
         out_dir=Path("./out"),
         extra_train="log_interval = 2",
         extra_sample="log_interval = 2",
-        extra_sample_sample="start = \"\\n\"",
+        extra_sample_sample='start = "\\n"',
     )
     p.write_text(text)
     exp = load_experiment_toml(p)
@@ -215,7 +215,7 @@ tensorboard_enabled = true
 eval_interval = 200
 tensorboard_enabled = false
 """,
-        extra_sample_sample="start = \"\\n\"",
+        extra_sample_sample='start = "\\n"',
     )
     p.write_text(text)
     exp = load_experiment_toml(p)

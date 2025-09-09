@@ -296,7 +296,6 @@ class DataConfig(_FrozenStrictModel):
     sampler: Literal["random", "sequential"] = "random"
 
     @field_validator("dataset_dir", mode="after")
-    @classmethod
     def _resolve_dataset_dir(cls, v: Path) -> Path:
         try:
             return v.resolve()
