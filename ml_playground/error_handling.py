@@ -7,6 +7,11 @@ import sys
 import traceback
 from typing import Any, Callable, Optional, Type, TypeVar
 from pathlib import Path
+from ml_playground.config_loader import (
+    fs_path_exists,
+    fs_is_file,
+    fs_is_dir,
+)
 
 # Type variable for generic error handling
 T = TypeVar("T")
@@ -129,17 +134,17 @@ def safe_file_operation(
 
 def validate_file_exists(path: Path, description: str = "File") -> None:
     """Validate that a file exists, raising a DataError if not."""
-    if not path.exists():
+    if not fs_path_exists(path):
         raise DataError(f"{description} not found at {path}")
-    if not path.is_file():
+    if not fs_is_file(path):
         raise DataError(f"{description} path {path} exists but is not a file")
 
 
 def validate_directory_exists(path: Path, description: str = "Directory") -> None:
     """Validate that a directory exists, raising a DataError if not."""
-    if not path.exists():
+    if not fs_path_exists(path):
         raise DataError(f"{description} not found at {path}")
-    if not path.is_dir():
+    if not fs_is_dir(path):
         raise DataError(f"{description} path {path} exists but is not a directory")
 
 
