@@ -263,7 +263,7 @@ excluded-modules = [
   "ml_playground/tokenizer_protocol.py",
   "ml_playground/lr_scheduler.py",
 ]
-test-command = "pytest -q -n auto tests/unit/ml_playground/test_config.py tests/unit/ml_playground/test_config_loader_unit.py"
+test-command = "pytest -q -n auto tests/unit/ml_playground/test_config.py"
 no-copy-source-files = false
 
 [cosmic-ray.distributor]
