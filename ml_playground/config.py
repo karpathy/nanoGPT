@@ -60,10 +60,11 @@ class _FrozenStrictModel(BaseModel):
         extra="forbid",
         validate_default=True,
         strict=True,  # zero coercion across all models
+        arbitrary_types_allowed=True,  # allow logging.Logger
     )
 
-    # Common optional logger field for all configs
-    logger: Any | None = Field(default=None)
+    # Common logger available on all configs; allow custom test doubles
+    logger: Any = Field(default_factory=lambda: logging.getLogger(__name__))
 
 
 # Reusable strict type aliases
@@ -166,24 +167,6 @@ class RuntimeConfig(_FrozenStrictModel):
         # Preserve as provided (relative or absolute). Resolution is handled by loaders when desired.
         return v
 
-    # No stable filename paths; reading is selected via checkpointing.read_policy
-
-    @model_validator(mode="after")
-    def _sanity(self) -> "RuntimeConfig":
-        # Basic bounds that aren't covered by types
-        if self.max_iters < 0:
-            raise ValueError("max_iters must be >= 0")
-        if self.eval_interval < 1:
-            raise ValueError("eval_interval must be >= 1")
-        if self.eval_iters < 1:
-            raise ValueError("eval_iters must be >= 1")
-        if self.log_interval < 1:
-            raise ValueError("log_interval must be >= 1")
-        if self.ckpt_time_interval_minutes < 0:
-            raise ValueError("ckpt_time_interval_minutes must be >= 0")
-        # Accept device/dtype combinations as declared by enums; no cross-check here
-        return self
-
 
 class TrainerConfig(_FrozenStrictModel):
     """
@@ -271,11 +254,9 @@ class LRSchedule(_FrozenStrictModel):
 
     @model_validator(mode="after")
     def _check_warmup_le_decay(self) -> "LRSchedule":
+        # Type aliases enforce non-negativity; only cross-field relation remains
         if self.warmup_iters > self.lr_decay_iters:
             raise ValueError("warmup_iters must be <= lr_decay_iters")
-        # min_lr must be non-negative
-        if self.min_lr < 0:
-            raise ValueError("min_lr must be >= 0")
         return self
 
 
@@ -367,8 +348,6 @@ class ExperimentConfig(_FrozenStrictModel):
     prepare: PreparerConfig
     train: TrainerConfig
     sample: SamplerConfig
-    # Logger is always present via default factory; CLI/loader may override
-    logger: Any = Field(default_factory=lambda: logging.getLogger(__name__))
 
 
 def load_experiment_toml(path: Path) -> ExperimentConfig:

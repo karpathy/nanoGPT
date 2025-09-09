@@ -20,17 +20,7 @@ from ml_playground.tokenizer import CharTokenizer
 from ml_playground.error_handling import DataError
 
 
-# ---- Helpers ----
-class Logger:
-    def __init__(self) -> None:
-        self.infos: list[str] = []
-        self.warnings: list[str] = []
-
-    def info(self, msg: str) -> None:  # noqa: D401
-        self.infos.append(str(msg))
-
-    def warning(self, msg: str) -> None:  # noqa: D401
-        self.warnings.append(str(msg))
+"""Logging helpers are provided via fixtures in conftest.py (list_logger, list_logger_factory)."""
 
 
 class DummyTok:
@@ -231,7 +221,7 @@ def test_diff_files_updated_and_skipped(tmp_path: Path) -> None:
 # ---- internal PreparerInstance behaviors ----
 
 
-def test_write_bin_and_meta_raises_on_invalid_existing_meta(tmp_path: Path) -> None:
+def test_write_bin_and_meta_raises_on_invalid_existing_meta(tmp_path: Path, list_logger) -> None:
     ds = tmp_path / "ds"
     ds.mkdir()
     # Pre-create files with invalid meta content (not a dict with meta_version)
@@ -240,8 +230,7 @@ def test_write_bin_and_meta_raises_on_invalid_existing_meta(tmp_path: Path) -> N
     with (ds / "meta.pkl").open("wb") as f:
         pickle.dump([1, 2, 3], f)  # invalid
 
-    logger = Logger()
-    cfg = PreparerConfig(dataset_dir=ds, logger=logger)
+    cfg = PreparerConfig(dataset_dir=ds, logger=list_logger)
     inst = _PreparerInstance(cfg)
     tr, va, meta = _mk_arrays(8)
     with pytest.raises(DataError):
@@ -256,7 +245,7 @@ def test_write_bin_and_meta_raises_on_unreadable_meta(tmp_path: Path) -> None:
     (ds / "val.bin").write_bytes(b"y")
     (ds / "meta.pkl").write_bytes(b"not-a-pickle")
 
-    cfg = PreparerConfig(dataset_dir=ds, logger=None)
+    cfg = PreparerConfig(dataset_dir=ds)
     inst = _PreparerInstance(cfg)
     tr, va, meta = _mk_arrays(6)
     with pytest.raises(DataError):
@@ -264,23 +253,22 @@ def test_write_bin_and_meta_raises_on_unreadable_meta(tmp_path: Path) -> None:
 
 
 def test_write_bin_and_meta_info_logs_created_then_raises_on_invalid_second_run(
-    tmp_path: Path,
+    tmp_path: Path, list_logger, list_logger_factory
 ) -> None:
     ds = tmp_path / "ds3"
-    logger = Logger()
-    cfg = PreparerConfig(dataset_dir=ds, logger=logger)
+    cfg = PreparerConfig(dataset_dir=ds, logger=list_logger)
     inst = _PreparerInstance(cfg)
 
     # First write -> should log Created entries
     tr, va, meta = _mk_arrays(5)
     inst._write_bin_and_meta(ds, tr, va, meta)
-    assert any("Created: [" in i for i in logger.infos)
+    assert any("Created: [" in i for i in list_logger.infos)
 
     # Prepare pre-existing invalid meta and ensure second run raises
     with (ds / "meta.pkl").open("wb") as f:
         pickle.dump(["bad"], f)
 
-    logger2 = Logger()
+    logger2 = list_logger_factory()
     inst2 = _PreparerInstance(PreparerConfig(dataset_dir=ds, logger=logger2))
     tr2, va2, meta2 = _mk_arrays(7)
     with pytest.raises(DataError):
