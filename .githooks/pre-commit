@@ -4,14 +4,12 @@
 
 set -euo pipefail
 
-if command -v uv >/dev/null 2>&1; then
-  echo "[pre-commit] Running quality gate via uv (capped pytest 10s)..."
-  PRE_COMMIT=1 uv run bash tools/quality_gate.sh
-else
-  echo "[pre-commit] uv not found; attempting to run quality gate directly (capped pytest 10s)..."
-  PRE_COMMIT=1 bash tools/quality_gate.sh
-fi
+echo "[pre-commit] Vulture (dead code scanning)"
+uv run vulture ml_playground --min-confidence 90
+echo "[pre-commit] Core quality gates (ruff, format, pyright, mypy, pytest)"
+PRE_COMMIT=1 make quality
 
-# Best-effort: run a very short mutation test and ignore failures/timeouts
-echo "[pre-commit] Running quick mutation test (3s budget, non-blocking)"
-CR_TIMEOUT=3 bash tools/mutation_test.sh || true
+# Best-effort: run a quick mutation test (non-blocking); rely on pyproject.toml for config
+echo "[pre-commit] Running quick mutation test (non-blocking)"
+uv run cosmic-ray init pyproject.toml out/cosmic-ray/session.sqlite >/dev/null 2>&1 || true
+uv run cosmic-ray exec pyproject.toml out/cosmic-ray/session.sqlite || true
