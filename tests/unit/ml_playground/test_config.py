@@ -3,8 +3,6 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 from ml_playground.config import (
-    load_toml,
-    AppConfig,
     DataConfig,
     ExperimentConfig,
     load_experiment_toml,
@@ -17,11 +15,14 @@ from ml_playground.config import (
     RuntimeConfig,
     _deep_merge_dicts,
 )
+from ml_playground.config_loader import load_full_experiment_config
 from ml_playground.prepare import PreparerConfig
 
 
-def test_load_toml_roundtrip(tmp_path: Path) -> None:
+def test_full_loader_roundtrip(tmp_path: Path) -> None:
     toml_text = """
+[prepare]
+
 [train.model]
 n_layer=1
 n_head=1
@@ -44,6 +45,7 @@ learning_rate = 0.001
 out_dir = "out/test_next"
 max_iters = 1
 
+[sample]
 [sample.runtime]
 out_dir = "out/test_next"
 
@@ -52,39 +54,40 @@ out_dir = "out/test_next"
     cfg_path = tmp_path / "cfg.toml"
     cfg_path.write_text(toml_text)
 
-    cfg: AppConfig = load_toml(cfg_path)
-    assert cfg.train is not None
-    assert cfg.sample is not None
-    assert isinstance(cfg.train.runtime.out_dir, Path)
-    assert isinstance(cfg.train.data.dataset_dir, Path)
+    exp: ExperimentConfig = load_full_experiment_config(cfg_path)
+    assert exp.train is not None
+    assert exp.sample is not None
+    assert isinstance(exp.train.runtime.out_dir, Path)
+    assert isinstance(exp.train.data.dataset_dir, Path)
 
 
-def test_load_toml_empty_config(tmp_path: Path) -> None:
-    """Test loading empty TOML config returns AppConfig with None values."""
+def test_full_loader_empty_config_raises(tmp_path: Path) -> None:
+    """Strict: Empty TOML is invalid for ExperimentConfig (missing sections)."""
     toml_text = ""
     cfg_path = tmp_path / "empty.toml"
     cfg_path.write_text(toml_text)
 
-    cfg: AppConfig = load_toml(cfg_path)
-    assert cfg.train is None
-    assert cfg.sample is None
+    with pytest.raises(Exception):
+        load_full_experiment_config(cfg_path)
 
 
-def test_load_toml_bad_root_type(tmp_path: Path) -> None:
+def test_full_loader_bad_root_type(tmp_path: Path) -> None:
     # TOML decoding to non-dict root (e.g., array) should raise ValueError
     bad_text = """
 arr = [1,2,3]
 """
     p = tmp_path / "bad.toml"
     p.write_text(bad_text)
-    with pytest.raises(ValueError):
-        load_toml(p)
+    with pytest.raises(Exception):
+        load_full_experiment_config(p)
 
 
-def test_load_toml_nested_unknown_keys_in_sample_raise(tmp_path: Path) -> None:
+def test_full_loader_nested_unknown_keys_in_sample_raise(tmp_path: Path) -> None:
     p = tmp_path / "cfg_bad_sample_nested.toml"
     p.write_text(
         """
+[prepare]
+
 [train]
 [train.model]
 
@@ -106,13 +109,15 @@ unknown_leaf = 42
 """
     )
     with pytest.raises(ValidationError):
-        load_toml(p)
+        load_full_experiment_config(p)
 
 
-def test_load_toml_incomplete_train_config(tmp_path: Path) -> None:
+def test_full_loader_incomplete_train_config(tmp_path: Path) -> None:
     """Strict: incomplete [train] should raise ValidationError."""
     # Missing required sections like model, data, optim, schedule, runtime
     toml_text = """
+[prepare]
+
 [train.model]
 n_layer=1
 
@@ -122,7 +127,7 @@ n_layer=1
     cfg_path.write_text(toml_text)
 
     with pytest.raises(ValidationError):
-        load_toml(cfg_path)
+        load_full_experiment_config(cfg_path)
 
 
 # Consolidated: validators and util tests previously in fragmented files
@@ -191,10 +196,12 @@ def test_validate_path_exists_file_and_dir(tmp_path: Path) -> None:
         validate_path_exists(d, "x", must_be_file=True)
 
 
-def test_load_toml_filters_sections(tmp_path: Path) -> None:
+def test_full_loader_unknown_top_level_sections_raise(tmp_path: Path) -> None:
     p = tmp_path / "cfg.toml"
     p.write_text(
         """
+[prepare]
+
 [train]
 [train.model]
 
@@ -217,19 +224,17 @@ start = "\\n"
 foo = 1
 """
     )
-    app = load_toml(p)
-    assert isinstance(app, AppConfig)
-    # Only known sections should be retained
-    assert app.train is not None and app.sample is not None
-    # Unknown top-level sections must be filtered out
-    assert not hasattr(app, "export")
+    with pytest.raises(ValidationError):
+        load_full_experiment_config(p)
 
 
-def test_load_toml_nested_unknown_keys_raise(tmp_path: Path) -> None:
+def test_full_loader_nested_unknown_keys_raise(tmp_path: Path) -> None:
     # Unknown nested keys under [train.*] should raise due to strict Pydantic models
     p = tmp_path / "cfg_bad_nested.toml"
     p.write_text(
         """
+[prepare]
+
 [train]
 [train.model]
 unknown_key = 123
@@ -251,10 +256,10 @@ out_dir = "./out"
 """
     )
     with pytest.raises(ValidationError):
-        load_toml(p)
+        load_full_experiment_config(p)
 
 
-def test_load_experiment_toml_and_reference_resolution(tmp_path: Path) -> None:
+def test_load_experiment_toml_strict_sections(tmp_path: Path) -> None:
     p = tmp_path / "exp.toml"
     p.write_text(
         """
@@ -285,50 +290,14 @@ log_interval = 2
     )
     exp = load_experiment_toml(p)
     assert isinstance(exp, ExperimentConfig)
-    # Parsed runtime present and matches provided values
+    # Parsed runtime present and matches provided values (no reference resolution)
     assert exp.sample.runtime is not None
     assert exp.sample.runtime.out_dir == Path("./out")
     assert exp.sample.runtime.log_interval == 2
 
 
-def test_reference_resolution_with_overrides(tmp_path: Path) -> None:
-    p = tmp_path / "exp_ref.toml"
-    p.write_text(
-        """
-[prepare]
-
-[train]
-[train.model]
-
-[train.data]
-dataset_dir = "./data"
-
-[train.optim]
-
-[train.schedule]
-
-[train.runtime]
-out_dir = "./out"
-log_interval = 1
-
-[sample]
-    [sample.runtime]
-    # override only log_interval
-    log_interval = 3
-    [sample.sample]
-    start = "\\n"
-"""
-    )
-    exp = load_experiment_toml(p)
-    assert exp.sample.runtime is not None
-    # out_dir from train.runtime should be merged in
-    assert exp.sample.runtime.out_dir == Path("./out")
-    # override preserved
-    assert exp.sample.runtime.log_interval == 3
-
-
-def test_reference_resolution_multiple_overrides(tmp_path: Path) -> None:
-    p = tmp_path / "exp_ref_multi.toml"
+def test_explicit_sample_runtime_overrides(tmp_path: Path) -> None:
+    p = tmp_path / "exp2.toml"
     p.write_text(
         """
 [prepare]
@@ -347,26 +316,26 @@ dataset_dir = "./data"
 out_dir = "./out"
 eval_interval = 100
 eval_iters = 20
-tensorboard_enabled = false
+tensorboard_enabled = true
 
 [sample]
-    runtime_ref = "train.runtime"
-    [sample.runtime]
-    # override only a subset
-    eval_interval = 200
-    [sample.sample]
-    start = "\\n"
+[sample.runtime]
+out_dir = "./out"
+eval_interval = 200
+tensorboard_enabled = false
+[sample.sample]
+start = "\\n"
 """
     )
     exp = load_experiment_toml(p)
     rt = exp.sample.runtime
     assert rt is not None
-    # out_dir inherited
+    # explicit runtime provided
     assert rt.out_dir == Path("./out")
     # eval_interval overridden
     assert rt.eval_interval == 200
-    # other train.runtime values preserved
-    assert rt.eval_iters == 20
+    # other values follow sample.runtime or schema defaults (no inheritance)
+    assert rt.eval_iters == 200
     assert rt.tensorboard_enabled is False
 
 
@@ -594,8 +563,8 @@ def test_dataconfig_meta_none_path(tmp_path: Path) -> None:
 def test_preparerconfig_path_coercion_and_resolve(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Coercion from str and Path; resolve is best-effort
-    pc = PreparerConfig(dataset_dir=str(tmp_path / "ds"), raw_dir=tmp_path / "raw")
+    # Paths are strictly Path-typed; resolve is best-effort
+    pc = PreparerConfig(dataset_dir=tmp_path / "ds", raw_dir=tmp_path / "raw")
     assert isinstance(pc.dataset_dir, Path) and isinstance(pc.raw_dir, Path)
     # ensure resolve does not crash on non-existent
     _ = pc.dataset_dir and pc.raw_dir
@@ -614,19 +583,22 @@ def test_sampleconfig_more_ranges() -> None:
 
 
 def test_config_exports() -> None:
-    # Validate that config exports expected symbols directly
+    # Validate that config exports expected symbols directly and loader exists
     from ml_playground import config as shim
+    from ml_playground import config_loader as loader
 
     assert hasattr(shim, "TrainerConfig")
     assert hasattr(shim, "SamplerConfig")
     assert hasattr(shim, "DataConfig")
     assert hasattr(shim, "RuntimeConfig")
-    assert hasattr(shim, "load_toml")
+    assert hasattr(loader, "load_full_experiment_config")
 
 
-def test_load_toml_incomplete_sample_config(tmp_path: Path) -> None:
+def test_full_loader_incomplete_sample_config(tmp_path: Path) -> None:
     """Strict: incomplete [sample] should raise ValidationError."""
     toml_text = """
+[prepare]
+
 [sample.runtime]
 out_dir = "out/test"
 # Missing sample.sample section
@@ -635,12 +607,14 @@ out_dir = "out/test"
     cfg_path.write_text(toml_text)
 
     with pytest.raises(ValidationError):
-        load_toml(cfg_path)
+        load_full_experiment_config(cfg_path)
 
 
-def test_load_toml_no_train_section(tmp_path: Path) -> None:
-    """Test loading TOML without train section."""
+def test_full_loader_no_train_section_raises(tmp_path: Path) -> None:
+    """Strict: Missing [train] section raises."""
     toml_text = """
+[prepare]
+
 [sample.runtime]
 out_dir = "out/test"
 
@@ -648,15 +622,15 @@ out_dir = "out/test"
 """
     cfg_path = tmp_path / "no_train.toml"
     cfg_path.write_text(toml_text)
-
-    cfg: AppConfig = load_toml(cfg_path)
-    assert cfg.train is None
-    assert cfg.sample is not None
+    with pytest.raises(ValidationError):
+        load_full_experiment_config(cfg_path)
 
 
-def test_load_toml_no_sample_section(tmp_path: Path) -> None:
-    """Test loading TOML without sample section."""
+def test_full_loader_no_sample_section_raises(tmp_path: Path) -> None:
+    """Strict: Missing [sample] section raises."""
     toml_text = """
+[prepare]
+
 [train.model]
 n_layer=1
 n_head=1
@@ -676,15 +650,15 @@ out_dir = "out/test"
 """
     cfg_path = tmp_path / "no_sample.toml"
     cfg_path.write_text(toml_text)
-
-    cfg: AppConfig = load_toml(cfg_path)
-    assert cfg.train is not None
-    assert cfg.sample is None
+    with pytest.raises(ValidationError):
+        load_full_experiment_config(cfg_path)
 
 
-def test_load_toml_train_missing_data_section(tmp_path: Path) -> None:
+def test_full_loader_train_missing_data_section(tmp_path: Path) -> None:
     """Strict: [train] missing required data subsection must raise ValidationError."""
     toml_text = """
+[prepare]
+
 [train.model]
  n_layer=1
  n_head=1
@@ -704,12 +678,14 @@ def test_load_toml_train_missing_data_section(tmp_path: Path) -> None:
     cfg_path.write_text(toml_text)
 
     with pytest.raises(ValidationError):
-        load_toml(cfg_path)
+        load_full_experiment_config(cfg_path)
 
 
-def test_load_toml_train_missing_runtime_section(tmp_path: Path) -> None:
+def test_full_loader_train_missing_runtime_section(tmp_path: Path) -> None:
     """Strict: [train] missing required runtime subsection must raise ValidationError."""
     toml_text = """
+[prepare]
+
 [train.model]
  n_layer=1
  n_head=1
@@ -729,12 +705,14 @@ def test_load_toml_train_missing_runtime_section(tmp_path: Path) -> None:
     cfg_path.write_text(toml_text)
 
     with pytest.raises(ValidationError):
-        load_toml(cfg_path)
+        load_full_experiment_config(cfg_path)
 
 
-def test_load_toml_sample_missing_runtime_section(tmp_path: Path) -> None:
+def test_full_loader_sample_missing_runtime_section(tmp_path: Path) -> None:
     """Strict: [sample] missing required runtime subsection must raise ValidationError."""
     toml_text = """
+[prepare]
+
 [sample.sample]
 # Missing [sample.runtime] section
 """
@@ -742,4 +720,4 @@ def test_load_toml_sample_missing_runtime_section(tmp_path: Path) -> None:
     cfg_path.write_text(toml_text)
 
     with pytest.raises(ValidationError):
-        load_toml(cfg_path)
+        load_full_experiment_config(cfg_path)

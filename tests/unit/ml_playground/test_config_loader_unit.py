@@ -119,9 +119,7 @@ def test_load_train_config_merges_defaults_and_sets_provenance(tmp_path: Path) -
     assert cfg.extras["provenance"]["context"]["config_path"].endswith("config.toml")
 
 
-def test_load_sample_config_requires_section_and_runtime_ref_merge(
-    tmp_path: Path,
-) -> None:
+def test_load_sample_config_requires_section_and_sample_runtime(tmp_path: Path) -> None:
     root = tmp_path
     experiments = root / "experiments" / "exp"
     experiments.mkdir(parents=True)
@@ -135,8 +133,10 @@ def test_load_sample_config_requires_section_and_runtime_ref_merge(
             device = "cpu"
             dtype = "float32"
 
-            [sample]
-            runtime_ref = "train.runtime"
+            [sample.runtime]
+            out_dir = "./out"
+            device = "cpu"
+            dtype = "float32"
             [sample.sample]
             max_new_tokens = 7
             """
@@ -156,16 +156,15 @@ def test_load_sample_config_requires_section_and_runtime_ref_merge(
     s = load_sample_config(exp_cfg)
     assert s.sample.max_new_tokens == 7
 
-    # Now explicit [sample] with runtime_ref and overrides
+    # Now explicit [sample] with runtime overrides
     exp_cfg.write_text(
         textwrap.dedent("""
         [train.runtime]
         out_dir = "./exp_out"
         device = "cpu"
 
-        [sample]
-        runtime_ref = "train.runtime"
         [sample.runtime]
+        out_dir = "./exp_out"
         tensorboard_enabled = false
         [sample.sample]
         max_new_tokens = 9
@@ -173,7 +172,7 @@ def test_load_sample_config_requires_section_and_runtime_ref_merge(
     )
     s2 = load_sample_config(exp_cfg)
     assert isinstance(s2.runtime, RuntimeConfig)
-    # runtime = train.runtime merged with sample.runtime overrides
+    # runtime provided explicitly in [sample.runtime]
     assert s2.runtime.out_dir.as_posix().endswith("exp_out")
     assert s2.runtime.tensorboard_enabled is False
     assert s2.sample.max_new_tokens == 9
@@ -183,8 +182,12 @@ def test_load_sample_config_from_raw_and_errors() -> None:
     raw = {
         "train": {"runtime": {"out_dir": "./out", "device": "cpu"}},
         "sample": {
-            "runtime_ref": "train.runtime",
-            "runtime": {"tensorboard_enabled": False},
+            "runtime": {
+                "out_dir": "./out",
+                "tensorboard_enabled": False,
+                "device": "cpu",
+                "dtype": "float32",
+            },
             "sample": {"max_new_tokens": 11},
         },
     }
@@ -192,29 +195,28 @@ def test_load_sample_config_from_raw_and_errors() -> None:
     assert cfg.runtime and cfg.runtime.tensorboard_enabled is False
     assert cfg.sample.max_new_tokens == 11
 
-    # Error path: missing [train] section referenced by runtime_ref should simply not merge, not raise
-    raw2 = {"sample": {"runtime_ref": "train.runtime", "sample": {}}}
-    cfg2 = load_sample_config_from_raw(raw2, defaults_raw={})
-    # runtime remains None because no train.runtime exists and no direct runtime provided
-    assert cfg2.runtime is None
+    # Error path: missing runtime must raise
+    raw2 = {"sample": {"sample": {}}}
+    with pytest.raises(Exception):
+        load_sample_config_from_raw(raw2, defaults_raw={})
 
 
-def test_runtime_ref_merge_overrides_and_preserves_out_dir_relative() -> None:
-    # Consolidated from test_config_loader_strict.py
+def test_sample_requires_explicit_runtime_and_preserves_relative_out_dir() -> None:
     raw = {
-        "train": {"runtime": {"out_dir": "./out_train", "seed": 123}},
         "sample": {
-            "runtime_ref": "train.runtime",
-            # Override seed in sample.runtime; out_dir should be preserved from train.runtime
-            "runtime": {"seed": 999},
+            "runtime": {
+                "out_dir": "./out_train",
+                "seed": 999,
+                "device": "cpu",
+                "dtype": "float32",
+            },
             "sample": {"start": "hi", "max_new_tokens": 1},
         },
     }
     cfg = load_sample_config_from_raw(raw, defaults_raw={})
     rt = cfg.runtime
     assert rt is not None
-    assert rt.seed == 999  # override applied
-    # Ensure path remains relative and retains trailing directory name
+    assert rt.seed == 999
     assert not rt.out_dir.is_absolute()
     assert rt.out_dir.name == "out_train"
 

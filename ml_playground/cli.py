@@ -4,7 +4,6 @@ import typer
 from typer.main import get_command
 
 import logging
-import tomllib
 from pathlib import Path
 from typing import Annotated, Any, Callable
 import torch
@@ -14,6 +13,7 @@ from ml_playground.config import (
     SamplerConfig,
     PreparerConfig,
 )
+import ml_playground.config_loader as config_loader
 import ml_playground.prepare as prepare_mod
 import ml_playground.sampler as sampler_mod
 import ml_playground.trainer as trainer_mod
@@ -125,11 +125,8 @@ def _cfg_path_for(experiment: str, exp_config: Path | None) -> Path:
 
 
 def _read_toml(p: Path) -> dict[str, Any]:
-    with p.open("rb") as f:
-        raw = tomllib.load(f)
-    if not isinstance(raw, dict):
-        raise ValueError(f"Config at {p} must be a TOML table/object")
-    return raw
+    # Canonical loader: delegate to config_loader.read_toml_dict
+    return config_loader.read_toml_dict(p)
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -244,65 +241,49 @@ def _load_effective_config(
     merged = _resolve_relative_paths(merged, config_path)
 
     if config_type == "prepare":
-        config_dict = merged.get("prepare", {})
+        config_dict = dict(merged.get("prepare", {}))
+        config_dict["logger"] = logging.getLogger(__name__)
         cfg = PreparerConfig.model_validate(config_dict)
     elif config_type == "train":
-        config_dict = merged.get("train")
-        if not isinstance(config_dict, dict):
-            raise ValueError("Missing [train] section in config")
+        config_dict = dict(merged.get("train", {}))
+        # Ensure required nested sections exist; allow defaults when omitted
+        if "model" not in config_dict:
+            config_dict["model"] = {}
+        if "data" not in config_dict:
+            config_dict["data"] = {}
+        if "optim" not in config_dict:
+            config_dict["optim"] = {}
+        if "schedule" not in config_dict:
+            config_dict["schedule"] = {}
+        if "runtime" not in config_dict:
+            config_dict["runtime"] = {}
+        # Coerce paths to Path objects for strict schema
+        from pathlib import Path as _Path
 
-        # Sanitize runtime: drop unknown keys to satisfy strict schema
-        try:
-            from ml_playground.config import (
-                RuntimeConfig,
-            )  # local import to avoid cycles
-
-            allowed = set(RuntimeConfig.model_fields.keys())
-            config_dict = _clean_runtime_config(config_dict, allowed)
-        except Exception:
-            pass
-
+        if isinstance(config_dict.get("data", {}).get("dataset_dir"), str):
+            config_dict["data"]["dataset_dir"] = _Path(
+                config_dict["data"]["dataset_dir"]
+            )  # type: ignore[index]
+        if isinstance(config_dict.get("runtime", {}).get("out_dir"), str):
+            config_dict["runtime"]["out_dir"] = _Path(config_dict["runtime"]["out_dir"])  # type: ignore[index]
+        config_dict["logger"] = logging.getLogger(__name__)
         cfg = TrainerConfig.model_validate(config_dict)
     elif config_type == "sample":
-        config_dict = merged.get("sample")
+        config_dict = dict(merged.get("sample", {}))
         if not isinstance(config_dict, dict):
             raise ValueError("Missing [sample] section in config")
-
-        # Handle runtime_ref by merging train.runtime into sample.runtime
-        rt_ref = config_dict.get("runtime_ref")
-        if rt_ref == "train.runtime":
-            train_dict = merged.get("train", {})
-            train_rt = (
-                train_dict.get("runtime", {}) if isinstance(train_dict, dict) else {}
-            )
-            # merge any direct sample.runtime overrides over train.runtime
-            sample_rt = config_dict.get("runtime", {})
-            if isinstance(train_rt, dict):
-                base_rt = dict(train_rt)
-                if isinstance(sample_rt, dict):
-                    base_rt.update(sample_rt)
-                config_dict = dict(config_dict)
-                config_dict["runtime"] = base_rt
-                config_dict.pop("runtime_ref", None)
-
-        # Ensure required nested 'sample' block exists; allow defaults when omitted
         if "sample" not in config_dict or not isinstance(
             config_dict.get("sample"), dict
         ):
             config_dict = dict(config_dict)
             config_dict["sample"] = {}
+        # Coerce paths to Path objects for strict schema
+        from pathlib import Path as _Path
 
-        # Drop unknown fields under runtime to keep strict schema while tolerating experiment-specific extras
-        try:
-            from ml_playground.config import (
-                RuntimeConfig,
-            )  # local import to avoid cycles
-
-            allowed = set(RuntimeConfig.model_fields.keys())
-            config_dict = _clean_runtime_config(config_dict, allowed)
-        except Exception:
-            pass
-
+        if isinstance(config_dict.get("runtime", {}).get("out_dir"), str):
+            config_dict.setdefault("runtime", {})
+            config_dict["runtime"]["out_dir"] = _Path(config_dict["runtime"]["out_dir"])  # type: ignore[index]
+        config_dict["logger"] = logging.getLogger(__name__)
         cfg = SamplerConfig.model_validate(config_dict)
     else:
         raise ValueError(f"Unknown config type: {config_type}")
@@ -657,26 +638,28 @@ if __name__ == "__main__":
 
 
 def _run_prepare_cmd(experiment: str, exp_config_path: Path | None) -> None:
-    """Run prepare command with simplified function call."""
-    cfg_path, cfg = def_load_effective_prepare(experiment, exp_config_path)
-    _run_prepare(experiment, cfg, cfg_path)
+    """Run prepare command: load full ExperimentConfig once and pass section."""
+    cfg_path = _cfg_path_for(experiment, exp_config_path)
+    exp = config_loader.load_full_experiment_config(cfg_path)
+    _run_prepare(experiment, exp.prepare, cfg_path)
 
 
 def _run_train_cmd(experiment: str, exp_config_path: Path | None) -> None:
-    """Run train command with simplified function call."""
-    cfg_path, cfg = def_load_effective_train(experiment, exp_config_path)
-    _run_train(experiment, cfg, cfg_path)
+    """Run train command: load full ExperimentConfig once and pass section."""
+    cfg_path = _cfg_path_for(experiment, exp_config_path)
+    exp = config_loader.load_full_experiment_config(cfg_path)
+    _run_train(experiment, exp.train, cfg_path)
 
 
 def _run_sample_cmd(experiment: str, exp_config_path: Path | None) -> None:
-    """Run sample command with simplified function call."""
-    cfg_path, cfg = def_load_effective_sample(experiment, exp_config_path)
-    _run_sample(experiment, cfg, cfg_path)
+    """Run sample command: load full ExperimentConfig once and pass section."""
+    cfg_path = _cfg_path_for(experiment, exp_config_path)
+    exp = config_loader.load_full_experiment_config(cfg_path)
+    _run_sample(experiment, exp.sample, cfg_path)
 
 
 def _run_loop_cmd(experiment: str, exp_config_path: Path | None) -> None:
-    """Run loop command with simplified function call."""
-    prep_path, prep_cfg = def_load_effective_prepare(experiment, exp_config_path)
-    _, train_cfg = def_load_effective_train(experiment, exp_config_path)
-    _, sample_cfg = def_load_effective_sample(experiment, exp_config_path)
-    _run_loop(experiment, prep_path, prep_cfg, train_cfg, sample_cfg)
+    """Run loop command: load full ExperimentConfig once and pass sections."""
+    cfg_path = _cfg_path_for(experiment, exp_config_path)
+    exp = config_loader.load_full_experiment_config(cfg_path)
+    _run_loop(experiment, cfg_path, exp.prepare, exp.train, exp.sample)

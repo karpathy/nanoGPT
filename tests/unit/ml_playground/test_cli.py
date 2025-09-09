@@ -19,6 +19,11 @@ from ml_playground.config import (
     SamplerConfig,
     RuntimeConfig,
     SampleConfig,
+    ExperimentConfig,
+    ModelConfig,
+    DataConfig,
+    OptimConfig,
+    LRSchedule,
 )
 from ml_playground.prepare import PreparerConfig
 
@@ -28,9 +33,22 @@ runner = CliRunner()
 def test_main_prepare_shakespeare_success(mocker: MockerFixture) -> None:
     """Test prepare command with shakespeare dataset succeeds."""
     mock_run = mocker.patch("ml_playground.cli._run_prepare")
+    # Mock canonical loader to return minimal full experiment config
     mocker.patch(
-        "ml_playground.cli.def_load_effective_prepare",
-        return_value=(Path("cfg.toml"), PreparerConfig()),
+        "ml_playground.config_loader.load_full_experiment_config",
+        return_value=ExperimentConfig(
+            prepare=PreparerConfig(),
+            train=TrainerConfig(
+                model=ModelConfig(),
+                data=DataConfig(dataset_dir=Path(".")),
+                optim=OptimConfig(),
+                schedule=LRSchedule(),
+                runtime=RuntimeConfig(out_dir=Path(".")),
+            ),
+            sample=SamplerConfig(
+                runtime=RuntimeConfig(out_dir=Path(".")), sample=SampleConfig()
+            ),
+        ),
     )
     result = runner.invoke(app, ["prepare", "shakespeare"])
     assert result.exit_code == 0
@@ -41,8 +59,20 @@ def test_main_prepare_bundestag_char_success(mocker: MockerFixture) -> None:
     """Test prepare command with bundestag_char dataset succeeds."""
     mock_run = mocker.patch("ml_playground.cli._run_prepare")
     mocker.patch(
-        "ml_playground.cli.def_load_effective_prepare",
-        return_value=(Path("cfg.toml"), PreparerConfig()),
+        "ml_playground.config_loader.load_full_experiment_config",
+        return_value=ExperimentConfig(
+            prepare=PreparerConfig(),
+            train=TrainerConfig(
+                model=ModelConfig(),
+                data=DataConfig(dataset_dir=Path(".")),
+                optim=OptimConfig(),
+                schedule=LRSchedule(),
+                runtime=RuntimeConfig(out_dir=Path(".")),
+            ),
+            sample=SamplerConfig(
+                runtime=RuntimeConfig(out_dir=Path(".")), sample=SampleConfig()
+            ),
+        ),
     )
     result = runner.invoke(app, ["prepare", "bundestag_char"])
     assert result.exit_code == 0
@@ -54,7 +84,7 @@ def test_main_prepare_unknown_dataset_fails(
 ) -> None:
     """Unknown experiment should surface as a CLI error exit."""
     mocker.patch(
-        "ml_playground.cli.def_load_effective_prepare",
+        "ml_playground.config_loader.load_full_experiment_config",
         side_effect=FileNotFoundError("Config not found"),
     )
     result = runner.invoke(app, ["prepare", "unknown"])
@@ -67,8 +97,14 @@ def test_main_train_success(tmp_path: Path, mocker: MockerFixture) -> None:
     mock_train_cfg = mocker.Mock(spec=TrainerConfig)
     mock_run = mocker.patch("ml_playground.cli._run_train")
     mocker.patch(
-        "ml_playground.cli.def_load_effective_train",
-        return_value=(Path("cfg.toml"), mock_train_cfg),
+        "ml_playground.config_loader.load_full_experiment_config",
+        return_value=ExperimentConfig(
+            prepare=PreparerConfig(),
+            train=mock_train_cfg,  # type: ignore[arg-type]
+            sample=SamplerConfig(
+                runtime=RuntimeConfig(out_dir=Path(".")), sample=SampleConfig()
+            ),
+        ),
     )
     result = runner.invoke(app, ["train", "shakespeare"])
     assert result.exit_code == 0
@@ -80,7 +116,7 @@ def test_main_train_no_train_block_fails(
 ) -> None:
     """Test train command fails when strict loader raises."""
     mocker.patch(
-        "ml_playground.cli.def_load_effective_train",
+        "ml_playground.config_loader.load_full_experiment_config",
         side_effect=ValueError("Missing train config"),
     )
     result = runner.invoke(app, ["train", "shakespeare"])
@@ -96,8 +132,18 @@ def test_main_sample_success(tmp_path: Path, mocker: MockerFixture) -> None:
     )
     mock_run = mocker.patch("ml_playground.cli._run_sample")
     mocker.patch(
-        "ml_playground.cli.def_load_effective_sample",
-        return_value=(Path("cfg.toml"), mock_sample_cfg),
+        "ml_playground.config_loader.load_full_experiment_config",
+        return_value=ExperimentConfig(
+            prepare=PreparerConfig(),
+            train=TrainerConfig(
+                model=ModelConfig(),
+                data=DataConfig(dataset_dir=Path(".")),
+                optim=OptimConfig(),
+                schedule=LRSchedule(),
+                runtime=RuntimeConfig(out_dir=Path(".")),
+            ),
+            sample=mock_sample_cfg,
+        ),
     )
     result = runner.invoke(app, ["sample", "shakespeare"])
     assert result.exit_code == 0
@@ -109,7 +155,7 @@ def test_main_sample_no_sample_block_fails(
 ) -> None:
     """Test sample command fails when strict loader raises."""
     mocker.patch(
-        "ml_playground.cli.def_load_effective_sample",
+        "ml_playground.config_loader.load_full_experiment_config",
         side_effect=ValueError("Missing sample config"),
     )
     result = runner.invoke(app, ["sample", "shakespeare"])
@@ -126,16 +172,12 @@ def test_main_loop_success(tmp_path: Path, mocker: MockerFixture) -> None:
     )
     mock_run = mocker.patch("ml_playground.cli._run_loop")
     mocker.patch(
-        "ml_playground.cli.def_load_effective_prepare",
-        return_value=(Path("cfg.toml"), PreparerConfig()),
-    )
-    mocker.patch(
-        "ml_playground.cli.def_load_effective_train",
-        return_value=(Path("cfg.toml"), mock_train_config),
-    )
-    mocker.patch(
-        "ml_playground.cli.def_load_effective_sample",
-        return_value=(Path("cfg.toml"), mock_sample_config),
+        "ml_playground.config_loader.load_full_experiment_config",
+        return_value=ExperimentConfig(
+            prepare=PreparerConfig(),
+            train=mock_train_config,  # type: ignore[arg-type]
+            sample=mock_sample_config,
+        ),
     )
 
     result = runner.invoke(app, ["loop", "shakespeare"])
@@ -146,7 +188,7 @@ def test_main_loop_success(tmp_path: Path, mocker: MockerFixture) -> None:
 def test_main_loop_unknown_dataset_fails(tmp_path: Path, mocker: MockerFixture) -> None:
     """Unknown experiment should bubble up as CLI error exit."""
     mocker.patch(
-        "ml_playground.cli.def_load_effective_prepare",
+        "ml_playground.config_loader.load_full_experiment_config",
         side_effect=FileNotFoundError("Config not found"),
     )
     result = runner.invoke(app, ["loop", "shakespeare"])
@@ -159,11 +201,7 @@ def test_main_loop_missing_train_block_fails(
 ) -> None:
     """Test loop command fails when strict train loader raises."""
     mocker.patch(
-        "ml_playground.cli.def_load_effective_prepare",
-        return_value=(Path("cfg.toml"), PreparerConfig()),
-    )
-    mocker.patch(
-        "ml_playground.cli.def_load_effective_train",
+        "ml_playground.config_loader.load_full_experiment_config",
         side_effect=ValueError("Missing train config"),
     )
     result = runner.invoke(app, ["loop", "shakespeare"])
@@ -176,15 +214,7 @@ def test_main_loop_missing_sample_block_fails(
 ) -> None:
     """Test loop command fails when strict sample loader raises."""
     mocker.patch(
-        "ml_playground.cli.def_load_effective_prepare",
-        return_value=(Path("cfg.toml"), PreparerConfig()),
-    )
-    mocker.patch(
-        "ml_playground.cli.def_load_effective_train",
-        return_value=(Path("cfg.toml"), mocker.Mock(spec=TrainerConfig)),
-    )
-    mocker.patch(
-        "ml_playground.cli.def_load_effective_sample",
+        "ml_playground.config_loader.load_full_experiment_config",
         side_effect=ValueError("Missing sample config"),
     )
     result = runner.invoke(app, ["loop", "shakespeare"])
@@ -292,30 +322,27 @@ def test_load_train_config_resolves_relative_paths(tmp_path: Path):
     assert str(cfg.runtime.out_dir).startswith(str(exp_dir))
 
 
-def test_load_sample_config_resolves_relative_out_dir_with_runtime_ref(tmp_path: Path):
-    # Use runtime_ref to defaults' train.runtime and override out_dir relatively
+def test_load_sample_config_resolves_relative_out_dir_strict(tmp_path: Path):
+    # Provide explicit [sample.runtime] with relative out_dir and expect absolute resolution
     p = tmp_path / "experiments" / "exp" / "config.toml"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(
-        """[sample]
-runtime_ref = "train.runtime"
-
-[train]
-[train.runtime]
+        """
+[sample]
+[sample.runtime]
+out_dir = "out_rel"
 device = "cpu"
+dtype = "float32"
+
+[sample.sample]
+max_new_tokens = 1
 """
     )
     default_config_p = tmp_path / "default_config.toml"
-    default_config_p.write_text(
-        """[train]
-[train.runtime]
-out_dir = "out_rel"
-"""
-    )
+    default_config_p.write_text("")
 
-    # Use strict loader with explicit path; will resolve runtime_ref and make out_dir absolute
+    # Use strict loader with explicit path; will resolve relative out_dir and make it absolute
     _, cfg = cli.def_load_effective_sample("exp", p)
-    # Help static type checkers: runtime is required by runtime_ref resolution
     r = cast(RuntimeConfig, cfg.runtime)
     assert r is not None
     assert r.out_dir.is_absolute()
@@ -700,6 +727,24 @@ def test_sample_routes_to_injected_sampler(
         "ml_playground.experiments.speakger.sampler.sample_from_toml",
         _fake_sample_from_toml,
         raising=False,
+    )
+
+    # Mock canonical loader to avoid reading real experiment config with unknown keys
+    mocker.patch(
+        "ml_playground.config_loader.load_full_experiment_config",
+        return_value=ExperimentConfig(
+            prepare=PreparerConfig(),
+            train=TrainerConfig(
+                model=ModelConfig(),
+                data=DataConfig(dataset_dir=Path(".")),
+                optim=OptimConfig(),
+                schedule=LRSchedule(),
+                runtime=RuntimeConfig(out_dir=Path(".")),
+            ),
+            sample=SamplerConfig(
+                runtime=RuntimeConfig(out_dir=Path(".")), sample=SampleConfig()
+            ),
+        ),
     )
 
     # Act: run CLI with experiment auto-resolved config (no SystemExit on success)

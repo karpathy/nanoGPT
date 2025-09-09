@@ -34,6 +34,8 @@ def tmp_dataset(tmp_path: Path) -> Path:
 def _write_exp_config(tmp_dir: Path, out_dir: Path, dataset_dir: Path) -> Path:
     """Create a minimal, strict experiment config TOML pointing to tmp paths."""
     cfg = f'''
+[prepare]
+
 [train.model]
 n_layer = 1
 n_head = 2

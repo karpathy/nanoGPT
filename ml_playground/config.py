@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import logging
 from typing import Literal, Optional, Any, Annotated
 import tomllib
 from pydantic import (
@@ -61,6 +62,9 @@ class _FrozenStrictModel(BaseModel):
         strict=True,  # zero coercion across all models
     )
 
+    # Common optional logger field for all configs
+    logger: Any | None = Field(default=None)
+
 
 # Reusable strict type aliases
 def _no_nan(v: float) -> float:
@@ -68,34 +72,35 @@ def _no_nan(v: float) -> float:
         raise ValueError("must not be NaN")
     return v
 
-NonNaNNonNegativeStrictFloat = Annotated[StrictFloat, AfterValidator(_no_nan), Field(ge=0)]
+
+NonNaNNonNegativeStrictFloat = Annotated[
+    StrictFloat, AfterValidator(_no_nan), Field(ge=0)
+]
 UnitIntervalStrictFloat = Annotated[StrictFloat, Field(ge=0, le=1)]  # [0, 1]
 PosUnitIntervalStrictFloat = Annotated[StrictFloat, Field(gt=0, le=1)]  # (0, 1]
 PositiveStrictFloat = Annotated[StrictFloat, Field(gt=0)]
+
+# New validated int aliases
+NonNegativeStrictInt = Annotated[int, Field(ge=0)]
+PositiveStrictInt = Annotated[int, Field(gt=0)]
+AtLeastOneInt = Annotated[int, Field(ge=1)]
+SeedInt = Annotated[int, Field(ge=0)]
+MinutesNonNegative = Annotated[int, Field(ge=0)]
+EpochCount = AtLeastOneInt
 
 
 class PreparerConfig(_FrozenStrictModel):
     """Strict config for data preparation (owner-local)."""
 
-    dataset_dir: Optional[Path | str] = None
-    raw_dir: Optional[Path | str] = None
-    add_structure_tokens: Optional[bool] = None
-    doc_separator: Optional[str] = None
+    dataset_dir: Path = Path("./datasets")
+    raw_dir: Path = Path("./raw")
+    add_structure_tokens: bool = False
+    doc_separator: str = ""
     extras: dict[str, Any] = Field(default_factory=dict)
-    logger: Any | None = Field(default=None)
-
-    @field_validator("dataset_dir", "raw_dir", mode="before")
-    @classmethod
-    def _coerce_path(cls, v: Path | str | None) -> Optional[Path]:
-        if v is None:
-            return None
-        return Path(v)
 
     @field_validator("dataset_dir", "raw_dir", mode="after")
     @classmethod
-    def _resolve_path(cls, v: Optional[Path]) -> Optional[Path]:
-        if v is None:
-            return None
+    def _resolve_path(cls, v: Path) -> Path:
         try:
             return v.resolve()
         except Exception:
@@ -110,28 +115,33 @@ class RuntimeConfig(_FrozenStrictModel):
     """
 
     out_dir: Path
-    max_iters: int = 600_000
-    eval_interval: int = 2_000
-    eval_iters: int = 200
-    log_interval: int = 1
+    max_iters: NonNegativeStrictInt = 600_000
+    eval_interval: AtLeastOneInt = 2_000
+    eval_iters: AtLeastOneInt = 200
+    log_interval: AtLeastOneInt = 1
     eval_only: bool = False
-    seed: int = 1337
+    seed: SeedInt = 1337
     device: DeviceKind = "cpu"
     dtype: DTypeKind = "float32"
     compile: bool = False
     # TensorBoard logging toggle (default: enabled)
     tensorboard_enabled: bool = True
+    # Persist last/best every eval step
+    always_save_checkpoint: bool = True
 
     # Optional epoch semantics (experiment-scoped)
-    iters_per_epoch: Optional[int] = None
-    max_epochs: Optional[int] = None
+    iters_per_epoch: Optional[EpochCount] = None
+    max_epochs: Optional[EpochCount] = None
 
     # Checkpoint policy (rotated-only)
     ckpt_metric: Literal["val_loss", "perplexity"] = "val_loss"
     ckpt_greater_is_better: bool = False
     ckpt_atomic: bool = True
     ckpt_write_metadata: bool = True
-    ckpt_time_interval_minutes: int = 0
+    ckpt_last_filename: str = "ckpt_last.pt"
+    ckpt_best_filename: str = "ckpt_best.pt"
+    ckpt_top_k: NonNegativeStrictInt = 0
+    ckpt_time_interval_minutes: MinutesNonNegative = 0
 
     class Checkpointing(_FrozenStrictModel):
         class Keep(_FrozenStrictModel):
@@ -145,15 +155,10 @@ class RuntimeConfig(_FrozenStrictModel):
     checkpointing: Checkpointing = Checkpointing()
 
     # Smoothed improvement + early stopping
-    best_smoothing_alpha: float = 1.0
-    early_stop_patience: int = 0
+    best_smoothing_alpha: UnitIntervalStrictFloat = 1.0
+    early_stop_patience: NonNegativeStrictInt = 0
     # Exponential moving average of weights
-    ema_decay: float = 0.0
-
-    @field_validator("out_dir", mode="before")
-    @classmethod
-    def _coerce_out_dir(cls, v: Path | str) -> Path:
-        return Path(v)
+    ema_decay: UnitIntervalStrictFloat = 0.0
 
     @field_validator("out_dir", mode="after")
     @classmethod
@@ -162,6 +167,22 @@ class RuntimeConfig(_FrozenStrictModel):
         return v
 
     # No stable filename paths; reading is selected via checkpointing.read_policy
+
+    @model_validator(mode="after")
+    def _sanity(self) -> "RuntimeConfig":
+        # Basic bounds that aren't covered by types
+        if self.max_iters < 0:
+            raise ValueError("max_iters must be >= 0")
+        if self.eval_interval < 1:
+            raise ValueError("eval_interval must be >= 1")
+        if self.eval_iters < 1:
+            raise ValueError("eval_iters must be >= 1")
+        if self.log_interval < 1:
+            raise ValueError("log_interval must be >= 1")
+        if self.ckpt_time_interval_minutes < 0:
+            raise ValueError("ckpt_time_interval_minutes must be >= 0")
+        # Accept device/dtype combinations as declared by enums; no cross-check here
+        return self
 
 
 class TrainerConfig(_FrozenStrictModel):
@@ -176,8 +197,33 @@ class TrainerConfig(_FrozenStrictModel):
     schedule: LRSchedule
     runtime: RuntimeConfig
     extras: dict[str, Any] = Field(default_factory=dict)
-    logger: Any | None = Field(default=None)
     checkpointing: RuntimeConfig.Checkpointing = RuntimeConfig.Checkpointing()
+
+    @model_validator(mode="after")
+    def _cross_field_checks(self) -> "TrainerConfig":
+        # Ensure data.block_size <= model.block_size
+        try:
+            if self.data.block_size > self.model.block_size:
+                raise ValueError(
+                    "train.data.block_size must be <= train.model.block_size"
+                )
+            # If using LR decay, ensure min_lr <= learning_rate
+            if (
+                self.schedule.decay_lr
+                and self.schedule.min_lr > self.optim.learning_rate
+            ):
+                raise ValueError(
+                    "train.schedule.min_lr must be <= train.optim.learning_rate when decay_lr=true"
+                )
+            # If decay is disabled, warmup must be zero to avoid inconsistent intent
+            if (not self.schedule.decay_lr) and (self.schedule.warmup_iters != 0):
+                raise ValueError(
+                    "train.schedule.warmup_iters must be 0 when decay_lr=false"
+                )
+        except Exception:
+            # If any attribute missing due to prior validation, let pydantic report it
+            pass
+        return self
 
 
 class SamplerConfig(_FrozenStrictModel):
@@ -186,31 +232,17 @@ class SamplerConfig(_FrozenStrictModel):
     Supports a schema-level reference to reuse runtime from the training section.
     """
 
-    # Either provide runtime directly or a reference to an existing section
-    runtime: Optional[RuntimeConfig] = None
-    runtime_ref: Optional[Literal["train.runtime"]] = None
+    # Runtime is required; references are not supported
+    runtime: RuntimeConfig
 
     sample: SampleConfig
     extras: dict[str, Any] = Field(default_factory=dict)
-    logger: Any | None = Field(default=None)
-
-    @model_validator(mode="before")
-    @classmethod
-    def _require_runtime_or_ref(cls, data: Any) -> Any:
-        # AppConfig-level strictness: require presence of either key in input
-        if isinstance(data, dict):
-            if "runtime" not in data and "runtime_ref" not in data:
-                raise ValueError(
-                    "SamplerConfig requires either 'runtime' or 'runtime_ref'."
-                )
-        return data
 
     @model_validator(mode="after")
-    def _check_runtime_or_ref(self) -> "SamplerConfig":
-        if self.runtime is None and self.runtime_ref is None:
-            raise ValueError(
-                "SamplerConfig requires either 'runtime' or 'runtime_ref'."
-            )
+    def _check_runtime(self) -> "SamplerConfig":
+        # Ensures runtime is present (redundant due to type, but keeps explicitness)
+        if self.runtime is None:  # type: ignore[unreachable]
+            raise ValueError("SamplerConfig requires 'runtime'.")
         return self
 
 
@@ -233,14 +265,15 @@ class LRSchedule(_FrozenStrictModel):
     """
 
     decay_lr: bool = True
-    warmup_iters: NonNegativeInt = 2000
-    lr_decay_iters: NonNegativeInt = 600_000
+    warmup_iters: NonNegativeStrictInt = 2000
+    lr_decay_iters: NonNegativeStrictInt = 600_000
     min_lr: NonNaNNonNegativeStrictFloat = 6e-5
 
     @model_validator(mode="after")
     def _check_warmup_le_decay(self) -> "LRSchedule":
         if self.warmup_iters > self.lr_decay_iters:
             raise ValueError("warmup_iters must be <= lr_decay_iters")
+        # min_lr must be non-negative
         if self.min_lr < 0:
             raise ValueError("min_lr must be >= 0")
         return self
@@ -252,10 +285,10 @@ class ModelConfig(_FrozenStrictModel):
     Provides validation to ensure non-negativity and valid ranges.
     """
 
-    n_layer: PositiveInt = 12
-    n_head: PositiveInt = 12
-    n_embd: PositiveInt = 767
-    block_size: PositiveInt = 1024
+    n_layer: PositiveStrictInt = 12
+    n_head: PositiveStrictInt = 12
+    n_embd: PositiveStrictInt = 767
+    block_size: AtLeastOneInt = 1024
     dropout: UnitIntervalStrictFloat = 0.0
     bias: bool = True
     vocab_size: Optional[PositiveInt] = None
@@ -271,20 +304,15 @@ class DataConfig(_FrozenStrictModel):
     train_bin: str = "train.bin"
     val_bin: str = "val.bin"
     meta_pkl: Optional[str] = "meta.pkl"
-    batch_size: PositiveInt = 12
-    block_size: PositiveInt = 1024
-    grad_accum_steps: PositiveInt = 40
+    batch_size: AtLeastOneInt = 12
+    block_size: AtLeastOneInt = 1024
+    grad_accum_steps: AtLeastOneInt = 40
     # Tokenizer selection for bundestag_char-like datasets
     tokenizer: Literal["char", "word", "tiktoken"] = "char"
     # n-gram tokenization size for character datasets (1 = pure char-level)
     ngram_size: PositiveInt = 1
     # Sampling policy: random (default) or sequential (deterministic coverage)
     sampler: Literal["random", "sequential"] = "random"
-
-    @field_validator("dataset_dir", mode="before")
-    @classmethod
-    def _coerce_path(cls, v: Path | str) -> Path:
-        return Path(v)
 
     @field_validator("dataset_dir", mode="after")
     @classmethod
@@ -294,7 +322,14 @@ class DataConfig(_FrozenStrictModel):
         except Exception:
             return v
 
-    # type constraints handle positivity; keep path validators above
+    @model_validator(mode="after")
+    def _check_tokenizer_compat(self) -> "DataConfig":
+        # tiktoken does not use ngram grouping; enforce neutral ngram_size
+        if self.tokenizer == "tiktoken" and self.ngram_size != 1:
+            raise ValueError(
+                "train.data.ngram_size must be 1 when tokenizer='tiktoken'"
+            )
+        return self
 
     # Computed, read-only paths
     @property
@@ -319,53 +354,11 @@ class SampleConfig(_FrozenStrictModel):
     """
 
     start: str = "\n"
-    num_samples: PositiveInt = 3
-    max_new_tokens: PositiveInt = 200
+    num_samples: AtLeastOneInt = 3
+    max_new_tokens: AtLeastOneInt = 200
     temperature: PositiveStrictFloat = 0.8
-    top_k: NonNegativeInt = 200
+    top_k: NonNegativeStrictInt = 200
     top_p: Optional[PosUnitIntervalStrictFloat] = None
-
-
-class AppConfig(_FrozenStrictModel):
-    """
-    Top-level config capturing the overall application configuration, possibly including both training
-    and sampling configuration blocks.
-    """
-
-    train: Optional[TrainerConfig] = Field(default=None)
-    sample: Optional[SamplerConfig] = Field(default=None)
-
-
-def load_toml(path: Path) -> "AppConfig":
-    """Load a TOML file into a strongly-typed AppConfig.
-
-    This helper is used by experiment preparers to optionally read
-    experiment-scoped configuration values. It performs strict typing
-    via Pydantic models and raises on invalid structure.
-
-    NOTE: AppConfig is strict (forbids extras). To allow experiment-specific
-    top-level sections (e.g., [export]), we filter the loaded TOML to only
-    include keys that AppConfig knows about ("train" and "sample").
-    """
-    if not isinstance(path, Path):
-        path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"Config file not found: {path.resolve()}")
-    with path.open("rb") as f:
-        raw = tomllib.load(f)
-    if not isinstance(raw, dict):
-        raise ValueError(f"Config at {path} must be a TOML table/object")
-    filtered: dict[str, Any] = {}
-    if SECTION_TRAIN in raw:
-        filtered[SECTION_TRAIN] = raw[SECTION_TRAIN]
-    if SECTION_SAMPLE in raw:
-        filtered[SECTION_SAMPLE] = raw[SECTION_SAMPLE]
-    # If the file contained keys but none of the known sections, treat as invalid
-    if not filtered and len(raw) > 0:
-        raise ValueError(
-            "Config must contain one of the known sections: 'train' or 'sample'"
-        )
-    return AppConfig.model_validate(filtered)
 
 
 class ExperimentConfig(_FrozenStrictModel):
@@ -374,44 +367,62 @@ class ExperimentConfig(_FrozenStrictModel):
     prepare: PreparerConfig
     train: TrainerConfig
     sample: SamplerConfig
-
-    @model_validator(mode="before")
-    @classmethod
-    def _resolve_references_before(cls, data: Any) -> Any:
-        # Only process if incoming data is a mapping/dict
-        if not isinstance(data, dict):
-            return data
-        d = dict(data)
-        train = d.get("train")
-        sample = d.get("sample")
-        if isinstance(train, dict) and isinstance(sample, dict):
-            rt_ref = sample.get("runtime_ref")
-            runtime_overrides = sample.get("runtime")
-            if rt_ref == "train.runtime" or isinstance(runtime_overrides, dict):
-                base_rt = (
-                    (train.get("runtime") or {})
-                    if isinstance(train.get("runtime"), dict)
-                    else {}
-                )
-                merged = _deep_merge_dicts(base_rt, runtime_overrides or {})
-                new_sample = dict(sample)
-                new_sample["runtime"] = merged
-                new_sample.pop("runtime_ref", None)
-                d["sample"] = new_sample
-        return d
+    # Logger is always present via default factory; CLI/loader may override
+    logger: Any = Field(default_factory=lambda: logging.getLogger(__name__))
 
 
-def load_experiment_toml(path: Path | str) -> ExperimentConfig:
-    """Parse the entire TOML once, returning a fully validated ExperimentConfig."""
-    p = Path(path)
-    if not p.exists():
-        raise FileNotFoundError(f"Config file not found: {p}")
-    with p.open("rb") as f:
-        raw = tomllib.load(f)
-    if not isinstance(raw, dict):
-        raise ValueError(f"Config at {p} must be a TOML table/object")
+def load_experiment_toml(path: Path) -> ExperimentConfig:
+    """Parse the entire TOML once, returning a fully validated ExperimentConfig.
+
+    Accepts only a Path (no coercion). Reads text in UTF-8 and uses tomllib.loads.
+    """
+    if not path.exists():
+        raise FileNotFoundError(f"Config file not found: {path}")
+    text = path.read_text(encoding="utf-8")
+    raw = tomllib.loads(text)
+
+    # Coerce known path string fields to Path objects before strict validation
+    def _coerce_paths(d: dict[str, Any]) -> dict[str, Any]:
+        out = dict(d)
+        prep = out.get("prepare")
+        if isinstance(prep, dict):
+            for k in ("dataset_dir", "raw_dir"):
+                if k in prep and isinstance(prep[k], str):
+                    prep[k] = Path(prep[k])
+        train = out.get("train")
+        if isinstance(train, dict):
+            data = train.get("data")
+            if (
+                isinstance(data, dict)
+                and "dataset_dir" in data
+                and isinstance(data["dataset_dir"], str)
+            ):
+                data["dataset_dir"] = Path(data["dataset_dir"])
+            rt = train.get("runtime")
+            if (
+                isinstance(rt, dict)
+                and "out_dir" in rt
+                and isinstance(rt["out_dir"], str)
+            ):
+                rt["out_dir"] = Path(rt["out_dir"])
+        sample = out.get("sample")
+        if isinstance(sample, dict):
+            rt = sample.get("runtime")
+            if (
+                isinstance(rt, dict)
+                and "out_dir" in rt
+                and isinstance(rt["out_dir"], str)
+            ):
+                rt["out_dir"] = Path(rt["out_dir"])
+        return out
+
+    coerced = _coerce_paths(raw)
+    # Inject required logger into top-level only
+    log = logging.getLogger(__name__)
+    eff = dict(coerced)
+    eff["logger"] = log
     # No filtering: rely on ExperimentConfig's strict schema to forbid unknown sections
-    return ExperimentConfig.model_validate(raw)
+    return ExperimentConfig.model_validate(eff)
 
 
 # Backward-compatible aliases for newer API names used by some modules
@@ -517,9 +528,7 @@ __all__ = [
     "TrainerConfig",
     "SamplerConfig",
     "PreparerConfig",
-    "AppConfig",
     "ExperimentConfig",
-    "load_toml",
     "load_experiment_toml",
     "SECTION_PREPARE",
     "SECTION_TRAIN",
