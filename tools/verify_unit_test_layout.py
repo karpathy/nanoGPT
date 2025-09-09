@@ -17,6 +17,7 @@ This script enforces:
 Usage:
   uv run python tools/verify_unit_test_layout.py
 """
+
 from __future__ import annotations
 
 import sys
@@ -54,8 +55,12 @@ def main() -> int:
         if not p.name.startswith("test_"):
             bad_names.append(p)
     if bad_names:
-        lines = "\n".join(f" - {p.relative_to(PROJECT_ROOT)}" for p in sorted(bad_names))
-        fail(f"Non-conforming unit test names found (must start with 'test_'):\n{lines}")
+        lines = "\n".join(
+            f" - {p.relative_to(PROJECT_ROOT)}" for p in sorted(bad_names)
+        )
+        fail(
+            f"Non-conforming unit test names found (must start with 'test_'):\n{lines}"
+        )
 
     # 2) Map top-level src modules to expected test file names
     src_modules = [p.stem for p in SRC_DIR.glob("*.py") if p.name != "__init__.py"]
@@ -72,22 +77,32 @@ def main() -> int:
             continue
         name = tf.stem  # test_<module>
         if name.startswith("test_"):
-            mod = name[len("test_"):]
+            mod = name[len("test_") :]
             by_module[mod].append(tf)
 
     # 3) Enforce at most one test_<module>.py per top-level src module
-    dup_modules = {m: files for m, files in by_module.items() if len(files) > 1 and m in src_modules}
+    dup_modules = {
+        m: files
+        for m, files in by_module.items()
+        if len(files) > 1 and m in src_modules
+    }
     if dup_modules:
         lines = []
         for m, files in sorted(dup_modules.items()):
             for f in files:
                 lines.append(f" - {m}: {f.relative_to(PROJECT_ROOT)}")
-        fail("Multiple unit test files found for the same logical unit (top-level modules):\n" + "\n".join(lines))
+        fail(
+            "Multiple unit test files found for the same logical unit (top-level modules):\n"
+            + "\n".join(lines)
+        )
 
     # 4) Optionally, warn if a top-level module has no corresponding test file
     missing = [m for m in src_modules if (UNIT_DIR / f"test_{m}.py").exists() is False]
     if missing:
-        warn("Top-level modules without a corresponding unit test file: " + ", ".join(sorted(missing)))
+        warn(
+            "Top-level modules without a corresponding unit test file: "
+            + ", ".join(sorted(missing))
+        )
 
     print("[unit-layout] OK: naming and one-file-per-unit checks passed")
     return 0

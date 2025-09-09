@@ -258,7 +258,7 @@ directory = "htmlcov"
 
 [cosmic-ray]
 module-path = "ml_playground/config.py"
-timeout = 120.0
+timeout = 3.0
 excluded-modules = [
   "ml_playground/tokenizer_protocol.py",
   "ml_playground/lr_scheduler.py",

@@ -14,7 +14,10 @@ from ml_playground.config import (
     ModelConfig,
     RuntimeConfig,
 )
-from ml_playground.config_loader import load_full_experiment_config, deep_merge_dicts
+from ml_playground.config_loader import (
+    load_full_experiment_config,
+    deep_merge_dicts,
+)
 from tests.conftest import minimal_full_experiment_toml
 from ml_playground.prepare import PreparerConfig
 
