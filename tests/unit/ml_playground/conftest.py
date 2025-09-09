@@ -31,6 +31,7 @@ def list_logger() -> ListLogger:
 @pytest.fixture()
 def list_logger_factory() -> Callable[[], ListLogger]:
     """Provide a factory to create multiple independent ListLogger instances."""
+
     def _factory() -> ListLogger:
         return ListLogger()
 

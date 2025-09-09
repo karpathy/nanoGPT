@@ -221,7 +221,9 @@ def test_diff_files_updated_and_skipped(tmp_path: Path) -> None:
 # ---- internal PreparerInstance behaviors ----
 
 
-def test_write_bin_and_meta_raises_on_invalid_existing_meta(tmp_path: Path, list_logger) -> None:
+def test_write_bin_and_meta_raises_on_invalid_existing_meta(
+    tmp_path: Path, list_logger
+) -> None:
     ds = tmp_path / "ds"
     ds.mkdir()
     # Pre-create files with invalid meta content (not a dict with meta_version)
