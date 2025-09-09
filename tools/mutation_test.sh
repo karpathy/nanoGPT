@@ -56,8 +56,9 @@ fi
 # Any extra args are forwarded to `cosmic-ray exec`.
 
 echo "[mut] cosmic-ray exec (timeout: ${CR_TIMEOUT:-none})"
+EXTRA_ARGS=()
 if [[ -n "${CR_TIMEOUT:-}" ]]; then
-  run_cmd python "$ROOT_DIR/tools/with_timeout.py" "$CR_TIMEOUT" cosmic-ray exec pyproject.toml "$SESSION_DB" "$@"
-else
-  run_cmd cosmic-ray exec pyproject.toml "$SESSION_DB" "$@"
+  # Prefer CLI override to toml value
+  EXTRA_ARGS+=("--timeout" "$CR_TIMEOUT")
 fi
+run_cmd cosmic-ray exec "${EXTRA_ARGS[@]}" pyproject.toml "$SESSION_DB" "$@"

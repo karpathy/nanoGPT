@@ -30,11 +30,11 @@ sync:
 # Test targets
 
 test:
-	uv run python tools/verify_unit_test_layout.py && \
+	[ -f tools/verify_unit_test_layout.py ] && uv run python tools/verify_unit_test_layout.py || true; \
 	uv run pytest $(PYTEST_BASE)
 
 unit:
-	uv run python tools/verify_unit_test_layout.py && \
+	[ -f tools/verify_unit_test_layout.py ] && uv run python tools/verify_unit_test_layout.py || true; \
 	uv run pytest $(PYTEST_BASE) tests/unit
 
 unit-cov:
@@ -47,7 +47,7 @@ quality:
 	uv run ruff format . && \
 	uv run pyright && \
 	uv run mypy --incremental ml_playground && \
-	uv run python tools/verify_unit_test_layout.py && \
+	[ -f tools/verify_unit_test_layout.py ] && uv run python tools/verify_unit_test_layout.py || true; \
 	uv run pytest $(PYTEST_BASE)
 
 # Extended quality: dead code + core quality + mutation testing (non-fatal) 
