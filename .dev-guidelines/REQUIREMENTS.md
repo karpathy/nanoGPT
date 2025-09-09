@@ -1,7 +1,7 @@
 ---
 trigger: model_decision
 description: when talking about requirements (checkpointing behavior)
-globs: *.py, *.md
+globs: *.py, *.md, *.toml
 ---
 
 # Checkpointing System Requirements
@@ -63,3 +63,17 @@ The checkpointing system manages model snapshots during training to enable resum
 - Strict failure modes - no silent failures
 - Clear error messages for misconfiguration
 - Validation of checkpoint files on load
+
+## Filesystem Access and Path Suppliers
+
+- The configuration loader (`ml_playground.config_loader`) is the single boundary that interacts with the filesystem for configuration concerns.
+  - Reads TOML files (defaults and experiment config) using strict UTF-8 parsing.
+  - Resolves known relative paths relative to the config file directory when appropriate.
+  - Coerces string paths to `pathlib.Path` objects before validation.
+  - Injects required runtime context (e.g., logger) prior to strict Pydantic validation.
+- All other modules must treat `Path` values as already validated inputs and must not perform additional path resolution or ad-hoc filesystem probing beyond their explicit responsibilities (e.g., training writing checkpoints, sampler reading checkpoints).
+- No fallback or legacy behavior: invalid or missing paths must surface as early errors during load/validation.
+- To keep call sites simple and decoupled from path layout, the loader should expose supplier functions (thin helpers) that return the canonical `Path` objects needed by downstream components. Examples:
+  - `get_cfg_path(experiment: str, exp_config: Path | None) -> Path` (already provided)
+  - `get_default_config_path(config_path: Path) -> Path` (already provided)
+  - If needed, additional suppliers for derived locations (e.g., experiment directories) should live in `config_loader` and not be re-implemented elsewhere.
