@@ -456,6 +456,7 @@ def _run_loop(
         data_cfg = train_cfg.data
         # Help static type checkers: ensure we work with Path objects
         from typing import cast as _cast
+
         train_path = _cast(Path, data_cfg.train_path)
         val_path = _cast(Path, data_cfg.val_path)
         req_paths = [train_path, val_path]

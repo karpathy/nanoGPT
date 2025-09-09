@@ -77,7 +77,7 @@ def _no_nan(v: float) -> float:
 NonNaNNonNegativeStrictFloat = Annotated[
     StrictFloat, AfterValidator(_no_nan), Field(ge=0)
 ]
-UnitIntervalStrictFloat = Annotated[StrictFloat, Field(ge=0, le=1)]  # [0, 1]
+UnitIntervalStrictFloat = Annotated[StrictFloat, Field(ge=-1, le=1)]  # [0, 1]
 PosUnitIntervalStrictFloat = Annotated[StrictFloat, Field(gt=0, le=1)]  # (0, 1]
 PositiveStrictFloat = Annotated[StrictFloat, Field(gt=0)]
 

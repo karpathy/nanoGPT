@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol, Any, Iterable, cast
+from typing import Protocol, Any, Iterable
 from pathlib import Path
 import pickle
 import numpy as np
@@ -238,19 +238,20 @@ def write_bin_and_meta(
 
     # Use DataConfig-computed paths when provided, otherwise default filenames
     if data_cfg is not None:
-        # Help static type checkers by casting properties to Path
-        train_path = cast(Path, data_cfg.train_path)
-        val_path = cast(Path, data_cfg.val_path)
+        train_path = data_cfg.train_path
+        val_path = data_cfg.val_path
         # meta may be optional
-        _mp = data_cfg.meta_path
-        meta_path = cast(Path, _mp if _mp is not None else ds_dir / "meta.pkl")
+        meta_path = (
+            data_cfg.meta_path
+            if data_cfg.meta_path is not None
+            else ds_dir / "meta.pkl"
+        )
     else:
         train_path = ds_dir / "train.bin"
         val_path = ds_dir / "val.bin"
         meta_path = ds_dir / "meta.pkl"
 
-    paths: list[Path] = [train_path, val_path, meta_path]
-    before = snapshot_files(paths)
+    before = snapshot_files([train_path, val_path, meta_path])
 
     if train_path.exists() and val_path.exists() and meta_path.exists():
         # Strict: meta.pkl must be valid; do not regenerate silently
@@ -286,7 +287,7 @@ def write_bin_and_meta(
         tmp_val.unlink(missing_ok=True)
         tmp_meta.unlink(missing_ok=True)
 
-    created, updated, skipped = diff_files(paths, before)
+    created, updated, skipped = diff_files([train_path, val_path, meta_path], before)
 
     log_func = None
     if logger and hasattr(logger, "info"):
