@@ -454,10 +454,14 @@ def _run_loop(
     skip_prepare = False
     try:
         data_cfg = train_cfg.data
-        req_paths = [data_cfg.train_path, data_cfg.val_path]
+        # Help static type checkers: ensure we work with Path objects
+        from typing import cast as _cast
+        train_path = _cast(Path, data_cfg.train_path)
+        val_path = _cast(Path, data_cfg.val_path)
+        req_paths = [train_path, val_path]
         # meta is optional
         if data_cfg.meta_path is not None:
-            req_paths.append(data_cfg.meta_path)
+            req_paths.append(_cast(Path, data_cfg.meta_path))
         skip_prepare = all(p.exists() for p in req_paths)
     except Exception:
         skip_prepare = False

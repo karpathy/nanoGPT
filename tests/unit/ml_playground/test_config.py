@@ -13,9 +13,8 @@ from ml_playground.config import (
     OptimConfig,
     ModelConfig,
     RuntimeConfig,
-    _deep_merge_dicts,
 )
-from ml_playground.config_loader import load_full_experiment_config
+from ml_playground.config_loader import load_full_experiment_config, deep_merge_dicts
 from tests.conftest import minimal_full_experiment_toml
 from ml_playground.prepare import PreparerConfig
 
@@ -398,7 +397,7 @@ def test_runtimeconfig_defaults_and_checkpointing() -> None:
 def test_deep_merge_dicts_nested_and_replace() -> None:
     base = {"a": 1, "b": {"x": 1, "y": 2}, "c": {"k": 1}, "d": 4}
     override = {"b": {"y": 20, "z": 3}, "c": 5, "e": 6}
-    out = _deep_merge_dicts(base, override)
+    out = deep_merge_dicts(base, override)
     # Nested dicts merge
     assert out["b"] == {"x": 1, "y": 20, "z": 3}
     # Non-dict in override replaces
@@ -412,7 +411,7 @@ def test_deep_merge_dicts_nested_and_replace() -> None:
 def test_deep_merge_numeric_replacements() -> None:
     base = {"a": {"x": 1, "y": -2}, "b": 10}
     override = {"a": {"x": 3}, "b": 0}
-    out = _deep_merge_dicts(base, override)
+    out = deep_merge_dicts(base, override)
     # Exact numeric replacement, no arithmetic or bitwise side-effects
     assert out["a"]["x"] == 3
     assert out["a"]["y"] == -2
@@ -423,7 +422,7 @@ def test_deep_merge_type_replacement() -> None:
     # If override supplies a non-dict, it should replace the base dict entirely
     base = {"a": {"x": 1}, "b": {"y": 2}}
     override = {"b": 7}
-    out = _deep_merge_dicts(base, override)
+    out = deep_merge_dicts(base, override)
     assert out["a"] == {"x": 1}
     assert out["b"] == 7
 

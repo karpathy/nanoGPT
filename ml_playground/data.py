@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple, Any, Dict
+from typing import Tuple, Any, Dict, cast
 import numpy as np
 import numpy.typing as npt
 import torch
@@ -72,8 +72,9 @@ class SimpleBatches:
     def __init__(self, data: DataConfig, device: str) -> None:
         self.data = data
         self.device = device
-        train_path = data.train_path
-        val_path = data.val_path
+        # Help static type checkers with explicit casts from @property to Path
+        train_path = cast(Path, data.train_path)
+        val_path = cast(Path, data.val_path)
         if not train_path.exists() or not val_path.exists():
             raise FileNotFoundError(
                 f"Training data not found at {train_path} and/or {val_path}"
@@ -83,7 +84,8 @@ class SimpleBatches:
         try:
             # Only attempt to read meta if a path was provided
             if data.meta_path is not None:
-                meta_path = data.meta_path
+                _mp = data.meta_path
+                meta_path = cast(Path, _mp)
                 if meta_path.exists():
                     with meta_path.open("rb") as f:
                         meta = pickle.load(f)
