@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import logging
-from typing import Literal, Optional, Any, Annotated
-import tomllib
+from typing import Literal, Optional, Any, Annotated, cast
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -26,10 +25,10 @@ def _deep_merge_dicts(base: Any, override: Any) -> dict[str, Any]:
     """Recursively merge override into base (override wins).
     Only merges nested dicts; other types are replaced.
     """
-    out = dict(base) if isinstance(base, dict) else {}
+    out: dict[str, Any] = dict(base) if isinstance(base, dict) else {}
     if not isinstance(override, dict):
         return out
-    for k, v in override.items():
+    for k, v in cast(dict[str, Any], override).items():
         bv = out.get(k)
         if isinstance(bv, dict) and isinstance(v, dict):
             out[k] = _deep_merge_dicts(bv, v)
@@ -39,6 +38,15 @@ def _deep_merge_dicts(base: Any, override: Any) -> dict[str, Any]:
 
 
 # Strict, single-source configuration module.
+
+
+# Central strict resolver for all config path fields
+def _resolve_path_strict(v: Path) -> Path:
+    try:
+        return v.resolve()
+    except OSError:
+        raise ValueError(f"Invalid path: {v}")
+
 
 # Section/key constants to avoid scattered magic strings
 SECTION_PREPARE = "prepare"
@@ -77,7 +85,7 @@ def _no_nan(v: float) -> float:
 NonNaNNonNegativeStrictFloat = Annotated[
     StrictFloat, AfterValidator(_no_nan), Field(ge=0)
 ]
-UnitIntervalStrictFloat = Annotated[StrictFloat, Field(ge=-1, le=1)]  # [0, 1]
+UnitIntervalStrictFloat = Annotated[StrictFloat, Field(ge=0, le=1)]  # [0, 1]
 PosUnitIntervalStrictFloat = Annotated[StrictFloat, Field(gt=0, le=1)]  # (0, 1]
 PositiveStrictFloat = Annotated[StrictFloat, Field(gt=0)]
 
@@ -102,11 +110,7 @@ class PreparerConfig(_FrozenStrictModel):
     @field_validator("dataset_dir", "raw_dir", mode="after")
     @classmethod
     def _resolve_path(cls, v: Path) -> Path:
-        try:
-            return v.resolve()
-        except Exception:
-            # Best-effort normalization; leave as-is if resolve fails
-            return v
+        return _resolve_path_strict(v)
 
 
 class RuntimeConfig(_FrozenStrictModel):
@@ -128,7 +132,7 @@ class RuntimeConfig(_FrozenStrictModel):
     # TensorBoard logging toggle (default: enabled)
     tensorboard_enabled: bool = True
     # Persist last/best every eval step
-    always_save_checkpoint: bool = True
+    always_save_checkpoint: bool = False
 
     # Optional epoch semantics (experiment-scoped)
     iters_per_epoch: Optional[EpochCount] = None
@@ -199,7 +203,7 @@ class TrainerConfig(_FrozenStrictModel):
                     "train.schedule.min_lr must be <= train.optim.learning_rate when decay_lr=true"
                 )
             # If decay is disabled, warmup must be zero to avoid inconsistent intent
-            if (not self.schedule.decay_lr) and (self.schedule.warmup_iters != 0):
+            if (not self.schedule.decay_lr) or (self.schedule.warmup_iters != 0):
                 raise ValueError(
                     "train.schedule.warmup_iters must be 0 when decay_lr=false"
                 )
@@ -220,13 +224,6 @@ class SamplerConfig(_FrozenStrictModel):
 
     sample: SampleConfig
     extras: dict[str, Any] = Field(default_factory=dict)
-
-    @model_validator(mode="after")
-    def _check_runtime(self) -> "SamplerConfig":
-        # Ensures runtime is present (redundant due to type, but keeps explicitness)
-        if self.runtime is None:  # type: ignore[unreachable]
-            raise ValueError("SamplerConfig requires 'runtime'.")
-        return self
 
 
 class OptimConfig(_FrozenStrictModel):
@@ -350,57 +347,15 @@ class ExperimentConfig(_FrozenStrictModel):
 
 
 def load_experiment_toml(path: Path) -> ExperimentConfig:
-    """Parse the entire TOML once, returning a fully validated ExperimentConfig.
+    """Canonical wrapper that delegates to config_loader.
 
-    Accepts only a Path (no coercion). Reads text in UTF-8 and uses tomllib.loads.
+    Ensures the filesystem boundary for configuration remains in config_loader.
+    Accepts only a Path (no coercion) and returns a fully validated ExperimentConfig.
     """
-    if not path.exists():
-        raise FileNotFoundError(f"Config file not found: {path}")
-    text = path.read_text(encoding="utf-8")
-    raw = tomllib.loads(text)
+    # Local import to avoid circular dependency at module import time
+    from ml_playground import config_loader as _loader
 
-    # Coerce known path string fields to Path objects before strict validation
-    def _coerce_paths(d: dict[str, Any]) -> dict[str, Any]:
-        out = dict(d)
-        prep = out.get("prepare")
-        if isinstance(prep, dict):
-            for k in ("dataset_dir", "raw_dir"):
-                if k in prep and isinstance(prep[k], str):
-                    prep[k] = Path(prep[k])
-        train = out.get("train")
-        if isinstance(train, dict):
-            data = train.get("data")
-            if (
-                isinstance(data, dict)
-                and "dataset_dir" in data
-                and isinstance(data["dataset_dir"], str)
-            ):
-                data["dataset_dir"] = Path(data["dataset_dir"])
-            rt = train.get("runtime")
-            if (
-                isinstance(rt, dict)
-                and "out_dir" in rt
-                and isinstance(rt["out_dir"], str)
-            ):
-                rt["out_dir"] = Path(rt["out_dir"])
-        sample = out.get("sample")
-        if isinstance(sample, dict):
-            rt = sample.get("runtime")
-            if (
-                isinstance(rt, dict)
-                and "out_dir" in rt
-                and isinstance(rt["out_dir"], str)
-            ):
-                rt["out_dir"] = Path(rt["out_dir"])
-        return out
-
-    coerced = _coerce_paths(raw)
-    # Inject required logger into top-level only
-    log = logging.getLogger(__name__)
-    eff = dict(coerced)
-    eff["logger"] = log
-    # No filtering: rely on ExperimentConfig's strict schema to forbid unknown sections
-    return ExperimentConfig.model_validate(eff)
+    return _loader.load_full_experiment_config(path)
 
 
 # Backward-compatible aliases for newer API names used by some modules
