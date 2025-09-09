@@ -11,6 +11,17 @@ Unit tests validate individual functions, classes, and small modules in isolatio
 - Construct config dataclasses/Pydantic models inline with tiny values.
 - Avoid loading files; prefer direct objects and minimal test data.
 
+### Centralized fixtures and helpers
+
+- `tests/conftest.py`
+  - `out_dir(tmp_path: Path) -> Path`
+    - Provides a ready-to-use `tmp_path / "out"` directory for tests that write outputs.
+  - `minimal_full_experiment_toml(dataset_dir: Path, out_dir: Path, *, extra_optim: str = "", extra_train: str = "", extra_sample: str = "", extra_sample_sample: str = "", include_train_data: bool = True, include_train_runtime: bool = True, include_sample: bool = True) -> str`
+    - Builds a strict, minimal ExperimentConfig TOML. Use the `extra_*` parameters to inject lines into the appropriate sections and the `include_*` flags to omit sections when testing validation errors.
+
+- `tests/unit/ml_playground/conftest.py`
+  - `ListLogger` with fixtures `list_logger` and `list_logger_factory` to capture `.info()` and `.warning()` calls without writing to stdout.
+
 ## Principles
 - Extremely fast, deterministic, and isolated.
 - No I/O or network by default; use pure functions where possible.

@@ -16,41 +16,19 @@ from ml_playground.config import (
     _deep_merge_dicts,
 )
 from ml_playground.config_loader import load_full_experiment_config
+from tests.conftest import minimal_full_experiment_toml
 from ml_playground.prepare import PreparerConfig
 
 
 def test_full_loader_roundtrip(tmp_path: Path) -> None:
-    toml_text = """
-[prepare]
-
-[train.model]
-n_layer=1
-n_head=1
-n_embd=32
-block_size=16
-bias=false
-
-[train.data]
-dataset_dir = "data/shakespeare"
-block_size = 16
-batch_size = 2
-grad_accum_steps = 1
-
-[train.optim]
-learning_rate = 0.001
-
-[train.schedule]
-
-[train.runtime]
-out_dir = "out/test_next"
-max_iters = 1
-
-[sample]
-[sample.runtime]
-out_dir = "out/test_next"
-
-[sample.sample]
-"""
+    toml_text = minimal_full_experiment_toml(
+        dataset_dir=Path("data/shakespeare"),
+        out_dir=Path("out/test_next"),
+        extra_optim="learning_rate = 0.001",
+        extra_train="max_iters = 1",
+        extra_sample="",
+        extra_sample_sample="",
+    )
     cfg_path = tmp_path / "cfg.toml"
     cfg_path.write_text(toml_text)
 
@@ -84,30 +62,12 @@ arr = [1,2,3]
 
 def test_full_loader_nested_unknown_keys_in_sample_raise(tmp_path: Path) -> None:
     p = tmp_path / "cfg_bad_sample_nested.toml"
-    p.write_text(
-        """
-[prepare]
-
-[train]
-[train.model]
-
-[train.data]
-dataset_dir = "./data"
-
-[train.optim]
-
-[train.schedule]
-
-[train.runtime]
-out_dir = "./out"
-
-[sample]
-[sample.runtime]
-out_dir = "./out"
-[sample.sample]
-unknown_leaf = 42
-"""
+    text = minimal_full_experiment_toml(
+        dataset_dir=Path("./data"),
+        out_dir=Path("./out"),
+        extra_sample_sample="unknown_leaf = 42",
     )
+    p.write_text(text)
     with pytest.raises(ValidationError):
         load_full_experiment_config(p)
 
@@ -198,32 +158,13 @@ def test_validate_path_exists_file_and_dir(tmp_path: Path) -> None:
 
 def test_full_loader_unknown_top_level_sections_raise(tmp_path: Path) -> None:
     p = tmp_path / "cfg.toml"
-    p.write_text(
-        """
-[prepare]
-
-[train]
-[train.model]
-
-[train.data]
-dataset_dir = "./data"
-
-[train.optim]
-
-[train.schedule]
-
-[train.runtime]
-out_dir = "./out"
-
-[sample]
-runtime_ref = "train.runtime"
-[sample.sample]
-start = "\\n"
-
-[export]
-foo = 1
-"""
+    base = minimal_full_experiment_toml(
+        dataset_dir=Path("./data"),
+        out_dir=Path("./out"),
+        include_sample=True,
+        extra_sample_sample='start = "\\n"',
     )
+    p.write_text(base + "\n[export]\nfoo = 1\n")
     with pytest.raises(ValidationError):
         load_full_experiment_config(p)
 
@@ -231,63 +172,27 @@ foo = 1
 def test_full_loader_nested_unknown_keys_raise(tmp_path: Path) -> None:
     # Unknown nested keys under [train.*] should raise due to strict Pydantic models
     p = tmp_path / "cfg_bad_nested.toml"
-    p.write_text(
-        """
-[prepare]
-
-[train]
-[train.model]
-unknown_key = 123
-
-[train.data]
-dataset_dir = "./data"
-
-[train.optim]
-
-[train.schedule]
-
-[train.runtime]
-out_dir = "./out"
-
-[sample]
-[sample.runtime]
-out_dir = "./out"
-[sample.sample]
-"""
+    text = minimal_full_experiment_toml(
+        dataset_dir=Path("./data"),
+        out_dir=Path("./out"),
     )
+    # Inject unknown train.model key
+    text = text.replace("[train.model]", "[train.model]\nunknown_key = 123")
+    p.write_text(text)
     with pytest.raises(ValidationError):
         load_full_experiment_config(p)
 
 
 def test_load_experiment_toml_strict_sections(tmp_path: Path) -> None:
     p = tmp_path / "exp.toml"
-    p.write_text(
-        """
-[prepare]
-# minimal preparer config
-
-[train]
-[train.model]
-
-[train.data]
-dataset_dir = "./data"
-
-[train.optim]
-
-[train.schedule]
-
-[train.runtime]
-out_dir = "./out"
-log_interval = 2
-
-[sample]
-    [sample.runtime]
-    out_dir = "./out"
-    log_interval = 2
-    [sample.sample]
-    start = "\\n"
-"""
+    text = minimal_full_experiment_toml(
+        dataset_dir=Path("./data"),
+        out_dir=Path("./out"),
+        extra_train="log_interval = 2",
+        extra_sample="log_interval = 2",
+        extra_sample_sample="start = \"\\n\"",
     )
+    p.write_text(text)
     exp = load_experiment_toml(p)
     assert isinstance(exp, ExperimentConfig)
     # Parsed runtime present and matches provided values (no reference resolution)
@@ -298,35 +203,21 @@ log_interval = 2
 
 def test_explicit_sample_runtime_overrides(tmp_path: Path) -> None:
     p = tmp_path / "exp2.toml"
-    p.write_text(
-        """
-[prepare]
-
-[train]
-[train.model]
-
-[train.data]
-dataset_dir = "./data"
-
-[train.optim]
-
-[train.schedule]
-
-[train.runtime]
-out_dir = "./out"
+    text = minimal_full_experiment_toml(
+        dataset_dir=Path("./data"),
+        out_dir=Path("./out"),
+        extra_train="""
 eval_interval = 100
 eval_iters = 20
 tensorboard_enabled = true
-
-[sample]
-[sample.runtime]
-out_dir = "./out"
+""",
+        extra_sample="""
 eval_interval = 200
 tensorboard_enabled = false
-[sample.sample]
-start = "\\n"
-"""
+""",
+        extra_sample_sample="start = \"\\n\"",
     )
+    p.write_text(text)
     exp = load_experiment_toml(p)
     rt = exp.sample.runtime
     assert rt is not None
@@ -596,13 +487,13 @@ def test_config_exports() -> None:
 
 def test_full_loader_incomplete_sample_config(tmp_path: Path) -> None:
     """Strict: incomplete [sample] should raise ValidationError."""
-    toml_text = """
-[prepare]
-
-[sample.runtime]
-out_dir = "out/test"
-# Missing sample.sample section
-"""
+    toml_text = minimal_full_experiment_toml(
+        dataset_dir=Path("./data"),
+        out_dir=Path("out/test"),
+        include_sample=True,
+    )
+    # Remove [sample.sample] section
+    toml_text = toml_text.replace("[sample.sample]", "# Missing sample.sample")
     cfg_path = tmp_path / "incomplete_sample.toml"
     cfg_path.write_text(toml_text)
 
@@ -628,26 +519,11 @@ out_dir = "out/test"
 
 def test_full_loader_no_sample_section_raises(tmp_path: Path) -> None:
     """Strict: Missing [sample] section raises."""
-    toml_text = """
-[prepare]
-
-[train.model]
-n_layer=1
-n_head=1
-n_embd=32
-block_size=16
-
-[train.data]
-dataset_dir = "data/shakespeare"
-
-[train.optim]
-learning_rate = 0.001
-
-[train.schedule]
-
-[train.runtime]
-out_dir = "out/test"
-"""
+    toml_text = minimal_full_experiment_toml(
+        dataset_dir=Path("data/shakespeare"),
+        out_dir=Path("out/test"),
+        include_sample=False,
+    )
     cfg_path = tmp_path / "no_sample.toml"
     cfg_path.write_text(toml_text)
     with pytest.raises(ValidationError):
@@ -656,24 +532,12 @@ out_dir = "out/test"
 
 def test_full_loader_train_missing_data_section(tmp_path: Path) -> None:
     """Strict: [train] missing required data subsection must raise ValidationError."""
-    toml_text = """
-[prepare]
-
-[train.model]
- n_layer=1
- n_head=1
- n_embd=32
- block_size=16
- 
- [train.optim]
- learning_rate = 0.001
- 
- [train.schedule]
- 
- [train.runtime]
- out_dir = "out/test"
- # Missing [train.data] section
- """
+    # Start from a complete config and remove [train.data]
+    toml_text = minimal_full_experiment_toml(
+        dataset_dir=Path("data/shakespeare"),
+        out_dir=Path("out/test"),
+        include_train_data=False,
+    )
     cfg_path = tmp_path / "missing_data.toml"
     cfg_path.write_text(toml_text)
 
@@ -683,24 +547,11 @@ def test_full_loader_train_missing_data_section(tmp_path: Path) -> None:
 
 def test_full_loader_train_missing_runtime_section(tmp_path: Path) -> None:
     """Strict: [train] missing required runtime subsection must raise ValidationError."""
-    toml_text = """
-[prepare]
-
-[train.model]
- n_layer=1
- n_head=1
- n_embd=32
- block_size=16
- 
- [train.data]
- dataset_dir = "data/shakespeare"
- 
- [train.optim]
- learning_rate = 0.001
- 
- [train.schedule]
- # Missing [train.runtime] section
- """
+    toml_text = minimal_full_experiment_toml(
+        dataset_dir=Path("data/shakespeare"),
+        out_dir=Path("out/test"),
+        include_train_runtime=False,
+    )
     cfg_path = tmp_path / "missing_runtime.toml"
     cfg_path.write_text(toml_text)
 
@@ -710,12 +561,13 @@ def test_full_loader_train_missing_runtime_section(tmp_path: Path) -> None:
 
 def test_full_loader_sample_missing_runtime_section(tmp_path: Path) -> None:
     """Strict: [sample] missing required runtime subsection must raise ValidationError."""
-    toml_text = """
-[prepare]
-
-[sample.sample]
-# Missing [sample.runtime] section
-"""
+    toml_text = minimal_full_experiment_toml(
+        dataset_dir=Path("./data"),
+        out_dir=Path("out/test"),
+        include_sample=True,
+    )
+    # Remove [sample.runtime]
+    toml_text = toml_text.replace("[sample.runtime]", "# Missing [sample.runtime]")
     cfg_path = tmp_path / "sample_missing_runtime.toml"
     cfg_path.write_text(toml_text)
 

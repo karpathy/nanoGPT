@@ -37,10 +37,9 @@ def ckpt_obj() -> Checkpoint:
 
 
 def test_checkpoint_manager_rotation_and_latest(
-    tmp_path: Path, ckpt_obj: Checkpoint
+    tmp_path: Path, ckpt_obj: Checkpoint, out_dir: Path
 ) -> None:
-    out = tmp_path / "out"
-    out.mkdir()
+    out = out_dir
     mgr = CheckpointManager(out, atomic=False, keep_last=2, keep_best=1)
 
     # Save 3 last checkpoints -> only last 2 should remain
@@ -61,10 +60,9 @@ def test_checkpoint_manager_rotation_and_latest(
 
 
 def test_checkpoint_manager_best_rotation_and_sidecar_cleanup(
-    tmp_path: Path, ckpt_obj: Checkpoint
+    tmp_path: Path, ckpt_obj: Checkpoint, out_dir: Path
 ) -> None:
-    out = tmp_path / "out"
-    out.mkdir()
+    out = out_dir
     logger = logging.getLogger("test")
     mgr = CheckpointManager(out, atomic=False, keep_last=0, keep_best=1)
 
