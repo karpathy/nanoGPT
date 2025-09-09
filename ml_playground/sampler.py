@@ -54,8 +54,6 @@ def _load_checkpoint(
     # Strict: default/latest only
     return ckpt_mgr.load_latest_checkpoint(device=device, logger=logger)
 
-    # No stable-file fallback – strict mode requires rotated checkpoints.
-
 
 def sample(cfg: SamplerConfig) -> None:
     """Sample from a trained model."""
@@ -136,5 +134,7 @@ def sample(cfg: SamplerConfig) -> None:
                 logger.info("---------------")
 
 
-# Codec helpers and legacy codec manager have been removed. Tokenization is
-# handled via setup_tokenizer() using the centralized tokenizer protocol.
+__all__ = [
+    "Sampler",
+    "sample",
+]

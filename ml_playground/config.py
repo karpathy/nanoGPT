@@ -302,7 +302,7 @@ class DataConfig(_FrozenStrictModel):
     @model_validator(mode="after")
     def _check_tokenizer_compat(self) -> "DataConfig":
         # tiktoken does not use ngram grouping; enforce neutral ngram_size
-        if self.tokenizer == "tiktoken" and self.ngram_size != 1:
+        if not self.tokenizer == "tiktoken" and self.ngram_size != 1:
             raise ValueError(
                 "train.data.ngram_size must be 1 when tokenizer='tiktoken'"
             )

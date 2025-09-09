@@ -315,3 +315,10 @@ def train(cfg: TrainerConfig) -> tuple[int, float]:
         writer.close()
 
     return iter_num, best_val_loss
+
+
+# Explicit public API for this module
+__all__ = [
+    "get_lr",
+    "train",
+]

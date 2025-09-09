@@ -315,8 +315,8 @@ def test_load_train_config_resolves_relative_paths(tmp_path: Path):
 """
     config_path.write_text(toml_text)
 
-    # Use strict loader with explicit path so we don't depend on package experiments root
-    _, cfg = cli.def_load_effective_train("exp", config_path)
+    # Use strict partial loader with explicit path so we don't depend on package experiments root
+    cfg = config_loader.load_train_config(config_path)
 
     assert str(cfg.data.dataset_dir).startswith(str(exp_dir))
     assert str(cfg.runtime.out_dir).startswith(str(exp_dir))
@@ -341,8 +341,8 @@ max_new_tokens = 1
     default_config_p = tmp_path / "default_config.toml"
     default_config_p.write_text("")
 
-    # Use strict loader with explicit path; will resolve relative out_dir and make it absolute
-    _, cfg = cli.def_load_effective_sample("exp", p)
+    # Use strict partial loader with explicit path; will resolve relative out_dir and make it absolute
+    cfg = config_loader.load_sample_config(p)
     r = cast(RuntimeConfig, cfg.runtime)
     assert r is not None
     assert r.out_dir.is_absolute()
@@ -582,7 +582,7 @@ def test_get_cfg_path_explicit_and_default(tmp_path: Path):
 def test_load_config_error_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # 1) Missing config path -> exit
     with pytest.raises(FileNotFoundError):
-        cli.def_load_effective_train("exp", Path("/__no_such_file__"))
+        config_loader.load_train_config(Path("/__no_such_file__"))
 
     # Create experiments structure: tmp/experiments/exp/config.toml
     exp_dir = tmp_path / "experiments" / "exp"
@@ -597,14 +597,14 @@ def test_load_config_error_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     defaults_path.write_text("this is not valid toml")
 
     with pytest.raises(Exception) as ei3:
-        cli.def_load_effective_train("exp", cfg)
+        config_loader.load_train_config(cfg)
     assert "default_config.toml" in str(ei3.value).lower()
 
     # 3) Experiment config invalid -> exit mentioning cfg path
     bad_cfg = exp_dir / "bad.toml"
     bad_cfg.write_text("this is not valid toml")
     with pytest.raises(Exception) as ei4:
-        cli.def_load_effective_train("exp", bad_cfg)
+        config_loader.load_train_config(bad_cfg)
     assert "bad.toml" in str(ei4.value).lower()
 
 

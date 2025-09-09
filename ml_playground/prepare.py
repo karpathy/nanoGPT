@@ -345,3 +345,20 @@ def setup_tokenizer(
     else:
         tokenizer = create_tokenizer(tokenizer_type)
     return tokenizer
+
+
+# Explicit public API for this module
+__all__ = [
+    "Encoder",
+    "Preparer",
+    "snapshot_files",
+    "diff_files",
+    "create_standardized_metadata",
+    "make_preparer",
+    "split_train_val",
+    "create_tokenizer_for_preparation",
+    "prepare_with_tokenizer",
+    "write_bin_and_meta",
+    "seed_text_file",
+    "setup_tokenizer",
+]

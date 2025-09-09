@@ -42,7 +42,9 @@ def _file_violations(p: Path) -> list[str]:
             dq = line.count('"')
             sq = line.count("'")
             if (dq % 2 == 0) and (sq % 2 == 0):
-                errors.append(f"L{i}: Forbidden private attribute access: {line.strip()}")
+                errors.append(
+                    f"L{i}: Forbidden private attribute access: {line.strip()}"
+                )
     return errors
 
 

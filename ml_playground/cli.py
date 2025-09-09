@@ -42,23 +42,8 @@ def _global_device_setup(device: str, dtype: str, seed: int) -> None:
 # --- Typer helpers ---------------------------------------------------------
 def _complete_experiments(ctx: typer.Context, incomplete: str) -> list[str]:
     """Auto-complete experiment names based on directories with a config.toml."""
-    root = Path(__file__).resolve().parent / "experiments"
-    if not root.exists():
-        return []
-
-    try:
-        return sorted(
-            [
-                p.name
-                for p in root.iterdir()
-                if p.is_dir()
-                and (p / "config.toml").exists()
-                and p.name.startswith(incomplete)
-            ]
-        )
-    except OSError:
-        # Autocomplete is a non-critical UX nicety; return empty on FS errors
-        return []
+    # Delegate to loader to keep FS access centralized for configuration
+    return config_loader.list_experiments_with_config(incomplete)
 
 
 # --- CLI plumbing ----------------------------------------------------------
@@ -102,26 +87,13 @@ def run_or_exit(
         raise typer.Exit(exception_exit_code)
 
 
-def _resolve_and_load_configs(exp_name: str, exp_cfg: Path | None):
-    """Resolve config path and return raw TOML dicts.
-
-    Exists to be monkeypatched in tests.
-    """
-    cfg_path = _cfg_path_for(exp_name, exp_cfg)
-    raw = _read_toml(cfg_path)
-    return cfg_path, raw, {}
-
-
 def _cfg_path_for(experiment: str, exp_config: Path | None) -> Path:
     """Resolve the path to the experiment config TOML strictly.
 
     - If exp_config is provided, use it.
     - Else, use experiments/<experiment>/config.toml under this package's experiments dir.
     """
-    if exp_config is not None:
-        return exp_config
-    exp_dir = Path(__file__).resolve().parent / "experiments" / experiment
-    return exp_dir / "config.toml"
+    return config_loader.get_cfg_path(experiment, exp_config)
 
 
 def _read_toml(p: Path) -> dict[str, Any]:
@@ -139,180 +111,7 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
             out[k] = v
     return out
 
-
-def _load_merged_raw(config_path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Load default_config.toml (if exists) and experiment config, return (defaults, merged)."""
-    # default_config.toml expected at the parent of experiments/
-    defaults_path = config_path.parents[2] / "default_config.toml"
-    defaults_err: Exception | None = None
-    if defaults_path.exists():
-        try:
-            defaults = _read_toml(defaults_path)
-        except Exception as e:
-            # Defer raising; experiment config error should take precedence if present
-            defaults = {}
-            defaults_err = ValueError(f"default_config.toml: {e}")
-    else:
-        defaults = {}
-
-    # Read experiment config; if it fails, prefer this error mentioning the cfg path
-    try:
-        raw = _read_toml(config_path)
-    except Exception as e:
-        raise ValueError(f"{config_path.name}: {e}")
-
-    # If experiment config succeeded but defaults had an error, raise it now
-    if defaults_err is not None:
-        raise defaults_err
-    merged = _deep_merge(defaults, raw)
-    return defaults, merged
-
-
-def _resolve_path_if_relative(base: Path, path_str: str) -> str:
-    """Resolve a path string relative to base if it's not absolute."""
-    if path_str.startswith("/"):
-        return path_str
-    return str((base / path_str).resolve())
-
-
-def _resolve_relative_paths(merged: dict[str, Any], cfg_path: Path) -> dict[str, Any]:
-    """Resolve known relative paths relative to the config file directory."""
-    base = cfg_path.parent
-    out = dict(merged)
-    # prepare.dataset_dir, prepare.raw_dir
-    prep = out.get("prepare")
-    if isinstance(prep, dict):
-        for key in ("dataset_dir", "raw_dir"):
-            if (
-                key in prep
-                and isinstance(prep[key], str)
-                and not prep[key].startswith("/")
-            ):
-                prep[key] = _resolve_path_if_relative(base, prep[key])
-    # train.data.dataset_dir and train.runtime.out_dir
-    train = out.get("train")
-    if isinstance(train, dict):
-        data = train.get("data")
-        if (
-            isinstance(data, dict)
-            and "dataset_dir" in data
-            and isinstance(data["dataset_dir"], str)
-            and not data["dataset_dir"].startswith("/")
-        ):
-            data["dataset_dir"] = _resolve_path_if_relative(base, data["dataset_dir"])
-        rt = train.get("runtime")
-        if (
-            isinstance(rt, dict)
-            and "out_dir" in rt
-            and isinstance(rt["out_dir"], str)
-            and not rt["out_dir"].startswith("/")
-        ):
-            rt["out_dir"] = _resolve_path_if_relative(base, rt["out_dir"])
-    # sample.runtime.out_dir (if provided directly)
-    sample = out.get("sample")
-    if isinstance(sample, dict):
-        rt = sample.get("runtime")
-        if (
-            isinstance(rt, dict)
-            and "out_dir" in rt
-            and isinstance(rt["out_dir"], str)
-            and not rt["out_dir"].startswith("/")
-        ):
-            rt["out_dir"] = _resolve_path_if_relative(base, rt["out_dir"])
-    return out
-
-
-def _clean_runtime_config(config_dict: dict, allowed_fields: set) -> dict:
-    """Clean runtime configuration by removing unknown fields."""
-    rt = config_dict.get("runtime")
-    if isinstance(rt, dict):
-        config_dict["runtime"] = {k: v for k, v in rt.items() if k in allowed_fields}
-    return config_dict
-
-
-def _load_effective_config(
-    experiment: str, exp_config: Path | None, config_type: str
-) -> tuple[Path, Any]:
-    """Generic function to load and validate configuration strictly from TOML."""
-    config_path = _cfg_path_for(experiment, exp_config)
-    if not config_path.exists():
-        raise FileNotFoundError(f"Config file not found: {config_path}")
-    _, merged = _load_merged_raw(config_path)
-    merged = _resolve_relative_paths(merged, config_path)
-
-    if config_type == "prepare":
-        config_dict = dict(merged.get("prepare", {}))
-        config_dict["logger"] = logging.getLogger(__name__)
-        cfg = PreparerConfig.model_validate(config_dict)
-    elif config_type == "train":
-        config_dict = dict(merged.get("train", {}))
-        # Ensure required nested sections exist; allow defaults when omitted
-        if "model" not in config_dict:
-            config_dict["model"] = {}
-        if "data" not in config_dict:
-            config_dict["data"] = {}
-        if "optim" not in config_dict:
-            config_dict["optim"] = {}
-        if "schedule" not in config_dict:
-            config_dict["schedule"] = {}
-        if "runtime" not in config_dict:
-            config_dict["runtime"] = {}
-        # Coerce paths to Path objects for strict schema
-        from pathlib import Path as _Path
-
-        if isinstance(config_dict.get("data", {}).get("dataset_dir"), str):
-            config_dict["data"]["dataset_dir"] = _Path(
-                config_dict["data"]["dataset_dir"]
-            )  # type: ignore[index]
-        if isinstance(config_dict.get("runtime", {}).get("out_dir"), str):
-            config_dict["runtime"]["out_dir"] = _Path(config_dict["runtime"]["out_dir"])  # type: ignore[index]
-        config_dict["logger"] = logging.getLogger(__name__)
-        cfg = TrainerConfig.model_validate(config_dict)
-    elif config_type == "sample":
-        config_dict = dict(merged.get("sample", {}))
-        if not isinstance(config_dict, dict):
-            raise ValueError("Missing [sample] section in config")
-        if "sample" not in config_dict or not isinstance(
-            config_dict.get("sample"), dict
-        ):
-            config_dict = dict(config_dict)
-            config_dict["sample"] = {}
-        # Coerce paths to Path objects for strict schema
-        from pathlib import Path as _Path
-
-        if isinstance(config_dict.get("runtime", {}).get("out_dir"), str):
-            config_dict.setdefault("runtime", {})
-            config_dict["runtime"]["out_dir"] = _Path(config_dict["runtime"]["out_dir"])  # type: ignore[index]
-        config_dict["logger"] = logging.getLogger(__name__)
-        cfg = SamplerConfig.model_validate(config_dict)
-    else:
-        raise ValueError(f"Unknown config type: {config_type}")
-
-    return config_path, cfg
-
-
-def def_load_effective_prepare(
-    experiment: str, exp_config: Path | None
-) -> tuple[Path, PreparerConfig]:
-    """Load and validate preparer configuration strictly from TOML."""
-    return _load_effective_config(experiment, exp_config, "prepare")
-
-
-def def_load_effective_train(
-    experiment: str, exp_config: Path | None
-) -> tuple[Path, TrainerConfig]:
-    """Load and validate training configuration strictly from TOML."""
-    return _load_effective_config(experiment, exp_config, "train")
-
-
-def def_load_effective_sample(
-    experiment: str, exp_config: Path | None
-) -> tuple[Path, SamplerConfig]:
-    """Load and validate sampling configuration strictly from TOML.
-
-    Supports schema-level runtime_ref to inherit train.runtime and resolves paths relative to the config.
-    """
-    return _load_effective_config(experiment, exp_config, "sample")
+    # All config TOML loading and merging lives in config_loader.
 
 
 # --- Command runners -------------------------------------------------------
@@ -449,20 +248,14 @@ def _run_loop(
     sample_cfg: SamplerConfig,
 ) -> None:
     """Run the full prepare->train->sample loop for an experiment."""
-    # If dataset artifacts already exist, skip prepare to allow env overrides-driven loops
     # Determine if prepare can be skipped by checking data artifacts from DataConfig
     skip_prepare = False
     try:
         data_cfg = train_cfg.data
-        # Help static type checkers: ensure we work with Path objects
-        from typing import cast as _cast
-
-        train_path = _cast(Path, data_cfg.train_path)
-        val_path = _cast(Path, data_cfg.val_path)
-        req_paths = [train_path, val_path]
+        req_paths = [data_cfg.train_path, data_cfg.val_path]
         # meta is optional
         if data_cfg.meta_path is not None:
-            req_paths.append(_cast(Path, data_cfg.meta_path))
+            req_paths.append(data_cfg.meta_path)
         skip_prepare = all(p.exists() for p in req_paths)
     except Exception:
         skip_prepare = False
@@ -518,8 +311,8 @@ def global_options(
     ctx.obj = {"exp_config": exp_config}
 
 
-@app.command(name="prepare")
-def prepare_command(
+@app.command()
+def prepare(
     ctx: typer.Context,
     experiment: Annotated[
         str,
@@ -537,8 +330,8 @@ def prepare_command(
     )
 
 
-@app.command(name="train")
-def train_command(
+@app.command()
+def train(
     ctx: typer.Context,
     experiment: Annotated[
         str,
@@ -556,8 +349,8 @@ def train_command(
     )
 
 
-@app.command(name="sample")
-def sample_command(
+@app.command()
+def sample(
     ctx: typer.Context,
     experiment: Annotated[
         str,
@@ -575,8 +368,8 @@ def sample_command(
     )
 
 
-@app.command(name="analyze")
-def analyze_command(
+@app.command()
+def analyze(
     ctx: typer.Context,
     experiment: Annotated[
         str,
