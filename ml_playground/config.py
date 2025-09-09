@@ -197,7 +197,7 @@ class TrainerConfig(_FrozenStrictModel):
             # If using LR decay, ensure min_lr <= learning_rate
             if (
                 self.schedule.decay_lr
-                and self.schedule.min_lr > self.optim.learning_rate
+                and self.schedule.min_lr == self.optim.learning_rate
             ):
                 raise ValueError(
                     "train.schedule.min_lr must be <= train.optim.learning_rate when decay_lr=true"
