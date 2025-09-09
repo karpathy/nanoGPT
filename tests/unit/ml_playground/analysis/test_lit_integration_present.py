@@ -2,7 +2,7 @@ from __future__ import annotations
 from types import ModuleType
 from unittest.mock import patch
 
-from ml_playground.analysis import lit_integration as li
+from ml_playground.analysis import run_server_bundestag_char
 
 
 def test_lit_integration_server_path(monkeypatch):
@@ -47,7 +47,7 @@ def test_lit_integration_server_path(monkeypatch):
             "lit_nlp.server": server_mod,
         },
     ):
-        li.run_server_bundestag_char(host="0.0.0.0", port=1234, open_browser=False)
+        run_server_bundestag_char(host="0.0.0.0", port=1234, open_browser=False)
         assert served.get("called") is True
         assert served["port"] == 1234
         assert served["host"] == "0.0.0.0"

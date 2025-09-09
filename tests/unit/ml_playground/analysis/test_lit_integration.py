@@ -2,7 +2,7 @@ from __future__ import annotations
 import re
 import pytest
 
-from ml_playground.analysis.lit_integration import run_server_bundestag_char
+from ml_playground.analysis import run_server_bundestag_char
 
 
 @pytest.mark.integration
