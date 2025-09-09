@@ -25,6 +25,29 @@ def get_cfg_path(experiment: str, exp_config: Path | None) -> Path:
     return Path(__file__).resolve().parent / "experiments" / experiment / "config.toml"
 
 
+def list_experiments_with_config(prefix: str = "") -> list[str]:
+    """List experiment directory names under experiments/ that contain a config.toml.
+
+    This is used by CLI autocompletion, centralizing the filesystem touchpoint for
+    configuration discovery.
+    """
+    root = Path(__file__).resolve().parent / "experiments"
+    if not root.exists():
+        return []
+    try:
+        return sorted(
+            [
+                p.name
+                for p in root.iterdir()
+                if p.is_dir()
+                and (p / "config.toml").exists()
+                and p.name.startswith(prefix)
+            ]
+        )
+    except OSError:
+        return []
+
+
 def read_toml_dict(path: Path) -> dict[str, Any]:
     """Reads a TOML file and returns a dictionary.
 
@@ -36,12 +59,36 @@ def read_toml_dict(path: Path) -> dict[str, Any]:
     return tomllib.loads(text)
 
 
+# Centralized filesystem query helpers (single FS boundary policy)
+def fs_path_exists(path: Path) -> bool:
+    try:
+        return path.exists()
+    except Exception:
+        return False
+
+
+def fs_is_file(path: Path) -> bool:
+    try:
+        return path.is_file()
+    except Exception:
+        return False
+
+
+def fs_is_dir(path: Path) -> bool:
+    try:
+        return path.is_dir()
+    except Exception:
+        return False
+
+
 def get_default_config_path(config_path: Path) -> Path:
     """Return the default_config.toml path adjacent to experiments/.
 
     Given an experiment config like .../experiments/<exp>/config.toml, the
     defaults live at .../default_config.toml.
     """
+    # config_path: .../experiments/<exp>/config.toml
+    # defaults live under the experiments directory: .../experiments/default_config.toml
     return (config_path.parent.parent / "default_config.toml").resolve()
 
 
@@ -109,7 +156,7 @@ def _resolve_relative_paths(merged: dict[str, Any], cfg_path: Path) -> dict[str,
                 and not prep[key].startswith("/")
             ):
                 prep[key] = _resolve_path_if_relative(base, prep[key])
-    # train.data.dataset_dir and train.runtime.out_dir
+    # train.data.dataset_dir (keep runtime.out_dir as provided to preserve relative semantics)
     train = out.get("train")
     if isinstance(train, dict):
         data = train.get("data")
@@ -120,25 +167,10 @@ def _resolve_relative_paths(merged: dict[str, Any], cfg_path: Path) -> dict[str,
             and not data["dataset_dir"].startswith("/")
         ):
             data["dataset_dir"] = _resolve_path_if_relative(base, data["dataset_dir"])
-        rt = train.get("runtime")
-        if (
-            isinstance(rt, dict)
-            and "out_dir" in rt
-            and isinstance(rt["out_dir"], str)
-            and not rt["out_dir"].startswith("/")
-        ):
-            rt["out_dir"] = _resolve_path_if_relative(base, rt["out_dir"])
-    # sample.runtime.out_dir (if provided directly)
+    # sample.runtime.out_dir: do not resolve; preserve as provided
     sample = out.get("sample")
     if isinstance(sample, dict):
-        rt = sample.get("runtime")
-        if (
-            isinstance(rt, dict)
-            and "out_dir" in rt
-            and isinstance(rt["out_dir"], str)
-            and not rt["out_dir"].startswith("/")
-        ):
-            rt["out_dir"] = _resolve_path_if_relative(base, rt["out_dir"])
+        pass
     return out
 
 
@@ -155,7 +187,13 @@ def load_full_experiment_config(config_path: Path) -> ExperimentConfig:
 
     raw_exp = read_toml_dict(config_path)
     defaults_path = get_default_config_path(config_path)
-    defaults_raw = read_toml_dict(defaults_path) if defaults_path.exists() else {}
+    if defaults_path.exists():
+        try:
+            defaults_raw = read_toml_dict(defaults_path)
+        except Exception as e:
+            raise Exception(f"default_config.toml: {e}")
+    else:
+        defaults_raw = {}
     merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
     merged = _resolve_relative_paths(merged, config_path)
     effective = _coerce_known_paths_to_path(merged)
@@ -175,6 +213,27 @@ def load_train_config(config_path: Path) -> TrainerConfig:
     raw_merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
     eff = _coerce_known_paths_to_path(raw_merged)
     td = dict(eff.get("train", {}))
+    # Resolve relative paths against config directory for partial loader
+    base = config_path.parent
+    try:
+        data = td.get("data", {})
+        if isinstance(data, dict):
+            ds = data.get("dataset_dir")
+            if isinstance(ds, Path) and not ds.is_absolute():
+                data["dataset_dir"] = (base / ds).resolve()
+        rt = td.get("runtime", {})
+        if isinstance(rt, dict):
+            od = rt.get("out_dir")
+            if isinstance(od, Path) and not od.is_absolute():
+                rt["out_dir"] = (base / od).resolve()
+    except Exception:
+        pass
+    # Populate required nested sections with defaults when omitted
+    td.setdefault("model", {})
+    td.setdefault("data", {})
+    td.setdefault("optim", {})
+    td.setdefault("schedule", {})
+    td.setdefault("runtime", {})
     td["logger"] = logger
     cfg = TrainerConfig.model_validate(td)
     info = {"raw": raw_merged, "context": {"config_path": str(config_path)}}
@@ -194,6 +253,19 @@ def load_sample_config(config_path: Path) -> SamplerConfig:
     # No runtime_ref mechanics; strict SamplerConfig requires runtime
     eff = _coerce_known_paths_to_path(raw_merged)
     sd = dict(eff.get("sample", {}))
+    # Resolve relative paths against config directory for partial loader
+    base = config_path.parent
+    try:
+        rt = sd.get("runtime", {})
+        if isinstance(rt, dict):
+            od = rt.get("out_dir")
+            if isinstance(od, Path) and not od.is_absolute():
+                rt["out_dir"] = (base / od).resolve()
+    except Exception:
+        pass
+    # Ensure nested 'sample' subsection exists for SamplerConfig
+    if "sample" not in sd or not isinstance(sd.get("sample"), dict):
+        sd["sample"] = {}
     sd["logger"] = logger
     cfg = SamplerConfig.model_validate(sd)
     info = {"raw": raw_merged, "context": {"config_path": str(config_path)}}
