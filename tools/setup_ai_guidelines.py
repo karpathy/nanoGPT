@@ -24,7 +24,7 @@ TOOL_MAP: Dict[str, str] = {
     "kiro": ".kiro/steering/product.md",
     "windsurf": ".windsurf/rules/rule.md",
     "cursor": ".cursor/rules/00-readme.mdc",
-    # "codex": "Agent.md" - for codex we would need to merge or hope to 
+    # "codex": "Agent.md" - for codex we would need to merge or hope to
 }
 
 
