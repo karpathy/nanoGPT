@@ -16,13 +16,11 @@ Quick start guide for setting up the ml_playground development environment.
 ## Environment Setup
 
 ### 1. Create Virtual Environment
-
 ```bash
 make setup
 ```
 
 ### 2. Verify Installation
-
 ```bash
 make verify
 ```
@@ -30,28 +28,24 @@ make verify
 ## Basic Workflow Commands
 
 ### Dataset Preparation
-
 ```bash
 make prepare EXP=shakespeare
 make prepare EXP=bundestag_char
 ```
 
 ### Training
-
 ```bash
 make train EXP=shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml
 make train EXP=bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
 ```
 
 ### Sampling
-
 ```bash
 make sample EXP=shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml
 make sample EXP=bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
 ```
 
 ### End-to-End Loop
-
 ```bash
 make loop EXP=bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
 ```
