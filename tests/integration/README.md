@@ -19,8 +19,8 @@ Integration tests verify that multiple components work together correctly via Py
 - No test-only code paths in production.
 
 ## Run Locally
-- Run all integration tests: `uv run pytest -q tests/integration`
-- Single file: `uv run pytest -q tests/integration/test_*.py`
+- Run all integration tests: `make integration`
+- Single file: `make test-file FILE=tests/integration/test_*.py`
 
 ## For AI Agents
 - Use explicit Python configs and small, local fixtures.

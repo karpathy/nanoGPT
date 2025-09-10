@@ -33,10 +33,10 @@ Important: Strict configuration injection
 
 Common CLI patterns
 
-- Prepare: prefer uv scripts like `uv run prepare-<name>` (e.g., `uv run prepare-shakespeare`).
-- Train: prefer uv scripts like `uv run train-<name>-cpu` (e.g., `uv run train-shakespeare-cpu`).
-- Sample: prefer uv scripts like `uv run sample-<name>-cpu` (e.g., `uv run sample-shakespeare-cpu`).
-- End‑to‑end: prefer uv scripts like `uv run loop-<name>-cpu` (e.g., `uv run loop-bundestag-char-cpu`).
+- Prepare: `make prepare EXP=<name> [CONFIG=path]` (e.g., `make prepare EXP=shakespeare`).
+- Train: `make train EXP=<name> CONFIG=path` (e.g., `make train EXP=shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml`).
+- Sample: `make sample EXP=<name> CONFIG=path` (e.g., `make sample EXP=shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml`).
+- End‑to‑end: `make loop EXP=<name> CONFIG=path` (e.g., `make loop EXP=bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml`).
 
 Implemented experiments (current)
 
@@ -79,7 +79,6 @@ Notes
 - The CLI uses `ml_playground.experiments.PREPARERS` (auto‑discovered). Legacy `ml_playground/datasets` registries are not used.
 - Keep paths inside configs relative to the repo for portability.
 
-
 ## New Experiment Template
 
 Use this copy-ready template to create a new experiment at `ml_playground/experiments/<name>/`.
@@ -117,70 +116,60 @@ Paste the following into `ml_playground/experiments/<name>/Readme.md` and replac
   - `ckpt_best_XXXXXXXX_<metric>.pt`
 - Logging: TensorBoard at `out_dir/logs/tb`
 
-## Environment Setup (UV-only)
+## Environment Setup (preferred)
 
 ```bash
-uv run setup
-# Optional: add runtime deps if needed by your integration
-# uv add peft transformers torch tensorboard
+make setup
+make verify
 ```
 
 ## How to Run
+
 - Config path: `ml_playground/experiments/<name>/config.toml`
 
 Prepare dataset:
 
 ```bash
-uv run prepare-<name>
-# <dataset_name> equals the experiment folder name discovered via preparer.py (often "<name>")
+make prepare EXP=<name>
 ```
 
 Train:
 
 ```bash
-uv run train-<name>-cpu  # or the experiment's train script (some are without -cpu)
+make train EXP=<name> CONFIG=ml_playground/experiments/<name>/config.toml
 ```
 
 Sample:
 
 ```bash
-uv run sample-<name>-cpu  # or the experiment's sample script
+make sample EXP=<name> CONFIG=ml_playground/experiments/<name>/config.toml
 ```
 
 End-to-end loop:
 
 ```bash
-uv run loop-<name>-cpu  # or the experiment's loop script
+make loop EXP=<name> CONFIG=ml_playground/experiments/<name>/config.toml
 ```
 
-## Configuration Highlights
-- [prepare]
-  - `dataset = "<dataset_name>"`
-  - `raw_dir`, `dataset_dir` (describe what they point to)
-  - add integration-specific keys like `add_structure_tokens`, `doc_separator`
-- [train.data]
-  - `dataset_dir` and core knobs: `batch_size`, `block_size`, `grad_accum_steps`
-- [train.runtime]
-  - `out_dir = "ml_playground/experiments/<name>/out/<run_name>"`
-  - `device = "cpu" | "mps" | "cuda"`, `dtype = "float32" | "float16"`
-- [sample.runtime]
-  - `out_dir` should match `train.runtime.out_dir`
-- [sample.sample]
-  - `start` prompt, `num_samples`, `max_new_tokens`, `temperature`, `top_k`, `top_p`
+## Configuration
+
+- Use the default settings in `ml_playground/configs/` where available and adjust via experiment configs under `ml_playground/experiments/<name>/config.toml`.
+- For tiny test defaults, see `tests/e2e/ml_playground/experiments/test_default_config.toml`.
 
 ## Outputs
+
 - Data artifacts: `ml_playground/experiments/<name>/datasets/...`
 - Training artifacts: `out_dir` contains checkpoints (and adapters if applicable) and `logs/tb`
 
 ## Troubleshooting
+
 - Common issues and fixes
 - e.g., if sampling shows tokenization issues, ensure tiktoken is installed; for HF gated models, set HUGGINGFACE_HUB_TOKEN in .env
 
 ## Notes
+
 - The dataset preparer for this experiment is auto‑discovered via a class in `preparer.py` and invoked by the CLI.
 - Keep all paths in TOML relative to the repo root for portability.
-```
-
 Example `preparer.py` (strict API):
 
 ```python
@@ -197,39 +186,3 @@ class MyPreparer(_PreparerProto):
         # ... your preparation logic ...
         # write_bin_and_meta(ds_dir, train_ids, val_ids, meta)
         return PrepareReport(created_files=(), updated_files=(), skipped_files=(), messages=("ok",))
-```
-
-Example `config.toml` (adapt to your integration):
-
-```toml
-[prepare]
-dataset = "<dataset_name>"
-raw_dir = "ml_playground/experiments/<name>/raw"
-dataset_dir = "ml_playground/experiments/<name>/datasets"
-
-[train.data]
-dataset_dir = "ml_playground/experiments/<name>/datasets"
-batch_size = 4
-block_size = 128
-grad_accum_steps = 1
-
-[train.runtime]
-out_dir = "ml_playground/experiments/<name>/out/<name>_run"
-device = "cpu"
-dtype = "float32"
-seed = 1
-
-[sample.runtime]
-out_dir = "ml_playground/experiments/<name>/out/<name>_run"
-device = "cpu"
-dtype = "float32"
-seed = 1
-compile = false
-
-[sample.sample]
-start = "Hello"
-max_new_tokens = 64
-temperature = 0.8
-top_k = 200
-top_p = 0.95
-num_samples = 1

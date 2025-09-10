@@ -93,20 +93,20 @@ The `ml_playground/cli.py` module provides the command-line interface for the fr
 
 ### Usage
 
-Run subcommands via the Typer CLI module:
+Run subcommands via Make targets (preferred):
 
 ```bash
-# Prepare data for an experiment (config auto-resolved or passed with --exp-config)
-uv run python -m ml_playground.cli prepare <experiment> [--exp-config /path/to/config.toml]
+# Prepare data for an experiment
+make prepare EXP=<experiment> [CONFIG=/path/to/config.toml]
 
 # Train a model for an experiment
-uv run python -m ml_playground.cli train <experiment> [--exp-config /path/to/config.toml]
+make train EXP=<experiment> CONFIG=/path/to/config.toml
 
 # Sample from a trained model
-uv run python -m ml_playground.cli sample <experiment> [--exp-config /path/to/config.toml]
+make sample EXP=<experiment> CONFIG=/path/to/config.toml
 
 # Run prepare -> train -> sample in one go
-uv run python -m ml_playground.cli loop <experiment> [--exp-config /path/to/config.toml]
+make loop EXP=<experiment> CONFIG=/path/to/config.toml
 ```
 
 ## Configuration System

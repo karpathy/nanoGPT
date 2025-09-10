@@ -55,8 +55,9 @@ If a test requires functionality that only exists as a private helper, prefer ei
 
 ## Run Locally
 
-- Run all unit tests: `uv run pytest -q tests/unit`
-- Single file: `uv run pytest -q tests/unit/path/to/test_*.py`
+- Run all unit tests: `make unit`
+- Unit with coverage: `make unit-cov`
+- Single file: `make test-file FILE=tests/unit/path/to/test_*.py`
 
 ## For AI Agents
 

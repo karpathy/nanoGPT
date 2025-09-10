@@ -17,39 +17,37 @@ Quick start guide for setting up the ml_playground development environment.
 
 ### 1. Create Virtual Environment
 ```bash
-uv venv --clear
-uv sync --all-groups
+make setup
 ```
 
 ### 2. Verify Installation
 ```bash
-# Check that ml_playground is importable
-uv run python -c "import ml_playground; print('✓ Setup complete')"
+make verify
 ```
 
 ## Basic Workflow Commands
 
 ### Dataset Preparation
 ```bash
-uv run python -m ml_playground.cli prepare shakespeare
-uv run python -m ml_playground.cli prepare bundestag_char
+make prepare EXP=shakespeare
+make prepare EXP=bundestag_char
 ```
 
 ### Training
 ```bash
-uv run python -m ml_playground.cli train shakespeare --exp-config ml_playground/configs/shakespeare_cpu.toml
-uv run python -m ml_playground.cli train bundestag_char --exp-config ml_playground/configs/bundestag_char_cpu.toml
+make train EXP=shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml
+make train EXP=bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
 ```
 
 ### Sampling
 ```bash
-uv run python -m ml_playground.cli sample shakespeare --exp-config ml_playground/configs/shakespeare_cpu.toml
-uv run python -m ml_playground.cli sample bundestag_char --exp-config ml_playground/configs/bundestag_char_cpu.toml
+make sample EXP=shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml
+make sample EXP=bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
 ```
 
 ### End-to-End Loop
 ```bash
-uv run python -m ml_playground.cli loop bundestag_char --exp-config ml_playground/configs/bundestag_char_cpu.toml
+make loop EXP=bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
 ```
 
 ## Configuration System

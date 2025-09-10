@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Pre-commit hook to run the quality gate. Fails the commit on any gate failure.
-# Requires uv; if uv is unavailable, try running via system python.
+# Uses Make targets; ensure the environment is set up (see Makefile `setup`).
 
 set -euo pipefail
 
 echo "[pre-commit] Vulture (dead code scanning)"
-uv run vulture ml_playground --min-confidence 90
+make deadcode
 echo "[pre-commit] Core quality gates (ruff, format, pyright, mypy, pytest)"
 PRE_COMMIT=1 make quality
 

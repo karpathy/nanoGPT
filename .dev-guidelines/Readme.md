@@ -11,11 +11,9 @@ trigger: always_on
 Get up and running immediately:
 
 ```bash
-uv venv --clear
-uv sync --all-groups
-uv run ruff check --fix . && uv run ruff format .
-uv run pyright && uv run mypy ml_playground
-uv run pytest -n auto -W error --strict-markers --strict-config -v
+make setup
+make verify
+make quality   # ruff+format+pyright+mypy+pytest
 ```
 
 ## Documentation Structure
@@ -78,33 +76,31 @@ This guideline system is organized into focused documents for easy navigation:
 **Environment Setup**:
 
 ```bash
-uv venv --clear && uv sync --all-groups
+make setup
+make verify
 ```
 
 **Quality Gates** (run before each commit):
 
 ```bash
-uv run ruff check --fix . && uv run ruff format .
-uv run pyright
-uv run mypy ml_playground  
-uv run pytest -n auto -W error --strict-markers --strict-config -v
+make quality
 ```
 
 **Runtime Entry Points**:
 
 ```bash
 # Prepare datasets
-uv run python -m ml_playground.cli prepare shakespeare
-uv run python -m ml_playground.cli prepare bundestag_char
+make prepare EXP=shakespeare
+make prepare EXP=bundestag_char
 
-# Train (select config with --exp-config if not using the experiment's default)
-uv run python -m ml_playground.cli train shakespeare --exp-config ml_playground/configs/shakespeare_cpu.toml
+# Train (select config path explicitly)
+make train EXP=shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml
 
 # Sample from trained model
-uv run python -m ml_playground.cli sample shakespeare --exp-config ml_playground/configs/shakespeare_cpu.toml
+make sample EXP=shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml
 
 # End-to-end pipeline
-uv run python -m ml_playground.cli loop bundestag_char --exp-config ml_playground/configs/bundestag_char_cpu.toml
+make loop EXP=bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
 ```
 
 ## Need Help?

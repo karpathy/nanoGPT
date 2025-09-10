@@ -65,7 +65,8 @@ Testing Docs
 ### 1. Test Framework and Runner
 
 - **Framework**: pytest only. Do not use unittest or nose.
-- **Runner**: `uv run pytest`
+- **Runner (preferred)**: `make test` (invokes `uv run pytest` under the hood)
+- **Runner (direct)**: `uv run pytest`
 - **Coverage**: `uv run coverage run -m pytest; uv run coverage report; uv run coverage xml`
 - **Random seed**: Enforced determinism via `tests/conftest.py` with fixed seed.
 
