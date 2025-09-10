@@ -30,8 +30,11 @@ Quality gates (required before commit/PR)
 - Static analysis and typing:
   make pyright
   make mypy
-- Full quality gate:
+- Full quality gate (ruff, format, pyright, mypy, pytest):
   make quality
+  
+- Extended quality (optional, non-fatal mutation testing with Cosmic Ray):
+  make quality-ext
 - Tests:
   make test
 
@@ -74,6 +77,14 @@ Notes
 - Checkpoints: trainer writes ckpt_last.pt on every eval and updates ckpt_best.pt when improved (or when always_save_checkpoint is true). Training auto-resumes from ckpt_last.pt if it exists; to start fresh, delete ckpt_last.pt (and ckpt_best.pt optionally) or use a new out_dir. On resume, the checkpointed model_args (n_layer, n_head, n_embd, block_size, bias, vocab_size, dropout) take precedence over TOML values to ensure compatibility.
 - For small local runs, tune batch_size, block_size, and grad_accum_steps in the [train.data] section.
 - For detailed information about the centralized framework utilities, see [Framework Utilities Documentation](docs/framework_utilities.md).
+
+Mutation testing
+
+- Mutation testing is performed with Cosmic Ray and configured centrally in `pyproject.toml` (see `[tool.cosmic-ray]`).
+- Run manually when needed (non-fatal in Makefile):
+  - `make quality-ext`
+- The Makefile initializes a session database at `out/cosmic-ray/session.sqlite` if absent and then runs `cosmic-ray exec` against it.
+- CI and pre-commit do not run mutation testing by default.
 
 Loop
 

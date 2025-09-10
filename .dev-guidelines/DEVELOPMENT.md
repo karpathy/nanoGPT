@@ -12,16 +12,15 @@ Core development practices, quality standards, and workflow for ml_playground co
 
 For detailed information about the centralized framework utilities, see [Framework Utilities Documentation](../docs/framework_utilities.md).
 
-Run these commands before every commit:
+Run this Make target before every commit (same commands under the hood):
 
 ```bash
-uv run ruff check --fix . && uv run ruff format .
-uv run pyright
-uv run mypy ml_playground
-uv run pytest -n auto -W error --strict-markers --strict-config -v
+make quality
 ```
 
-**All four gates must pass.** Do not open a PR otherwise.
+This runs: ruff (lint+format), pyright, mypy (ml_playground), and pytest with strict settings.
+
+CI and pre-commit both invoke `make quality` as the core gate.
 
 ## Commit Standards
 
@@ -176,6 +175,17 @@ Testing Docs
 **Enforcement**: First flake = immediate deletion. Tests must be 100% deterministic and reliable.
 
 **Rationale**: Even a single flaky test destroys developer confidence and wastes precious development time.
+
+## Mutation Testing (Optional)
+
+- We use Cosmic Ray for mutation testing; configuration lives in `pyproject.toml` under `[tool.cosmic-ray]`.
+- Run manually when desired:
+
+```bash
+make quality-ext
+```
+
+- This initializes (if needed) and executes Cosmic Ray sessions at `out/cosmic-ray/session.sqlite`. The step is non-fatal and not part of CI or pre-commit by default.
 
 ### Running Tests
 

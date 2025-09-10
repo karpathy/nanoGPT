@@ -56,11 +56,11 @@ quality-ext:
 	uv run vulture ml_playground --min-confidence 90
 	# Core quality gate
 	$(MAKE) quality
-	# Mutation tests with timeout cap; do not fail the build if non-zero
-	set +e; CR_TIMEOUT=10 bash tools/mutation_test.sh; code=$$?; set -e; \
-	if [ "$$code" -eq 124 ]; then \
-	  echo "[warning] Cosmic Ray timed out after 10s cap; proceeding"; \
-	elif [ "$$code" -ne 0 ]; then \
+	# Mutation tests (non-fatal). Rely on pyproject.toml [cosmic-ray] configuration.
+	set +e; \
+	uv run cosmic-ray init pyproject.toml out/cosmic-ray/session.sqlite >/dev/null 2>&1 || true; \
+	uv run cosmic-ray exec pyproject.toml out/cosmic-ray/session.sqlite; code=$$?; set -e; \
+	if [ "$$code" -ne 0 ]; then \
 	  echo "[warning] Cosmic Ray returned non-zero (code=$$code); proceeding"; \
 	fi
 
