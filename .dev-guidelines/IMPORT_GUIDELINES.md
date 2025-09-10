@@ -9,6 +9,7 @@ globs:
 This is a prescriptive, low‑choice standard for all Python imports in the codebase. Follow as written.
 
 ## Core Principles
+
 - Single source of truth: import only from the definitive submodule that defines the symbol.
 - Zero ambiguity: one allowed way for each common scenario.
 - No hidden behavior: imports must be pure, cheap, and deterministic.
@@ -42,7 +43,7 @@ This is a prescriptive, low‑choice standard for all Python imports in the code
    - Otherwise, no aliases. Use full module paths.
 
 6. **Re-exports and facades**
-   - Prohibited: exposing symbols via package-level __init__.py, "compat" modules, or import shims.
+   - Prohibited: exposing symbols via package-level **init**.py, "compat" modules, or import shims.
    - Consumers must import from the canonical submodule.
 
 7. **Side-effect free imports**
@@ -56,7 +57,7 @@ This is a prescriptive, low‑choice standard for all Python imports in the code
 
 9. **Cycle handling**
    - First choice: refactor to remove the cycle (extract shared code to a lower-level module).
-   - If refactor is not immediately feasible, a single, narrowly-scoped local import is permitted inside the function that needs it, with a code comment "Cycle break: <short rationale>". Track a task to remove the cycle.
+   - If refactor is not immediately feasible, a single, narrowly-scoped local import is permitted inside the function that needs it, with a code comment "Cycle break: short rationale". Track a task to remove the cycle.
 
 10. **Type-only imports**
     - Use typing.TYPE_CHECKING guards for heavy or optional typing dependencies.
@@ -66,23 +67,26 @@ This is a prescriptive, low‑choice standard for all Python imports in the code
     - Not allowed by default.
     - Allowed only when both conditions hold: breaks a hard import cycle or defers a large, cold-path dependency with measurable startup benefit. Must be documented with a comment "Lazy import: <reason + expected impact>".
 
-12. **__init__.py usage**
+12. ****init**.py usage**
     - May exist for package recognition or minimal metadata only.
     - Prohibited: symbol re-exports, wildcard exports, or public API surfaces.
 
 ## Canonical Patterns
 
-### Import few names from a concrete submodule:
+### Import few names from a concrete submodule
+
 ```python
 from project.module.submodule import Foo, Bar
 ```
 
-### Import many names from one submodule:
+### Import many names from one submodule
+
 ```python
 import project.module.submodule as submodule  # avoid custom aliases
 ```
 
-### Optional dependency (function-scoped):
+### Optional dependency (function-scoped)
+
 ```python
 def export_to_parquet(df, path):
     try:
@@ -92,14 +96,16 @@ def export_to_parquet(df, path):
     pq.write_table(df, path)
 ```
 
-### Type-only import for a heavy/optional type:
+### Type-only import for a heavy/optional type
+
 ```python
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from heavy_lib import HugeType
 ```
 
-### Temporary cycle break (documented):
+### Temporary cycle break (documented)
+
 ```python
 def compute():
     # Cycle break: runtime imports runner, runner imports compute
