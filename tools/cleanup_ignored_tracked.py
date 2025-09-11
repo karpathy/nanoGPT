@@ -2,40 +2,49 @@
 """
 cleanup_ignored_tracked.py
 
-Utility to manage tracked files that match .gitignore rules.
+Interactive tool (Typer-based) to manage files that are tracked in Git but
+are ignored by your current .gitignore rules.
 
-Modes:
-  - check:  Print tracked files that are ignored by Git
-  - delete: Remove those files from the repo (dry-run by default)
+What this tool does:
+  - Detects tracked files that match ignore patterns.
+  - Lets you choose between a Dry Run (show commands), Actually Run (untrack), or Cancel.
 
-Delete mode behavior:
-  - By default, performs a dry run and shows the `git rm` commands it would run.
-  - Without --wipe, uses `git rm --cached` (untrack only, keep file in working tree).
-  - With --wipe, uses `git rm` (also removes from working tree).
-  - Use --no-dry-run to actually perform the removal.
+Safety and history:
+  - The "Actually Run" option uses `git rm --cached` to untrack files but keeps them on disk.
+  - It does NOT rewrite history. Past commits remain unchanged.
+  - If you need to purge files from history, use a separate history-rewrite tool (not included here).
 
-Examples:
-  python tools/cleanup_ignored_tracked.py check
-  python tools/cleanup_ignored_tracked.py delete               # dry run, untrack only
-  python tools/cleanup_ignored_tracked.py delete --no-dry-run  # actually untrack
-  python tools/cleanup_ignored_tracked.py delete --no-dry-run --wipe  # remove from index and working tree
+Usage:
+  - Simply run: `python tools/cleanup_ignored_tracked.py`
+  - Follow the on-screen prompt to select an option.
 
 Notes:
   - This script shells out to Git and requires being run inside a Git repo.
   - It respects .gitignore and other standard ignore files via `git check-ignore`.
 """
+
 from __future__ import annotations
 
-import argparse
 import os
 import shlex
 import subprocess
 import sys
 from typing import Iterable, List, Tuple
 
+import typer
 
-def run(cmd: List[str], cwd: str | None = None, check: bool = True) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, cwd=cwd, check=check, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+def run(
+    cmd: List[str], cwd: str | None = None, check: bool = True
+) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        cmd,
+        cwd=cwd,
+        check=check,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
 
 
 def git_root(start: str = ".") -> str:
@@ -97,11 +106,17 @@ def filter_ignored(repo: str, paths: Iterable[str]) -> List[Tuple[str, str]]:
     return results
 
 
-def find_tracked_and_ignored(repo: str, limit_to_path: str | None = None) -> List[Tuple[str, str]]:
+def find_tracked_and_ignored(
+    repo: str, limit_to_path: str | None = None
+) -> List[Tuple[str, str]]:
     tracked = get_tracked_files(repo)
     if limit_to_path:
         limit_to_path = os.path.normpath(limit_to_path)
-        tracked = [p for p in tracked if p == limit_to_path or p.startswith(limit_to_path.rstrip(os.sep) + os.sep)]
+        tracked = [
+            p
+            for p in tracked
+            if p == limit_to_path or p.startswith(limit_to_path.rstrip(os.sep) + os.sep)
+        ]
     return filter_ignored(repo, tracked)
 
 
@@ -116,7 +131,9 @@ def print_list(items: List[Tuple[str, str]]) -> None:
     print(f"\nTotal: {len(items)} file(s)")
 
 
-def delete_items(repo: str, items: List[Tuple[str, str]], dry_run: bool, wipe: bool) -> int:
+def delete_items(
+    repo: str, items: List[Tuple[str, str]], dry_run: bool, wipe: bool
+) -> int:
     if not items:
         print("Nothing to delete. ✅")
         return 0
@@ -141,62 +158,49 @@ def delete_items(repo: str, items: List[Tuple[str, str]], dry_run: bool, wipe: b
             exit_code = 1
 
     if dry_run:
-        print("\nDry run complete. Re-run with --no-dry-run to apply.")
+        print("\nDry run complete. Re-run to apply.")
     else:
         print("\nRemoval complete. Remember to commit the changes.")
     return exit_code
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Manage tracked files that are ignored by Git")
-    sub = parser.add_subparsers(dest="mode", required=True)
-
-    common = argparse.ArgumentParser(add_help=False)
-    common.add_argument(
-        "--path",
-        default=None,
-        help="Limit operation to a specific path (file or directory) relative to repo root",
-    )
-
-    sub.add_parser("check", parents=[common], help="List tracked files that are ignored by Git")
-
-    p_delete = sub.add_parser(
-        "delete",
-        parents=[common],
-        help="Remove tracked files that are ignored by Git (dry-run by default)",
-    )
-    p_delete.add_argument(
-        "--no-dry-run",
-        action="store_true",
-        help="Actually perform the removals (default is dry-run)",
-    )
-    p_delete.add_argument(
-        "--wipe",
-        action="store_true",
-        help="Also remove files from the working tree (uses 'git rm' instead of 'git rm --cached')",
-    )
-
-    return parser.parse_args(argv)
+def explain_and_prompt(items: List[Tuple[str, str]]) -> str:
+    print()
+    print("This tool will:" )
+    print("  • Find files that are tracked in Git but currently ignored by .gitignore.")
+    print("  • Optionally untrack them using 'git rm --cached' (keeps files on disk).")
+    print()
+    print("It will NOT rewrite history. Past commits remain unchanged.")
+    print("To purge from history, use a separate history-rewrite tool (e.g., git filter-repo).")
+    print()
+    print_list(items)
+    print()
+    print("Choose an option:")
+    print("  [d] Dry run (show what would be done)")
+    print("  [r] Run now (untrack with 'git rm --cached')")
+    print("  [c] Cancel")
+    choice = typer.prompt("Enter choice", default="c").strip().lower()
+    return choice
 
 
-def main(argv: List[str]) -> int:
-    args = parse_args(argv)
+def main() -> int:
     repo = git_root()
+    # For now we operate on the entire repo; add scoped path here if needed.
+    items = find_tracked_and_ignored(repo, limit_to_path=None)
 
-    items = find_tracked_and_ignored(repo, limit_to_path=args.path)
-
-    if args.mode == "check":
-        print_list(items)
+    if not items:
+        print("No tracked files are ignored by Git. ✅")
         return 0
 
-    if args.mode == "delete":
-        dry_run = not getattr(args, "no_dry_run", False)
-        wipe = getattr(args, "wipe", False)
-        return delete_items(repo, items, dry_run=dry_run, wipe=wipe)
-
-    print(f"Unknown mode: {args.mode}", file=sys.stderr)
-    return 2
+    choice = explain_and_prompt(items)
+    if choice in ("d", "dry", "dry-run", "dryrun"):
+        return delete_items(repo, items, dry_run=True, wipe=False)
+    if choice in ("r", "run", "apply", "go"):
+        return delete_items(repo, items, dry_run=False, wipe=False)
+    print("Canceled. No changes made.")
+    return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    # Run Typer app entry (no commands/args needed).
+    sys.exit(typer.run(main))
