@@ -147,22 +147,18 @@ def print_list(items: List[Tuple[str, str]]) -> None:
     typer.echo("\n".join(lines))
 
 
-## Removed legacy untracking flow to keep the tool focused on history rewrite.
-
-
 def rewrite_history(repo: str, items: List[Tuple[str, str]], dry_run: bool) -> int:
     if not items:
         print("Nothing to rewrite. ")
         return 0
 
-    paths = [path for path, _ in items]
     # Prepare a temporary file with all paths (one per line)
     tmp_path = None
     try:
         with tempfile.NamedTemporaryFile("w", delete=False, encoding="utf-8") as tf:
             tmp_path = tf.name
-            for p in paths:
-                tf.write(p + "\n")
+            for path, _meta in items:
+                tf.write(path + "\n")
     except Exception as e:
         typer.echo(f"Error preparing temporary paths file: {e}", err=True)
         return 1
@@ -170,10 +166,7 @@ def rewrite_history(repo: str, items: List[Tuple[str, str]], dry_run: bool) -> i
     cmd = ["git", "filter-repo", "--invert-paths", "--paths-from-file", tmp_path]
 
     if dry_run:
-        typer.echo(
-            "Planned paths to purge from history:\n"
-            + "\n".join(f"  - {p}" for p in paths)
-        )
+        typer.echo(f"Planned to purge {len(items)} path(s) from history (see list above).")
         typer.echo(f"\nDRY-RUN: would run: {shlex.join(cmd)}")
         # Clean up temp file after preview
         try:
@@ -193,11 +186,8 @@ def rewrite_history(repo: str, items: List[Tuple[str, str]], dry_run: bool) -> i
         return 2
 
     # Final confirmation
-    typer.echo(
-        "You are about to REWRITE HISTORY and purge the following paths from all commits:\n"
-        + "\n".join(f"  - {p}" for p in paths)
-    )
-    typer.echo("\nThis will change commit hashes. You will likely need to force-push.")
+    typer.echo(f"You are about to REWRITE HISTORY and purge {len(items)} path(s) from all commits.")
+    typer.echo("This will change commit hashes. You will likely need to force-push.")
     proceed = typer.confirm("Proceed with history rewrite?", default=False)
     if not proceed:
         typer.echo("Canceled. No changes made.")
