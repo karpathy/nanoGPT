@@ -3,19 +3,22 @@
 Character-level language modeling on Bundestag speeches with a simple vocabulary built from the dataset characters.
 
 ## Overview
- - Dataset: Custom text (provide input.txt manually)
+
+- Dataset: Custom text (provide input.txt manually)
 - Encoding: Per-character IDs (uint16)
 - Method: Classic NanoGPT-style training (strict TOML config)
 - Pipeline: prepare → train → sample via ml_playground CLI
 
 ## Data
- - Input: ml_playground/experiments/bundestag_char/datasets/input.txt
-   - Preparers fail if this file is missing; create it with your own text.
+
+- Input: ml_playground/experiments/bundestag_char/datasets/input.txt
+  - Preparers fail if this file is missing; create it with your own text.
 - Outputs (prepared):
   - train.bin, val.bin (uint16 arrays)
   - meta.pkl (vocab metadata with stoi/itos, vocab_size)
 
 ## Method/Model
+
 - Build vocabulary from unique characters in the corpus
 - Encode train/val splits 90/10 into uint16 arrays
 - Model architecture and training hyperparameters are specified in TOML
@@ -23,37 +26,45 @@ Character-level language modeling on Bundestag speeches with a simple vocabulary
 This experiment uses the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../../docs/framework_utilities.md).
 
 ## Environment Setup (UV-only)
+
 ```bash
 uv run setup
 ```
 
 ## Strict configuration injection
+
 - This experiment does not read TOML directly. The CLI loads and validates the TOML and injects config objects into the experiment code.
 
 ## How to Run
+
 - Config example: ml_playground/experiments/bundestag_char/config.toml
 
 Prepare:
+
 ```bash
 uv run prepare-bundestag-char
 ```
 
 Train:
+
 ```bash
 uv run train-bundestag-char-cpu
 ```
 
 Sample:
+
 ```bash
 uv run sample-bundestag-char-cpu
 ```
 
 End-to-end loop:
+
 ```bash
 uv run loop-bundestag-char-cpu
 ```
 
 ## Configuration Highlights
+
 - [train.data]
   - dataset_dir = "ml_playground/experiments/bundestag_char/datasets"
   - train_bin = "train.bin", val_bin = "val.bin", meta_pkl = "meta.pkl"
@@ -67,117 +78,51 @@ uv run loop-bundestag-char-cpu
   - start prompt text, num_samples, max_new_tokens
 
 ## Outputs
+
 - Data artifacts: ml_playground/experiments/bundestag_char/datasets/{train.bin,val.bin,meta.pkl}
 - Training: out_dir contains rotated checkpoints only, e.g.:
   - ckpt_last_XXXXXXXX.pt
-  - ckpt_best_XXXXXXXX_<metric>.pt
+  - `ckpt_best_XXXXXXXX_<metric>.pt`
   - logs/tb
 
-## Troubleshooting
-- If meta.pkl is missing at sampling, the CLI loop copies it to out_dir automatically; otherwise, place meta.pkl next to checkpoints.
-- Ensure your input text is UTF-8 encoded.
+## Folder structure
 
-## Notes
-- The preparer is registered in ml_playground.experiments and is invoked by CLI prepare bundestag_char.
-# Bundestag (Char-Level)
-
-Character-level language modeling on Bundestag speeches with a simple vocabulary built from the dataset characters.
-
-## Overview
-- Dataset: Custom text (seeded with page1.txt by default)
-- Encoding: Per-character IDs (uint16)
-- Method: Classic NanoGPT-style training (strict TOML config)
-- Pipeline: prepare → train → sample via ml_playground CLI
-
-## Data
-- Input: ml_playground/experiments/bundestag_char/datasets/page1.txt
-  - If missing, the preparer seeds it from a bundled sample file; replace with your own text for real runs.
-- Outputs (prepared):
-  - train.bin, val.bin (uint16 arrays)
-  - meta.pkl (vocab metadata with stoi/itos, vocab_size)
-
-## Method/Model
-- Build vocabulary from unique characters in the corpus
-- Encode train/val splits 90/10 into uint16 arrays
-- Model architecture and training hyperparameters are specified in TOML
-- TensorBoard logging at out_dir/logs/tb
-This experiment uses the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../../docs/framework_utilities.md).
-
-## Environment Setup (UV-only)
-```bash
-uv run setup
+```text
+ml_playground/experiments/bundestag_char/
+├── Readme.md        - experiment documentation (this file)
+├── config.toml      - sample/preset config for real runs
+├── test_config.toml - tiny defaults for tests
+├── preparer.py      - dataset preparation (char vocab, encode, write bins/meta)
+├── trainer.py       - NanoGPT-style training orchestration
+├── sampler.py       - generation/sampling entrypoints
+├── ollama_export.py - GGUF/Ollama export helper for this experiment
+├── datasets/        - prepared dataset artifacts written here
+└── export/          - export artifacts directory (e.g., GGUF)
 ```
-
-## How to Run
-- Config example: ml_playground/experiments/bundestag_char/config.toml
-
-Prepare:
-```bash
-uv run prepare-bundestag-char
-```
-
-Train:
-```bash
-uv run train-bundestag-char-cpu
-```
-
-Sample:
-```bash
-uv run sample-bundestag-char-cpu
-```
-
-End-to-end loop:
-```bash
-uv run loop-bundestag-char-cpu
-```
-
-## Analyze with LIT (PoC)
-Start an interactive UI (Learning Interpretability Tool) to explore a tiny sample of the dataset and a trivial echo model. This is optional and intended for quick inspection.
-
-```bash
-uv run analyze-bundestag-char
-```
-
-Notes:
-- Requires optional extra 'lit'; install via `uv run setup-lit`.
-- The server prefers reading datasets/page1.txt if present; otherwise uses embedded samples.
-- CPU-only; no CUDA assumptions.
-
-## Configuration Highlights
-- [train.data]
-  - dataset_dir = "ml_playground/experiments/bundestag_char/datasets"
-  - train_bin = "train.bin", val_bin = "val.bin", meta_pkl = "meta.pkl"
-  - batch_size, block_size, grad_accum_steps
-- [train.runtime]
-  - out_dir = "ml_playground/experiments/bundestag_char/out/bundestag_char_next"
-  - device = "cpu" (or "mps"/"cuda" if available), dtype = "float32"
-- [sample.runtime]
-  - out_dir should match train.runtime.out_dir
-- [sample.sample]
-  - start prompt text, num_samples, max_new_tokens
-
-## Outputs
-- Data artifacts: ml_playground/experiments/bundestag_char/datasets/{train.bin,val.bin,meta.pkl}
-- Training: out_dir contains rotated checkpoints only, e.g.:
-  - ckpt_last_XXXXXXXX.pt
-  - ckpt_best_XXXXXXXX_<metric>.pt
-  - logs/tb
 
 ## Troubleshooting
+
 - If meta.pkl is missing at sampling, the CLI loop copies it to out_dir automatically; otherwise, place meta.pkl next to checkpoints.
 - Ensure your input text is UTF-8 encoded.
-
-## Notes
-- The preparer is registered in ml_playground.experiments and is invoked by CLI prepare bundestag_char.
-
 
 ## Word Tokenizer Option
+
 - This experiment now supports a word-level tokenizer in addition to char/n-gram.
 - To enable, set in config under [train.data]:
 
-```
+```toml
 # Tokenizer selection: "char" (default) or "word"
 tokenizer = "word"
 # ngram_size is ignored when tokenizer="word"
 ```
+
 - Sampling and training automatically use the dataset's meta.pkl; decoding joins tokens with a single space.
+
+## Checklist
+
+- Adheres to `.dev-guidelines/DOCUMENTATION.md` (abstraction, required sections).
+- Folder tree includes inline descriptions for each entry.
+- Links to shared docs where applicable (e.g., `../../docs/framework_utilities.md`).
+- Commands are copy-pasteable and minimal (setup, prepare/train/sample/loop).
+- Configuration Highlights only list essential keys; defaults are not restated.
+- Outputs paths and filenames reflect current behavior (check `[train.runtime].out_dir`).

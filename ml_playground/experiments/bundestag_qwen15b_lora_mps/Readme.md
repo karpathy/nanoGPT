@@ -23,6 +23,8 @@ Preset of the generic HF+PEFT integration to fine‑tune Qwen2.5‑1.5B on Bunde
 - Evaluation runs periodically; TensorBoard logs at `out_dir/logs/tb`
 - Adapters saved to `out_dir/adapters/{best,last,final}`
 
+For framework utilities, see [../../docs/framework_utilities.md](../../docs/framework_utilities.md).
+
 ## Environment Setup (UV-only)
 
 ```bash
@@ -78,6 +80,20 @@ out/bundestag_qwen15b_lora_mps/
     └── tb/
 ```
 
+## Folder structure
+
+```text
+ml_playground/experiments/bundestag_qwen15b_lora_mps/
+├── Readme.md        - preset documentation (this file)
+├── __init__.py      - package marker
+├── config.toml      - preset config targeting Qwen2.5-1.5B + LoRA
+├── test_config.toml - tiny defaults for tests
+├── preparer.py      - prepares tokenizer and JSONL for finetuning
+├── trainer.py       - HF+PEFT LoRA training orchestration
+├── sampler.py       - generation/sampling entrypoints
+└── datasets/        - prepared dataset artifacts (tokenizer/, JSONL)
+```
+
 ## Troubleshooting
 
 - Gated models/tokenizer downloads: set `HUGGINGFACE_HUB_TOKEN=hf_***` in `.env` or run `uv run huggingface-cli login`
@@ -88,3 +104,12 @@ out/bundestag_qwen15b_lora_mps/
 
 - This preset rides on the generic integration at `ml_playground/experiments/bundestag_finetuning_mps`.
 - Swap the base model by changing `[train.hf_model].model_name`.
+
+## Checklist
+
+- Adheres to `.dev-guidelines/DOCUMENTATION.md` (abstraction, required sections).
+- Folder tree includes inline descriptions for each entry.
+- Links to shared docs where applicable (e.g., `../../docs/framework_utilities.md`).
+- Commands are copy-pasteable and minimal (setup, prepare/train/sample/loop).
+- Configuration Highlights only list essential keys; defaults are not restated.
+- Outputs paths and filenames reflect current behavior (check `[train.runtime].out_dir`).
