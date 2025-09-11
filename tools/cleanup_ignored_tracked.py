@@ -26,12 +26,14 @@ Notes:
 from __future__ import annotations
 
 import os
+import tempfile
 import shlex
 import subprocess
 import sys
 from typing import Iterable, List, Tuple
 
 import typer
+import click
 
 
 def run(
@@ -135,46 +137,17 @@ def find_tracked_and_ignored(
 
 def print_list(items: List[Tuple[str, str]]) -> None:
     if not items:
-        print("No tracked files are ignored by Git. ✅")
+        typer.echo("No tracked files are ignored by Git. ✅")
         return
+    lines = [
+        "Tracked files currently ignored by Git (source:line:pattern -> path):",
+        *[f"  {meta} -> {path}" for path, meta in items],
+        f"\nTotal: {len(items)} file(s)",
+    ]
+    typer.echo("\n".join(lines))
 
-    print("Tracked files currently ignored by Git (source:line:pattern -> path):")
-    for path, meta in items:
-        print(f"  {meta} -> {path}")
-    print(f"\nTotal: {len(items)} file(s)")
 
-
-def delete_items(
-    repo: str, items: List[Tuple[str, str]], dry_run: bool, wipe: bool
-) -> int:
-    if not items:
-        print("Nothing to delete. ✅")
-        return 0
-
-    # Choose command template
-    base_cmd = ["git", "rm"]
-    if not wipe:
-        base_cmd.append("--cached")
-
-    exit_code = 0
-    for path, meta in items:
-        cmd = base_cmd + ["--", path]
-        if dry_run:
-            print(f"DRY-RUN: would run: {shlex.join(cmd)}   # ignored by {meta}")
-            continue
-        try:
-            out = run(cmd, cwd=repo, check=True)
-            # Show a concise echo of what happened
-            sys.stdout.write(out.stdout)
-        except subprocess.CalledProcessError as e:
-            print(f"Error removing {path}: {e.stderr}", file=sys.stderr)
-            exit_code = 1
-
-    if dry_run:
-        print("\nDry run complete. Re-run to apply.")
-    else:
-        print("\nRemoval complete. Remember to commit the changes.")
-    return exit_code
+## Removed legacy untracking flow to keep the tool focused on history rewrite.
 
 
 def rewrite_history(repo: str, items: List[Tuple[str, str]], dry_run: bool) -> int:
@@ -183,31 +156,51 @@ def rewrite_history(repo: str, items: List[Tuple[str, str]], dry_run: bool) -> i
         return 0
 
     paths = [path for path, _ in items]
-    # Build: git filter-repo --invert-paths --path <p1> --path <p2> ...
-    cmd = ["git", "filter-repo", "--invert-paths"]
-    for p in paths:
-        cmd += ["--path", p]
+    # Prepare a temporary file with all paths (one per line)
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile("w", delete=False, encoding="utf-8") as tf:
+            tmp_path = tf.name
+            for p in paths:
+                tf.write(p + "\n")
+    except Exception as e:
+        typer.echo(f"Error preparing temporary paths file: {e}", err=True)
+        return 1
+
+    cmd = ["git", "filter-repo", "--invert-paths", "--paths-from-file", tmp_path]
 
     if dry_run:
-        print("Planned paths to purge from history:")
-        for p in paths:
-            print(f"  - {p}")
-        print(f"\nDRY-RUN: would run: {shlex.join(cmd)}")
+        typer.echo(
+            "Planned paths to purge from history:\n"
+            + "\n".join(f"  - {p}" for p in paths)
+        )
+        typer.echo(f"\nDRY-RUN: would run: {shlex.join(cmd)}")
+        # Clean up temp file after preview
+        try:
+            if tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+        except Exception:
+            pass
         return 0
 
     if not _check_filter_repo_available(repo):
-        print("Error: 'git filter-repo' is not installed or not on PATH.", file=sys.stderr)
-        print("Install: https://github.com/newren/git-filter-repo and re-run.", file=sys.stderr)
+        typer.echo(
+            "Error: 'git filter-repo' is not installed or not on PATH.", err=True
+        )
+        typer.echo(
+            "Install: https://github.com/newren/git-filter-repo and re-run.", err=True
+        )
         return 2
 
     # Final confirmation
-    print("You are about to REWRITE HISTORY and purge the following paths from all commits:")
-    for p in paths:
-        print(f"  - {p}")
-    print("\nThis will change commit hashes. You will likely need to force-push.")
+    typer.echo(
+        "You are about to REWRITE HISTORY and purge the following paths from all commits:\n"
+        + "\n".join(f"  - {p}" for p in paths)
+    )
+    typer.echo("\nThis will change commit hashes. You will likely need to force-push.")
     proceed = typer.confirm("Proceed with history rewrite?", default=False)
     if not proceed:
-        print("Canceled. No changes made.")
+        typer.echo("Canceled. No changes made.")
         return 0
 
     try:
@@ -215,31 +208,44 @@ def rewrite_history(repo: str, items: List[Tuple[str, str]], dry_run: bool) -> i
         # Show a concise echo of what happened
         sys.stdout.write(out.stdout)
     except subprocess.CalledProcessError as e:
-        print(f"Error rewriting history: {e.stderr}", file=sys.stderr)
+        typer.echo(f"Error rewriting history: {e.stderr}", err=True)
         return 1
+    finally:
+        # Always clean up temp file
+        try:
+            if tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+        except Exception:
+            pass
 
-    print("\nHistory rewritten. Remember to force-push the changes.")
+    typer.echo("\nHistory rewritten. Remember to force-push the changes.")
     return 0
 
 
 def explain_and_prompt(items: List[Tuple[str, str]]) -> str:
-    print()
-    print("This tool will:")
-    print("  • Find files that are tracked in Git but currently ignored by .gitignore.")
-    print("  • Optionally purge them from history using 'git filter-repo --invert-paths'.")
-    print()
-    print("WARNING: The 'Run' option will REWRITE HISTORY using git filter-repo.")
-    print("         This changes commit hashes and requires a force-push.")
-    print("         Git will keep backups under refs/original/ for recovery.")
-    print()
+    typer.echo(
+        (
+            "\nThis tool will:\n"
+            "  • Find files that are tracked in Git but currently ignored by .gitignore.\n"
+            "  • Optionally purge them from history using 'git filter-repo --invert-paths'.\n\n"
+            "WARNING: The 'Run' option will REWRITE HISTORY using git filter-repo.\n"
+            "         This changes commit hashes and requires a force-push.\n"
+            "         Git will keep backups under refs/original/ for recovery.\n"
+        )
+    )
     print_list(items)
-    print()
-    print("Choose an option:")
-    print("  [d] Dry run (show the git filter-repo command)")
-    print("  [r] Run now (rewrite history with git filter-repo)")
-    print("  [c] Cancel")
-    choice = typer.prompt("Enter choice", default="c").strip().lower()
-    return choice
+    typer.echo(
+        "\nChoose an option:\n"
+        "  [d] Dry run (show the git filter-repo command)\n"
+        "  [r] Run now (rewrite history with git filter-repo)\n"
+        "  [c] Cancel"
+    )
+    choice = typer.prompt(
+        "Enter choice",
+        default="c",
+        type=click.Choice(["d", "r", "c"], case_sensitive=False),
+    )
+    return choice.lower()
 
 
 def main() -> int:
@@ -248,15 +254,15 @@ def main() -> int:
     items = find_tracked_and_ignored(repo, limit_to_path=None)
 
     if not items:
-        print("No tracked files are ignored by Git. ✅")
+        typer.echo("No tracked files are ignored by Git. ✅")
         return 0
 
     choice = explain_and_prompt(items)
-    if choice in ("d", "dry", "dry-run", "dryrun"):
+    if choice == "d":
         return rewrite_history(repo, items, dry_run=True)
-    if choice in ("r", "run", "apply", "go"):
+    if choice == "r":
         return rewrite_history(repo, items, dry_run=False)
-    print("Canceled. No changes made.")
+    typer.echo("Canceled. No changes made.")
     return 0
 
 
