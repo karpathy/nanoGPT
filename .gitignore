@@ -1,7 +1,6 @@
 .DS_Store
-.idea
+
 .ipynb_checkpoints/
-.vscode
 __pycache__/
 *.bin
 *.pkl
@@ -36,21 +35,7 @@ out/
 .ruff_cache/
 .coverage
 
-# Common generated artifact directories
-datasets/
-**/datasets/
-checkpoints/
-**/checkpoints/
-runs/
-**/runs/
-wandb/
-**/wandb/
-lightning_logs/
-**/lightning_logs/
-artifacts/
-**/artifacts/
-mlruns/
-**/mlruns/
+
 logs/
 **/logs/
 tb_logs/
@@ -58,18 +43,10 @@ tensorboard/
 **/tensorboard/
 events.out.tfevents.*
 
-# Prepared dataset artifacts
-ml_playground/datasets/**/train.bin
-ml_playground/datasets/**/val.bin
-ml_playground/datasets/**/meta.pkl
-ml_playground/datasets/**/meta.json
-ml_playground/datasets/**/train.jsonl
-ml_playground/datasets/**/val.jsonl
-ml_playground/datasets/**/tokenizer/
-
 # Bundestag MP datasets (sensitive CSVs)
 **/all_mps_mapping.csv
 **/all_mps_meta.csv
+**/Bundestag.csv
 
 .output.txt
 /.env
@@ -90,17 +67,16 @@ ml_playground/datasets/**/tokenizer/
 **/raw/
 **/out/
 
-
-# Exclude local developer resources
-.ldres/
-
 # Vendor llama.cpp binaries and build artifacts (do not commit)
 tools/llama_cpp/llama-gguf
 tools/llama_cpp/llama-quantize
 
 # Local editor/workspace folders
-
 .windsurf/
 .junie/
 .github
 !.github/workflows
+.vscode
+.idea
+# Local developer resources
+.ldres/
