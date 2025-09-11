@@ -114,6 +114,23 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     # All config TOML loading and merging lives in config_loader.
 
 
+def _log_dir(tag: str, dir_name: str, dir_path: Path | None, logger) -> None:
+    """Log information about a directory path."""
+    if dir_path is None:
+        logger.info(f"[{tag}] {dir_name}: <not set>")
+    elif isinstance(dir_path, Path):
+        if dir_path.exists():
+            try:
+                contents = sorted([p.name for p in dir_path.iterdir()])
+                logger.info(f"[{tag}] {dir_name} (exists): {dir_path}")
+                logger.info(f"[{tag}]   Contents: {contents}")
+            except Exception:
+                # If listing fails, still indicate existence
+                logger.info(f"[{tag}] {dir_name} (exists): {dir_path}")
+        else:
+            logger.info(f"[{tag}] {dir_name} (missing): {dir_path}")
+
+
 # --- Command runners -------------------------------------------------------
 
 
@@ -129,36 +146,13 @@ def _log_command_status(tag: str, cfg: Any) -> None:
         out_dir = getattr(cfg, "out_dir", None)
         if out_dir is None and hasattr(cfg, "runtime"):
             out_dir = getattr(cfg.runtime, "out_dir", None)
-        if out_dir is None:
-            logger.info(f"[{tag}] out_dir: <not set>")
-        elif isinstance(out_dir, Path):
-            if out_dir.exists():
-                try:
-                    contents = sorted([p.name for p in out_dir.iterdir()])
-                    logger.info(f"[{tag}] out_dir (exists): {out_dir}")
-                    logger.info(f"[{tag}]   Contents: {contents}")
-                except Exception:
-                    # If listing fails, still indicate existence
-                    logger.info(f"[{tag}] out_dir (exists): {out_dir}")
-            else:
-                logger.info(f"[{tag}] out_dir (missing): {out_dir}")
+        _log_dir(tag, "out_dir", out_dir, logger)
 
         # Handle top-level dataset_dir or nested data.dataset_dir
         ds_dir = getattr(cfg, "dataset_dir", None)
         if ds_dir is None and hasattr(cfg, "data"):
             ds_dir = getattr(cfg.data, "dataset_dir", None)
-        if ds_dir is None:
-            logger.info(f"[{tag}] dataset_dir: <not set>")
-        elif isinstance(ds_dir, Path):
-            if ds_dir.exists():
-                try:
-                    contents = sorted([p.name for p in ds_dir.iterdir()])
-                    logger.info(f"[{tag}] dataset_dir (exists): {ds_dir}")
-                    logger.info(f"[{tag}]   Contents: {contents}")
-                except Exception:
-                    logger.info(f"[{tag}] dataset_dir (exists): {ds_dir}")
-            else:
-                logger.info(f"[{tag}] dataset_dir (missing): {ds_dir}")
+        _log_dir(tag, "dataset_dir", ds_dir, logger)
     except Exception:
         # Never fail due to logging
         pass
