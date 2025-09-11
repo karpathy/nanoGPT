@@ -15,86 +15,61 @@ VERIFY_TOOL=tools/verify_unit_test_layout.py
 CLI=$(RUN) python -m $(PKG).cli
 PYTEST_CMD=$(RUN) pytest $(PYTEST_BASE)
 
-help:
-	@echo "Available targets:"
-	@echo "  setup        - Create venv and install all dependencies (dev + project)"
-	@echo "  sync         - Sync dependencies (project + dev)"
-	@echo "  test         - Run full test suite"
-	@echo "  unit         - Run unit tests only"
-	@echo "  unit-cov     - Run unit tests with coverage for $(PKG)"
-	@echo "  integration  - Run integration tests only"
-	@echo "  e2e          - Run end-to-end tests only"
-	@echo "  acceptance   - Run acceptance tests only"
-	@echo "  test-file    - Run a single test file: make test-file FILE=path/to/test_*.py"
-	@echo "  quality      - Lint, format, type-check, and run tests"
-	@echo "  quality-ext  - Extended quality: vulture + quality + mutation tests (10s cap)"
-	@echo "  quality-ci   - Alias of quality-ext for CI pipelines"
-	@echo "  lint         - Run Ruff checks"
-	@echo "  format       - Auto-fix with Ruff and format code"
-	@echo "  deadcode     - Scan for dead code with vulture"
-	@echo "  prepare      - Prepare dataset: make prepare EXP=<name> [CONFIG=path]"
-	@echo "  train        - Train model:   make train   EXP=<name> CONFIG=path"
-	@echo "  sample       - Sample model:  make sample  EXP=<name> CONFIG=path"
-	@echo "  loop         - Full loop:     make loop    EXP=<name> CONFIG=path"
-	@echo "  tensorboard  - Run TensorBoard: make tensorboard LOGDIR=out/<run>/logs/tb [PORT=6006]"
-	@echo "  verify       - Quick sanity check that ml_playground imports"
-	@echo "  gguf-help    - Show llama.cpp converter help"
-	@echo "  pyright      - Run Pyright type checker"
-	@echo "  mypy         - Run Mypy type checker on ml_playground"
-	@echo "  typecheck    - Run both Pyright and Mypy"
-	@echo "  clean        - Remove common caches and artifacts"
+help: ## Show this help
+	@echo "Available targets:" && \
+	awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z0-9_.-]+:.*##/ { printf "  %-12s %s\n", $$1, $$2 }' $(MAKEFILE_LIST) Makefile | sort -u
 
-setup:
+setup: ## Create venv and install all dependencies (dev + project)
 	uv venv --clear && uv sync --all-groups
 
-sync:
+sync: ## Sync dependencies (project + dev)
 	uv sync --all-groups
 
-verify:
+verify: ## Quick sanity check that $(PKG) imports
 	$(RUN) python -c "import $(PKG); print('✓ $(PKG) import OK')"
 
 # Test targets
 
 # Helper: verify unit test layout (if tool exists)
-pytest-verify-layout:
+pytest-verify-layout: ## Verify unit test layout if verification tool exists
 	[ -f $(VERIFY_TOOL) ] && $(RUN) python $(VERIFY_TOOL) || true
 
 # Helper: core pytest invoker; pass extra args with PYARGS="..."
-pytest-core:
+pytest-core: ## Run pytest with $(PYTEST_BASE); pass extra args via PYARGS
 	$(PYTEST_CMD) $(PYARGS)
 
 # Full test suite with layout verification
-pytest-all: pytest-verify-layout
+pytest-all: pytest-verify-layout ## Full test suite with layout verification
 	$(PYTEST_CMD)
 
-test:
+test: ## Run full test suite
 	$(MAKE) pytest-all
 
-unit: pytest-verify-layout
+unit: pytest-verify-layout ## Run unit tests only
 	$(MAKE) pytest-core PYARGS="tests/unit"
 
-unit-cov:
+unit-cov: ## Run unit tests with coverage for $(PKG)
 	$(RUN) pytest $(PYTEST_BASE) --cov=$(PKG) --cov-report=term-missing tests/unit
 
-integration:
+integration: ## Run integration tests only
 	$(MAKE) pytest-core PYARGS="-m integration --no-cov"
 
-e2e:
+e2e: ## Run end-to-end tests only
 	$(MAKE) pytest-core PYARGS="-m e2e --no-cov"
 
-acceptance:
+acceptance: ## Run acceptance tests only (quiet)
 	$(RUN) pytest -q -m acceptance
 
-test-file:
+test-file: ## Run a single test file: make test-file FILE=path/to/test_*.py
 	@if [ -z "$(FILE)" ]; then echo "Usage: make test-file FILE=path/to/test_*.py"; exit 2; fi; \
 	$(RUN) pytest -q $(FILE)
 
 # Quality gates
 
-quality: format typecheck test
+quality: format typecheck test ## Lint, format, type-check, and run tests
 
 # Extended quality: dead code + core quality + mutation testing (non-fatal) 
-quality-ext:
+quality-ext: ## Extended quality: vulture + quality + mutation tests (non-fatal)
 	# Dead code scan (project package only)
 	$(MAKE) deadcode
 	# Core quality gate
@@ -108,27 +83,27 @@ quality-ext:
 	fi
 
 # CI alias for extended quality
-quality-ci: quality-ext
+quality-ci: quality-ext ## Alias of quality-ext for CI pipelines
 
-lint:
+lint: ## Run Ruff checks
 	$(RUN) ruff check .
 
-format:
+format: ## Auto-fix with Ruff and format code
 	$(RUN) ruff check --fix . && $(RUN) ruff format .
 
 # Dead code scanning
-deadcode:
+deadcode: ## Scan for dead code with vulture
 	$(RUN) vulture $(PKG) --min-confidence 90
 
-pyright:
+pyright: ## Run Pyright type checker
 	$(RUN) pyright
 
-mypy:
+mypy: ## Run Mypy type checker on $(PKG)
 	$(RUN) mypy --incremental $(PKG)
 
-typecheck: pyright mypy
+typecheck: pyright mypy ## Run both Pyright and Mypy
 
-clean:
+clean: ## Remove common caches and artifacts
 	# Common caches and artifacts
 	rm -rf .pytest_cache .mypy_cache .ruff_cache htmlcov || true
 	# Python bytecode caches
@@ -136,36 +111,36 @@ clean:
 
 # Runtime CLI wrappers (use EXP=<name> and optional CONFIG=path)
 # Parameter checks for CLI targets
-check-exp:
+check-exp: ## Validate EXP is provided
 	@if [ -z "$(EXP)" ]; then echo "Usage: set EXP=<name>"; exit 2; fi
 
-check-exp-config:
+check-exp-config: ## Validate EXP and CONFIG are provided
 	@if [ -z "$(EXP)" ] || [ -z "$(CONFIG)" ]; then echo "Usage: set EXP=<name> CONFIG=path"; exit 2; fi
 
 # Runtime CLI wrappers (use EXP=<name> and optional CONFIG=path)
-prepare: check-exp
+prepare: check-exp ## Prepare dataset (EXP=<name> [CONFIG=path])
 	cmd="$(CLI) prepare $(EXP)"; \
 	if [ -n "$(CONFIG)" ]; then cmd="$$cmd --exp-config $(CONFIG)"; fi; \
 	echo $$cmd; $$cmd
 
-train: check-exp-config
+train: check-exp-config ## Train model (EXP=<name> CONFIG=path)
 	$(CLI) train $(EXP) --exp-config $(CONFIG)
 
-sample: check-exp-config
+sample: check-exp-config ## Sample model (EXP=<name> CONFIG=path)
 	$(CLI) sample $(EXP) --exp-config $(CONFIG)
 
-loop: check-exp-config
+loop: check-exp-config ## Full loop (EXP=<name> CONFIG=path)
 	$(CLI) loop $(EXP) --exp-config $(CONFIG)
 
-tensorboard:
+tensorboard: ## Run TensorBoard (LOGDIR=out/<run>/logs/tb [PORT=6006])
 	@if [ -z "$(LOGDIR)" ]; then echo "Usage: make tensorboard LOGDIR=out/<run>/logs/tb [PORT=6006]"; exit 2; fi; \
 	$(RUN) tensorboard --logdir $(LOGDIR) --port $${PORT:-6006}
 
-gguf-help:
+gguf-help: ## Show llama.cpp converter help
 	$(RUN) python tools/llama_cpp/convert-hf-to-gguf.py --help || true
 
 # Coverage helper
-coverage:
+coverage: ## Run coverage for non-performance tests and generate reports
 	$(RUN) coverage run -m pytest -m "not perf"
 	$(RUN) coverage report -m
 	$(RUN) coverage xml
