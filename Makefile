@@ -6,7 +6,7 @@ SHELL := /bin/bash
 .ONESHELL:
 .DEFAULT_GOAL := help
 
-.PHONY: help test unit unit-cov integration e2e acceptance test-file coverage quality quality-ext quality-ci lint format pyright mypy typecheck setup sync verify clean prepare train sample loop tensorboard deadcode gguf-help pytest-verify-layout pytest-core pytest-all check-exp check-exp-config
+.PHONY: help test unit unit-cov integration e2e acceptance test-file coverage quality quality-ext quality-ci lint format pyright mypy typecheck setup sync verify clean prepare train sample loop tensorboard deadcode gguf-help pytest-verify-layout pytest-core pytest-all check-exp check-exp-config check-tool ai-guidelines
 
 PYTEST_BASE=-n auto -W error --strict-markers --strict-config -v
 RUN=uv run
@@ -117,6 +117,10 @@ check-exp: ## Validate EXP is provided
 check-exp-config: ## Validate EXP and CONFIG are provided
 	@if [ -z "$(EXP)" ] || [ -z "$(CONFIG)" ]; then echo "Usage: set EXP=<name> CONFIG=path"; exit 2; fi
 
+# Parameter check for AI guidelines tool
+check-tool: ## Validate TOOL is provided (e.g., TOOL=windsurf)
+	@if [ -z "$(TOOL)" ]; then echo "Usage: set TOOL=<one of: copilot, aiassistant, junie, kiro, windsurf, cursor> [DRY_RUN=1]"; exit 2; fi
+
 # Runtime CLI wrappers (use EXP=<name> and optional CONFIG=path)
 prepare: check-exp ## Prepare dataset (EXP=<name> [CONFIG=path])
 	cmd="$(CLI) prepare $(EXP)"; \
@@ -131,6 +135,12 @@ sample: check-exp-config ## Sample model (EXP=<name> CONFIG=path)
 
 loop: check-exp-config ## Full loop (EXP=<name> CONFIG=path)
 	$(CLI) loop $(EXP) --exp-config $(CONFIG)
+
+# Tools
+ai-guidelines: check-tool ## Setup AI guidelines symlinks for a TOOL (TOOL=<name> [DRY_RUN=1])
+	cmd="$(RUN) python tools/setup_ai_guidelines.py setup $(TOOL)"; \
+	if [ -n "$(DRY_RUN)" ]; then cmd="$$cmd --dry-run"; fi; \
+	echo $$cmd; $$cmd
 
 tensorboard: ## Run TensorBoard (LOGDIR=out/<run>/logs/tb [PORT=6006])
 	@if [ -z "$(LOGDIR)" ]; then echo "Usage: make tensorboard LOGDIR=out/<run>/logs/tb [PORT=6006]"; exit 2; fi; \
