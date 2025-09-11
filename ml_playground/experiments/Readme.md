@@ -26,6 +26,21 @@ Conventions
 
 All experiments now use the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../docs/framework_utilities.md).
 
+## Folder structure (this directory)
+
+```text
+ml_playground/experiments/
+├── Readme.md                    - overview and conventions (this file)
+├── __init__.py                  - package marker/registry setup
+├── default_config.toml          - baseline config used by templates/examples
+├── protocol.py                  - typed protocol/contracts for preparers
+├── shakespeare/                 - Tiny Shakespeare experiment
+├── bundestag_char/              - Bundestag character-level experiment
+├── bundestag_tiktoken/          - Bundestag BPE (tiktoken) experiment
+├── bundestag_qwen15b_lora_mps/  - Qwen2.5 LoRA preset over generic integration
+└── speakger/                    - Gemma-based fine-tuning workflow (SpeakGer)
+```
+
 Important: Strict configuration injection
 
 - Experiments must not read TOML directly. The CLI reads TOML and injects fully validated config objects into experiment code.
