@@ -1,8 +1,19 @@
 # Makefile for common developer tasks using uv-managed environment
 
-.PHONY: help test unit unit-cov integration e2e acceptance test-file coverage quality quality-ext quality-ci lint format pyright mypy typecheck setup sync verify clean prepare train sample loop tensorboard deadcode gguf-help
+# Safer shell defaults
+SHELL := /bin/bash
+.SHELLFLAGS := -e -o pipefail -c
+.ONESHELL:
+.DEFAULT_GOAL := help
+
+.PHONY: help test unit unit-cov integration e2e acceptance test-file coverage quality quality-ext quality-ci lint format pyright mypy typecheck setup sync verify clean prepare train sample loop tensorboard deadcode gguf-help pytest-verify-layout pytest-core pytest-all check-exp check-exp-config
 
 PYTEST_BASE=-n auto -W error --strict-markers --strict-config -v
+RUN=uv run
+PKG=ml_playground
+VERIFY_TOOL=tools/verify_unit_test_layout.py
+CLI=$(RUN) python -m $(PKG).cli
+PYTEST_CMD=$(RUN) pytest $(PYTEST_BASE)
 
 help:
 	@echo "Available targets:"
@@ -10,7 +21,7 @@ help:
 	@echo "  sync         - Sync dependencies (project + dev)"
 	@echo "  test         - Run full test suite"
 	@echo "  unit         - Run unit tests only"
-	@echo "  unit-cov     - Run unit tests with coverage for ml_playground"
+	@echo "  unit-cov     - Run unit tests with coverage for $(PKG)"
 	@echo "  integration  - Run integration tests only"
 	@echo "  e2e          - Run end-to-end tests only"
 	@echo "  acceptance   - Run acceptance tests only"
@@ -40,43 +51,47 @@ sync:
 	uv sync --all-groups
 
 verify:
-	uv run python -c "import ml_playground; print('✓ ml_playground import OK')"
+	$(RUN) python -c "import $(PKG); print('✓ $(PKG) import OK')"
 
 # Test targets
 
-test:
-	[ -f tools/verify_unit_test_layout.py ] && uv run python tools/verify_unit_test_layout.py || true; \
-	uv run pytest $(PYTEST_BASE)
+# Helper: verify unit test layout (if tool exists)
+pytest-verify-layout:
+	[ -f $(VERIFY_TOOL) ] && $(RUN) python $(VERIFY_TOOL) || true
 
-unit:
-	[ -f tools/verify_unit_test_layout.py ] && uv run python tools/verify_unit_test_layout.py || true; \
-	uv run pytest $(PYTEST_BASE) tests/unit
+# Helper: core pytest invoker; pass extra args with PYARGS="..."
+pytest-core:
+	$(PYTEST_CMD) $(PYARGS)
+
+# Full test suite with layout verification
+pytest-all: pytest-verify-layout
+	$(PYTEST_CMD)
+
+test:
+	$(MAKE) pytest-all
+
+unit: pytest-verify-layout
+	$(MAKE) pytest-core PYARGS="tests/unit"
 
 unit-cov:
-	uv run pytest $(PYTEST_BASE) --cov=ml_playground --cov-report=term-missing tests/unit
+	$(RUN) pytest $(PYTEST_BASE) --cov=$(PKG) --cov-report=term-missing tests/unit
 
 integration:
-	uv run pytest $(PYTEST_BASE) -m integration --no-cov
+	$(MAKE) pytest-core PYARGS="-m integration --no-cov"
 
 e2e:
-	uv run pytest $(PYTEST_BASE) -m e2e --no-cov
+	$(MAKE) pytest-core PYARGS="-m e2e --no-cov"
 
 acceptance:
-	uv run pytest -q -m acceptance
+	$(RUN) pytest -q -m acceptance
 
 test-file:
 	@if [ -z "$(FILE)" ]; then echo "Usage: make test-file FILE=path/to/test_*.py"; exit 2; fi; \
-	uv run pytest -q $(FILE)
+	$(RUN) pytest -q $(FILE)
 
 # Quality gates
 
-quality:
-	uv run ruff check --fix . && \
-	uv run ruff format . && \
-	uv run pyright && \
-	uv run mypy --incremental ml_playground && \
-	[ -f tools/verify_unit_test_layout.py ] && uv run python tools/verify_unit_test_layout.py || true; \
-	uv run pytest $(PYTEST_BASE)
+quality: format typecheck test
 
 # Extended quality: dead code + core quality + mutation testing (non-fatal) 
 quality-ext:
@@ -86,8 +101,8 @@ quality-ext:
 	$(MAKE) quality
 	# Mutation tests (non-fatal). Rely on pyproject.toml [cosmic-ray] configuration.
 	set +e; \
-	uv run cosmic-ray init pyproject.toml out/cosmic-ray/session.sqlite >/dev/null 2>&1 || true; \
-	uv run cosmic-ray exec pyproject.toml out/cosmic-ray/session.sqlite; code=$$?; set -e; \
+	$(RUN) cosmic-ray init pyproject.toml out/cosmic-ray/session.sqlite >/dev/null 2>&1 || true; \
+	$(RUN) cosmic-ray exec pyproject.toml out/cosmic-ray/session.sqlite; code=$$?; set -e; \
 	if [ "$$code" -ne 0 ]; then \
 	  echo "[warning] Cosmic Ray returned non-zero (code=$$code); proceeding"; \
 	fi
@@ -96,54 +111,61 @@ quality-ext:
 quality-ci: quality-ext
 
 lint:
-	uv run ruff check .
+	$(RUN) ruff check .
 
 format:
-	uv run ruff check --fix . && uv run ruff format .
+	$(RUN) ruff check --fix . && $(RUN) ruff format .
 
 # Dead code scanning
 deadcode:
-	uv run vulture ml_playground --min-confidence 90
+	$(RUN) vulture $(PKG) --min-confidence 90
 
 pyright:
-	uv run pyright
+	$(RUN) pyright
 
 mypy:
-	uv run mypy --incremental ml_playground
+	$(RUN) mypy --incremental $(PKG)
 
 typecheck: pyright mypy
 
 clean:
-	rm -rf .pytest_cache .mypy_cache .ruff_cache htmlcov **/__pycache__ || true
+	# Common caches and artifacts
+	rm -rf .pytest_cache .mypy_cache .ruff_cache htmlcov || true
+	# Python bytecode caches
+	find . -type d -name "__pycache__" -prune -exec rm -rf {} + || true
 
 # Runtime CLI wrappers (use EXP=<name> and optional CONFIG=path)
-prepare:
-	@if [ -z "$(EXP)" ]; then echo "Usage: make prepare EXP=<name> [CONFIG=path]"; exit 2; fi; \
-	cmd="uv run python -m ml_playground.cli prepare $(EXP)"; \
+# Parameter checks for CLI targets
+check-exp:
+	@if [ -z "$(EXP)" ]; then echo "Usage: set EXP=<name>"; exit 2; fi
+
+check-exp-config:
+	@if [ -z "$(EXP)" ] || [ -z "$(CONFIG)" ]; then echo "Usage: set EXP=<name> CONFIG=path"; exit 2; fi
+
+# Runtime CLI wrappers (use EXP=<name> and optional CONFIG=path)
+prepare: check-exp
+	cmd="$(CLI) prepare $(EXP)"; \
 	if [ -n "$(CONFIG)" ]; then cmd="$$cmd --exp-config $(CONFIG)"; fi; \
 	echo $$cmd; $$cmd
 
-train:
-	@if [ -z "$(EXP)" ] || [ -z "$(CONFIG)" ]; then echo "Usage: make train EXP=<name> CONFIG=path"; exit 2; fi; \
-	uv run python -m ml_playground.cli train $(EXP) --exp-config $(CONFIG)
+train: check-exp-config
+	$(CLI) train $(EXP) --exp-config $(CONFIG)
 
-sample:
-	@if [ -z "$(EXP)" ] || [ -z "$(CONFIG)" ]; then echo "Usage: make sample EXP=<name> CONFIG=path"; exit 2; fi; \
-	uv run python -m ml_playground.cli sample $(EXP) --exp-config $(CONFIG)
+sample: check-exp-config
+	$(CLI) sample $(EXP) --exp-config $(CONFIG)
 
-loop:
-	@if [ -z "$(EXP)" ] || [ -z "$(CONFIG)" ]; then echo "Usage: make loop EXP=<name> CONFIG=path"; exit 2; fi; \
-	uv run python -m ml_playground.cli loop $(EXP) --exp-config $(CONFIG)
+loop: check-exp-config
+	$(CLI) loop $(EXP) --exp-config $(CONFIG)
 
 tensorboard:
 	@if [ -z "$(LOGDIR)" ]; then echo "Usage: make tensorboard LOGDIR=out/<run>/logs/tb [PORT=6006]"; exit 2; fi; \
-	uv run tensorboard --logdir $(LOGDIR) --port $${PORT:-6006}
+	$(RUN) tensorboard --logdir $(LOGDIR) --port $${PORT:-6006}
 
 gguf-help:
-	uv run python tools/llama_cpp/convert-hf-to-gguf.py --help || true
+	$(RUN) python tools/llama_cpp/convert-hf-to-gguf.py --help || true
 
 # Coverage helper
 coverage:
-	uv run coverage run -m pytest -m "not perf"
-	uv run coverage report -m
-	uv run coverage xml
+	$(RUN) coverage run -m pytest -m "not perf"
+	$(RUN) coverage report -m
+	$(RUN) coverage xml
