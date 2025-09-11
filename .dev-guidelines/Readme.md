@@ -20,6 +20,13 @@ make quality   # ruff+format+pyright+mypy+pytest
 
 This guideline system is organized into focused documents for easy navigation:
 
+### 📝 [DOCUMENTATION.md](DOCUMENTATION.md) - Documentation Guidelines
+
+- Abstraction levels and required sections
+- Annotated folder tree standard (with inline descriptions)
+- Markdown style (markdownlint) and DRY docs policy
+- Cross-referencing shared framework docs
+
 ### 📋 [SETUP.md](SETUP.md) - Environment Setup
 
 - Prerequisites and installation
@@ -49,6 +56,8 @@ This guideline system is organized into focused documents for easy navigation:
 - Development workflow fixes
 
 **UV-Only Workflow**: Use UV for everything - virtualenv, dependency sync, running tools and tests. No pip, requirements.txt, or manual venv activation.
+
+All documentation in this repo must adhere to [DOCUMENTATION.md](DOCUMENTATION.md).
 
 ## Core Principles (Non-Negotiable)
 
