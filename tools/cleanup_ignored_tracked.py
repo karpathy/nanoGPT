@@ -7,12 +7,12 @@ are ignored by your current .gitignore rules.
 
 What this tool does:
   - Detects tracked files that match ignore patterns.
-  - Lets you choose between a Dry Run (show commands), Actually Run (untrack), or Cancel.
+  - Lets you choose between a Dry Run (show command), Actually Run (REWRITE HISTORY to purge), or Cancel.
 
 Safety and history:
-  - The "Actually Run" option uses `git rm --cached` to untrack files but keeps them on disk.
-  - It does NOT rewrite history. Past commits remain unchanged.
-  - If you need to purge files from history, use a separate history-rewrite tool (not included here).
+  - The "Actually Run" option uses `git filter-repo --invert-paths` with the matched paths to REWRITE HISTORY and purge them from all commits.
+  - This is destructive to commit hashes. You will need to force-push and coordinate with collaborators.
+  - A dry run prints the exact command that would be executed. Cancel makes no changes.
 
 Usage:
   - Simply run: `python tools/cleanup_ignored_tracked.py`
@@ -106,6 +106,19 @@ def filter_ignored(repo: str, paths: Iterable[str]) -> List[Tuple[str, str]]:
     return results
 
 
+def _check_filter_repo_available(repo: str) -> bool:
+    """Return True if `git filter-repo` appears available on PATH.
+
+    We consider the tool available if invoking `git filter-repo --help` does not
+    raise FileNotFoundError. A non-zero exit code is fine (usage errors, etc.).
+    """
+    try:
+        run(["git", "filter-repo", "--help"], cwd=repo, check=False)
+        return True
+    except FileNotFoundError:
+        return False
+
+
 def find_tracked_and_ignored(
     repo: str, limit_to_path: str | None = None
 ) -> List[Tuple[str, str]]:
@@ -164,20 +177,66 @@ def delete_items(
     return exit_code
 
 
+def rewrite_history(repo: str, items: List[Tuple[str, str]], dry_run: bool) -> int:
+    if not items:
+        print("Nothing to rewrite. ")
+        return 0
+
+    paths = [path for path, _ in items]
+    # Build: git filter-repo --invert-paths --path <p1> --path <p2> ...
+    cmd = ["git", "filter-repo", "--invert-paths"]
+    for p in paths:
+        cmd += ["--path", p]
+
+    if dry_run:
+        print("Planned paths to purge from history:")
+        for p in paths:
+            print(f"  - {p}")
+        print(f"\nDRY-RUN: would run: {shlex.join(cmd)}")
+        return 0
+
+    if not _check_filter_repo_available(repo):
+        print("Error: 'git filter-repo' is not installed or not on PATH.", file=sys.stderr)
+        print("Install: https://github.com/newren/git-filter-repo and re-run.", file=sys.stderr)
+        return 2
+
+    # Final confirmation
+    print("You are about to REWRITE HISTORY and purge the following paths from all commits:")
+    for p in paths:
+        print(f"  - {p}")
+    print("\nThis will change commit hashes. You will likely need to force-push.")
+    proceed = typer.confirm("Proceed with history rewrite?", default=False)
+    if not proceed:
+        print("Canceled. No changes made.")
+        return 0
+
+    try:
+        out = run(cmd, cwd=repo, check=True)
+        # Show a concise echo of what happened
+        sys.stdout.write(out.stdout)
+    except subprocess.CalledProcessError as e:
+        print(f"Error rewriting history: {e.stderr}", file=sys.stderr)
+        return 1
+
+    print("\nHistory rewritten. Remember to force-push the changes.")
+    return 0
+
+
 def explain_and_prompt(items: List[Tuple[str, str]]) -> str:
     print()
-    print("This tool will:" )
+    print("This tool will:")
     print("  • Find files that are tracked in Git but currently ignored by .gitignore.")
-    print("  • Optionally untrack them using 'git rm --cached' (keeps files on disk).")
+    print("  • Optionally purge them from history using 'git filter-repo --invert-paths'.")
     print()
-    print("It will NOT rewrite history. Past commits remain unchanged.")
-    print("To purge from history, use a separate history-rewrite tool (e.g., git filter-repo).")
+    print("WARNING: The 'Run' option will REWRITE HISTORY using git filter-repo.")
+    print("         This changes commit hashes and requires a force-push.")
+    print("         Git will keep backups under refs/original/ for recovery.")
     print()
     print_list(items)
     print()
     print("Choose an option:")
-    print("  [d] Dry run (show what would be done)")
-    print("  [r] Run now (untrack with 'git rm --cached')")
+    print("  [d] Dry run (show the git filter-repo command)")
+    print("  [r] Run now (rewrite history with git filter-repo)")
     print("  [c] Cancel")
     choice = typer.prompt("Enter choice", default="c").strip().lower()
     return choice
@@ -194,9 +253,9 @@ def main() -> int:
 
     choice = explain_and_prompt(items)
     if choice in ("d", "dry", "dry-run", "dryrun"):
-        return delete_items(repo, items, dry_run=True, wipe=False)
+        return rewrite_history(repo, items, dry_run=True)
     if choice in ("r", "run", "apply", "go"):
-        return delete_items(repo, items, dry_run=False, wipe=False)
+        return rewrite_history(repo, items, dry_run=False)
     print("Canceled. No changes made.")
     return 0
 
