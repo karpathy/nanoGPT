@@ -14,9 +14,11 @@ PKG=ml_playground
 VERIFY_TOOL=tools/verify_unit_test_layout.py
 CLI=$(RUN) python -m $(PKG).cli
 PYTEST_CMD=$(RUN) pytest $(PYTEST_BASE)
+TOOLS=copilot aiassistant junie kiro windsurf cursor
 
 help: ## Show this help
 	@echo "Available targets:" && \
+	echo "  vars         TOOLS=$(TOOLS)" && \
 	awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z0-9_.-]+:.*##/ { printf "  %-12s %s\n", $$1, $$2 }' $(MAKEFILE_LIST) Makefile | sort -u
 
 setup: ## Create venv and install all dependencies (dev + project)
@@ -119,7 +121,7 @@ check-exp-config: ## Validate EXP and CONFIG are provided
 
 # Parameter check for AI guidelines tool
 check-tool: ## Validate TOOL is provided (e.g., TOOL=windsurf)
-	@if [ -z "$(TOOL)" ]; then echo "Usage: set TOOL=<one of: copilot, aiassistant, junie, kiro, windsurf, cursor> [DRY_RUN=1]"; exit 2; fi
+	@if [ -z "$(TOOL)" ]; then echo "Usage: set TOOL=<one of: $(TOOLS)> [DRY_RUN=1]"; exit 2; fi
 
 # Runtime CLI wrappers (use EXP=<name> and optional CONFIG=path)
 prepare: check-exp ## Prepare dataset (EXP=<name> [CONFIG=path])
@@ -137,7 +139,7 @@ loop: check-exp-config ## Full loop (EXP=<name> CONFIG=path)
 	$(CLI) loop $(EXP) --exp-config $(CONFIG)
 
 # Tools
-ai-guidelines: check-tool ## Setup AI guidelines symlinks for a TOOL (TOOL=<name> [DRY_RUN=1])
+ai-guidelines: check-tool ## Setup AI guidelines symlinks for a TOOL (TOOL=<$(TOOLS)> [DRY_RUN=1])
 	cmd="$(RUN) python tools/setup_ai_guidelines.py $(TOOL)"; \
 	if [ -n "$(DRY_RUN)" ]; then cmd="$$cmd --dry-run"; fi; \
 	echo $$cmd; $$cmd
