@@ -86,10 +86,10 @@ ml_playground/datasets/**/tokenizer/
 **/.hf_cache/
 
 # Experiment-specific generated data (do not version)
-ml_playground/experiments/**/datasets/
-ml_playground/experiments/**/raw/
-ml_playground/experiments/**/out/
-ml_playground/experiments/**/exploratory/
+**/datasets/
+**/raw/
+**/out/
+
 
 # Exclude local developer resources
 .ldres/
@@ -100,25 +100,7 @@ tools/llama_cpp/llama-quantize
 
 # Local editor/workspace folders
 
-
-# --- Exceptions for code under ml_playground/datasets/ ---
-# The patterns above ignore any datasets directory globally. We want to version
-# lightweight code modules living at ml_playground/datasets/, while still ignoring
-# large data artifacts. The following rules re-include specific code files.
-!ml_playground/datasets/
-ml_playground/datasets/*
-!ml_playground/datasets/__init__.py
-!ml_playground/datasets/shakespeare.py
-
-# Keep ignoring heavy binary/text artifacts even if placed in that folder
-ml_playground/datasets/**/train.bin
-ml_playground/datasets/**/val.bin
-ml_playground/datasets/**/meta.pkl
-ml_playground/datasets/**/meta.json
-ml_playground/datasets/**/train.jsonl
-ml_playground/datasets/**/val.jsonl
-ml_playground/datasets/**/tokenizer/
-
 .windsurf/
-
 .junie/
+.github
+!.github/workflows
