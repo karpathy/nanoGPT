@@ -1,1 +1,0 @@
-../.dev-guidelines/REQUIREMENTS.md
