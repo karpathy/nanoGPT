@@ -138,7 +138,7 @@ loop: check-exp-config ## Full loop (EXP=<name> CONFIG=path)
 
 # Tools
 ai-guidelines: check-tool ## Setup AI guidelines symlinks for a TOOL (TOOL=<name> [DRY_RUN=1])
-	cmd="$(RUN) python tools/setup_ai_guidelines.py setup $(TOOL)"; \
+	cmd="$(RUN) python tools/setup_ai_guidelines.py $(TOOL)"; \
 	if [ -n "$(DRY_RUN)" ]; then cmd="$$cmd --dry-run"; fi; \
 	echo $$cmd; $$cmd
 
