@@ -268,6 +268,18 @@ def _run_loop(
 # --- CLI definition --------------------------------------------------------
 
 
+EXPERIMENT_HELP = "Experiment name (directory in ml_playground/experiments)"
+
+
+ExperimentArg = Annotated[
+    str,
+    typer.Argument(
+        help=EXPERIMENT_HELP,
+        autocompletion=_complete_experiments,
+    ),
+]
+
+
 # Typer-based CLI
 app = typer.Typer(
     no_args_is_help=True,
@@ -314,32 +326,20 @@ def global_options(
 @app.command()
 def prepare(
     ctx: typer.Context,
-    experiment: Annotated[
-        str,
-        typer.Argument(
-            help="Experiment name (directory in ml_playground/experiments)",
-            autocompletion=_complete_experiments,
-        ),
-    ],
+    experiment: ExperimentArg,
 ) -> None:
     """Prepare data for an experiment."""
     exp_config_path = _extract_exp_config(ctx)
     run_or_exit(
         lambda: _run_prepare_cmd(experiment, exp_config_path),
-        keyboard_interrupt_msg="\nPreparation cancelled.",
+        keyboard_interrupt_msg="\nData preparation cancelled.",
     )
 
 
 @app.command()
 def train(
     ctx: typer.Context,
-    experiment: Annotated[
-        str,
-        typer.Argument(
-            help="Experiment name (directory in ml_playground/experiments)",
-            autocompletion=_complete_experiments,
-        ),
-    ],
+    experiment: ExperimentArg,
 ) -> None:
     """Train a model for an experiment."""
     exp_config_path = _extract_exp_config(ctx)
@@ -352,13 +352,7 @@ def train(
 @app.command()
 def sample(
     ctx: typer.Context,
-    experiment: Annotated[
-        str,
-        typer.Argument(
-            help="Experiment name (directory in ml_playground/experiments)",
-            autocompletion=_complete_experiments,
-        ),
-    ],
+    experiment: ExperimentArg,
 ) -> None:
     """Sample from a trained model."""
     exp_config_path = _extract_exp_config(ctx)
@@ -371,13 +365,7 @@ def sample(
 @app.command()
 def analyze(
     ctx: typer.Context,
-    experiment: Annotated[
-        str,
-        typer.Argument(
-            help="Experiment name (directory in ml_playground/experiments)",
-            autocompletion=_complete_experiments,
-        ),
-    ],
+    experiment: ExperimentArg,
     host: str = typer.Option(
         "127.0.0.1", help="Host for the analysis server (not implemented)"
     ),
@@ -395,13 +383,7 @@ def analyze(
 @app.command()
 def loop(
     ctx: typer.Context,
-    experiment: Annotated[
-        str,
-        typer.Argument(
-            help="Experiment name (directory in ml_playground/experiments)",
-            autocompletion=_complete_experiments,
-        ),
-    ],
+    experiment: ExperimentArg,
 ) -> None:
     """Run the full prepare, train, and sample loop for an experiment."""
     exp_config_path = _extract_exp_config(ctx)
