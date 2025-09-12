@@ -414,26 +414,30 @@ if __name__ == "__main__":
 def _run_prepare_cmd(experiment: str, exp_config_path: Path | None) -> None:
     """Run prepare command: load full ExperimentConfig once and pass section."""
     cfg_path = _cfg_path_for(experiment, exp_config_path)
-    exp = config_loader.load_full_experiment_config(cfg_path)
+    project_home = Path(__file__).resolve().parent.parent
+    exp = config_loader.load_full_experiment_config(cfg_path, project_home, experiment)
     _run_prepare(experiment, exp.prepare, cfg_path)
 
 
 def _run_train_cmd(experiment: str, exp_config_path: Path | None) -> None:
     """Run train command: load full ExperimentConfig once and pass section."""
     cfg_path = _cfg_path_for(experiment, exp_config_path)
-    exp = config_loader.load_full_experiment_config(cfg_path)
+    project_home = Path(__file__).resolve().parent.parent
+    exp = config_loader.load_full_experiment_config(cfg_path, project_home, experiment)
     _run_train(experiment, exp.train, cfg_path)
 
 
 def _run_sample_cmd(experiment: str, exp_config_path: Path | None) -> None:
     """Run sample command: load full ExperimentConfig once and pass section."""
     cfg_path = _cfg_path_for(experiment, exp_config_path)
-    exp = config_loader.load_full_experiment_config(cfg_path)
+    project_home = Path(__file__).resolve().parent.parent
+    exp = config_loader.load_full_experiment_config(cfg_path, project_home, experiment)
     _run_sample(experiment, exp.sample, cfg_path)
 
 
 def _run_loop_cmd(experiment: str, exp_config_path: Path | None) -> None:
     """Run loop command: load full ExperimentConfig once and pass sections."""
     cfg_path = _cfg_path_for(experiment, exp_config_path)
-    exp = config_loader.load_full_experiment_config(cfg_path)
+    project_home = Path(__file__).resolve().parent.parent
+    exp = config_loader.load_full_experiment_config(cfg_path, project_home, experiment)
     _run_loop(experiment, cfg_path, exp.prepare, exp.train, exp.sample)

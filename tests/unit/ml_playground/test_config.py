@@ -33,8 +33,9 @@ def test_full_loader_roundtrip(tmp_path: Path) -> None:
     )
     cfg_path = tmp_path / "cfg.toml"
     cfg_path.write_text(toml_text)
-
-    exp: ExperimentConfig = load_full_experiment_config(cfg_path)
+    project_home = tmp_path.parent if tmp_path.parent.name else tmp_path
+    experiment_name = cfg_path.parent.name
+    exp: ExperimentConfig = load_full_experiment_config(cfg_path, project_home, experiment_name)
     assert exp.train is not None
     assert exp.sample is not None
     assert isinstance(exp.train.runtime.out_dir, Path)
@@ -46,9 +47,10 @@ def test_full_loader_empty_config_raises(tmp_path: Path) -> None:
     toml_text = ""
     cfg_path = tmp_path / "empty.toml"
     cfg_path.write_text(toml_text)
-
+    project_home = tmp_path.parent if tmp_path.parent.name else tmp_path
+    experiment_name = cfg_path.parent.name
     with pytest.raises(Exception):
-        load_full_experiment_config(cfg_path)
+        load_full_experiment_config(cfg_path, project_home, experiment_name)
 
 
 def test_full_loader_bad_root_type(tmp_path: Path) -> None:
@@ -58,8 +60,10 @@ arr = [1,2,3]
 """
     p = tmp_path / "bad.toml"
     p.write_text(bad_text)
+    project_home = tmp_path.parent if tmp_path.parent.name else tmp_path
+    experiment_name = p.parent.name
     with pytest.raises(Exception):
-        load_full_experiment_config(p)
+        load_full_experiment_config(p, project_home, experiment_name)
 
 
 def test_full_loader_nested_unknown_keys_in_sample_raise(tmp_path: Path) -> None:

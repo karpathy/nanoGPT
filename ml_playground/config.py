@@ -354,8 +354,9 @@ def load_experiment_toml(path: Path) -> ExperimentConfig:
     """
     # Local import to avoid circular dependency at module import time
     from ml_playground import config_loader as _loader
-
-    return _loader.load_full_experiment_config(path)
+    project_home = Path(__file__).resolve().parent.parent
+    experiment_name = path.parent.name
+    return _loader.load_full_experiment_config(path, project_home, experiment_name)
 
 
 # Backward-compatible aliases for newer API names used by some modules

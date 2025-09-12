@@ -179,11 +179,11 @@ def _resolve_relative_paths(merged: dict[str, Any], cfg_path: Path) -> dict[str,
     return out
 
 
-def load_full_experiment_config(config_path: Path) -> ExperimentConfig:
+def load_full_experiment_config(config_path: Path, project_home: Path, experiment_name: str) -> ExperimentConfig:
     """Canonical loader for a full experiment configuration.
 
-    - Reads default_config.toml (if present) and experiment config.
-    - Merges defaults -> experiment (experiment overrides).
+    - Reads default_config.toml (if present), experiment config, and special .ldres config (if present).
+    - Merges defaults -> experiment -> .ldres config (.ldres config overrides all).
     - Resolves known relative paths relative to the config file dir.
     - Validates the entire config into an ExperimentConfig (prepare, train, sample mandatory).
     """
@@ -206,7 +206,20 @@ def load_full_experiment_config(config_path: Path) -> ExperimentConfig:
                 defaults_raw = read_toml_dict(alt_defaults)
             except Exception as e:
                 raise Exception(f"default_config.toml: {e}")
+
+    # --- Check for special .ldres experiment config ---
+    ldres_config = project_home / ".ldres" / "etc" / "ml_playground" / "experiments" / experiment_name / "config.toml"
+    ldres_raw = {}
+    if ldres_config.exists():
+        try:
+            ldres_raw = read_toml_dict(ldres_config)
+        except Exception as e:
+            raise Exception(f".ldres experiment config: {e}")
+    # --- END ---
+
+    # Merge order: defaults -> experiment config -> .ldres config
     merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
+    merged = deep_merge_dicts(merged, deepcopy(ldres_raw))
     merged = _resolve_relative_paths(merged, config_path)
     effective = _coerce_known_paths_to_path(merged)
     # Inject required logger into top-level only (section models forbid extras)
