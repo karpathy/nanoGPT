@@ -54,8 +54,7 @@ def git_root(start: str = ".") -> str:
         out = run(["git", "rev-parse", "--show-toplevel"], cwd=start)
         return out.stdout.strip()
     except subprocess.CalledProcessError as e:
-        print("Error: not inside a Git repository.", file=sys.stderr)
-        print(e.stderr, file=sys.stderr)
+        typer.echo(f"Error: not inside a Git repository.\n{e.stderr}", err=True)
         sys.exit(2)
 
 
@@ -166,7 +165,9 @@ def rewrite_history(repo: str, items: List[Tuple[str, str]], dry_run: bool) -> i
     cmd = ["git", "filter-repo", "--invert-paths", "--paths-from-file", tmp_path]
 
     if dry_run:
-        typer.echo(f"Planned to purge {len(items)} path(s) from history (see list above).")
+        typer.echo(
+            f"Planned to purge {len(items)} path(s) from history (see list above)."
+        )
         typer.echo(f"\nDRY-RUN: would run: {shlex.join(cmd)}")
         # Clean up temp file after preview
         try:
@@ -186,7 +187,9 @@ def rewrite_history(repo: str, items: List[Tuple[str, str]], dry_run: bool) -> i
         return 2
 
     # Final confirmation
-    typer.echo(f"You are about to REWRITE HISTORY and purge {len(items)} path(s) from all commits.")
+    typer.echo(
+        f"You are about to REWRITE HISTORY and purge {len(items)} path(s) from all commits."
+    )
     typer.echo("This will change commit hashes. You will likely need to force-push.")
     proceed = typer.confirm("Proceed with history rewrite?", default=False)
     if not proceed:
