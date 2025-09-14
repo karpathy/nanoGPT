@@ -66,14 +66,28 @@ The checkpointing system manages model snapshots during training to enable resum
 
 ## Filesystem Access and Path Suppliers
 
-- The configuration loader (`ml_playground.config_loader`) is the single boundary that interacts with the filesystem for configuration concerns.
+- The configuration loader (`ml_playground.config_loader`) is the single boundary that interacts with the filesystem for configuration concerns (parsing TOML, resolving and coercing paths, injecting logger).
   - Reads TOML files (defaults and experiment config) using strict UTF-8 parsing.
   - Resolves known relative paths relative to the config file directory when appropriate.
   - Coerces string paths to `pathlib.Path` objects before validation.
   - Injects required runtime context (e.g., logger) prior to strict Pydantic validation.
-- All other modules must treat `Path` values as already validated inputs and must not perform additional path resolution or ad-hoc filesystem probing beyond their explicit responsibilities (e.g., training writing checkpoints, sampler reading checkpoints).
+- All other modules must treat `Path` values as already validated inputs and must not perform additional path resolution or ad-hoc filesystem probing beyond their explicit responsibilities (e.g., training writing checkpoints, sampler reading checkpoints). Runtime commands may perform existence checks for required runtime artifacts (see Universal Meta Requirement).
 - No fallback or legacy behavior: invalid or missing paths must surface as early errors during load/validation.
 - To keep call sites simple and decoupled from path layout, the loader should expose supplier functions (thin helpers) that return the canonical `Path` objects needed by downstream components. Examples:
   - `get_cfg_path(experiment: str, exp_config: Path | None) -> Path` (already provided)
   - `get_default_config_path(config_path: Path) -> Path` (already provided)
   - If needed, additional suppliers for derived locations (e.g., experiment directories) should live in `config_loader` and not be re-implemented elsewhere.
+
+## Universal Meta Requirement
+
+- `meta.pkl` is a required data artifact for training and sampling.
+  - `DataConfig.meta_pkl` is mandatory (default: `"meta.pkl"`).
+  - `DataConfig.meta_path` always resolves to a `Path` under `dataset_dir`.
+- Responsibility split:
+  - Prepare: must write `meta.pkl` to the dataset directory.
+  - Loader: remains pure wrt data artifacts; it does not check for the presence of `meta.pkl`.
+  - CLI (runtime): enforces fast-fail validations for required runtime artifacts:
+    - Train: requires `train.data.meta_path` to exist.
+    - Sample: requires `train.data.meta_path` or `<sample.runtime.out_dir>/<experiment>/meta.pkl` to exist.
+    - Loop: skipping prepare requires `train.bin`, `val.bin`, and `meta.pkl` to be present.
+  - Rationale: keeps config loading deterministic and testable without a filesystem, while still failing early at execution time when artifacts are missing.

@@ -54,6 +54,7 @@ Datasets
 Workflows (high-level)
 
 - Prepare/train/sample workflows are driven by Make targets. For exact commands, refer to each experiment's `Readme.md` and `.dev-guidelines/SETUP.md`.
+- Universal meta policy: the data directory must contain a `meta.pkl` file used by training and sampling. The `prepare` step is responsible for writing `meta.pkl`.
 
 Notes
 
@@ -61,6 +62,7 @@ Notes
 - CPU/MPS are first-class. CUDA may be selected in TOML if available.
 - Checkpoint behavior and policies are described in `.dev-guidelines/DEVELOPMENT.md` and `.dev-guidelines/REQUIREMENTS.md`.
 - For framework utilities, see [Framework Utilities Documentation](docs/framework_utilities.md).
+ - CLI validations: train and sample commands now fail fast if `meta.pkl` is missing. The loop's prepare-skip logic also requires `meta.pkl` to be present alongside `train.bin` and `val.bin`.
 
 Mutation testing
 
