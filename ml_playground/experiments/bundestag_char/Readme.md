@@ -87,17 +87,17 @@ uv run loop-bundestag-char-cpu
 
 ## Folder structure
 
-```text
+```bash
 ml_playground/experiments/bundestag_char/
-├── Readme.md        - experiment documentation (this file)
-├── config.toml      - sample/preset config for real runs
-├── test_config.toml - tiny defaults for tests
-├── preparer.py      - dataset preparation (char vocab, encode, write bins/meta)
-├── trainer.py       - NanoGPT-style training orchestration
-├── sampler.py       - generation/sampling entrypoints
-├── ollama_export.py - GGUF/Ollama export helper for this experiment
-├── datasets/        - prepared dataset artifacts written here
-└── export/          - export artifacts directory (e.g., GGUF)
+├── Readme.md        # experiment documentation (this file)
+├── config.toml      # sample/preset config for real runs
+├── test_config.toml # tiny defaults for tests
+├── preparer.py      # dataset preparation (char vocab, encode, write bins/meta)
+├── trainer.py       # NanoGPT-style training orchestration
+├── sampler.py       # generation/sampling entrypoints
+├── ollama_export.py # GGUF/Ollama export helper for this experiment
+├── datasets/        # prepared dataset artifacts written here
+└── export/          # export artifacts directory (e.g., GGUF)
 ```
 
 ## Troubleshooting

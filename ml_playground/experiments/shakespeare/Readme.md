@@ -47,15 +47,22 @@ uv run loop-shakespeare-cpu
 
 ## Folder structure
 
-```text
+```bash
+# experiment documentation (this file)
 ml_playground/experiments/shakespeare/
-├── Readme.md        - experiment documentation (this file)
-├── config.toml      - sample/preset config for real runs
-├── test_config.toml - tiny defaults for tests
-├── preparer.py      - dataset preparation (download/tokenize, write bins/meta)
-├── trainer.py       - NanoGPT-style training orchestration
-├── sampler.py       - generation/sampling entrypoints
-└── datasets/        - prepared dataset artifacts written here
+├── Readme.md        
+# sample/preset config for real runs
+├── config.toml      
+# tiny defaults for tests
+├── test_config.toml 
+# dataset preparation (download/tokenize, write bins/meta)
+├── preparer.py      
+# NanoGPT-style training orchestration
+├── trainer.py       
+# generation/sampling entrypoints
+├── sampler.py       
+# prepared dataset artifacts written here
+└── datasets/        
 ```
 
 ## Troubleshooting

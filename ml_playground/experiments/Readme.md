@@ -28,17 +28,17 @@ All experiments now use the centralized framework utilities for error handling, 
 
 ## Folder structure (this directory)
 
-```text
+```bash
 ml_playground/experiments/
-├── Readme.md                    - overview and conventions (this file)
-├── __init__.py                  - package marker/registry setup
-├── default_config.toml          - baseline config used by templates/examples
-├── protocol.py                  - typed protocol/contracts for preparers
-├── shakespeare/                 - Tiny Shakespeare experiment
-├── bundestag_char/              - Bundestag character-level experiment
-├── bundestag_tiktoken/          - Bundestag BPE (tiktoken) experiment
-├── bundestag_qwen15b_lora_mps/  - Qwen2.5 LoRA preset over generic integration
-└── speakger/                    - Gemma-based fine-tuning workflow (SpeakGer)
+├── Readme.md                    # overview and conventions (this file)
+├── __init__.py                  # package marker/registry setup
+├── default_config.toml          # baseline config used by templates/examples
+├── protocol.py                  # typed protocol/contracts for preparers
+├── shakespeare/                 # Tiny Shakespeare experiment
+├── bundestag_char/              # Bundestag character-level experiment
+├── bundestag_tiktoken/          # Bundestag BPE (tiktoken) experiment
+├── bundestag_qwen15b_lora_mps/  # Qwen2.5 LoRA preset over generic integration
+└── speakger/                    # Gemma-based fine-tuning workflow (SpeakGer)
 ```
 
 Important: Strict configuration injection

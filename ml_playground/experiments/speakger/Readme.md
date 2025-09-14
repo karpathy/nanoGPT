@@ -91,7 +91,7 @@ Memory-friendly defaults for 32GB Apple Silicon are recommended.
 
 ## Outputs
 
-```text
+```bash
 out/speakger_gemma3_270m_lora_mps/
 ├── adapters/
 │   ├── best/
@@ -106,16 +106,16 @@ out/speakger_gemma3_270m_lora_mps/
 
 ## Folder structure
 
-```text
+```bash
 ml_playground/experiments/speakger/
-├── Readme.md           - experiment documentation (this file)
-├── config.toml         - sample/preset config for real runs
-├── test_config.toml    - tiny defaults for tests
-├── preparer.py         - dataset preparation (tokenizer, JSONL, meta)
-├── trainer.py          - HF+PEFT LoRA training orchestration
-├── sampler.py          - generation/sampling entrypoints
-├── datasets/           - prepared dataset artifacts written here
-└── raw/                - place raw .txt files or CSV here
+├── Readme.md           # experiment documentation (this file)
+├── config.toml         # sample/preset config for real runs
+├── test_config.toml    # tiny defaults for tests
+├── preparer.py         # dataset preparation (tokenizer, JSONL, meta)
+├── trainer.py          # HF+PEFT LoRA training orchestration
+├── sampler.py          # generation/sampling entrypoints
+├── datasets/           # prepared dataset artifacts written here
+└── raw/                # place raw .txt files or CSV here
 ```
 
 ## Troubleshooting
