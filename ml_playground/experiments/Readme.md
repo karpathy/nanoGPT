@@ -24,6 +24,12 @@ Conventions
 - Outputs: example configs write to `<experiment>/out/<run_name>`.
 - Typing/UV: everything follows the project’s strict typing and UV‑only workflow (see repo README for commands).
 
+Universal meta policy
+
+- Preparers must write a standardized `meta.pkl` next to `train.bin` and `val.bin` in the dataset directory.
+- Use `ml_playground.prepare.write_bin_and_meta(...)` to atomically write `train.bin`, `val.bin`, and `meta.pkl`.
+- The CLI will fail fast at train/sample time if `meta.pkl` is missing.
+
 All experiments now use the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../docs/framework_utilities.md).
 
 ## Folder structure (this directory)

@@ -36,12 +36,22 @@ make prepare EXP=shakespeare
 make prepare EXP=bundestag_char
 ```
 
+Notes:
+
+- The prepare step is responsible for writing `meta.pkl` into your dataset directory alongside `train.bin` and `val.bin`.
+- If you use a custom preparer, ensure it calls `ml_playground.prepare.write_bin_and_meta(...)` or equivalent utilities which always write a standardized `meta.pkl`.
+
 ### Training
 
 ```bash
 make train EXP=shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml
 make train EXP=bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
 ```
+
+Notes:
+
+- Universal meta policy: training requires `meta.pkl` to exist at `train.data.meta_path` (usually `<dataset_dir>/meta.pkl`).
+- The CLI will fail fast with a clear error if `meta.pkl` is missing.
 
 ### Sampling
 
@@ -50,11 +60,20 @@ make sample EXP=shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml
 make sample EXP=bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
 ```
 
+Notes:
+
+- Sampling requires `meta.pkl` to exist either at `train.data.meta_path` or under the sample runtime output directory at `<out_dir>/<experiment>/meta.pkl`.
+- The CLI will fail fast with a clear error if `meta.pkl` cannot be found in one of the expected locations.
+
 ### End-to-End Loop
 
 ```bash
 make loop EXP=bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
 ```
+
+Notes:
+
+- The loop will only skip the prepare step if `train.bin`, `val.bin`, and `meta.pkl` are present in the dataset directory.
 
 ## Configuration System
 

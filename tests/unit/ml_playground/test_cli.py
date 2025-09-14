@@ -55,6 +55,30 @@ def test_main_prepare_shakespeare_success(mocker: MockerFixture) -> None:
     mock_run.assert_called_once()
 
 
+def test_main_sample_missing_meta_fails(tmp_path: Path, mocker: MockerFixture) -> None:
+    """Sample should fail fast when neither train meta nor runtime meta exist."""
+    mocker.patch("ml_playground.config_loader.fs_path_exists", return_value=False)
+    mocker.patch(
+        "ml_playground.config_loader.load_full_experiment_config",
+        return_value=ExperimentConfig(
+            prepare=PreparerConfig(),
+            train=TrainerConfig(
+                model=ModelConfig(),
+                data=DataConfig(dataset_dir=Path(".")),
+                optim=OptimConfig(),
+                schedule=LRSchedule(),
+                runtime=RuntimeConfig(out_dir=Path(".")),
+            ),
+            sample=SamplerConfig(
+                runtime=RuntimeConfig(out_dir=Path("out")), sample=SampleConfig()
+            ),
+        ),
+    )
+    result = runner.invoke(app, ["sample", "shakespeare"])
+    assert result.exit_code == 1
+    assert "Missing required meta file for sampling" in result.stdout
+
+
 def test_main_prepare_bundestag_char_success(mocker: MockerFixture) -> None:
     """Test prepare command with bundestag_char dataset succeeds."""
     mock_run = mocker.patch("ml_playground.cli._run_prepare")

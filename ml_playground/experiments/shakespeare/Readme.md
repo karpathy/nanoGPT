@@ -13,6 +13,7 @@ Minimal experiment to prepare, train, and sample on the Tiny Shakespeare corpus 
 
 - Preparer auto-downloads `input.txt` if missing.
 - Prepared artifacts under `[train.data].dataset_dir` (default: `ml_playground/experiments/shakespeare/datasets/`).
+- Universal meta: the preparer writes `meta.pkl` alongside `train.bin` and `val.bin`.
 
 ## Method/Model
 
@@ -43,7 +44,7 @@ uv run loop-shakespeare-cpu
 ## Outputs
 
 - Training artifacts under `[train.runtime].out_dir` (rotated checkpoints, `logs/tb`).
-- Prepared data under `[train.data].dataset_dir` (`train.bin`, `val.bin`).
+- Prepared data under `[train.data].dataset_dir` (`train.bin`, `val.bin`, `meta.pkl`).
 
 ## Folder structure
 

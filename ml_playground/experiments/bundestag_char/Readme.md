@@ -102,7 +102,7 @@ ml_playground/experiments/bundestag_char/
 
 ## Troubleshooting
 
-- If meta.pkl is missing at sampling, the CLI loop copies it to out_dir automatically; otherwise, place meta.pkl next to checkpoints.
+- If sampling fails with a missing `meta.pkl`, ensure it exists at `[train.data].dataset_dir` alongside `train.bin` and `val.bin`, or under `[sample.runtime].out_dir/<experiment>/meta.pkl` as per the CLI discovery rules.
 - Ensure your input text is UTF-8 encoded.
 
 ## Word Tokenizer Option
