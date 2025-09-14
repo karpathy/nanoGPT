@@ -121,52 +121,34 @@ class Preparer:
         self.cfg = cfg
 
     def __call__(self, shared: SharedConfig) -> None:
-        extras = self.cfg.extras
-
-        # Create tokenizer based on config
-        tokenizer_type = extras.get("tokenizer_type", "char")
+        tokenizer_type = self.cfg.extras.get("tokenizer_type", "char")
         tokenizer = create_tokenizer(tokenizer_type)
 
-        text = extras.get("raw_text")
-        if text is None:
-            text = Path(extras["raw_text_path"]).read_text(encoding="utf-8")
+        text = self._get_raw_text()
 
-        train_arr, val_arr, meta = self._prepare_with_tokenizer(text, tokenizer)
-        # Use SharedConfig dataset_dir as the single source of truth
-        ds_dir = shared.dataset_dir
-        self._write_bin_and_meta(ds_dir, train_arr, val_arr, meta)  # type: ignore[arg-type]
+        train_arr, val_arr, meta = prepare_with_tokenizer(text, tokenizer)
 
-    def _split_train_val(self, text: str, split: float = 0.9) -> tuple[str, str]:
-        n = len(text)
-        train_end = int(n * split)
-        return text[:train_end], text[train_end:]
-
-    def _prepare_with_tokenizer(
-        self, text: str, tokenizer: Tokenizer
-    ) -> tuple[np.ndarray, np.ndarray, dict]:
-        return prepare_with_tokenizer(text, tokenizer)
-
-    def _write_bin_and_meta(
-        self, ds_dir: Path, train: np.ndarray, val: np.ndarray, meta: dict
-    ) -> None:
-        """Write train.bin, val.bin, and meta.pkl atomically and idempotently."""
-        # Optionally accept DataConfig via extras to control filenames
-        data_cfg = None
-        try:
-            extras = getattr(self.cfg, "extras", {}) or {}
-            maybe_dc = extras.get("data_config")
-            if isinstance(maybe_dc, DataConfig):
-                data_cfg = maybe_dc
-        except Exception:
-            data_cfg = None
+        data_cfg = self.cfg.extras.get("data_config")
         write_bin_and_meta(
-            ds_dir,
-            train,
-            val,
+            shared.dataset_dir,
+            train_arr,
+            val_arr,
             meta,
-            logger=getattr(self.cfg, "logger", None),
-            data_cfg=data_cfg,
+            logger=self.cfg.logger,
+            data_cfg=data_cfg if isinstance(data_cfg, DataConfig) else None,
         )
+
+    def _get_raw_text(self) -> str:
+        """Get raw text from config extras."""
+        text = self.cfg.extras.get("raw_text")
+        if text is not None:
+            return str(text)
+
+        raw_text_path = self.cfg.extras.get("raw_text_path")
+        if raw_text_path is not None:
+            return Path(raw_text_path).read_text(encoding="utf-8")
+
+        raise DataError("No raw text or path provided in preparer extras")
 
 
 def split_train_val(text: str, split: float = 0.9) -> tuple[str, str]:
