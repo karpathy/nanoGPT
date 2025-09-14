@@ -12,6 +12,8 @@ from ml_playground.config import (
     TrainerConfig,
     SamplerConfig,
     PreparerConfig,
+    ExperimentConfig,
+    SharedConfig,
 )
 import ml_playground.config_loader as config_loader
 import ml_playground.prepare as prepare_mod
@@ -96,22 +98,11 @@ def _cfg_path_for(experiment: str, exp_config: Path | None) -> Path:
     return config_loader.get_cfg_path(experiment, exp_config)
 
 
-def _read_toml(p: Path) -> dict[str, Any]:
-    # Canonical loader: delegate to config_loader.read_toml_dict
-    return config_loader.read_toml_dict(p)
-
-
-def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
-    out = dict(base)
-    for k, v in override.items():
-        bv = out.get(k)
-        if isinstance(bv, dict) and isinstance(v, dict):
-            out[k] = _deep_merge(bv, v)
-        else:
-            out[k] = v
-    return out
-
-    # All config TOML loading and merging lives in config_loader.
+def _load_experiment(experiment: str, exp_config_path: Path | None) -> ExperimentConfig:
+    """Load the full experiment configuration."""
+    cfg_path = _cfg_path_for(experiment, exp_config_path)
+    project_home = Path(__file__).resolve().parent.parent
+    return config_loader.load_full_experiment_config(cfg_path, project_home, experiment)
 
 
 def _log_dir(tag: str, dir_name: str, dir_path: Path | None, logger) -> None:
@@ -134,35 +125,12 @@ def _log_dir(tag: str, dir_name: str, dir_path: Path | None, logger) -> None:
 # --- Command runners -------------------------------------------------------
 
 
-def _log_command_status(
-    tag: str, cfg_or_shared: Any, maybe_out_dir: Path | None = None
-) -> None:
-    """Log known file-based artifacts for the given config.
-
-    Backward-compatible signatures:
-    - Old form: _log_command_status(tag, cfg)
-    - New form: _log_command_status(tag, shared, out_dir)
-    """
+def _log_command_status(tag: str, shared: "SharedConfig", out_dir: Path) -> None:
+    """Log known file-based artifacts for the given config."""
     logger = logging.getLogger(__name__)
     try:
-        out_dir: Path | None = None
-        ds_dir: Path | None = None
-        if maybe_out_dir is None:
-            # Old form: try to extract from cfg
-            cfg = cfg_or_shared
-            out_dir = getattr(cfg, "out_dir", None)
-            if out_dir is None and hasattr(cfg, "runtime"):
-                out_dir = getattr(cfg.runtime, "out_dir", None)
-            ds_dir = getattr(cfg, "dataset_dir", None)
-            if ds_dir is None and hasattr(cfg, "data"):
-                ds_dir = getattr(cfg.data, "dataset_dir", None)
-        else:
-            # New form
-            shared = cfg_or_shared
-            out_dir = maybe_out_dir
-            ds_dir = getattr(shared, "dataset_dir", None)
         _log_dir(tag, "out_dir", out_dir, logger)
-        _log_dir(tag, "dataset_dir", ds_dir, logger)
+        _log_dir(tag, "dataset_dir", shared.dataset_dir, logger)
     except Exception:
         # Never fail due to logging
         pass
@@ -427,31 +395,25 @@ if __name__ == "__main__":
 
 def _run_prepare_cmd(experiment: str, exp_config_path: Path | None) -> None:
     """Run prepare command: load full ExperimentConfig once and pass section."""
-    cfg_path = _cfg_path_for(experiment, exp_config_path)
-    project_home = Path(__file__).resolve().parent.parent
-    exp = config_loader.load_full_experiment_config(cfg_path, project_home, experiment)
-    _run_prepare(experiment, exp.prepare, cfg_path, exp.shared)
+    exp = _load_experiment(experiment, exp_config_path)
+    _run_prepare(experiment, exp.prepare, exp.shared.config_path, exp.shared)
 
 
 def _run_train_cmd(experiment: str, exp_config_path: Path | None) -> None:
     """Run train command: load full ExperimentConfig once and pass section."""
-    cfg_path = _cfg_path_for(experiment, exp_config_path)
-    project_home = Path(__file__).resolve().parent.parent
-    exp = config_loader.load_full_experiment_config(cfg_path, project_home, experiment)
+    exp = _load_experiment(experiment, exp_config_path)
     train_meta = exp.shared.dataset_dir / "meta.pkl"
     if not config_loader.fs_path_exists(train_meta):
         raise ValueError(
             f"Missing required meta file for training: {train_meta}.\n"
             "Run 'prepare' first or ensure your preparer writes meta.pkl."
         )
-    _run_train(experiment, exp.train, cfg_path, exp.shared)
+    _run_train(experiment, exp.train, exp.shared.config_path, exp.shared)
 
 
 def _run_sample_cmd(experiment: str, exp_config_path: Path | None) -> None:
     """Run sample command: load full ExperimentConfig once and pass section."""
-    cfg_path = _cfg_path_for(experiment, exp_config_path)
-    project_home = Path(__file__).resolve().parent.parent
-    exp = config_loader.load_full_experiment_config(cfg_path, project_home, experiment)
+    exp = _load_experiment(experiment, exp_config_path)
     # E1.2/E5: Validate meta existence for sample using SharedConfig only
     train_meta = exp.shared.dataset_dir / "meta.pkl"
     runtime_meta = exp.shared.sample_out_dir / experiment / "meta.pkl"
@@ -464,12 +426,17 @@ def _run_sample_cmd(experiment: str, exp_config_path: Path | None) -> None:
             f"train.meta={train_meta}, runtime.meta={runtime_meta}.\n"
             "Run 'prepare' and 'train' first or place meta.pkl in one of the expected locations."
         )
-    _run_sample(experiment, exp.sample, cfg_path, exp.shared)
+    _run_sample(experiment, exp.sample, exp.shared.config_path, exp.shared)
 
 
 def _run_loop_cmd(experiment: str, exp_config_path: Path | None) -> None:
     """Run loop command: load full ExperimentConfig once and pass sections."""
-    cfg_path = _cfg_path_for(experiment, exp_config_path)
-    project_home = Path(__file__).resolve().parent.parent
-    exp = config_loader.load_full_experiment_config(cfg_path, project_home, experiment)
-    _run_loop(experiment, cfg_path, exp.prepare, exp.train, exp.sample, exp.shared)
+    exp = _load_experiment(experiment, exp_config_path)
+    _run_loop(
+        experiment,
+        exp.shared.config_path,
+        exp.prepare,
+        exp.train,
+        exp.sample,
+        exp.shared,
+    )
