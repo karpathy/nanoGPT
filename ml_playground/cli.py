@@ -176,7 +176,7 @@ def _run_prepare(
 ) -> None:
     """Run the full prepare flow for an experiment."""
     print(f"---\nRunning preparer for experiment: {experiment}")
-    preparer = prepare_mod.make_preparer(prepare_cfg)
+    preparer = prepare_mod.Preparer(prepare_cfg)
     preparer(shared)
     print(f"Preparer for {experiment} finished.\n---")
 
@@ -188,7 +188,6 @@ def _run_train(
     shared: Any,
 ) -> None:
     """Run the full training flow for an experiment."""
-    # Global setup
     if not train_cfg.runtime:
         print("[error] Runtime configuration is missing for training.")
         raise typer.Exit(1)
@@ -201,7 +200,10 @@ def _run_train(
 
     print(f"---\nRunning trainer for experiment: {experiment}")
     _log_command_status("pre-train", shared, shared.train_out_dir)
-    trainer_mod.train(train_cfg, shared)
+
+    trainer = trainer_mod.Trainer(train_cfg, shared)
+    trainer.run()
+
     print(f"Trainer for {experiment} finished.")
     _log_command_status("post-train", shared, shared.train_out_dir)
     print("---")
@@ -218,7 +220,7 @@ def _run_sample(
         print("[error] Runtime configuration is missing for sampling.")
         raise typer.Exit(1)
 
-    # Global setup
+    # Global setup is now handled inside the Sampler class
     _global_device_setup(
         sample_cfg.runtime.device,
         sample_cfg.runtime.dtype,
@@ -227,7 +229,8 @@ def _run_sample(
 
     print(f"---\nRunning sampler for experiment: {experiment}")
     _log_command_status("pre-sample", shared, shared.sample_out_dir)
-    sampler_mod.sample(sample_cfg, shared)
+    sampler = sampler_mod.Sampler(sample_cfg, shared)
+    sampler.run()
     print(f"Sampler for {experiment} finished.")
     _log_command_status("post-sample", shared, shared.sample_out_dir)
     print("---")
@@ -435,7 +438,6 @@ def _run_train_cmd(experiment: str, exp_config_path: Path | None) -> None:
     cfg_path = _cfg_path_for(experiment, exp_config_path)
     project_home = Path(__file__).resolve().parent.parent
     exp = config_loader.load_full_experiment_config(cfg_path, project_home, experiment)
-    # E1.2/E5: Validate meta existence for train using SharedConfig only
     train_meta = exp.shared.dataset_dir / "meta.pkl"
     if not config_loader.fs_path_exists(train_meta):
         raise ValueError(
