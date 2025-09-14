@@ -11,6 +11,7 @@ from ml_playground.config import (
     RuntimeConfig,
 )
 from ml_playground.trainer import train
+from ml_playground.config import SharedConfig
 
 
 def test_train_smoke(tmp_path: Path) -> None:
@@ -32,7 +33,6 @@ def test_train_smoke(tmp_path: Path) -> None:
             vocab_size=256,
         ),
         data=DataConfig(
-            dataset_dir=tmp_path,
             batch_size=2,
             block_size=16,
             grad_accum_steps=1,
@@ -64,5 +64,13 @@ def test_train_smoke(tmp_path: Path) -> None:
             compile=False,
         ),
     )
-    iters, best = train(exp)
+    shared = SharedConfig(
+        experiment="smoke",
+        config_path=tmp_path / "cfg.toml",
+        project_home=tmp_path,
+        dataset_dir=tmp_path,
+        train_out_dir=exp.runtime.out_dir,
+        sample_out_dir=exp.runtime.out_dir,
+    )
+    iters, best = train(exp, shared)
     assert iters >= 2

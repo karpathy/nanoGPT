@@ -129,9 +129,7 @@ def _make_minimal_trainer_cfg(
     data_root.mkdir(parents=True)
     cfg = TrainerConfig(
         model=ModelConfig(n_layer=1, n_head=1, n_embd=8, block_size=4, dropout=0.0),
-        data=DataConfig(
-            dataset_dir=data_root, batch_size=2, block_size=4, grad_accum_steps=1
-        ),
+        data=DataConfig(batch_size=2, block_size=4, grad_accum_steps=1),
         optim=OptimConfig(
             learning_rate=0.01, weight_decay=0.0, beta1=0.9, beta2=0.95, grad_clip=0.0
         ),
@@ -163,7 +161,7 @@ def test_train_eval_only_breaks_early_and_returns(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        trainer_mod, "_setup_data_loader", lambda d, r: _FakeBatches(device=r.device)
+        trainer_mod, "_setup_data_loader", lambda d, r, ds: _FakeBatches(device=r.device)
     )
     monkeypatch.setattr(trainer_mod, "GPT", lambda cfg: _FakeModel())
     monkeypatch.setattr(trainer_mod, "GradScaler", _FakeScaler)
@@ -178,7 +176,7 @@ def test_train_eval_only_breaks_early_and_returns(
         experiment="unit",
         config_path=tmp_path / "cfg.toml",
         project_home=tmp_path,
-        dataset_dir=cfg.data.dataset_dir,
+        dataset_dir=tmp_path / "data",
         train_out_dir=cfg.runtime.out_dir,
         sample_out_dir=cfg.runtime.out_dir,
     )
@@ -219,7 +217,7 @@ def test_train_writes_best_checkpoint_on_improvement_after_first_iter(
         experiment="unit",
         config_path=tmp_path / "cfg.toml",
         project_home=tmp_path,
-        dataset_dir=cfg.data.dataset_dir,
+        dataset_dir=tmp_path / "data",
         train_out_dir=cfg.runtime.out_dir,
         sample_out_dir=cfg.runtime.out_dir,
     )

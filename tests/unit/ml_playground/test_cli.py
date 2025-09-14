@@ -49,7 +49,7 @@ def test_main_prepare_shakespeare_success(mocker: MockerFixture) -> None:
             prepare=PreparerConfig(),
             train=TrainerConfig(
                 model=ModelConfig(),
-                data=DataConfig(dataset_dir=Path(".")),
+                data=DataConfig(),
                 optim=OptimConfig(),
                 schedule=LRSchedule(),
                 runtime=RuntimeConfig(out_dir=Path(".")),
@@ -82,7 +82,7 @@ def test_main_sample_missing_meta_fails(tmp_path: Path, mocker: MockerFixture) -
             prepare=PreparerConfig(),
             train=TrainerConfig(
                 model=ModelConfig(),
-                data=DataConfig(dataset_dir=Path(".")),
+                data=DataConfig(),
                 optim=OptimConfig(),
                 schedule=LRSchedule(),
                 runtime=RuntimeConfig(out_dir=Path(".")),
@@ -115,7 +115,7 @@ def test_main_prepare_bundestag_char_success(mocker: MockerFixture) -> None:
             prepare=PreparerConfig(),
             train=TrainerConfig(
                 model=ModelConfig(),
-                data=DataConfig(dataset_dir=Path(".")),
+                data=DataConfig(),
                 optim=OptimConfig(),
                 schedule=LRSchedule(),
                 runtime=RuntimeConfig(out_dir=Path(".")),
@@ -163,7 +163,7 @@ def test_main_train_success(tmp_path: Path, mocker: MockerFixture) -> None:
             prepare=PreparerConfig(),
             train=TrainerConfig(
                 model=ModelConfig(),
-                data=DataConfig(dataset_dir=Path(".")),
+                data=DataConfig(),
                 optim=OptimConfig(),
                 schedule=LRSchedule(),
                 runtime=RuntimeConfig(out_dir=Path(".")),
@@ -215,7 +215,7 @@ def test_main_sample_success(tmp_path: Path, mocker: MockerFixture) -> None:
             prepare=PreparerConfig(),
             train=TrainerConfig(
                 model=ModelConfig(),
-                data=DataConfig(dataset_dir=Path(".")),
+                data=DataConfig(),
                 optim=OptimConfig(),
                 schedule=LRSchedule(),
                 runtime=RuntimeConfig(out_dir=Path(".")),
@@ -405,8 +405,7 @@ def test_load_train_config_resolves_relative_paths(tmp_path: Path):
 
     # Use strict partial loader with explicit path so we don't depend on package experiments root
     cfg = config_loader.load_train_config(config_path)
-
-    assert str(cfg.data.dataset_dir).startswith(str(exp_dir))
+    # With Shared-only paths, partial loader resolves runtime.out_dir; dataset_dir lives in Shared
     assert str(cfg.runtime.out_dir).startswith(str(exp_dir))
 
 
@@ -513,7 +512,7 @@ def test_log_command_status_covers_paths(tmp_path: Path):
 
     train_cfg = TrainerConfig(
         model=ModelConfig(),
-        data=DataConfig(dataset_dir=ds),
+        data=DataConfig(),
         optim=OptimConfig(),
         schedule=LRSchedule(),
         runtime=RuntimeConfig(out_dir=out),
@@ -537,11 +536,10 @@ def test_log_command_status_missing_paths(tmp_path: Path):
     )
 
     # None of these paths exist
-    ds = tmp_path / "missing_ds"
     out = tmp_path / "missing_out"
     cfg = TrainerConfig(
         model=ModelConfig(),
-        data=DataConfig(dataset_dir=ds),
+        data=DataConfig(),
         optim=OptimConfig(),
         schedule=LRSchedule(),
         runtime=RuntimeConfig(out_dir=out),
@@ -677,7 +675,7 @@ def test_load_config_error_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     exp_dir.mkdir(parents=True)
     cfg = exp_dir / "config.toml"
     cfg.write_text(
-        "[train]\n[train.runtime]\nout_dir='.'\n[train.model]\n[train.data]\ndataset_dir='.'\n[train.optim]\n[train.schedule]"
+        "[train]\n[train.runtime]\nout_dir='.'\n[train.model]\n[train.data]\n[train.optim]\n[train.schedule]"
     )
 
     # 2) Defaults invalid -> exit mentioning defaults path sibling to experiments/
@@ -762,12 +760,12 @@ def test_run_loop_calls_in_order_and_handles_print_errors(
     import ml_playground.trainer as trainer_mod
     import ml_playground.sampler as sampler_mod
 
-    def fake_preparer():
+    def fake_preparer(shared):
         calls.append("prepare")
 
     monkeypatch.setattr(prepare_mod, "make_preparer", lambda cfg: fake_preparer)
-    monkeypatch.setattr(trainer_mod, "train", lambda cfg: calls.append("train"))
-    monkeypatch.setattr(sampler_mod, "sample", lambda cfg: calls.append("sample"))
+    monkeypatch.setattr(trainer_mod, "train", lambda cfg, shared: calls.append("train"))
+    monkeypatch.setattr(sampler_mod, "sample", lambda cfg, shared: calls.append("sample"))
 
     # Configs
     from ml_playground.config import (
@@ -780,7 +778,7 @@ def test_run_loop_calls_in_order_and_handles_print_errors(
     prep_cfg = PreparerConfig()
     tcfg = TrainerConfig(
         model=ModelConfig(),
-        data=DataConfig(dataset_dir=tmp_path),
+        data=DataConfig(),
         optim=OptimConfig(),
         schedule=LRSchedule(),
         runtime=RuntimeConfig(out_dir=tmp_path),

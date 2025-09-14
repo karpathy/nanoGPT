@@ -99,6 +99,14 @@ num_samples = 1
 max_new_tokens = 8
 temperature = 0.9
 top_k = 50
+
+[shared]
+experiment = "bundestag_char"
+config_path = "{tmp_dir}/config.toml"
+project_home = "{tmp_dir}"
+dataset_dir = "{dataset_dir}"
+train_out_dir = "{out_dir}"
+sample_out_dir = "{out_dir}"
 '''
     p = tmp_dir / "config.toml"
     p.write_text(cfg)
@@ -124,6 +132,14 @@ num_samples = 1
 max_new_tokens = 8
 temperature = 0.9
 top_k = 50
+ 
+[shared]
+experiment = "bundestag_char"
+config_path = "{tmp_dir}/config.toml"
+project_home = "{tmp_dir}"
+dataset_dir = "{out_dir}"
+train_out_dir = "{out_dir}"
+sample_out_dir = "{out_dir}"
 '''
     p = tmp_dir / "config.toml"
     p.write_text(cfg)

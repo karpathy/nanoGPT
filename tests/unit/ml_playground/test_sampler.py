@@ -14,6 +14,7 @@ from ml_playground.config import (
     SamplerConfig,
     DataConfig,
     READ_POLICY_BEST,
+    SharedConfig,
 )
 import ml_playground.sampler as sampler
 from ml_playground.error_handling import DataError, CheckpointError
@@ -68,13 +69,12 @@ def _make_batches(
     sampler: str,
 ) -> SimpleBatches:
     cfg = DataConfig(
-        dataset_dir=ddir,
         batch_size=batch_size,
         block_size=block_size,
         grad_accum_steps=1,
         sampler=sampler,  # type: ignore[arg-type]
     )
-    return SimpleBatches(cfg, device="cpu")
+    return SimpleBatches(cfg, device="cpu", dataset_dir=ddir)
 
 
 def test_random_mode_basic(tmp_path: Path) -> None:
@@ -332,7 +332,15 @@ def test_sample_happy_path_with_file_prompt_and_char_meta(
     # Capture logs from sampler module
     caplog.set_level("INFO", logger="ml_playground.sampler")
     # Run
-    sampler.sample(exp)
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=out_dir / "cfg.toml",
+        project_home=out_dir,
+        dataset_dir=out_dir,
+        train_out_dir=out_dir,
+        sample_out_dir=out_dir,
+    )
+    sampler.sample(exp, shared)
 
     # Verify via logs (sampler logs instead of printing)
     text = caplog.text
@@ -387,8 +395,16 @@ def test_sample_with_compile_flag_uses_compiled_model(
     )
     exp = SamplerConfig(runtime=rt, sample=sc)
 
-    # Call sample function directly without passing model
-    sampler.sample(exp)
+    # Call sample function directly
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=out_dir / "cfg.toml",
+        project_home=out_dir,
+        dataset_dir=out_dir,
+        train_out_dir=out_dir,
+        sample_out_dir=out_dir,
+    )
+    sampler.sample(exp, shared)
     assert called["compiled"] == 1
 
 
@@ -474,8 +490,16 @@ def test_setup_tokenizer_requires_tokenizer_type(out_dir: Path) -> None:
         pickle.dump(meta, f)
 
     cfg = _sampler_cfg(out_dir)
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=out_dir / "cfg.toml",
+        project_home=out_dir,
+        dataset_dir=out_dir,
+        train_out_dir=out_dir,
+        sample_out_dir=out_dir,
+    )
     with pytest.raises(DataError):
-        sampler.sample(cfg)
+        sampler.sample(cfg, shared)
 
 
 def test_sampler_requires_rotated_checkpoints(out_dir: Path) -> None:
@@ -494,5 +518,13 @@ def test_sampler_requires_rotated_checkpoints(out_dir: Path) -> None:
     torch.save({"model": {}}, out_dir / "ckpt_best.pt")
 
     cfg = _sampler_cfg(out_dir)
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=out_dir / "cfg.toml",
+        project_home=out_dir,
+        dataset_dir=out_dir,
+        train_out_dir=out_dir,
+        sample_out_dir=out_dir,
+    )
     with pytest.raises(CheckpointError):
-        sampler.sample(cfg)
+        sampler.sample(cfg, shared)

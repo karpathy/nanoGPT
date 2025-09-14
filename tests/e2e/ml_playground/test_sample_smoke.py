@@ -9,6 +9,7 @@ from ml_playground.config import (
     RuntimeConfig,
     RuntimeConfig as RC,
     READ_POLICY_BEST,
+    SharedConfig,
 )
 
 
@@ -89,4 +90,12 @@ def test_sample_smoke(tmp_path: Path) -> None:
             start="\n", num_samples=1, max_new_tokens=4, temperature=1.0, top_k=10
         ),
     )
-    sample(exp)  # should run without exceptions
+    shared = SharedConfig(
+        experiment="smoke",
+        config_path=out_dir / "cfg.toml",
+        project_home=tmp_path,
+        dataset_dir=tmp_path,  # not used in sampler, but required
+        train_out_dir=out_dir,
+        sample_out_dir=out_dir,
+    )
+    sample(exp, shared)  # should run without exceptions

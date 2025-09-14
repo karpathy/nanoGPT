@@ -76,7 +76,6 @@ def minimal_full_experiment_toml(
     if include_train_data:
         base += f"""
         [train.data]
-        dataset_dir = "{_fmt_path(dataset_dir)}"
         """
     base += f"""
     [train.optim]
@@ -99,6 +98,17 @@ def minimal_full_experiment_toml(
         [sample.sample]
         {extra_sample_sample}
         """
+    # Add shared section: tied to provided dataset_dir/out_dir; generic experiment metadata
+    base += f"""
+    [shared]
+    experiment = "exp"
+    # Use relative placeholders; tests focus on schema validity rather than these paths
+    config_path = "./cfg.toml"
+    project_home = "."
+    dataset_dir = "{_fmt_path(dataset_dir)}"
+    train_out_dir = "{_fmt_path(out_dir)}"
+    sample_out_dir = "{_fmt_path(out_dir)}"
+    """
     return dedent(base)
 
 

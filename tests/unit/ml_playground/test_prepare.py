@@ -319,7 +319,16 @@ def test_make_preparer_runs_and_writes(tmp_path: Path) -> None:
     # Use a deterministic tokenizer via create_tokenizer
     # make_preparer should construct _PreparerInstance and write files
     p = prep.make_preparer(cfg)
-    p()
+    from ml_playground.config import SharedConfig
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=tmp_path / "cfg.toml",
+        project_home=tmp_path,
+        dataset_dir=ds,
+        train_out_dir=tmp_path / "train_out",
+        sample_out_dir=tmp_path / "sample_out",
+    )
+    p(shared)
 
     # Verify artifacts
     assert (ds / "train.bin").exists()
