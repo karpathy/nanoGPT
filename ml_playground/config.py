@@ -358,6 +358,41 @@ def load_experiment_toml(path: Path) -> ExperimentConfig:
     return _loader.load_full_experiment_config(path, project_home, experiment_name)
 
 
+class SharedConfig(_FrozenStrictModel):
+    """
+    Common per-experiment context derived at runtime (not from TOML).
+
+    Carries frequently accessed paths and identifiers for logging and wiring.
+    """
+
+    experiment: str
+    config_path: Path
+    project_home: Path
+    dataset_dir: Path
+    train_out_dir: Path
+    sample_out_dir: Path
+
+    @field_validator("config_path", "project_home", "dataset_dir", "train_out_dir", "sample_out_dir", mode="after")
+    @classmethod
+    def _as_is(cls, v: Path) -> Path:
+        # Preserve given paths without resolving to keep semantics consistent with loader
+        return v
+
+
+def make_shared_config(
+    experiment: str, config_path: Path, project_home: Path, exp: ExperimentConfig
+) -> SharedConfig:
+    """Factory to construct SharedConfig from a loaded ExperimentConfig."""
+    return SharedConfig(
+        experiment=experiment,
+        config_path=config_path,
+        project_home=project_home,
+        dataset_dir=exp.train.data.dataset_dir,
+        train_out_dir=exp.train.runtime.out_dir,
+        sample_out_dir=exp.sample.runtime.out_dir,
+    )
+
+
 # Backward-compatible aliases for newer API names used by some modules
 TrainExperiment = TrainerConfig
 SampleExperiment = SamplerConfig
@@ -462,6 +497,8 @@ __all__ = [
     "SamplerConfig",
     "PreparerConfig",
     "ExperimentConfig",
+    "SharedConfig",
+    "make_shared_config",
     "load_experiment_toml",
     "SECTION_PREPARE",
     "SECTION_TRAIN",
