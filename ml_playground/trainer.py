@@ -304,7 +304,7 @@ def train(cfg: TrainerConfig, shared: SharedConfig) -> tuple[int, float]:
 
     # Propagate dataset metadata to out_dir for downstream sampling utilities
     try:
-        meta_src = data_cfg.dataset_dir / data_cfg.meta_pkl  # filenames from DataConfig
+        meta_src = data_cfg.meta_path(shared.dataset_dir)
         if meta_src and meta_src.exists():
             # copy to out_dir preserving filename
             meta_dst = out_dir / meta_src.name

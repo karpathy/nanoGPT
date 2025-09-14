@@ -101,13 +101,12 @@ EpochCount = AtLeastOneInt
 class PreparerConfig(_FrozenStrictModel):
     """Strict config for data preparation (owner-local)."""
 
-    dataset_dir: Path = Path("./datasets")
     raw_dir: Path = Path("./raw")
     add_structure_tokens: bool = False
     doc_separator: str = ""
     extras: dict[str, Any] = Field(default_factory=dict)
 
-    @field_validator("dataset_dir", "raw_dir", mode="after")
+    @field_validator("raw_dir", mode="after")
     @classmethod
     def _resolve_path(cls, v: Path) -> Path:
         return _resolve_path_strict(v)
@@ -278,7 +277,6 @@ class DataConfig(_FrozenStrictModel):
     and dataset-specific hyperparameters.
     """
 
-    dataset_dir: Path
     train_bin: str = "train.bin"
     val_bin: str = "val.bin"
     meta_pkl: str = "meta.pkl"
@@ -292,13 +290,6 @@ class DataConfig(_FrozenStrictModel):
     # Sampling policy: random (default) or sequential (deterministic coverage)
     sampler: Literal["random", "sequential"] = "random"
 
-    @field_validator("dataset_dir", mode="after")
-    def _resolve_dataset_dir(cls, v: Path) -> Path:
-        try:
-            return v.resolve()
-        except Exception:
-            return v
-
     @model_validator(mode="after")
     def _check_tokenizer_compat(self) -> "DataConfig":
         # tiktoken does not use ngram grouping; enforce neutral ngram_size
@@ -308,18 +299,15 @@ class DataConfig(_FrozenStrictModel):
             )
         return self
 
-    # Computed, read-only paths
-    @property
-    def train_path(self) -> Path:
-        return self.dataset_dir / self.train_bin
+    # Path construction methods
+    def train_path(self, dataset_dir: Path) -> Path:
+        return dataset_dir / self.train_bin
 
-    @property
-    def val_path(self) -> Path:
-        return self.dataset_dir / self.val_bin
+    def val_path(self, dataset_dir: Path) -> Path:
+        return dataset_dir / self.val_bin
 
-    @property
-    def meta_path(self) -> Path:
-        return self.dataset_dir / self.meta_pkl
+    def meta_path(self, dataset_dir: Path) -> Path:
+        return dataset_dir / self.meta_pkl
 
 
 class SampleConfig(_FrozenStrictModel):

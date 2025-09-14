@@ -134,7 +134,7 @@ def _log_dir(tag: str, dir_name: str, dir_path: Path | None, logger) -> None:
 # --- Command runners -------------------------------------------------------
 
 
-def _log_command_status(tag: str, cfg: Any) -> None:
+def _log_command_status(tag: str, shared: Any, out_dir: Path) -> None:
     """Log known file-based artifacts for the given config.
 
     The function inspects common path fields of the configuration and prints
@@ -142,17 +142,8 @@ def _log_command_status(tag: str, cfg: Any) -> None:
     """
     logger = logging.getLogger(__name__)
     try:
-        # Handle top-level out_dir or nested runtime.out_dir
-        out_dir = getattr(cfg, "out_dir", None)
-        if out_dir is None and hasattr(cfg, "runtime"):
-            out_dir = getattr(cfg.runtime, "out_dir", None)
         _log_dir(tag, "out_dir", out_dir, logger)
-
-        # Handle top-level dataset_dir or nested data.dataset_dir
-        ds_dir = getattr(cfg, "dataset_dir", None)
-        if ds_dir is None and hasattr(cfg, "data"):
-            ds_dir = getattr(cfg.data, "dataset_dir", None)
-        _log_dir(tag, "dataset_dir", ds_dir, logger)
+        _log_dir(tag, "dataset_dir", shared.dataset_dir, logger)
     except Exception:
         # Never fail due to logging
         pass
@@ -190,10 +181,10 @@ def _run_train(
     )
 
     print(f"---\nRunning trainer for experiment: {experiment}")
-    _log_command_status("pre-train", train_cfg.runtime)
+    _log_command_status("pre-train", shared, shared.train_out_dir)
     trainer_mod.train(train_cfg, shared)
     print(f"Trainer for {experiment} finished.")
-    _log_command_status("post-train", train_cfg.runtime)
+    _log_command_status("post-train", shared, shared.train_out_dir)
     print("---")
 
 
@@ -216,10 +207,10 @@ def _run_sample(
     )
 
     print(f"---\nRunning sampler for experiment: {experiment}")
-    _log_command_status("pre-sample", sample_cfg.runtime)
+    _log_command_status("pre-sample", shared, shared.sample_out_dir)
     sampler_mod.sample(sample_cfg, shared)
     print(f"Sampler for {experiment} finished.")
-    _log_command_status("post-sample", sample_cfg.runtime)
+    _log_command_status("post-sample", shared, shared.sample_out_dir)
     print("---")
 
 
