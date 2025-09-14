@@ -47,9 +47,15 @@ class Sampler:
             raise ValueError("Runtime configuration is missing")
 
         self.out_dir = shared.sample_out_dir
-        setup_logging(str(self.out_dir))
         self.logger = logging.getLogger(__name__)
+        setup_logging(str(self.out_dir))
 
+        self._setup_torch_env()
+
+        self.model = self._load_checkpoint_and_model()
+        self.tokenizer = self._setup_tokenizer()
+
+    def _setup_torch_env(self):
         torch.manual_seed(self.runtime_cfg.seed)
         torch.cuda.manual_seed(self.runtime_cfg.seed)
 
@@ -65,9 +71,9 @@ class Sampler:
             else autocast(device_type=self.device_type, dtype=pt_dtype)
         )
 
+    def _load_checkpoint_and_model(self) -> GPT:
         checkpoint = self._load_checkpoint()
-        self.model = self._setup_model(checkpoint)
-        self.tokenizer = self._setup_tokenizer()
+        return self._init_model_from_checkpoint(checkpoint)
 
     def _load_checkpoint(self) -> Checkpoint:
         """Load model checkpoint."""
@@ -80,7 +86,7 @@ class Sampler:
             device=self.runtime_cfg.device, logger=self.logger
         )
 
-    def _setup_model(self, checkpoint: Checkpoint) -> GPT:
+    def _init_model_from_checkpoint(self, checkpoint: Checkpoint) -> GPT:
         model_cfg = ModelConfig(**checkpoint.model_args)
         model = GPT(model_cfg)
         model.load_state_dict(checkpoint.model, strict=False)
@@ -99,8 +105,8 @@ class Sampler:
             )
         return tokenizer
 
-    def run(self) -> None:
-        """Run the sampling process."""
+    def _get_start_ids(self) -> list[int]:
+        """Get the tokenized start IDs from the config."""
         start_text = self.sample_cfg.start
         if isinstance(start_text, str) and start_text.startswith("FILE:"):
             prompt_path = Path(start_text[5:])
@@ -108,8 +114,15 @@ class Sampler:
                 start_text = prompt_path.read_text(encoding="utf-8")
             except Exception as e:
                 self.logger.error(f"Failed to read prompt file {prompt_path}: {e}")
-                return
-        start_ids = self.tokenizer.encode(start_text)
+                return []
+        return self.tokenizer.encode(start_text)
+
+    def run(self) -> None:
+        """Run the sampling process."""
+        start_ids = self._get_start_ids()
+        if not start_ids:
+            return
+
         x = torch.tensor(start_ids, dtype=torch.long, device=self.runtime_cfg.device)[
             None, ...
         ]
@@ -143,9 +156,9 @@ def sample(cfg: SamplerConfig, shared: SharedConfig | None = None) -> None:
             train_out_dir=out_dir,
             sample_out_dir=out_dir,
         )
+    """Sample from a trained model."""
     sampler = Sampler(cfg, shared)
     sampler.run()
-    """Sample from a trained model."""
 
 
 __all__ = [
