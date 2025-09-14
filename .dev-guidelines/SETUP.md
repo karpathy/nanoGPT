@@ -76,6 +76,30 @@ make loop EXP=bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.tom
   - When invoking the CLI in E2E tests, pass the tiny test defaults explicitly:
     `--exp-config tests/e2e/ml_playground/experiments/test_default_config.toml`
 
+## Quality Gates
+
+```bash
+# Full gate: ruff (lint+format), pyright, mypy, pytest
+make quality
+
+# Extended: optional mutation testing (Cosmic Ray)
+make quality-ext
+```
+
+## TDD Workflow (Required)
+
+1. Write a failing test specifying the behavior (unit or integration).
+2. Implement the minimal production code to make the test pass.
+3. Refactor with tests green.
+
+Commit pairing rule (required): each functional change MUST include its tests in the same commit (unit/integration). Exceptions: documentation-only, test-only refactors (no behavior change), mechanical formatting.
+
+Recommended commit sequence per behavior:
+
+- `test(<scope>): specify failing behavior` (optional)
+- implementation + tests in the SAME COMMIT if not done above
+- `refactor(<scope>): tidy up with green tests` (optional)
+
 ## Quick Troubleshooting
 
 **Tests cannot import `ml_playground`**: You're not in the project venv - run `uv venv` then `uv sync --all-groups`
