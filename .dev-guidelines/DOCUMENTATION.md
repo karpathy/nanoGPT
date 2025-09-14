@@ -28,20 +28,20 @@ Unified standards for all documentation in this repository. Applies to top-level
 
 ## Folder Tree Standard
 
-- Use a fenced code block with `text` language.
-- Each entry must include a short inline description after two or more spaces.
+- Use a fenced code block with `bash` language for syntax highlighting.
+- Each entry must include a short inline description using `#` comments after two or more spaces.
 - Keep the tree small; avoid listing generated files except when critical to orientation.
 
 Example:
 
-```text
+```bash
 ml_playground/experiments/shakespeare/
-├── Readme.md        - experiment documentation (this file)
-├── config.toml      - sample/preset config for real runs overwriting ml_playground/experiments/default_config.toml
-├── preparer.py      - dataset preparation
-├── trainer.py       - training orchestration
-├── sampler.py       - generation/sampling entrypoints
-└── datasets/        - prepared dataset artifacts
+├── Readme.md        # experiment documentation (this file)
+├── config.toml      # sample/preset config for real runs overwriting ml_playground/experiments/default_config.toml
+├── preparer.py      # dataset preparation
+├── trainer.py       # training orchestration
+├── sampler.py       # generation/sampling entrypoints
+└── datasets/        # prepared dataset artifacts
 ```
 
 ## Linking to Framework Docs
@@ -72,6 +72,7 @@ ml_playground/experiments/shakespeare/
 
 - Docs must pass `make quality` (markdownlint part of our checks) before commit.
 - Prefer granular commits with clear `docs(<area>): <subject>` messages.
+- When documenting functional changes to code, ensure the associated commit pairs production code and tests in the same change per TDD policy (see `DEVELOPMENT.md`).
 - Reviewers check: abstraction level appropriate, tree annotated, headings/lists/code blocks spacing correct, and links valid.
 
 ## Tests and Tools READMEs
