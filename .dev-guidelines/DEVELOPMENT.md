@@ -39,7 +39,7 @@ CI and pre-commit both invoke `make quality` as the core gate.
 - Split large features into reviewable increments
 - Keep tests passing at every step
 - Pair production and test changes: when adding/refactoring code, include the minimal tests that specify the behavior in the same commit.
-- Acceptable exceptions: `docs/*` only commits, pure test refactors (no behavior change), or mechanical formatting. For everything else, pair code+tests.
+- Acceptable exceptions: documentation only commits, pure test refactors (no behavior change), or mechanical formatting. For everything else, pair code+tests.
 
 ### Conventional Commit Format
 
@@ -67,7 +67,7 @@ We practice strict TDD for all functional changes:
 
 Commit strategy under TDD:
 
-- Prefer 1–3 small commits per behavior: (a) failing test, (b) implementation, (c) optional refactor.
+- Prefer small commits per behavior
 - The implementation commit MUST pair production code and its tests if the previous commit wasn’t already pairing them.
 - Never merge code that reduces coverage or leaves failing tests.
 
