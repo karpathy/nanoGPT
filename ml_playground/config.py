@@ -342,6 +342,7 @@ class ExperimentConfig(_FrozenStrictModel):
     prepare: PreparerConfig
     train: TrainerConfig
     sample: SamplerConfig
+    shared: SharedConfig
 
 
 def load_experiment_toml(path: Path) -> ExperimentConfig:
@@ -372,25 +373,18 @@ class SharedConfig(_FrozenStrictModel):
     train_out_dir: Path
     sample_out_dir: Path
 
-    @field_validator("config_path", "project_home", "dataset_dir", "train_out_dir", "sample_out_dir", mode="after")
+    @field_validator(
+        "config_path",
+        "project_home",
+        "dataset_dir",
+        "train_out_dir",
+        "sample_out_dir",
+        mode="after",
+    )
     @classmethod
     def _as_is(cls, v: Path) -> Path:
         # Preserve given paths without resolving to keep semantics consistent with loader
         return v
-
-
-def make_shared_config(
-    experiment: str, config_path: Path, project_home: Path, exp: ExperimentConfig
-) -> SharedConfig:
-    """Factory to construct SharedConfig from a loaded ExperimentConfig."""
-    return SharedConfig(
-        experiment=experiment,
-        config_path=config_path,
-        project_home=project_home,
-        dataset_dir=exp.train.data.dataset_dir,
-        train_out_dir=exp.train.runtime.out_dir,
-        sample_out_dir=exp.sample.runtime.out_dir,
-    )
 
 
 # Backward-compatible aliases for newer API names used by some modules
@@ -498,7 +492,6 @@ __all__ = [
     "PreparerConfig",
     "ExperimentConfig",
     "SharedConfig",
-    "make_shared_config",
     "load_experiment_toml",
     "SECTION_PREPARE",
     "SECTION_TRAIN",

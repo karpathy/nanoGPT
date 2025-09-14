@@ -15,6 +15,7 @@ from ml_playground.config import (
     DataConfig,
     OptimConfig,
     LRSchedule,
+    SharedConfig,
 )
 from ml_playground.checkpoint import Checkpoint
 
@@ -173,7 +174,15 @@ def test_train_eval_only_breaks_early_and_returns(
     )
 
     cfg = _make_minimal_trainer_cfg(tmp_path, eval_only=True, max_iters=0)
-    it, best = trainer_mod.train(cfg)
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=tmp_path / "cfg.toml",
+        project_home=tmp_path,
+        dataset_dir=cfg.data.dataset_dir,
+        train_out_dir=cfg.runtime.out_dir,
+        sample_out_dir=cfg.runtime.out_dir,
+    )
+    it, best = trainer_mod.train(cfg, shared)
     assert it == 0
     assert best == pytest.approx(0.4)
 
@@ -206,7 +215,15 @@ def test_train_writes_best_checkpoint_on_improvement_after_first_iter(
     monkeypatch.setattr(trainer_mod, "estimate_loss", _est_loss)
 
     cfg = _make_minimal_trainer_cfg(tmp_path, eval_only=False, max_iters=2)
-    it, best = trainer_mod.train(cfg)
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=tmp_path / "cfg.toml",
+        project_home=tmp_path,
+        dataset_dir=cfg.data.dataset_dir,
+        train_out_dir=cfg.runtime.out_dir,
+        sample_out_dir=cfg.runtime.out_dir,
+    )
+    it, best = trainer_mod.train(cfg, shared)
 
     assert it >= 1
     assert any(s.is_best and s.iter_num == 1 for s in fake_mgr.saved)

@@ -12,6 +12,7 @@ from ml_playground.config import (
     SamplerConfig,
     TrainerConfig,
     ExperimentConfig,
+    SharedConfig,
 )
 
 # Module-level logger
@@ -232,12 +233,30 @@ def load_full_experiment_config(
     merged = deep_merge_dicts(merged, deepcopy(ldres_raw))
     merged = _resolve_relative_paths(merged, config_path)
     effective = _coerce_known_paths_to_path(merged)
-    # Inject required logger into top-level only (section models forbid extras)
-    log = logger
-    effective = dict(effective)
-    effective["logger"] = log
-    # Strict: do not tolerate unknown keys; rely on Pydantic's extra='forbid'
-    return ExperimentConfig.model_validate(effective)
+    # Enforce unknown top-level keys: if extras beyond allowed are present, trigger validation error
+    allowed_top = {"prepare", "train", "sample"}
+    extras = set(effective.keys()) - allowed_top
+    if extras:
+        # Will raise a ValidationError due to extra keys and missing required 'shared'
+        ExperimentConfig.model_validate(effective)
+    # Build section configs explicitly and attach SharedConfig
+    prep_dict = dict(effective.get("prepare", {}))
+    train_dict = dict(effective.get("train", {}))
+    sample_dict = dict(effective.get("sample", {}))
+    # Validate sections
+    prepare = PreparerConfig.model_validate(prep_dict)
+    train = TrainerConfig.model_validate(train_dict)
+    sample = SamplerConfig.model_validate(sample_dict)
+    # Construct SharedConfig from validated sections
+    shared = SharedConfig(
+        experiment=experiment_name,
+        config_path=config_path,
+        project_home=project_home,
+        dataset_dir=train.data.dataset_dir,
+        train_out_dir=train.runtime.out_dir,
+        sample_out_dir=sample.runtime.out_dir,
+    )
+    return ExperimentConfig(prepare=prepare, train=train, sample=sample, shared=shared)
 
 
 def load_train_config(config_path: Path) -> TrainerConfig:

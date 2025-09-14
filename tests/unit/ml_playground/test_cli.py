@@ -20,6 +20,7 @@ from ml_playground.config import (
     RuntimeConfig,
     SampleConfig,
     ExperimentConfig,
+    SharedConfig,
     ModelConfig,
     DataConfig,
     OptimConfig,
@@ -34,6 +35,14 @@ def test_main_prepare_shakespeare_success(mocker: MockerFixture) -> None:
     """Test prepare command with shakespeare dataset succeeds."""
     mock_run = mocker.patch("ml_playground.cli._run_prepare")
     # Mock canonical loader to return minimal full experiment config
+    shared = SharedConfig(
+        experiment="shakespeare",
+        config_path=Path("config.toml"),
+        project_home=Path("."),
+        dataset_dir=Path("."),
+        train_out_dir=Path("."),
+        sample_out_dir=Path("."),
+    )
     mocker.patch(
         "ml_playground.config_loader.load_full_experiment_config",
         return_value=ExperimentConfig(
@@ -48,6 +57,7 @@ def test_main_prepare_shakespeare_success(mocker: MockerFixture) -> None:
             sample=SamplerConfig(
                 runtime=RuntimeConfig(out_dir=Path(".")), sample=SampleConfig()
             ),
+            shared=shared,
         ),
     )
     result = runner.invoke(app, ["prepare", "shakespeare"])
@@ -58,6 +68,14 @@ def test_main_prepare_shakespeare_success(mocker: MockerFixture) -> None:
 def test_main_sample_missing_meta_fails(tmp_path: Path, mocker: MockerFixture) -> None:
     """Sample should fail fast when neither train meta nor runtime meta exist."""
     mocker.patch("ml_playground.config_loader.fs_path_exists", return_value=False)
+    shared = SharedConfig(
+        experiment="shakespeare",
+        config_path=Path("config.toml"),
+        project_home=Path("."),
+        dataset_dir=Path("."),
+        train_out_dir=Path("."),
+        sample_out_dir=Path("out"),
+    )
     mocker.patch(
         "ml_playground.config_loader.load_full_experiment_config",
         return_value=ExperimentConfig(
@@ -72,6 +90,7 @@ def test_main_sample_missing_meta_fails(tmp_path: Path, mocker: MockerFixture) -
             sample=SamplerConfig(
                 runtime=RuntimeConfig(out_dir=Path("out")), sample=SampleConfig()
             ),
+            shared=shared,
         ),
     )
     result = runner.invoke(app, ["sample", "shakespeare"])
@@ -82,6 +101,14 @@ def test_main_sample_missing_meta_fails(tmp_path: Path, mocker: MockerFixture) -
 def test_main_prepare_bundestag_char_success(mocker: MockerFixture) -> None:
     """Test prepare command with bundestag_char dataset succeeds."""
     mock_run = mocker.patch("ml_playground.cli._run_prepare")
+    shared = SharedConfig(
+        experiment="bundestag_char",
+        config_path=Path("config.toml"),
+        project_home=Path("."),
+        dataset_dir=Path("."),
+        train_out_dir=Path("."),
+        sample_out_dir=Path("."),
+    )
     mocker.patch(
         "ml_playground.config_loader.load_full_experiment_config",
         return_value=ExperimentConfig(
@@ -96,6 +123,7 @@ def test_main_prepare_bundestag_char_success(mocker: MockerFixture) -> None:
             sample=SamplerConfig(
                 runtime=RuntimeConfig(out_dir=Path(".")), sample=SampleConfig()
             ),
+            shared=shared,
         ),
     )
     result = runner.invoke(app, ["prepare", "bundestag_char"])
@@ -121,6 +149,14 @@ def test_main_train_success(tmp_path: Path, mocker: MockerFixture) -> None:
     # E1.2: mock meta existence
     mocker.patch("ml_playground.config_loader.fs_path_exists", return_value=True)
     mock_run = mocker.patch("ml_playground.cli._run_train")
+    shared = SharedConfig(
+        experiment="shakespeare",
+        config_path=Path("config.toml"),
+        project_home=Path("."),
+        dataset_dir=Path("."),
+        train_out_dir=Path("."),
+        sample_out_dir=Path("."),
+    )
     mocker.patch(
         "ml_playground.config_loader.load_full_experiment_config",
         return_value=ExperimentConfig(
@@ -135,6 +171,7 @@ def test_main_train_success(tmp_path: Path, mocker: MockerFixture) -> None:
             sample=SamplerConfig(
                 runtime=RuntimeConfig(out_dir=Path(".")), sample=SampleConfig()
             ),
+            shared=shared,
         ),
     )
     result = runner.invoke(app, ["train", "shakespeare"])
@@ -164,6 +201,14 @@ def test_main_sample_success(tmp_path: Path, mocker: MockerFixture) -> None:
         sample=SampleConfig(start="x"),
     )
     mock_run = mocker.patch("ml_playground.cli._run_sample")
+    shared = SharedConfig(
+        experiment="shakespeare",
+        config_path=Path("config.toml"),
+        project_home=Path("."),
+        dataset_dir=Path("."),
+        train_out_dir=Path("."),
+        sample_out_dir=Path("."),
+    )
     mocker.patch(
         "ml_playground.config_loader.load_full_experiment_config",
         return_value=ExperimentConfig(
@@ -176,6 +221,7 @@ def test_main_sample_success(tmp_path: Path, mocker: MockerFixture) -> None:
                 runtime=RuntimeConfig(out_dir=Path(".")),
             ),
             sample=mock_sample_cfg,
+            shared=shared,
         ),
     )
     result = runner.invoke(app, ["sample", "shakespeare"])
@@ -204,12 +250,21 @@ def test_main_loop_success(tmp_path: Path, mocker: MockerFixture) -> None:
         sample=SampleConfig(start="x"),
     )
     mock_run = mocker.patch("ml_playground.cli._run_loop")
+    shared = SharedConfig(
+        experiment="shakespeare",
+        config_path=Path("config.toml"),
+        project_home=Path("."),
+        dataset_dir=Path("."),
+        train_out_dir=Path("."),
+        sample_out_dir=Path("."),
+    )
     mocker.patch(
         "ml_playground.config_loader.load_full_experiment_config",
         return_value=ExperimentConfig(
             prepare=PreparerConfig(),
             train=mock_train_config,  # type: ignore[arg-type]
             sample=mock_sample_config,
+            shared=shared,
         ),
     )
 
@@ -731,9 +786,17 @@ def test_run_loop_calls_in_order_and_handles_print_errors(
         runtime=RuntimeConfig(out_dir=tmp_path),
     )
     scfg = SamplerConfig(runtime=RuntimeConfig(out_dir=tmp_path), sample=SampleConfig())
+    shared = SharedConfig(
+        experiment="exp",
+        config_path=tmp_path / "cfg.toml",
+        project_home=tmp_path,
+        dataset_dir=tmp_path,
+        train_out_dir=tmp_path,
+        sample_out_dir=tmp_path,
+    )
 
     # Should not raise; ensure order prepare -> train -> sample
-    cli._run_loop("exp", tmp_path / "cfg.toml", prep_cfg, tcfg, scfg)
+    cli._run_loop("exp", tmp_path / "cfg.toml", prep_cfg, tcfg, scfg, shared)
 
     assert calls == ["prepare", "train", "sample"]
 
@@ -765,6 +828,14 @@ def test_sample_routes_to_injected_sampler(
     )
 
     # Mock canonical loader to avoid reading real experiment config with unknown keys
+    shared = SharedConfig(
+        experiment="speakger",
+        config_path=Path("config.toml"),
+        project_home=Path("."),
+        dataset_dir=Path("."),
+        train_out_dir=Path("."),
+        sample_out_dir=Path("."),
+    )
     mocker.patch(
         "ml_playground.config_loader.load_full_experiment_config",
         return_value=ExperimentConfig(
@@ -779,6 +850,7 @@ def test_sample_routes_to_injected_sampler(
             sample=SamplerConfig(
                 runtime=RuntimeConfig(out_dir=Path(".")), sample=SampleConfig()
             ),
+            shared=shared,
         ),
     )
 

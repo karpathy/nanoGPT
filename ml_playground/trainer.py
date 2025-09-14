@@ -18,6 +18,7 @@ from ml_playground.config import (
     TrainerConfig,
     LRSchedule,
     READ_POLICY_BEST,
+    SharedConfig,
 )
 from ml_playground.data import SimpleBatches
 from ml_playground.ema import EMA
@@ -73,7 +74,7 @@ def _setup_model(
     return model, optimizer
 
 
-def train(cfg: TrainerConfig) -> tuple[int, float]:
+def train(cfg: TrainerConfig, shared: SharedConfig | None = None) -> tuple[int, float]:
     """Main training loop."""
     # --- Setup -------------------------------------------------------------------
     runtime_cfg = cfg.runtime
@@ -82,7 +83,9 @@ def train(cfg: TrainerConfig) -> tuple[int, float]:
     optim_cfg = cfg.optim
     schedule_cfg = cfg.schedule
 
-    setup_logging(str(runtime_cfg.out_dir))
+    # Use shared-config paths for all filesystem locations when provided, else fallback
+    out_dir = shared.train_out_dir if shared is not None else cfg.runtime.out_dir
+    setup_logging(str(out_dir))
     logger = logging.getLogger(__name__)
 
     # --- Set random seeds -------------------------------------------------------
@@ -119,17 +122,17 @@ def train(cfg: TrainerConfig) -> tuple[int, float]:
     # --- Checkpoint manager setup -----------------------------------------------
     # Ensure output directory exists before any checkpointing/logging
     try:
-        runtime_cfg.out_dir.mkdir(parents=True, exist_ok=True)
+        out_dir.mkdir(parents=True, exist_ok=True)
     except Exception:
         pass
     ckpt_mgr = CheckpointManager(
-        out_dir=runtime_cfg.out_dir,
+        out_dir=out_dir,
         atomic=runtime_cfg.ckpt_atomic,
         keep_last=runtime_cfg.checkpointing.keep.last,
         keep_best=runtime_cfg.checkpointing.keep.best,
     )
 
-    if runtime_cfg.out_dir.exists():
+    if out_dir.exists():
         try:
             if runtime_cfg.checkpointing.read_policy == READ_POLICY_BEST:
                 checkpoint = ckpt_mgr.load_best_checkpoint(
@@ -172,7 +175,7 @@ def train(cfg: TrainerConfig) -> tuple[int, float]:
     # --- TensorBoard logging -------------------------------------------------
     writer: SummaryWriter | None = None
     if runtime_cfg.tensorboard_enabled:
-        writer = SummaryWriter(log_dir=str(runtime_cfg.out_dir))
+        writer = SummaryWriter(log_dir=str(out_dir))
 
     # --- Training loop ----------------------------------------------------------
     logger.info("Starting training loop")
@@ -300,10 +303,10 @@ def train(cfg: TrainerConfig) -> tuple[int, float]:
 
     # Propagate dataset metadata to out_dir for downstream sampling utilities
     try:
-        meta_src = data_cfg.meta_path
+        meta_src = data_cfg.meta_path  # filenames still come from DataConfig
         if meta_src and meta_src.exists():
             # copy to out_dir preserving filename
-            meta_dst = runtime_cfg.out_dir / meta_src.name
+            meta_dst = out_dir / meta_src.name
             # best-effort copy; avoid crashing training if fails
             import shutil
 

@@ -12,7 +12,6 @@ from ml_playground.config import (
     TrainerConfig,
     SamplerConfig,
     PreparerConfig,
-    make_shared_config,
 )
 import ml_playground.config_loader as config_loader
 import ml_playground.prepare as prepare_mod
@@ -163,6 +162,7 @@ def _run_prepare(
     experiment: str,
     prepare_cfg: PreparerConfig,
     config_path: Path,
+    shared: Any,
 ) -> None:
     """Run the full prepare flow for an experiment."""
     print(f"---\nRunning preparer for experiment: {experiment}")
@@ -175,6 +175,7 @@ def _run_train(
     experiment: str,
     train_cfg: TrainerConfig,
     config_path: Path,
+    shared: Any,
 ) -> None:
     """Run the full training flow for an experiment."""
     # Global setup
@@ -190,7 +191,11 @@ def _run_train(
 
     print(f"---\nRunning trainer for experiment: {experiment}")
     _log_command_status("pre-train", train_cfg.runtime)
-    trainer_mod.train(train_cfg)
+    try:
+        trainer_mod.train(train_cfg, shared)
+    except TypeError:
+        # Backward-compat for test monkeypatches that stub train(cfg)
+        trainer_mod.train(train_cfg)
     print(f"Trainer for {experiment} finished.")
     _log_command_status("post-train", train_cfg.runtime)
     print("---")
@@ -200,6 +205,7 @@ def _run_sample(
     experiment: str,
     sample_cfg: SamplerConfig,
     config_path: Path,
+    shared: Any,
 ) -> None:
     """Run the full sampling flow for an experiment."""
     if not sample_cfg.runtime:
@@ -241,26 +247,21 @@ def _run_loop(
     prepare_cfg: PreparerConfig,
     train_cfg: TrainerConfig,
     sample_cfg: SamplerConfig,
+    shared: Any,
 ) -> None:
     """Run the full prepare->train->sample loop for an experiment."""
     # Determine if prepare can be skipped by checking data artifacts via SharedConfig
     skip_prepare = False
     try:
-        shared = train_cfg.extras.get("shared") if hasattr(train_cfg, "extras") else None
-        if shared is not None and hasattr(shared, "dataset_dir"):
-            ds_dir = shared.dataset_dir
-            req_paths = [ds_dir / "train.bin", ds_dir / "val.bin", ds_dir / "meta.pkl"]
-        else:
-            # Legacy fallback
-            data_cfg = train_cfg.data
-            req_paths = [data_cfg.train_path, data_cfg.val_path, data_cfg.meta_path]
+        ds_dir = shared.dataset_dir
+        req_paths = [ds_dir / "train.bin", ds_dir / "val.bin", ds_dir / "meta.pkl"]
         skip_prepare = all(p.exists() for p in req_paths)
     except Exception:
         skip_prepare = False
     if not skip_prepare:
-        _run_prepare(experiment, prepare_cfg, config_path)
-    _run_train(experiment, train_cfg, config_path)
-    _run_sample(experiment, sample_cfg, config_path)
+        _run_prepare(experiment, prepare_cfg, config_path, shared)
+    _run_train(experiment, train_cfg, config_path, shared)
+    _run_sample(experiment, sample_cfg, config_path, shared)
 
 
 # --- CLI definition --------------------------------------------------------
@@ -420,15 +421,7 @@ def _run_prepare_cmd(experiment: str, exp_config_path: Path | None) -> None:
     cfg_path = _cfg_path_for(experiment, exp_config_path)
     project_home = Path(__file__).resolve().parent.parent
     exp = config_loader.load_full_experiment_config(cfg_path, project_home, experiment)
-    # E5.2: attach SharedConfig to section extras for downstream consumers
-    try:
-        shared = make_shared_config(experiment, cfg_path, project_home, exp)
-        exp.prepare.extras["shared"] = shared
-        exp.train.extras["shared"] = shared
-        exp.sample.extras["shared"] = shared
-    except Exception:
-        pass
-    _run_prepare(experiment, exp.prepare, cfg_path)
+    _run_prepare(experiment, exp.prepare, cfg_path, exp.shared)
 
 
 def _run_train_cmd(experiment: str, exp_config_path: Path | None) -> None:
@@ -436,24 +429,14 @@ def _run_train_cmd(experiment: str, exp_config_path: Path | None) -> None:
     cfg_path = _cfg_path_for(experiment, exp_config_path)
     project_home = Path(__file__).resolve().parent.parent
     exp = config_loader.load_full_experiment_config(cfg_path, project_home, experiment)
-    # E5.2: attach SharedConfig to section extras
-    try:
-        shared = make_shared_config(experiment, cfg_path, project_home, exp)
-        exp.prepare.extras["shared"] = shared
-        exp.train.extras["shared"] = shared
-        exp.sample.extras["shared"] = shared
-    except Exception:
-        shared = None
     # E1.2/E5: Validate meta existence for train using SharedConfig only
-    if shared is None:
-        raise ValueError("Internal error: SharedConfig not available for training paths")
-    train_meta = shared.dataset_dir / "meta.pkl"
+    train_meta = exp.shared.dataset_dir / "meta.pkl"
     if not config_loader.fs_path_exists(train_meta):
         raise ValueError(
             f"Missing required meta file for training: {train_meta}.\n"
             "Run 'prepare' first or ensure your preparer writes meta.pkl."
         )
-    _run_train(experiment, exp.train, cfg_path)
+    _run_train(experiment, exp.train, cfg_path, exp.shared)
 
 
 def _run_sample_cmd(experiment: str, exp_config_path: Path | None) -> None:
@@ -461,19 +444,9 @@ def _run_sample_cmd(experiment: str, exp_config_path: Path | None) -> None:
     cfg_path = _cfg_path_for(experiment, exp_config_path)
     project_home = Path(__file__).resolve().parent.parent
     exp = config_loader.load_full_experiment_config(cfg_path, project_home, experiment)
-    # E5.2: attach SharedConfig to section extras
-    try:
-        shared = make_shared_config(experiment, cfg_path, project_home, exp)
-        exp.prepare.extras["shared"] = shared
-        exp.train.extras["shared"] = shared
-        exp.sample.extras["shared"] = shared
-    except Exception:
-        shared = None
     # E1.2/E5: Validate meta existence for sample using SharedConfig only
-    if shared is None:
-        raise ValueError("Internal error: SharedConfig not available for sampling paths")
-    train_meta = shared.dataset_dir / "meta.pkl"
-    runtime_meta = shared.sample_out_dir / experiment / "meta.pkl"
+    train_meta = exp.shared.dataset_dir / "meta.pkl"
+    runtime_meta = exp.shared.sample_out_dir / experiment / "meta.pkl"
     if not (
         config_loader.fs_path_exists(train_meta)
         or config_loader.fs_path_exists(runtime_meta)
@@ -483,7 +456,7 @@ def _run_sample_cmd(experiment: str, exp_config_path: Path | None) -> None:
             f"train.meta={train_meta}, runtime.meta={runtime_meta}.\n"
             "Run 'prepare' and 'train' first or place meta.pkl in one of the expected locations."
         )
-    _run_sample(experiment, exp.sample, cfg_path)
+    _run_sample(experiment, exp.sample, cfg_path, exp.shared)
 
 
 def _run_loop_cmd(experiment: str, exp_config_path: Path | None) -> None:
@@ -491,12 +464,4 @@ def _run_loop_cmd(experiment: str, exp_config_path: Path | None) -> None:
     cfg_path = _cfg_path_for(experiment, exp_config_path)
     project_home = Path(__file__).resolve().parent.parent
     exp = config_loader.load_full_experiment_config(cfg_path, project_home, experiment)
-    # E5.2: attach SharedConfig to section extras
-    try:
-        shared = make_shared_config(experiment, cfg_path, project_home, exp)
-        exp.prepare.extras["shared"] = shared
-        exp.train.extras["shared"] = shared
-        exp.sample.extras["shared"] = shared
-    except Exception:
-        pass
-    _run_loop(experiment, cfg_path, exp.prepare, exp.train, exp.sample)
+    _run_loop(experiment, cfg_path, exp.prepare, exp.train, exp.sample, exp.shared)
