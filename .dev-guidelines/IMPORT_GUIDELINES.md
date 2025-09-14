@@ -117,6 +117,7 @@ def compute():
 
 - Run the project's linter/formatter/import organizer before every commit to enforce ordering and grouping.
 - Type checkers must pass with type-only guards for heavy/optional types.
+- Changes to import structure should follow TDD and be committed with paired tests when behavior or public API surface changes.
 
 ## Review Checklist (Must Pass All)
 
