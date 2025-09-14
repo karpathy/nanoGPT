@@ -691,12 +691,16 @@ def test_load_config_error_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     # Mock the defaults path to point to our test location
     test_defaults_path = tmp_path / "default_config.toml"
     test_defaults_path.write_text("this is not valid toml")
-    
+
     def mock_default_config_path_from_root(project_root: Path) -> Path:
         return test_defaults_path
-    
-    monkeypatch.setattr(config_loader, "_default_config_path_from_root", mock_default_config_path_from_root)
-    
+
+    monkeypatch.setattr(
+        config_loader,
+        "_default_config_path_from_root",
+        mock_default_config_path_from_root,
+    )
+
     with pytest.raises(Exception) as ei3:
         config_loader.load_train_config(cfg)
     assert "default_config.toml" in str(ei3.value).lower()

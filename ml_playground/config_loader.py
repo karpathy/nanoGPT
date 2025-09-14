@@ -211,16 +211,16 @@ def load_full_experiment_config(
         raise FileNotFoundError(f"Config file not found: {config_path}")
 
     raw_exp = read_toml_dict(config_path)
-    
+
     # Strict validation: require mandatory sections in experiment config
     required_sections = ["prepare", "train", "sample"]
     for section in required_sections:
         if section not in raw_exp:
             raise ValidationError.from_exception_data(
-                "ExperimentConfig", 
-                [{"type": "missing", "loc": (section,), "input": raw_exp}]
+                "ExperimentConfig",
+                [{"type": "missing", "loc": (section,), "input": raw_exp}],
             )
-    
+
     # Validate train subsections
     if "train" in raw_exp and isinstance(raw_exp["train"], dict):
         train_required = ["model", "data", "optim", "schedule", "runtime"]
@@ -228,19 +228,31 @@ def load_full_experiment_config(
             if subsection not in raw_exp["train"]:
                 raise ValidationError.from_exception_data(
                     "TrainerConfig",
-                    [{"type": "missing", "loc": ("train", subsection), "input": raw_exp["train"]}]
+                    [
+                        {
+                            "type": "missing",
+                            "loc": ("train", subsection),
+                            "input": raw_exp["train"],
+                        }
+                    ],
                 )
-    
-    # Validate sample subsections  
+
+    # Validate sample subsections
     if "sample" in raw_exp and isinstance(raw_exp["sample"], dict):
         sample_required = ["runtime", "sample"]
         for subsection in sample_required:
             if subsection not in raw_exp["sample"]:
                 raise ValidationError.from_exception_data(
                     "SamplerConfig",
-                    [{"type": "missing", "loc": ("sample", subsection), "input": raw_exp["sample"]}]
+                    [
+                        {
+                            "type": "missing",
+                            "loc": ("sample", subsection),
+                            "input": raw_exp["sample"],
+                        }
+                    ],
                 )
-    
+
     defaults_path = _default_config_path_from_root(project_home)
     defaults_raw = {}
     if defaults_path.exists():
