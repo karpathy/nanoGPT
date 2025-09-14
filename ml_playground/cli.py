@@ -246,10 +246,8 @@ def _run_loop(
     skip_prepare = False
     try:
         data_cfg = train_cfg.data
-        req_paths = [data_cfg.train_path, data_cfg.val_path]
-        # meta is optional
-        if data_cfg.meta_path is not None:
-            req_paths.append(data_cfg.meta_path)
+        # meta is mandatory (E1.1/E1.2)
+        req_paths = [data_cfg.train_path, data_cfg.val_path, data_cfg.meta_path]
         skip_prepare = all(p.exists() for p in req_paths)
     except Exception:
         skip_prepare = False
@@ -424,6 +422,13 @@ def _run_train_cmd(experiment: str, exp_config_path: Path | None) -> None:
     cfg_path = _cfg_path_for(experiment, exp_config_path)
     project_home = Path(__file__).resolve().parent.parent
     exp = config_loader.load_full_experiment_config(cfg_path, project_home, experiment)
+    # E1.2: Validate meta existence for train
+    train_meta = exp.train.data.meta_path
+    if not config_loader.fs_path_exists(train_meta):
+        raise ValueError(
+            f"Missing required meta file for training: {train_meta}.\n"
+            "Run 'prepare' first or ensure your preparer writes meta.pkl."
+        )
     _run_train(experiment, exp.train, cfg_path)
 
 
@@ -432,6 +437,18 @@ def _run_sample_cmd(experiment: str, exp_config_path: Path | None) -> None:
     cfg_path = _cfg_path_for(experiment, exp_config_path)
     project_home = Path(__file__).resolve().parent.parent
     exp = config_loader.load_full_experiment_config(cfg_path, project_home, experiment)
+    # E1.2: Validate meta existence for sample (discoverable via train or runtime)
+    train_meta = exp.train.data.meta_path
+    runtime_meta = exp.sample.runtime.out_dir / experiment / "meta.pkl"
+    if not (
+        config_loader.fs_path_exists(train_meta)
+        or config_loader.fs_path_exists(runtime_meta)
+    ):
+        raise ValueError(
+            "Missing required meta file for sampling. Checked: "
+            f"train.meta={train_meta}, runtime.meta={runtime_meta}.\n"
+            "Run 'prepare' and 'train' first or place meta.pkl in one of the expected locations."
+        )
     _run_sample(experiment, exp.sample, cfg_path)
 
 

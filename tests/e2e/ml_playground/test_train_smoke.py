@@ -1,6 +1,7 @@
 from __future__ import annotations
 from pathlib import Path
 import numpy as np
+from numpy.typing import NDArray
 from ml_playground.config import (
     TrainerConfig,
     ModelConfig,
@@ -14,9 +15,11 @@ from ml_playground.trainer import train
 
 def test_train_smoke(tmp_path: Path) -> None:
     # Create a tiny dataset
-    arr = (np.arange(1024) % 256).astype("uint16")
+    arr: NDArray[np.uint16] = (np.arange(1024) % 256).astype("uint16")
     (tmp_path / "train.bin").write_bytes(arr.tobytes())
     (tmp_path / "val.bin").write_bytes(arr.tobytes())
+    # Create required meta file (content not validated here)
+    (tmp_path / "meta.pkl").write_bytes(b"\x80\x04N.")
 
     exp = TrainerConfig(
         model=ModelConfig(
@@ -35,7 +38,6 @@ def test_train_smoke(tmp_path: Path) -> None:
             grad_accum_steps=1,
             train_bin="train.bin",
             val_bin="val.bin",
-            meta_pkl=None,
         ),
         optim=OptimConfig(
             learning_rate=1e-3, weight_decay=0.0, grad_clip=0.0, beta1=0.9, beta2=0.95

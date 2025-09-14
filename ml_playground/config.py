@@ -281,7 +281,7 @@ class DataConfig(_FrozenStrictModel):
     dataset_dir: Path
     train_bin: str = "train.bin"
     val_bin: str = "val.bin"
-    meta_pkl: Optional[str] = "meta.pkl"
+    meta_pkl: str = "meta.pkl"
     batch_size: AtLeastOneInt = 12
     block_size: AtLeastOneInt = 1024
     grad_accum_steps: AtLeastOneInt = 40
@@ -318,9 +318,7 @@ class DataConfig(_FrozenStrictModel):
         return self.dataset_dir / self.val_bin
 
     @property
-    def meta_path(self) -> Optional[Path]:
-        if self.meta_pkl is None:
-            return None
+    def meta_path(self) -> Path:
         return self.dataset_dir / self.meta_pkl
 
 
@@ -354,6 +352,7 @@ def load_experiment_toml(path: Path) -> ExperimentConfig:
     """
     # Local import to avoid circular dependency at module import time
     from ml_playground import config_loader as _loader
+
     project_home = Path(__file__).resolve().parent.parent
     experiment_name = path.parent.name
     return _loader.load_full_experiment_config(path, project_home, experiment_name)

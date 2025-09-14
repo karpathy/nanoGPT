@@ -1,5 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
+from typing import Any, cast
 import pytest
 from pydantic import ValidationError
 from ml_playground.config import (
@@ -35,7 +36,9 @@ def test_full_loader_roundtrip(tmp_path: Path) -> None:
     cfg_path.write_text(toml_text)
     project_home = tmp_path.parent if tmp_path.parent.name else tmp_path
     experiment_name = cfg_path.parent.name
-    exp: ExperimentConfig = load_full_experiment_config(cfg_path, project_home, experiment_name)
+    exp: ExperimentConfig = load_full_experiment_config(
+        cfg_path, project_home, experiment_name
+    )
     assert exp.train is not None
     assert exp.sample is not None
     assert isinstance(exp.train.runtime.out_dir, Path)
@@ -75,7 +78,7 @@ def test_full_loader_nested_unknown_keys_in_sample_raise(tmp_path: Path) -> None
     )
     p.write_text(text)
     with pytest.raises(ValidationError):
-        load_full_experiment_config(p)
+        load_experiment_toml(p)
 
 
 def test_full_loader_incomplete_train_config(tmp_path: Path) -> None:
@@ -93,7 +96,7 @@ n_layer=1
     cfg_path.write_text(toml_text)
 
     with pytest.raises(ValidationError):
-        load_full_experiment_config(cfg_path)
+        load_experiment_toml(cfg_path)
 
 
 # Consolidated: validators and util tests previously in fragmented files
@@ -172,7 +175,7 @@ def test_full_loader_unknown_top_level_sections_raise(tmp_path: Path) -> None:
     )
     p.write_text(base + "\n[export]\nfoo = 1\n")
     with pytest.raises(ValidationError):
-        load_full_experiment_config(p)
+        load_experiment_toml(p)
 
 
 def test_full_loader_nested_unknown_keys_raise(tmp_path: Path) -> None:
@@ -186,7 +189,7 @@ def test_full_loader_nested_unknown_keys_raise(tmp_path: Path) -> None:
     text = text.replace("[train.model]", "[train.model]\nunknown_key = 123")
     p.write_text(text)
     with pytest.raises(ValidationError):
-        load_full_experiment_config(p)
+        load_experiment_toml(p)
 
 
 def test_load_experiment_toml_strict_sections(tmp_path: Path) -> None:
@@ -452,9 +455,12 @@ def test_dataconfig_paths_and_defaults(tmp_path: Path) -> None:
     assert dc.meta_path == tmp_path / "meta.pkl"
 
 
-def test_dataconfig_meta_none_path(tmp_path: Path) -> None:
-    dc = DataConfig(dataset_dir=tmp_path, meta_pkl=None)
-    assert dc.meta_path is None
+def test_dataconfig_meta_none_rejected(tmp_path: Path) -> None:
+    # E1.1: meta_pkl is mandatory; None is invalid and should raise
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        DataConfig(dataset_dir=tmp_path, meta_pkl=cast(Any, None))
 
 
 def test_preparerconfig_path_coercion_and_resolve(
@@ -504,7 +510,7 @@ def test_full_loader_incomplete_sample_config(tmp_path: Path) -> None:
     cfg_path.write_text(toml_text)
 
     with pytest.raises(ValidationError):
-        load_full_experiment_config(cfg_path)
+        load_experiment_toml(cfg_path)
 
 
 def test_full_loader_no_train_section_raises(tmp_path: Path) -> None:
@@ -520,7 +526,7 @@ out_dir = "out/test"
     cfg_path = tmp_path / "no_train.toml"
     cfg_path.write_text(toml_text)
     with pytest.raises(ValidationError):
-        load_full_experiment_config(cfg_path)
+        load_experiment_toml(cfg_path)
 
 
 def test_full_loader_no_sample_section_raises(tmp_path: Path) -> None:
@@ -533,7 +539,7 @@ def test_full_loader_no_sample_section_raises(tmp_path: Path) -> None:
     cfg_path = tmp_path / "no_sample.toml"
     cfg_path.write_text(toml_text)
     with pytest.raises(ValidationError):
-        load_full_experiment_config(cfg_path)
+        load_experiment_toml(cfg_path)
 
 
 def test_full_loader_train_missing_data_section(tmp_path: Path) -> None:
@@ -548,7 +554,7 @@ def test_full_loader_train_missing_data_section(tmp_path: Path) -> None:
     cfg_path.write_text(toml_text)
 
     with pytest.raises(ValidationError):
-        load_full_experiment_config(cfg_path)
+        load_experiment_toml(cfg_path)
 
 
 def test_full_loader_train_missing_runtime_section(tmp_path: Path) -> None:
@@ -562,7 +568,7 @@ def test_full_loader_train_missing_runtime_section(tmp_path: Path) -> None:
     cfg_path.write_text(toml_text)
 
     with pytest.raises(ValidationError):
-        load_full_experiment_config(cfg_path)
+        load_experiment_toml(cfg_path)
 
 
 def test_full_loader_sample_missing_runtime_section(tmp_path: Path) -> None:
@@ -578,4 +584,4 @@ def test_full_loader_sample_missing_runtime_section(tmp_path: Path) -> None:
     cfg_path.write_text(toml_text)
 
     with pytest.raises(ValidationError):
-        load_full_experiment_config(cfg_path)
+        load_experiment_toml(cfg_path)

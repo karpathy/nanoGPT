@@ -94,13 +94,20 @@ def test_main_prepare_unknown_dataset_fails(
 
 def test_main_train_success(tmp_path: Path, mocker: MockerFixture) -> None:
     """Test train command auto-resolves config for experiment and calls train (strict loader)."""
-    mock_train_cfg = mocker.Mock(spec=TrainerConfig)
+    # E1.2: mock meta existence
+    mocker.patch("ml_playground.config_loader.fs_path_exists", return_value=True)
     mock_run = mocker.patch("ml_playground.cli._run_train")
     mocker.patch(
         "ml_playground.config_loader.load_full_experiment_config",
         return_value=ExperimentConfig(
             prepare=PreparerConfig(),
-            train=mock_train_cfg,  # type: ignore[arg-type]
+            train=TrainerConfig(
+                model=ModelConfig(),
+                data=DataConfig(dataset_dir=Path(".")),
+                optim=OptimConfig(),
+                schedule=LRSchedule(),
+                runtime=RuntimeConfig(out_dir=Path(".")),
+            ),
             sample=SamplerConfig(
                 runtime=RuntimeConfig(out_dir=Path(".")), sample=SampleConfig()
             ),
@@ -126,6 +133,8 @@ def test_main_train_no_train_block_fails(
 
 def test_main_sample_success(tmp_path: Path, mocker: MockerFixture) -> None:
     """Test sample command auto-resolves config and calls sample function (strict loader)."""
+    # E1.2: mock meta discovery success
+    mocker.patch("ml_playground.config_loader.fs_path_exists", return_value=True)
     mock_sample_cfg = SamplerConfig(
         runtime=RuntimeConfig(out_dir=Path("out")),
         sample=SampleConfig(start="x"),
@@ -716,6 +725,8 @@ def test_sample_routes_to_injected_sampler(
     """CLI should dispatch 'sample speakger' to the unified injected-config sampler path (_run_sample)."""
     # Patch the unified run path; we don't want to import heavy experiment deps
     run_sample = mocker.patch("ml_playground.cli._run_sample")
+    # E1.2: mock meta discovery to avoid filesystem dependency
+    mocker.patch("ml_playground.config_loader.fs_path_exists", return_value=True)
 
     # Also ensure legacy entrypoint is NOT consulted anymore
     called = {"count": 0}

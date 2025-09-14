@@ -179,7 +179,9 @@ def _resolve_relative_paths(merged: dict[str, Any], cfg_path: Path) -> dict[str,
     return out
 
 
-def load_full_experiment_config(config_path: Path, project_home: Path, experiment_name: str) -> ExperimentConfig:
+def load_full_experiment_config(
+    config_path: Path, project_home: Path, experiment_name: str
+) -> ExperimentConfig:
     """Canonical loader for a full experiment configuration.
 
     - Reads default_config.toml (if present), experiment config, and special .ldres config (if present).
@@ -208,7 +210,15 @@ def load_full_experiment_config(config_path: Path, project_home: Path, experimen
                 raise Exception(f"default_config.toml: {e}")
 
     # --- Check for special .ldres experiment config ---
-    ldres_config = project_home / ".ldres" / "etc" / "ml_playground" / "experiments" / experiment_name / "config.toml"
+    ldres_config = (
+        project_home
+        / ".ldres"
+        / "etc"
+        / "ml_playground"
+        / "experiments"
+        / experiment_name
+        / "config.toml"
+    )
     ldres_raw = {}
     if ldres_config.exists():
         try:
