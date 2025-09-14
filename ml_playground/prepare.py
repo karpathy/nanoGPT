@@ -240,12 +240,7 @@ def write_bin_and_meta(
     if data_cfg is not None:
         train_path = data_cfg.train_path
         val_path = data_cfg.val_path
-        # meta may be optional
-        meta_path = (
-            data_cfg.meta_path
-            if data_cfg.meta_path is not None
-            else ds_dir / "meta.pkl"
-        )
+        meta_path = data_cfg.meta_path
     else:
         train_path = ds_dir / "train.bin"
         val_path = ds_dir / "val.bin"
