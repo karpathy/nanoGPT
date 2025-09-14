@@ -110,7 +110,9 @@ class Sampler:
                 self.logger.error(f"Failed to read prompt file {prompt_path}: {e}")
                 return
         start_ids = self.tokenizer.encode(start_text)
-        x = torch.tensor(start_ids, dtype=torch.long, device=self.runtime_cfg.device)[None, ...]
+        x = torch.tensor(start_ids, dtype=torch.long, device=self.runtime_cfg.device)[
+            None, ...
+        ]
 
         self.logger.info("Sampling...")
         with torch.no_grad():
@@ -125,8 +127,6 @@ class Sampler:
                     output = self.tokenizer.decode(y[0].tolist())
                     self.logger.info(output)
                     self.logger.info("---------------")
-
-
 
 
 def sample(cfg: SamplerConfig, shared: SharedConfig | None = None) -> None:

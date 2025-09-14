@@ -160,7 +160,9 @@ class Trainer:
 
         self.ema: EMA | None = None
         if self.runtime_cfg.ema_decay > 0.0:
-            self.ema = EMA(self.model, self.runtime_cfg.ema_decay, self.runtime_cfg.device)
+            self.ema = EMA(
+                self.model, self.runtime_cfg.ema_decay, self.runtime_cfg.device
+            )
 
         self.writer: SummaryWriter | None = None
         if self.runtime_cfg.tensorboard_enabled:
@@ -207,7 +209,10 @@ class Trainer:
             for param_group in self.optimizer.param_groups:
                 param_group["lr"] = lr
 
-            if self.iter_num % self.runtime_cfg.eval_interval == 0 and self.runtime_cfg.eval_iters > 0:
+            if (
+                self.iter_num % self.runtime_cfg.eval_interval == 0
+                and self.runtime_cfg.eval_iters > 0
+            ):
                 self._evaluate(lr, raw_model)
 
             if self.iter_num == 0 and self.runtime_cfg.eval_only:
@@ -225,7 +230,9 @@ class Trainer:
                     mfu = raw_model.estimate_mfu(
                         self.data_cfg.batch_size * self.data_cfg.grad_accum_steps, dt
                     )
-                    running_mfu = mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
+                    running_mfu = (
+                        mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
+                    )
                 mfu_pct = max(0.0, min(float(running_mfu), 100.0))
                 self.logger.info(
                     f"iter {self.iter_num}: loss {lossf:.4f}, time {dt * 1000:.2f}ms, mfu {mfu_pct:.2f}%"
@@ -247,8 +254,12 @@ class Trainer:
 
     def _evaluate(self, lr: float, raw_model: GPT):
         # Use raw_model to satisfy type checker regardless of compile() wrapping
-        losses = estimate_loss(raw_model, self.batches, self.runtime_cfg.eval_iters, self.ctx)
-        self.logger.info(f"step {self.iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        losses = estimate_loss(
+            raw_model, self.batches, self.runtime_cfg.eval_iters, self.ctx
+        )
+        self.logger.info(
+            f"step {self.iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
+        )
         if self.writer:
             self.writer.add_scalar("Loss/train", losses["train"], self.iter_num)
             self.writer.add_scalar("Loss/val", losses["val"], self.iter_num)
@@ -269,7 +280,9 @@ class Trainer:
 
         if self.optim_cfg.grad_clip != 0.0:
             self.scaler.unscale_(self.optimizer)
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.optim_cfg.grad_clip)
+            torch.nn.utils.clip_grad_norm_(
+                self.model.parameters(), self.optim_cfg.grad_clip
+            )
 
         self.scaler.step(self.optimizer)
         self.scaler.update()
@@ -305,9 +318,11 @@ class Trainer:
             if meta_src and meta_src.exists():
                 meta_dst = self.out_dir / meta_src.name
                 import shutil
+
                 shutil.copy2(meta_src, meta_dst)
         except Exception:
             pass
+
 
 def train(cfg: TrainerConfig, shared: SharedConfig | None = None) -> tuple[int, float]:
     """Main training loop."""

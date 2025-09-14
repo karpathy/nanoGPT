@@ -27,8 +27,6 @@ class Encoder(Protocol):
     def encode_ordinary(self, text: str) -> list[int]: ...
 
 
-
-
 def snapshot_files(paths: Iterable[Path]) -> dict[Path, tuple[bool, float, int]]:
     """Public utility to take a snapshot of file states for diffing later.
 
@@ -169,8 +167,6 @@ class Preparer:
             logger=getattr(self.cfg, "logger", None),
             data_cfg=data_cfg,
         )
-
-
 
 
 def split_train_val(text: str, split: float = 0.9) -> tuple[str, str]:
