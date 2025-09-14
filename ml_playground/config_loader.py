@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 import tomllib
-from pydantic_core import ValidationError
 
 from ml_playground.config import (
     ExperimentConfig,
@@ -106,162 +105,18 @@ def deep_merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str
     return out
 
 
-def _coerce_known_paths_to_path(eff: dict[str, Any]) -> dict[str, Any]:
-    """Convert known path fields to Path objects to satisfy strict models."""
-    out = dict(eff)
-    # prepare paths
-    prep = out.get("prepare")
-    if isinstance(prep, dict):
-        for k in ("raw_dir",):
-            if k in prep and isinstance(prep[k], str):
-                prep[k] = Path(prep[k])
-    # train paths
-    train = out.get("train")
-    if isinstance(train, dict):
-        data = train.get("data")
-        if (
-            isinstance(data, dict)
-            and "dataset_dir" in data
-            and isinstance(data["dataset_dir"], str)
-        ):
-            data["dataset_dir"] = Path(data["dataset_dir"])
-        rt = train.get("runtime")
-        if isinstance(rt, dict) and "out_dir" in rt and isinstance(rt["out_dir"], str):
-            rt["out_dir"] = Path(rt["out_dir"])
-    # sample paths
-    sample = out.get("sample")
-    if isinstance(sample, dict):
-        rt = sample.get("runtime")
-        if isinstance(rt, dict) and "out_dir" in rt and isinstance(rt["out_dir"], str):
-            rt["out_dir"] = Path(rt["out_dir"])
-    # shared paths
-    shared = out.get("shared")
-    if isinstance(shared, dict):
-        for key in (
-            "config_path",
-            "project_home",
-            "dataset_dir",
-            "train_out_dir",
-            "sample_out_dir",
-        ):
-            if key in shared and isinstance(shared[key], str):
-                shared[key] = Path(shared[key])
-    return out
-
-
-def _resolve_path_if_relative(base: Path, path_str: str) -> str:
-    """Resolve a path string relative to base if it's not absolute."""
-    if path_str.startswith("/"):
-        return path_str
-    return str((base / path_str).resolve())
-
-
-def _resolve_relative_paths(merged: dict[str, Any], cfg_path: Path) -> dict[str, Any]:
-    """Resolve known relative paths relative to the config file directory."""
-    base = cfg_path.parent
-    out = dict(merged)
-    # prepare.dataset_dir, prepare.raw_dir
-    prep = out.get("prepare")
-    if isinstance(prep, dict):
-        for key in ("raw_dir",):
-            if (
-                key in prep
-                and isinstance(prep[key], str)
-                and not prep[key].startswith("/")
-            ):
-                prep[key] = _resolve_path_if_relative(base, prep[key])
-    # train.data.dataset_dir and train.runtime.out_dir
-    train = out.get("train")
-    if isinstance(train, dict):
-        data = train.get("data")
-        if (
-            isinstance(data, dict)
-            and "dataset_dir" in data
-            and isinstance(data["dataset_dir"], str)
-            and not data["dataset_dir"].startswith("/")
-        ):
-            data["dataset_dir"] = _resolve_path_if_relative(base, data["dataset_dir"])
-        # Resolve train.runtime.out_dir for partial loader
-        runtime = train.get("runtime")
-        if (
-            isinstance(runtime, dict)
-            and "out_dir" in runtime
-            and isinstance(runtime["out_dir"], str)
-            and not runtime["out_dir"].startswith("/")
-        ):
-            runtime["out_dir"] = _resolve_path_if_relative(base, runtime["out_dir"])
-    # sample.runtime.out_dir: do not resolve; preserve as provided
-    sample = out.get("sample")
-    if isinstance(sample, dict):
-        pass
-    return out
-
-
-def load_full_experiment_config(
+def _load_and_merge_configs(
     config_path: Path, project_home: Path, experiment_name: str
-) -> ExperimentConfig:
-    """Canonical loader for a full experiment configuration.
-
-    - Reads default_config.toml (if present), experiment config, and special .ldres config (if present).
-    - Merges defaults -> experiment -> .ldres config (.ldres config overrides all).
-    - Resolves known relative paths relative to the config file dir.
-    - Validates the entire config into an ExperimentConfig (prepare, train, sample mandatory).
-    """
+) -> dict[str, Any]:
+    """Load and merge configurations from default, experiment, and .ldres files."""
     if not config_path.exists():
         raise FileNotFoundError(f"Config file not found: {config_path}")
 
     raw_exp = read_toml_dict(config_path)
 
-    # Strict validation: require mandatory sections in experiment config
-    required_sections = ["prepare", "train", "sample"]
-    for section in required_sections:
-        if section not in raw_exp:
-            raise ValidationError.from_exception_data(
-                "ExperimentConfig",
-                [{"type": "missing", "loc": (section,), "input": raw_exp}],
-            )
-
-    # Validate train subsections
-    if "train" in raw_exp and isinstance(raw_exp["train"], dict):
-        train_required = ["model", "data", "optim", "schedule", "runtime"]
-        for subsection in train_required:
-            if subsection not in raw_exp["train"]:
-                raise ValidationError.from_exception_data(
-                    "TrainerConfig",
-                    [
-                        {
-                            "type": "missing",
-                            "loc": ("train", subsection),
-                            "input": raw_exp["train"],
-                        }
-                    ],
-                )
-
-    # Validate sample subsections
-    if "sample" in raw_exp and isinstance(raw_exp["sample"], dict):
-        sample_required = ["runtime", "sample"]
-        for subsection in sample_required:
-            if subsection not in raw_exp["sample"]:
-                raise ValidationError.from_exception_data(
-                    "SamplerConfig",
-                    [
-                        {
-                            "type": "missing",
-                            "loc": ("sample", subsection),
-                            "input": raw_exp["sample"],
-                        }
-                    ],
-                )
-
     defaults_path = _default_config_path_from_root(project_home)
-    defaults_raw = {}
-    if defaults_path.exists():
-        try:
-            defaults_raw = read_toml_dict(defaults_path)
-        except Exception as e:
-            raise Exception(f"default_config.toml: {e}")
+    defaults_raw = read_toml_dict(defaults_path) if defaults_path.exists() else {}
 
-    # --- Check for special .ldres experiment config ---
     ldres_config = (
         project_home
         / ".ldres"
@@ -271,54 +126,46 @@ def load_full_experiment_config(
         / experiment_name
         / "config.toml"
     )
-    ldres_raw = {}
-    if ldres_config.exists():
-        try:
-            ldres_raw = read_toml_dict(ldres_config)
-        except Exception as e:
-            raise Exception(f".ldres experiment config: {e}")
-    # --- END ---
+    ldres_raw = read_toml_dict(ldres_config) if ldres_config.exists() else {}
 
     # Merge order: defaults -> experiment config -> .ldres config
     merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
-    merged = deep_merge_dicts(merged, deepcopy(ldres_raw))
-    # Resolve relative strings and coerce known paths to Path before strict validation
-    merged = _resolve_relative_paths(merged, config_path)
-    effective = _coerce_known_paths_to_path(merged)
+    return deep_merge_dicts(merged, deepcopy(ldres_raw))
 
-    # Clean up fields that have been moved to SharedConfig
-    if "prepare" in effective and isinstance(effective["prepare"], dict):
-        effective["prepare"].pop("dataset_dir", None)
 
-    return ExperimentConfig(**effective)
+def load_full_experiment_config(
+    config_path: Path, project_home: Path, experiment_name: str
+) -> ExperimentConfig:
+    """Canonical loader for a full experiment configuration."""
+    effective_config = _load_and_merge_configs(
+        config_path, project_home, experiment_name
+    )
+
+    # Populated by the model validator
+    effective_config.setdefault("shared", {})
+    effective_config["shared"]["config_path"] = config_path
+    effective_config["shared"]["project_home"] = project_home
+    effective_config["shared"]["experiment"] = experiment_name
+
+    return ExperimentConfig.model_validate(effective_config)
 
 
 def load_train_config(config_path: Path) -> TrainerConfig:
     """Load config from a file path."""
     raw_exp = read_toml_dict(config_path)
-    # Derive project root from package location for partial loader
     project_root = Path(__file__).resolve().parent.parent
     defaults_path = _default_config_path_from_root(project_root)
-    if defaults_path.exists():
-        try:
-            defaults_raw = read_toml_dict(defaults_path)
-        except Exception as e:
-            raise Exception(f"default_config.toml: {e}")
-    else:
-        defaults_raw = {}
+    defaults_raw = read_toml_dict(defaults_path) if defaults_path.exists() else {}
+
     raw_merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
-    # Resolve relative paths and coerce known paths to Path objects
-    merged = _resolve_relative_paths(raw_merged, config_path)
-    effective = _coerce_known_paths_to_path(merged)
-    td = dict(effective.get("train", {}))
-    # Populate required nested sections with defaults when omitted
-    td.setdefault("model", {})
-    td.setdefault("data", {})
-    td.setdefault("optim", {})
-    td.setdefault("schedule", {})
-    td.setdefault("runtime", {})
-    td["logger"] = logger
-    cfg = TrainerConfig.model_validate(td)
+
+    # The train config expects a 'train' section.
+    train_data = raw_merged.get("train", {})
+
+    # Pass config_path in context for path resolution
+    context = {"config_path": config_path}
+    cfg = TrainerConfig.model_validate(train_data, context=context)
+
     info = {"raw": raw_merged, "context": {"config_path": str(config_path)}}
     cfg.extras["provenance"] = info
     return cfg
@@ -329,83 +176,41 @@ def load_sample_config(config_path: Path) -> SamplerConfig:
     raw_exp = read_toml_dict(config_path)
     project_root = Path(__file__).resolve().parent.parent
     defaults_path = _default_config_path_from_root(project_root)
-    if defaults_path.exists():
-        try:
-            defaults_raw = read_toml_dict(defaults_path)
-        except Exception as e:
-            raise Exception(f"default_config.toml: {e}")
-    else:
-        defaults_raw = {}
-    # Strict: require [sample] section in the raw file itself (not provided by defaults)
+    defaults_raw = read_toml_dict(defaults_path) if defaults_path.exists() else {}
+
+    raw_merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
+
     if "sample" not in raw_exp:
         raise ValueError("Config must contain a [sample] section")
-    raw_merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
-    # No runtime_ref mechanics; strict SamplerConfig requires runtime
-    sd = dict(raw_merged.get("sample", {}))
-    # Resolve relative out_dir against config directory for partial loader
-    base = config_path.parent
-    rt = sd.get("runtime", {})
-    if isinstance(rt, dict):
-        od = rt.get("out_dir")
-        if isinstance(od, str) and not od.startswith("/"):
-            rt["out_dir"] = (base / od).resolve()
-        elif isinstance(od, Path) and not od.is_absolute():
-            rt["out_dir"] = (base / od).resolve()
-    # Ensure nested 'sample' subsection exists for SamplerConfig
-    if "sample" not in sd or not isinstance(sd.get("sample"), dict):
-        sd["sample"] = {}
-    sd["logger"] = logger
-    cfg = SamplerConfig.model_validate(sd)
+
+    sample_data = raw_merged.get("sample", {})
+
+    context = {"config_path": config_path}
+    cfg = SamplerConfig.model_validate(sample_data, context=context)
+
     info = {"raw": raw_merged, "context": {"config_path": str(config_path)}}
     cfg.extras["provenance"] = info
     return cfg
 
 
-def load_sample_config_from_raw(
-    raw_exp: dict, defaults_raw: dict | None = None
-) -> SamplerConfig:
-    """Loads and validates the sampling config from raw dictionaries."""
-    defaults_raw = defaults_raw or {}
-    raw_merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
-    eff = _coerce_known_paths_to_path(raw_merged)
-    cfg = SamplerConfig.model_validate(eff.get("sample", {}))
-    info = {"raw": raw_merged, "context": {}}
-    cfg.extras["provenance"] = info
-    return cfg
-
-
-# runtime_ref support removed: configurations must specify explicit runtime under [sample]
-
-
-def load_train_config_from_raw(raw_exp: dict, defaults_raw: dict) -> TrainerConfig:
-    """Loads and validates the training config from raw dictionaries."""
-    raw = deep_merge_dicts(defaults_raw, raw_exp)
-    if "train" not in raw:
-        raise ValueError("Config must contain a [train] section")
-
-    # Use Pydantic for validation
-    cfg = TrainerConfig.model_validate(raw["train"])
-    return cfg
-
-
 def load_prepare_config(path: Path) -> PreparerConfig:
-    """Public wrapper to load and validate preparer config.
-
-    Only parses the [prepare] section, merging defaults -> experiment and resolving paths.
-    Does not require [train] or [sample] sections.
-    """
+    """Public wrapper to load and validate preparer config."""
     raw_exp = read_toml_dict(path)
-    # Derive project root from package location for partial loader
     project_root = Path(__file__).resolve().parent.parent
     defaults_path = _default_config_path_from_root(project_root)
     defaults_raw = read_toml_dict(defaults_path) if defaults_path.exists() else {}
-    merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
-    if "prepare" not in merged or not isinstance(merged.get("prepare"), dict):
+
+    raw_merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
+
+    if "prepare" not in raw_merged:
         raise ValueError("Config must contain a [prepare] section")
-    prep_dict = dict(merged.get("prepare", {}))
-    prep_dict["logger"] = logger
-    cfg = PreparerConfig.model_validate(prep_dict)
-    info = {"raw": merged, "context": {"config_path": str(path)}}
+
+    prepare_data = raw_merged.get("prepare", {})
+
+    context = {"config_path": path}
+    cfg = PreparerConfig.model_validate(prepare_data, context=context)
+
+    info = {"raw": raw_merged, "context": {"config_path": str(path)}}
     cfg.extras["provenance"] = info
     return cfg
 

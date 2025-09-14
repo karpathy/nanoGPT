@@ -509,8 +509,6 @@ def test_log_command_status_covers_paths(tmp_path: Path):
         OptimConfig,
         LRSchedule,
         RuntimeConfig,
-        SamplerConfig,
-        SampleConfig,
     )
 
     ds = tmp_path / "dataset"
@@ -519,19 +517,27 @@ def test_log_command_status_covers_paths(tmp_path: Path):
     out = tmp_path / "out"
     out.mkdir(parents=True, exist_ok=True)
 
-    train_cfg = TrainerConfig(
-        model=ModelConfig(),
-        data=DataConfig(),
-        optim=OptimConfig(),
-        schedule=LRSchedule(),
-        runtime=RuntimeConfig(out_dir=out),
+    shared = SharedConfig(
+        experiment="test",
+        config_path=tmp_path / "config.toml",
+        project_home=tmp_path,
+        dataset_dir=ds,
+        train_out_dir=out,
+        sample_out_dir=out,
     )
     # Should not raise
-    cli._log_command_status("train", train_cfg.runtime)
+    cli._log_command_status("train", shared, out)
 
     # Sampler with runtime
-    samp_cfg = SamplerConfig(runtime=RuntimeConfig(out_dir=out), sample=SampleConfig())
-    cli._log_command_status("sample", samp_cfg.runtime)
+    shared = SharedConfig(
+        experiment="test",
+        config_path=tmp_path / "config.toml",
+        project_home=tmp_path,
+        dataset_dir=ds,
+        train_out_dir=out,
+        sample_out_dir=out,
+    )
+    cli._log_command_status("sample", shared, out)
 
 
 def test_log_command_status_missing_paths(tmp_path: Path):
@@ -546,15 +552,16 @@ def test_log_command_status_missing_paths(tmp_path: Path):
 
     # None of these paths exist
     out = tmp_path / "missing_out"
-    cfg = TrainerConfig(
-        model=ModelConfig(),
-        data=DataConfig(),
-        optim=OptimConfig(),
-        schedule=LRSchedule(),
-        runtime=RuntimeConfig(out_dir=out),
+    shared = SharedConfig(
+        experiment="test",
+        config_path=tmp_path / "config.toml",
+        project_home=tmp_path,
+        dataset_dir=tmp_path / "missing_ds",
+        train_out_dir=out,
+        sample_out_dir=out,
     )
     # Should not raise
-    cli._log_command_status("train", cfg.runtime)
+    cli._log_command_status("train", shared, out)
 
 
 def test_extract_exp_config_edge_cases():

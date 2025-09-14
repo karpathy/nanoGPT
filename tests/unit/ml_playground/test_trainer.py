@@ -161,9 +161,7 @@ def test_train_eval_only_breaks_early_and_returns(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        trainer_mod,
-        "_setup_data_loader",
-        lambda *args, **kwargs: _FakeBatches(device="cpu"),
+        trainer_mod, "SimpleBatches", lambda *args, **kwargs: _FakeBatches(device="cpu")
     )
     monkeypatch.setattr(trainer_mod, "GPT", lambda cfg: _FakeModel())
     monkeypatch.setattr(trainer_mod, "GradScaler", _FakeScaler)
@@ -191,9 +189,7 @@ def test_train_writes_best_checkpoint_on_improvement_after_first_iter(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        trainer_mod,
-        "_setup_data_loader",
-        lambda *args, **kwargs: _FakeBatches(device="cpu"),
+        trainer_mod, "SimpleBatches", lambda *args, **kwargs: _FakeBatches(device="cpu")
     )
     monkeypatch.setattr(trainer_mod, "GPT", lambda cfg: _FakeModel())
     monkeypatch.setattr(trainer_mod, "GradScaler", _FakeScaler)

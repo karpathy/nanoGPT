@@ -13,6 +13,7 @@ from pydantic import (
     NonNegativeInt,
     StrictFloat,
     AfterValidator,
+    ValidationInfo,
 )
 
 # Read policy constants to avoid hardcoded strings in code/tests
@@ -106,10 +107,29 @@ class PreparerConfig(_FrozenStrictModel):
     doc_separator: str = ""
     extras: dict[str, Any] = Field(default_factory=dict)
 
-    @field_validator("raw_dir", mode="after")
+    @model_validator(mode="before")
     @classmethod
-    def _resolve_path(cls, v: Path) -> Path:
-        return _resolve_path_strict(v)
+    def _resolve_paths(cls, data: Any, info: ValidationInfo) -> Any:
+        if not isinstance(data, dict) or not info.context:
+            return data
+
+        config_path = info.context.get("config_path")
+        if not config_path or not isinstance(config_path, Path):
+            return data
+
+        base_dir = config_path.parent
+
+        def resolve_if_relative(path_val: Any) -> Any:
+            if isinstance(path_val, str) and not path_val.startswith("/"):
+                return (base_dir / path_val).resolve()
+            if isinstance(path_val, Path) and not path_val.is_absolute():
+                return (base_dir / path_val).resolve()
+            return path_val
+
+        if "raw_dir" in data:
+            data["raw_dir"] = resolve_if_relative(data["raw_dir"])
+
+        return data
 
 
 class RuntimeConfig(_FrozenStrictModel):
@@ -177,6 +197,33 @@ class TrainerConfig(_FrozenStrictModel):
     scheduler, runtime, and extensible extras.
     """
 
+    @model_validator(mode="before")
+    @classmethod
+    def _resolve_paths(cls, data: Any, info: ValidationInfo) -> Any:
+        if not isinstance(data, dict) or not info.context:
+            return data
+
+        config_path = info.context.get("config_path")
+        if not config_path or not isinstance(config_path, Path):
+            return data
+
+        base_dir = config_path.parent
+
+        def resolve_if_relative(path_val: Any) -> Any:
+            if isinstance(path_val, str) and not path_val.startswith("/"):
+                return (base_dir / path_val).resolve()
+            if isinstance(path_val, Path) and not path_val.is_absolute():
+                return (base_dir / path_val).resolve()
+            return path_val
+
+        if "runtime" in data and isinstance(data["runtime"], dict):
+            if "out_dir" in data["runtime"]:
+                data["runtime"]["out_dir"] = resolve_if_relative(
+                    data["runtime"]["out_dir"]
+                )
+
+        return data
+
     model: ModelConfig
     data: DataConfig
     optim: OptimConfig
@@ -217,6 +264,33 @@ class SamplerConfig(_FrozenStrictModel):
     Top-level configuration for model sampling/generation runs, including runtime and sampling parameters.
     Supports a schema-level reference to reuse runtime from the training section.
     """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _resolve_paths(cls, data: Any, info: ValidationInfo) -> Any:
+        if not isinstance(data, dict) or not info.context:
+            return data
+
+        config_path = info.context.get("config_path")
+        if not config_path or not isinstance(config_path, Path):
+            return data
+
+        base_dir = config_path.parent
+
+        def resolve_if_relative(path_val: Any) -> Any:
+            if isinstance(path_val, str) and not path_val.startswith("/"):
+                return (base_dir / path_val).resolve()
+            if isinstance(path_val, Path) and not path_val.is_absolute():
+                return (base_dir / path_val).resolve()
+            return path_val
+
+        if "runtime" in data and isinstance(data["runtime"], dict):
+            if "out_dir" in data["runtime"]:
+                data["runtime"]["out_dir"] = resolve_if_relative(
+                    data["runtime"]["out_dir"]
+                )
+
+        return data
 
     # Runtime is required; references are not supported
     runtime: RuntimeConfig
@@ -332,6 +406,69 @@ class ExperimentConfig(_FrozenStrictModel):
     sample: SamplerConfig
     shared: SharedConfig
 
+    @model_validator(mode="before")
+    @classmethod
+    def _resolve_paths(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+
+        shared_data = data.get("shared", {})
+        config_path = None
+        if isinstance(shared_data, dict):
+            config_path = shared_data.get("config_path")
+        elif hasattr(shared_data, "config_path"):
+            config_path = shared_data.config_path
+        if not config_path or not isinstance(config_path, Path):
+            return data
+
+        base_dir = config_path.parent
+
+        def resolve_if_relative(path_val: Any) -> Any:
+            if isinstance(path_val, str) and not path_val.startswith("/"):
+                return (base_dir / path_val).resolve()
+            if isinstance(path_val, Path) and not path_val.is_absolute():
+                return (base_dir / path_val).resolve()
+            return path_val
+
+        # Defensively handle data that may already be a model instance
+        train_data = data.get("train")
+        if isinstance(train_data, dict):
+            runtime_data = train_data.get("runtime")
+            if isinstance(runtime_data, dict) and "out_dir" in runtime_data:
+                runtime_data["out_dir"] = resolve_if_relative(runtime_data["out_dir"])
+
+        sample_data = data.get("sample")
+        if isinstance(sample_data, dict):
+            runtime_data = sample_data.get("runtime")
+            if isinstance(runtime_data, dict) and "out_dir" in runtime_data:
+                runtime_data["out_dir"] = resolve_if_relative(runtime_data["out_dir"])
+
+        prepare_data = data.get("prepare")
+        if isinstance(prepare_data, dict) and "raw_dir" in prepare_data:
+            prepare_data["raw_dir"] = resolve_if_relative(prepare_data["raw_dir"])
+
+        # Populate shared paths
+        if isinstance(shared_data, dict):
+            train_runtime_data = data.get("train", {}).get("runtime", {})
+            if isinstance(train_runtime_data, dict):
+                train_out_dir = train_runtime_data.get("out_dir")
+                if train_out_dir:
+                    shared_data["train_out_dir"] = resolve_if_relative(train_out_dir)
+
+            sample_runtime_data = data.get("sample", {}).get("runtime", {})
+            if isinstance(sample_runtime_data, dict):
+                sample_out_dir = sample_runtime_data.get("out_dir")
+                if sample_out_dir:
+                    shared_data["sample_out_dir"] = resolve_if_relative(sample_out_dir)
+
+            prepare_data = data.get("prepare")
+            if isinstance(prepare_data, dict):
+                dataset_dir = prepare_data.pop("dataset_dir", None)
+                if dataset_dir:
+                    shared_data["dataset_dir"] = resolve_if_relative(dataset_dir)
+
+        return data
+
 
 def load_experiment_toml(path: Path) -> ExperimentConfig:
     """Canonical wrapper that delegates to config_loader.
@@ -380,92 +517,6 @@ TrainExperiment = TrainerConfig
 SampleExperiment = SamplerConfig
 
 
-def validate_config_field(
-    value: Any,
-    field_name: str,
-    expected_type: type,
-    required: bool = True,
-    min_value: Any = None,
-    max_value: Any = None,
-) -> None:
-    """
-    Validate a configuration field with type and range checks.
-
-    This function checks if the provided value is of the expected type and within the specified range.
-    It raises a ValueError if the validation fails.
-
-    Args:
-        value: The value to validate
-        field_name: Name of the field (for error messages)
-        expected_type: Expected type of the value
-        required: Whether the field is required (cannot be None)
-        min_value: Minimum allowed value (for numeric types)
-        max_value: Maximum allowed value (for numeric types)
-
-    Raises:
-        ValueError: If validation fails
-    """
-    # Check if required and missing
-    if required and value is None:
-        raise ValueError(f"Required configuration field '{field_name}' is missing")
-
-    # Skip further validation if None and not required
-    if value is None:
-        return
-
-    # Type check
-    if not isinstance(value, expected_type):
-        raise ValueError(
-            f"Configuration field '{field_name}' must be of type {expected_type.__name__}, "
-            f"got {type(value).__name__}"
-        )
-
-    # Range checks for numeric types
-    if isinstance(value, (int, float)):
-        if min_value is not None and value < min_value:
-            raise ValueError(
-                f"Configuration field '{field_name}' must be >= {min_value}, got {value}"
-            )
-        if max_value is not None and value > max_value:
-            raise ValueError(
-                f"Configuration field '{field_name}' must be <= {max_value}, got {value}"
-            )
-
-
-def validate_path_exists(
-    path: Path, field_name: str, must_be_file: bool = False, must_be_dir: bool = False
-) -> None:
-    """
-    Validate that a path exists and optionally check if it's a file or directory.
-
-    This function checks if the provided path exists and optionally checks if it's a file or directory.
-    It raises a ValueError if the validation fails.
-
-    Args:
-        path: Path to validate
-        field_name: Name of the field (for error messages)
-        must_be_file: If True, path must exist and be a file
-        must_be_dir: If True, path must exist and be a directory
-
-    Raises:
-        ValueError: If validation fails
-    """
-    if not path.exists():
-        raise ValueError(f"Path specified in '{field_name}' does not exist: {path}")
-
-    if must_be_file and not path.is_file():
-        raise ValueError(f"Path specified in '{field_name}' must be a file: {path}")
-
-    if must_be_dir and not path.is_dir():
-        raise ValueError(
-            f"Path specified in '{field_name}' must be a directory: {path}"
-        )
-
-
-# Expose utility functions
-validate_config_field = validate_config_field
-validate_path_exists = validate_path_exists
-
 __all__ = [
     "DeviceKind",
     "DTypeKind",
@@ -485,6 +536,4 @@ __all__ = [
     "SECTION_TRAIN",
     "SECTION_SAMPLE",
     "KEY_EXTRAS",
-    "validate_config_field",
-    "validate_path_exists",
 ]

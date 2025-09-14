@@ -4,7 +4,6 @@ import logging
 import time
 from contextlib import nullcontext
 from typing import cast
-from pathlib import Path
 
 import torch
 from torch import autocast
@@ -29,32 +28,6 @@ from ml_playground import lr_scheduler
 from ml_playground.model import GPT
 
 
-# Backward-compatible capture of dataset_dir for tests that monkeypatch this helper
-_DATASET_DIR_FOR_LOADER: Path | None = None
-
-
-def _setup_data_loader(*args) -> SimpleBatches:
-    """Initialize data loader.
-
-    Backward-compat with tests that monkeypatch this helper with different
-    signatures (data_cfg, runtime_cfg[, dataset_dir]). We accept *args and
-    extract what we need.
-    """
-    if len(args) == 2:
-        data_cfg, runtime_cfg = args
-        ds = (
-            _DATASET_DIR_FOR_LOADER
-            if _DATASET_DIR_FOR_LOADER is not None
-            else runtime_cfg.out_dir
-        )
-        return SimpleBatches(data=data_cfg, device=runtime_cfg.device, dataset_dir=ds)
-    elif len(args) == 3:
-        data_cfg, runtime_cfg, dataset_dir = args
-        return SimpleBatches(
-            data=data_cfg, device=runtime_cfg.device, dataset_dir=dataset_dir
-        )
-    else:
-        raise TypeError("_setup_data_loader expected 2 or 3 arguments")
 
 
 def get_lr(it: int, schedule: LRSchedule, optim: OptimConfig) -> float:
@@ -108,9 +81,24 @@ class Trainer:
         self.schedule_cfg = cfg.schedule
 
         self.out_dir = shared.train_out_dir
-        setup_logging(str(self.out_dir))
         self.logger = logging.getLogger(__name__)
+        setup_logging(str(self.out_dir))
 
+        self._setup_torch_env()
+
+        self.batches = self._setup_data_loader()
+        self.model, self.optimizer = self._setup_model()
+
+        self.iter_num = 0
+        self.best_val_loss = 1e9
+
+        self.out_dir.mkdir(parents=True, exist_ok=True)
+        self.ckpt_mgr = self._setup_checkpoint_manager()
+
+        self._load_checkpoint()
+        self._setup_components()
+
+    def _setup_torch_env(self):
         torch.manual_seed(self.runtime_cfg.seed)
         torch.cuda.manual_seed(self.runtime_cfg.seed)
         torch.backends.cuda.matmul.allow_tf32 = True
@@ -128,30 +116,36 @@ class Trainer:
             else autocast(device_type=self.device_type, dtype=pt_dtype)
         )
 
-        global _DATASET_DIR_FOR_LOADER
-        _DATASET_DIR_FOR_LOADER = self.shared.dataset_dir
-        self.batches = _setup_data_loader(self.data_cfg, self.runtime_cfg)
-
-        self.model, self.optimizer = _setup_model(
-            self.model_cfg, self.runtime_cfg, self.optim_cfg, self.logger
+    def _setup_data_loader(self) -> SimpleBatches:
+        return SimpleBatches(
+            data=self.data_cfg,
+            device=self.runtime_cfg.device,
+            dataset_dir=self.shared.dataset_dir,
         )
 
-        self.iter_num = 0
-        self.best_val_loss = 1e9
+    def _setup_model(self) -> tuple[GPT, torch.optim.Optimizer]:
+        self.logger.info("Initializing model and optimizer")
+        model = GPT(self.model_cfg)
+        model.to(self.runtime_cfg.device)
+        optimizer = model.configure_optimizers(
+            self.optim_cfg.weight_decay,
+            self.optim_cfg.learning_rate,
+            (self.optim_cfg.beta1, self.optim_cfg.beta2),
+            self.runtime_cfg.device,
+        )
+        return model, optimizer
 
-        self.out_dir.mkdir(parents=True, exist_ok=True)
-        self.ckpt_mgr = CheckpointManager(
+    def _setup_checkpoint_manager(self) -> CheckpointManager:
+        return CheckpointManager(
             out_dir=self.out_dir,
             atomic=self.runtime_cfg.ckpt_atomic,
             keep_last=self.runtime_cfg.checkpointing.keep.last,
             keep_best=self.runtime_cfg.checkpointing.keep.best,
         )
 
-        self._load_checkpoint()
-
+    def _setup_components(self):
         if self.runtime_cfg.compile:
             self.logger.info("Compiling the model... (takes a ~minute)")
-            # torch.compile returns Any; cast to GPT for static type-checkers
             self.model = cast(GPT, torch.compile(self.model))
 
         self.scaler = GradScaler(
@@ -225,17 +219,8 @@ class Trainer:
             dt = t1 - t0
             t0 = t1
             if self.iter_num % self.runtime_cfg.log_interval == 0:
-                lossf = loss.item() * self.data_cfg.grad_accum_steps
-                if local_iter_num >= 5:
-                    mfu = raw_model.estimate_mfu(
-                        self.data_cfg.batch_size * self.data_cfg.grad_accum_steps, dt
-                    )
-                    running_mfu = (
-                        mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
-                    )
-                mfu_pct = max(0.0, min(float(running_mfu), 100.0))
-                self.logger.info(
-                    f"iter {self.iter_num}: loss {lossf:.4f}, time {dt * 1000:.2f}ms, mfu {mfu_pct:.2f}%"
+                running_mfu = self._log_step(
+                    loss, dt, local_iter_num, raw_model, running_mfu
                 )
 
             self.iter_num += 1
@@ -251,6 +236,27 @@ class Trainer:
             self.writer.close()
 
         return self.iter_num, self.best_val_loss
+
+    def _log_step(
+        self,
+        loss: torch.Tensor,
+        dt: float,
+        local_iter_num: int,
+        raw_model: GPT,
+        running_mfu: float,
+    ) -> float:
+        lossf = loss.item() * self.data_cfg.grad_accum_steps
+        if local_iter_num >= 5:
+            mfu = raw_model.estimate_mfu(
+                self.data_cfg.batch_size * self.data_cfg.grad_accum_steps, dt
+            )
+            running_mfu = mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
+
+        mfu_pct = max(0.0, min(float(running_mfu), 100.0))
+        self.logger.info(
+            f"iter {self.iter_num}: loss {lossf:.4f}, time {dt * 1000:.2f}ms, mfu {mfu_pct:.2f}%"
+        )
+        return running_mfu
 
     def _evaluate(self, lr: float, raw_model: GPT):
         # Use raw_model to satisfy type checker regardless of compile() wrapping

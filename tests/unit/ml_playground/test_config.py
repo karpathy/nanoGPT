@@ -7,8 +7,6 @@ from ml_playground.config import (
     DataConfig,
     ExperimentConfig,
     load_experiment_toml,
-    validate_config_field,
-    validate_path_exists,
     SampleConfig,
     LRSchedule,
     OptimConfig,
@@ -102,67 +100,6 @@ n_layer=1
 # Consolidated: validators and util tests previously in fragmented files
 
 
-def test_validate_config_field_success_and_errors() -> None:
-    # Success cases
-    validate_config_field(3, "k", int)
-    validate_config_field(3.5, "k", float, min_value=0.0, max_value=10.0)
-    validate_config_field(None, "k", int, required=False)
-
-    # Required missing
-    with pytest.raises(ValueError):
-        validate_config_field(None, "k", int, required=True)
-
-    # Type mismatch
-    with pytest.raises(ValueError):
-        validate_config_field("x", "k", int)
-
-    # Range violations
-    with pytest.raises(ValueError) as ei:
-        validate_config_field(-1, "k", int, min_value=0)
-    assert ">= 0" in str(ei.value)
-    with pytest.raises(ValueError) as ei2:
-        validate_config_field(11, "k", int, max_value=10)
-    assert "<= 10" in str(ei2.value)
-    # Float edges
-    validate_config_field(0.0, "k", float, min_value=0.0)
-    with pytest.raises(ValueError):
-        validate_config_field(-1e-9, "k", float, min_value=0.0)
-    validate_config_field(1.0, "k", float, max_value=1.0)
-    with pytest.raises(ValueError):
-        validate_config_field(1.0000001, "k", float, max_value=1.0)
-    # Cross-type checks
-    validate_config_field(1, "k", int, min_value=0, max_value=10)
-    with pytest.raises(ValueError):
-        validate_config_field(1, "k", float)
-    with pytest.raises(ValueError):
-        validate_config_field(1.5, "k", int)
-
-    # Object type mismatch
-    class X:
-        pass
-
-    with pytest.raises(ValueError):
-        validate_config_field(X(), "obj", dict)
-
-
-def test_validate_path_exists_file_and_dir(tmp_path: Path) -> None:
-    # Missing
-    with pytest.raises(ValueError):
-        validate_path_exists(tmp_path / "missing", "x")
-
-    # File case
-    f = tmp_path / "a.txt"
-    f.write_text("hi")
-    validate_path_exists(f, "x", must_be_file=True)
-    with pytest.raises(ValueError):
-        validate_path_exists(f, "x", must_be_dir=True)
-
-    # Dir case
-    d = tmp_path / "d"
-    d.mkdir()
-    validate_path_exists(d, "x", must_be_dir=True)
-    with pytest.raises(ValueError):
-        validate_path_exists(d, "x", must_be_file=True)
 
 
 def test_full_loader_unknown_top_level_sections_raise(tmp_path: Path) -> None:

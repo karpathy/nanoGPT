@@ -26,7 +26,6 @@ from ml_playground.error_handling import (
     validate_file_exists,
     ProgressReporter,
 )
-from ml_playground.config import validate_config_field
 
 
 class BundestagCharPreparer(_PreparerProto):
@@ -72,7 +71,6 @@ class BundestagCharPreparer(_PreparerProto):
         if n < 1:
             raise DataError(f"ngram_size must be >= 1, got {n}")
 
-        validate_config_field(n, "ngram_size", int, min_value=1)
 
         validate_file_exists(input_file_path, "Input text file")
 
