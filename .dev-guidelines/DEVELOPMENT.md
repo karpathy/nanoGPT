@@ -29,6 +29,8 @@ CI and pre-commit both invoke `make quality` as the core gate.
 - **One logical change per commit** (e.g., fix a test, adjust a config, refactor a function)
 - **Keep commits under ~200 lines** unless unavoidable
 - **Run quality gates before each commit**, not just before PR
+- **Pairing rule (REQUIRED)**: Each functional or behavioral change MUST include its tests in the same commit (unit and/or integration). Creating new files (untracked) is expected when adding tests—stage them together with the production change.
+- **Granularity**: Prefer a short sequence of TDD commits to a single large commit. Each step should keep the suite green.
 
 ### Practical Tips
 
@@ -36,6 +38,8 @@ CI and pre-commit both invoke `make quality` as the core gate.
 - Separate mechanical formatting from semantic changes
 - Split large features into reviewable increments
 - Keep tests passing at every step
+- Pair production and test changes: when adding/refactoring code, include the minimal tests that specify the behavior in the same commit.
+- Acceptable exceptions: `docs/*` only commits, pure test refactors (no behavior change), or mechanical formatting. For everything else, pair code+tests.
 
 ### Conventional Commit Format
 
@@ -49,8 +53,29 @@ CI and pre-commit both invoke `make quality` as the core gate.
 
 - `feat(trainer): write checkpoint sidecar JSON with decision inputs/outputs`
 - `test(trainer): add tests for checkpoint sidecar schema and behavior`
+- `feat(config): reject invalid out_dir` + tests in same commit (preferred)
 - `chore(config): centralize tooling settings in pyproject.toml`
-- `docs(guidelines): document pyproject-only config and granular commits`
+- `docs(guidelines): document pyproject-only config and granular commits + TDD`
+
+## Test-Driven Development (REQUIRED)
+
+We practice strict TDD for all functional changes:
+
+1. Write a failing test that specifies the intended behavior (unit or integration).
+2. Implement the minimal production code to make the test pass.
+3. Refactor safely with tests green.
+
+Commit strategy under TDD:
+
+- Prefer 1–3 small commits per behavior: (a) failing test, (b) implementation, (c) optional refactor.
+- The implementation commit MUST pair production code and its tests if the previous commit wasn’t already pairing them.
+- Never merge code that reduces coverage or leaves failing tests.
+
+Allowed deviations:
+
+- Documentation-only changes.
+- Test-only refactors (no behavior change) when clearly labeled `test(<scope>): ...`.
+- Mechanical format/lint fixes.
 
 ## Testing Standards (ULTRA-STRICT POLICY - 100% SUCCESS REQUIRED)
 
