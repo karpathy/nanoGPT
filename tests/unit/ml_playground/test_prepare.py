@@ -308,7 +308,7 @@ def test_make_preparer_runs_and_writes(tmp_path: Path) -> None:
     ds = tmp_path / "ds"
 
     # Provide raw text via extras to avoid file IO
-    cfg = prep.Preparer.Config(  # type: ignore[attr-defined]
+    cfg = prep.PreparerConfig(
         extras={
             "tokenizer_type": "char",
             "raw_text": "abbaabba",
@@ -316,8 +316,7 @@ def test_make_preparer_runs_and_writes(tmp_path: Path) -> None:
     )
 
     # Use a deterministic tokenizer via create_tokenizer
-    # make_preparer should construct _PreparerInstance and write files
-    p = prep.make_preparer(cfg)
+    p = prep.Preparer(cfg)
     from ml_playground.config import SharedConfig
 
     shared = SharedConfig(

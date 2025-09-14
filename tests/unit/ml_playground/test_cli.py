@@ -779,14 +779,31 @@ def test_run_loop_calls_in_order_and_handles_print_errors(
     import ml_playground.trainer as trainer_mod
     import ml_playground.sampler as sampler_mod
 
-    def fake_preparer(shared):
-        calls.append("prepare")
+    class FakePreparer:
+        def __init__(self, cfg):
+            pass
 
-    monkeypatch.setattr(prepare_mod, "make_preparer", lambda cfg: fake_preparer)
-    monkeypatch.setattr(trainer_mod, "train", lambda cfg, shared: calls.append("train"))
-    monkeypatch.setattr(
-        sampler_mod, "sample", lambda cfg, shared: calls.append("sample")
-    )
+        def __call__(self, shared):
+            calls.append("prepare")
+
+    monkeypatch.setattr(prepare_mod, "Preparer", FakePreparer)
+
+    class FakeTrainer:
+        def __init__(self, cfg, shared):
+            pass
+
+        def run(self):
+            calls.append("train")
+
+    class FakeSampler:
+        def __init__(self, cfg, shared):
+            pass
+
+        def run(self):
+            calls.append("sample")
+
+    monkeypatch.setattr(trainer_mod, "Trainer", FakeTrainer)
+    monkeypatch.setattr(sampler_mod, "Sampler", FakeSampler)
 
     # Configs
     from ml_playground.config import (

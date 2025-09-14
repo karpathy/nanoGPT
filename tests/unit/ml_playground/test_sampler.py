@@ -314,7 +314,9 @@ def test_sample_happy_path_with_file_prompt_and_char_meta(
                 "n_embd": 8,
             }
 
-    monkeypatch.setattr(sampler, "_load_checkpoint", lambda *a, **k: _MiniCkpt())
+    monkeypatch.setattr(
+        sampler.Sampler, "_load_checkpoint", lambda *a, **k: _MiniCkpt()
+    )
 
     # Build SampleExperiment
     rt = RuntimeConfig(
@@ -385,7 +387,9 @@ def test_sample_with_compile_flag_uses_compiled_model(
                 "n_embd": 8,
             }
 
-    monkeypatch.setattr(sampler, "_load_checkpoint", lambda *a, **k: _MiniCkpt2())
+    monkeypatch.setattr(
+        sampler.Sampler, "_load_checkpoint", lambda *a, **k: _MiniCkpt2()
+    )
 
     rt = RuntimeConfig(
         out_dir=out_dir, device="cpu", dtype="float32", compile=True, seed=1
