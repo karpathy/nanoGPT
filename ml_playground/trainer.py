@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from contextlib import nullcontext
+from pathlib import Path
 
 import torch
 from torch import autocast
@@ -29,10 +30,10 @@ from ml_playground.model import GPT
 
 
 def _setup_data_loader(
-    data_cfg: DataConfig, runtime_cfg: RuntimeConfig
+    data_cfg: DataConfig, runtime_cfg: RuntimeConfig, dataset_dir: Path
 ) -> SimpleBatches:
     """Initialize data loader."""
-    return SimpleBatches(data=data_cfg, device=runtime_cfg.device)
+    return SimpleBatches(data=data_cfg, device=runtime_cfg.device, dataset_dir=dataset_dir)
 
 
 def get_lr(it: int, schedule: LRSchedule, optim: OptimConfig) -> float:
@@ -74,7 +75,7 @@ def _setup_model(
     return model, optimizer
 
 
-def train(cfg: TrainerConfig, shared: SharedConfig | None = None) -> tuple[int, float]:
+def train(cfg: TrainerConfig, shared: SharedConfig) -> tuple[int, float]:
     """Main training loop."""
     # --- Setup -------------------------------------------------------------------
     runtime_cfg = cfg.runtime
@@ -83,8 +84,8 @@ def train(cfg: TrainerConfig, shared: SharedConfig | None = None) -> tuple[int, 
     optim_cfg = cfg.optim
     schedule_cfg = cfg.schedule
 
-    # Use shared-config paths for all filesystem locations when provided, else fallback
-    out_dir = shared.train_out_dir if shared is not None else cfg.runtime.out_dir
+    # Use shared-config paths for all filesystem locations (no fallback)
+    out_dir = shared.train_out_dir
     setup_logging(str(out_dir))
     logger = logging.getLogger(__name__)
 
@@ -109,7 +110,7 @@ def train(cfg: TrainerConfig, shared: SharedConfig | None = None) -> tuple[int, 
     )
 
     # --- Data loader ------------------------------------------------------------
-    batches = _setup_data_loader(data_cfg, runtime_cfg)
+    batches = _setup_data_loader(data_cfg, runtime_cfg, shared.dataset_dir)
 
     # --- Model and optimizer ----------------------------------------------------
     model, optimizer = _setup_model(model_cfg, runtime_cfg, optim_cfg, logger)
@@ -303,7 +304,7 @@ def train(cfg: TrainerConfig, shared: SharedConfig | None = None) -> tuple[int, 
 
     # Propagate dataset metadata to out_dir for downstream sampling utilities
     try:
-        meta_src = data_cfg.meta_path  # filenames still come from DataConfig
+        meta_src = data_cfg.dataset_dir / data_cfg.meta_pkl  # filenames from DataConfig
         if meta_src and meta_src.exists():
             # copy to out_dir preserving filename
             meta_dst = out_dir / meta_src.name

@@ -7,7 +7,7 @@ import numpy as np
 from ml_playground.tokenizer_protocol import Tokenizer
 from ml_playground.tokenizer import create_tokenizer
 from ml_playground.error_handling import DataError
-from ml_playground.config import DataConfig, PreparerConfig
+from ml_playground.config import DataConfig, PreparerConfig, SharedConfig
 
 
 """
@@ -30,7 +30,7 @@ class Encoder(Protocol):
 class Preparer(Protocol):
     cfg: PreparerConfig
 
-    def __call__(self) -> None: ...
+    def __call__(self, shared: SharedConfig) -> None: ...
 
 
 def snapshot_files(paths: Iterable[Path]) -> dict[Path, tuple[bool, float, int]]:
@@ -126,7 +126,7 @@ class _PreparerInstance:
     def __init__(self, cfg: PreparerConfig) -> None:
         self.cfg = cfg
 
-    def __call__(self) -> None:
+    def __call__(self, shared: SharedConfig) -> None:
         extras = self.cfg.extras
 
         # Create tokenizer based on config
@@ -138,7 +138,9 @@ class _PreparerInstance:
             text = Path(extras["raw_text_path"]).read_text(encoding="utf-8")
 
         train_arr, val_arr, meta = self._prepare_with_tokenizer(text, tokenizer)
-        self._write_bin_and_meta(self.cfg.dataset_dir, train_arr, val_arr, meta)  # type: ignore[arg-type]
+        # Use SharedConfig dataset_dir as the single source of truth
+        ds_dir = shared.dataset_dir
+        self._write_bin_and_meta(ds_dir, train_arr, val_arr, meta)  # type: ignore[arg-type]
 
     def _split_train_val(self, text: str, split: float = 0.9) -> tuple[str, str]:
         n = len(text)

@@ -17,6 +17,7 @@ from ml_playground.config import (
     ModelConfig,
     SamplerConfig,
     READ_POLICY_BEST,
+    SharedConfig,
 )
 from ml_playground.error_handling import DataError, setup_logging
 from ml_playground.model import GPT
@@ -55,7 +56,7 @@ def _load_checkpoint(
     return ckpt_mgr.load_latest_checkpoint(device=device, logger=logger)
 
 
-def sample(cfg: SamplerConfig) -> None:
+def sample(cfg: SamplerConfig, shared: SharedConfig) -> None:
     """Sample from a trained model."""
     # --- Setup -------------------------------------------------------------------
     runtime_cfg = cfg.runtime
@@ -84,8 +85,9 @@ def sample(cfg: SamplerConfig) -> None:
     )
 
     # --- Load checkpoint --------------------------------------------------------
+    out_dir = shared.sample_out_dir
     checkpoint = _load_checkpoint(
-        runtime_cfg.out_dir,
+        out_dir,
         runtime_cfg.device,
         logger,
         read_policy=runtime_cfg.checkpointing.read_policy,
@@ -101,7 +103,7 @@ def sample(cfg: SamplerConfig) -> None:
         model = torch.compile(model)  # type: ignore
 
     # --- Tokenizer setup --------------------------------------------------------
-    tokenizer = setup_tokenizer(runtime_cfg.out_dir)
+    tokenizer = setup_tokenizer(out_dir)
     if not tokenizer:
         raise DataError(
             f"Tokenizer metadata not found in {runtime_cfg.out_dir} (expected meta.pkl)."

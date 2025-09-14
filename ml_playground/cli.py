@@ -167,7 +167,7 @@ def _run_prepare(
     """Run the full prepare flow for an experiment."""
     print(f"---\nRunning preparer for experiment: {experiment}")
     preparer = prepare_mod.make_preparer(prepare_cfg)
-    preparer()
+    preparer(shared)
     print(f"Preparer for {experiment} finished.\n---")
 
 
@@ -191,11 +191,7 @@ def _run_train(
 
     print(f"---\nRunning trainer for experiment: {experiment}")
     _log_command_status("pre-train", train_cfg.runtime)
-    try:
-        trainer_mod.train(train_cfg, shared)
-    except TypeError:
-        # Backward-compat for test monkeypatches that stub train(cfg)
-        trainer_mod.train(train_cfg)
+    trainer_mod.train(train_cfg, shared)
     print(f"Trainer for {experiment} finished.")
     _log_command_status("post-train", train_cfg.runtime)
     print("---")
@@ -221,7 +217,7 @@ def _run_sample(
 
     print(f"---\nRunning sampler for experiment: {experiment}")
     _log_command_status("pre-sample", sample_cfg.runtime)
-    sampler_mod.sample(sample_cfg)
+    sampler_mod.sample(sample_cfg, shared)
     print(f"Sampler for {experiment} finished.")
     _log_command_status("post-sample", sample_cfg.runtime)
     print("---")
