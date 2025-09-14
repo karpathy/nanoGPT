@@ -69,11 +69,12 @@ def _sample_batch(
 
 
 class SimpleBatches:
-    def __init__(self, data: DataConfig, device: str) -> None:
+    def __init__(self, data: DataConfig, device: str, dataset_dir: Path) -> None:
         self.data = data
         self.device = device
-        train_path = data.train_path
-        val_path = data.val_path
+        self._dataset_dir = dataset_dir
+        train_path = dataset_dir / data.train_bin
+        val_path = dataset_dir / data.val_bin
         if not train_path.exists() or not val_path.exists():
             raise FileNotFoundError(
                 f"Training data not found at {train_path} and/or {val_path}"
@@ -81,17 +82,16 @@ class SimpleBatches:
         # Determine dtype from meta.pkl if available; default to uint16
         dtype: np.dtype[Any] = np.dtype(np.uint16)
         try:
-            # Only attempt to read meta if a path was provided
-            if data.meta_path is not None:
-                meta_path = data.meta_path
-                if meta_path.exists():
-                    with meta_path.open("rb") as f:
-                        meta = pickle.load(f)
-                    dts = meta.get("dtype")
-                    if dts == "uint32":
-                        dtype = np.dtype(np.uint32)
-                    elif dts == "uint16":
-                        dtype = np.dtype(np.uint16)
+            # Read dtype from meta.pkl when present
+            meta_path = dataset_dir / data.meta_pkl
+            if meta_path.exists():
+                with meta_path.open("rb") as f:
+                    meta = pickle.load(f)
+                dts = meta.get("dtype")
+                if dts == "uint32":
+                    dtype = np.dtype(np.uint32)
+                elif dts == "uint16":
+                    dtype = np.dtype(np.uint16)
         except Exception:
             # If meta cannot be read, default remains uint16
             pass
