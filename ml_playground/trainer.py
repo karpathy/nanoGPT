@@ -28,8 +28,6 @@ from ml_playground import lr_scheduler
 from ml_playground.model import GPT
 
 
-
-
 def get_lr(it: int, schedule: LRSchedule, optim: OptimConfig) -> float:
     """Wrapper for learning rate according to schedule and optimizer.
 
