@@ -38,9 +38,7 @@ dropout = 0.0
 bias = false
 
 [train.data]
-# Paths are used as-is (absolute or relative), no rewriting.
-# The default directory can be assumed to exist/be created by prepare steps.
-dataset_dir = "./datasets"
+# Filenames configurable; dataset_dir lives in [shared]
 train_bin = "train.bin"
 val_bin = "val.bin"
 meta_pkl = "meta.pkl"
@@ -124,3 +122,12 @@ max_new_tokens = 128
 temperature = 0.9
 # Neutral top_k (0 disables top-k filtering)
 top_k = 0
+
+# Shared experiment context (defaults; experiments may override)
+[shared]
+experiment = ""
+config_path = "config.toml"
+project_home = "."
+dataset_dir = "./datasets"
+train_out_dir = "./out"
+sample_out_dir = "./out"

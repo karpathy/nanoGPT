@@ -12,7 +12,6 @@ from ml_playground.config import (
     SamplerConfig,
     TrainerConfig,
     ExperimentConfig,
-    SharedConfig,
 )
 
 # Module-level logger
@@ -87,15 +86,9 @@ def fs_is_dir(path: Path) -> bool:
         return False
 
 
-def get_default_config_path(config_path: Path) -> Path:
-    """Return the default_config.toml path adjacent to experiments/.
-
-    Given an experiment config like .../experiments/<exp>/config.toml, the
-    defaults live at .../default_config.toml.
-    """
-    # config_path: .../experiments/<exp>/config.toml
-    # defaults live under the experiments directory: .../experiments/default_config.toml
-    return (config_path.parent.parent / "default_config.toml").resolve()
+def _default_config_path_from_root(project_root: Path) -> Path:
+    """Compute the canonical default_config.toml from the project root."""
+    return (project_root / "ml_playground" / "experiments" / "default_config.toml").resolve()
 
 
 def deep_merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -138,6 +131,12 @@ def _coerce_known_paths_to_path(eff: dict[str, Any]) -> dict[str, Any]:
         rt = sample.get("runtime")
         if isinstance(rt, dict) and "out_dir" in rt and isinstance(rt["out_dir"], str):
             rt["out_dir"] = Path(rt["out_dir"])
+    # shared paths
+    shared = out.get("shared")
+    if isinstance(shared, dict):
+        for key in ("config_path", "project_home", "dataset_dir", "train_out_dir", "sample_out_dir"):
+            if key in shared and isinstance(shared[key], str):
+                shared[key] = Path(shared[key])
     return out
 
 
@@ -194,21 +193,15 @@ def load_full_experiment_config(
         raise FileNotFoundError(f"Config file not found: {config_path}")
 
     raw_exp = read_toml_dict(config_path)
-    defaults_path = get_default_config_path(config_path)
+    # Strict: validate raw experiment config without defaults; will raise ValidationError on missing sections
+    ExperimentConfig.model_validate(raw_exp)
+    defaults_path = _default_config_path_from_root(project_home)
     defaults_raw = {}
     if defaults_path.exists():
         try:
             defaults_raw = read_toml_dict(defaults_path)
         except Exception as e:
             raise Exception(f"default_config.toml: {e}")
-    else:
-        # Also support defaults placed as a sibling to the experiments/ directory
-        alt_defaults = config_path.parent.parent.parent / "default_config.toml"
-        if alt_defaults.exists():
-            try:
-                defaults_raw = read_toml_dict(alt_defaults)
-            except Exception as e:
-                raise Exception(f"default_config.toml: {e}")
 
     # --- Check for special .ldres experiment config ---
     ldres_config = (
@@ -231,71 +224,25 @@ def load_full_experiment_config(
     # Merge order: defaults -> experiment config -> .ldres config
     merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
     merged = deep_merge_dicts(merged, deepcopy(ldres_raw))
-    merged = _resolve_relative_paths(merged, config_path)
-    effective = _coerce_known_paths_to_path(merged)
-    # Enforce unknown top-level keys: if extras beyond allowed are present, trigger validation error
-    allowed_top = {"prepare", "train", "sample"}
-    extras = set(effective.keys()) - allowed_top
-    if extras:
-        # Will raise a ValidationError due to extra keys and missing required 'shared'
-        ExperimentConfig.model_validate(effective)
-    # Build section configs explicitly and attach SharedConfig
-    prep_dict = dict(effective.get("prepare", {}))
-    train_dict = dict(effective.get("train", {}))
-    sample_dict = dict(effective.get("sample", {}))
-    # Validate sections
-    prepare = PreparerConfig.model_validate(prep_dict)
-    train = TrainerConfig.model_validate(train_dict)
-    sample = SamplerConfig.model_validate(sample_dict)
-    # Construct SharedConfig from validated sections
-    shared = SharedConfig(
-        experiment=experiment_name,
-        config_path=config_path,
-        project_home=project_home,
-        dataset_dir=train.data.dataset_dir,
-        train_out_dir=train.runtime.out_dir,
-        sample_out_dir=sample.runtime.out_dir,
-    )
-    return ExperimentConfig(prepare=prepare, train=train, sample=sample, shared=shared)
+    # Rely on strict Pydantic validation and model-level path coercion
+    return ExperimentConfig(**merged)
 
 
 def load_train_config(config_path: Path) -> TrainerConfig:
     """Load config from a file path."""
     raw_exp = read_toml_dict(config_path)
-    defaults_path = get_default_config_path(config_path)
+    # Derive project root from package location for partial loader
+    project_root = Path(__file__).resolve().parent.parent
+    defaults_path = _default_config_path_from_root(project_root)
     if defaults_path.exists():
         try:
             defaults_raw = read_toml_dict(defaults_path)
         except Exception as e:
             raise Exception(f"default_config.toml: {e}")
     else:
-        # Also support defaults placed as a sibling to the experiments/ directory
-        alt_defaults = config_path.parent.parent.parent / "default_config.toml"
-        if alt_defaults.exists():
-            try:
-                defaults_raw = read_toml_dict(alt_defaults)
-            except Exception as e:
-                raise Exception(f"default_config.toml: {e}")
-        else:
-            defaults_raw = {}
+        defaults_raw = {}
     raw_merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
-    eff = _coerce_known_paths_to_path(raw_merged)
-    td = dict(eff.get("train", {}))
-    # Resolve relative paths against config directory for partial loader
-    base = config_path.parent
-    try:
-        data = td.get("data", {})
-        if isinstance(data, dict):
-            ds = data.get("dataset_dir")
-            if isinstance(ds, Path) and not ds.is_absolute():
-                data["dataset_dir"] = (base / ds).resolve()
-        rt = td.get("runtime", {})
-        if isinstance(rt, dict):
-            od = rt.get("out_dir")
-            if isinstance(od, Path) and not od.is_absolute():
-                rt["out_dir"] = (base / od).resolve()
-    except Exception:
-        pass
+    td = dict(raw_merged.get("train", {}))
     # Populate required nested sections with defaults when omitted
     td.setdefault("model", {})
     td.setdefault("data", {})
@@ -312,38 +259,30 @@ def load_train_config(config_path: Path) -> TrainerConfig:
 def load_sample_config(config_path: Path) -> SamplerConfig:
     """Load config from a file path."""
     raw_exp = read_toml_dict(config_path)
-    defaults_path = get_default_config_path(config_path)
+    project_root = Path(__file__).resolve().parent.parent
+    defaults_path = _default_config_path_from_root(project_root)
     if defaults_path.exists():
         try:
             defaults_raw = read_toml_dict(defaults_path)
         except Exception as e:
             raise Exception(f"default_config.toml: {e}")
     else:
-        alt_defaults = config_path.parent.parent.parent / "default_config.toml"
-        if alt_defaults.exists():
-            try:
-                defaults_raw = read_toml_dict(alt_defaults)
-            except Exception as e:
-                raise Exception(f"default_config.toml: {e}")
-        else:
-            defaults_raw = {}
-    raw_merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
-    # Provide strict error when [sample] section is absent
-    if "sample" not in raw_merged:
+        defaults_raw = {}
+    # Strict: require [sample] section in the raw file itself (not provided by defaults)
+    if "sample" not in raw_exp:
         raise ValueError("Config must contain a [sample] section")
+    raw_merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
     # No runtime_ref mechanics; strict SamplerConfig requires runtime
-    eff = _coerce_known_paths_to_path(raw_merged)
-    sd = dict(eff.get("sample", {}))
-    # Resolve relative paths against config directory for partial loader
+    sd = dict(raw_merged.get("sample", {}))
+    # Resolve relative out_dir against config directory for partial loader
     base = config_path.parent
-    try:
-        rt = sd.get("runtime", {})
-        if isinstance(rt, dict):
-            od = rt.get("out_dir")
-            if isinstance(od, Path) and not od.is_absolute():
-                rt["out_dir"] = (base / od).resolve()
-    except Exception:
-        pass
+    rt = sd.get("runtime", {})
+    if isinstance(rt, dict):
+        od = rt.get("out_dir")
+        if isinstance(od, str) and not od.startswith("/"):
+            rt["out_dir"] = (base / od).resolve()
+        elif isinstance(od, Path) and not od.is_absolute():
+            rt["out_dir"] = (base / od).resolve()
     # Ensure nested 'sample' subsection exists for SamplerConfig
     if "sample" not in sd or not isinstance(sd.get("sample"), dict):
         sd["sample"] = {}
@@ -388,14 +327,14 @@ def load_prepare_config(path: Path) -> PreparerConfig:
     Does not require [train] or [sample] sections.
     """
     raw_exp = read_toml_dict(path)
-    defaults_path = get_default_config_path(path)
+    # Derive project root from package location for partial loader
+    project_root = Path(__file__).resolve().parent.parent
+    defaults_path = _default_config_path_from_root(project_root)
     defaults_raw = read_toml_dict(defaults_path) if defaults_path.exists() else {}
     merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
-    merged = _resolve_relative_paths(merged, path)
     if "prepare" not in merged or not isinstance(merged.get("prepare"), dict):
         raise ValueError("Config must contain a [prepare] section")
-    eff = _coerce_known_paths_to_path(merged)
-    prep_dict = dict(eff.get("prepare", {}))
+    prep_dict = dict(merged.get("prepare", {}))
     prep_dict["logger"] = logger
     cfg = PreparerConfig.model_validate(prep_dict)
     info = {"raw": merged, "context": {"config_path": str(path)}}

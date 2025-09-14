@@ -42,7 +42,7 @@ def test_full_loader_roundtrip(tmp_path: Path) -> None:
     assert exp.train is not None
     assert exp.sample is not None
     assert isinstance(exp.train.runtime.out_dir, Path)
-    assert isinstance(exp.train.data.dataset_dir, Path)
+    assert isinstance(exp.shared.dataset_dir, Path)
 
 
 def test_full_loader_empty_config_raises(tmp_path: Path) -> None:
@@ -241,28 +241,22 @@ tensorboard_enabled = false
 
 def test_data_config_tokenizer_choices(tmp_path: Path) -> None:
     # Ensure DataConfig accepts tokenizer variants
-    DataConfig(dataset_dir=tmp_path, tokenizer="char")
-    DataConfig(dataset_dir=tmp_path, tokenizer="word")
-    DataConfig(dataset_dir=tmp_path, tokenizer="tiktoken")
+    DataConfig(tokenizer="char")
+    DataConfig(tokenizer="word")
+    DataConfig(tokenizer="tiktoken")
 
 
 def test_dataconfig_positive_ints(tmp_path: Path) -> None:
     with pytest.raises(ValidationError):
-        DataConfig(dataset_dir=tmp_path, batch_size=0)
+        DataConfig(batch_size=0)
     with pytest.raises(ValidationError):
-        DataConfig(dataset_dir=tmp_path, block_size=-1)
+        DataConfig(block_size=-1)
     with pytest.raises(ValidationError):
-        DataConfig(dataset_dir=tmp_path, grad_accum_steps=0)
+        DataConfig(grad_accum_steps=0)
     with pytest.raises(ValidationError):
-        DataConfig(dataset_dir=tmp_path, ngram_size=0)
+        DataConfig(ngram_size=0)
     # happy path
-    cfg = DataConfig(
-        dataset_dir=tmp_path,
-        batch_size=1,
-        block_size=1,
-        grad_accum_steps=1,
-        ngram_size=1,
-    )
+    cfg = DataConfig(batch_size=1, block_size=1, grad_accum_steps=1, ngram_size=1)
     assert cfg.batch_size == 1
 
 
@@ -438,7 +432,7 @@ def test_deep_merge_type_replacement() -> None:
 
 
 def test_dataconfig_paths_and_defaults(tmp_path: Path) -> None:
-    dc = DataConfig(dataset_dir=tmp_path)
+    dc = DataConfig()
     # Defaults
     assert dc.train_bin == "train.bin"
     assert dc.val_bin == "val.bin"
@@ -449,10 +443,9 @@ def test_dataconfig_paths_and_defaults(tmp_path: Path) -> None:
     assert dc.tokenizer in ("char", "word", "tiktoken")
     assert dc.ngram_size == 1
     assert dc.sampler in ("random", "sequential")
-    # Paths compute correctly
-    assert dc.train_path == tmp_path / "train.bin"
-    assert dc.val_path == tmp_path / "val.bin"
-    assert dc.meta_path == tmp_path / "meta.pkl"
+    # Filenames are configurable; dataset_dir is provided via SharedConfig at runtime
+    assert isinstance(dc.train_bin, str) and isinstance(dc.val_bin, str)
+    assert isinstance(dc.meta_pkl, str)
 
 
 def test_dataconfig_meta_none_rejected(tmp_path: Path) -> None:
@@ -460,7 +453,7 @@ def test_dataconfig_meta_none_rejected(tmp_path: Path) -> None:
     from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
-        DataConfig(dataset_dir=tmp_path, meta_pkl=cast(Any, None))
+        DataConfig(meta_pkl=cast(Any, None))
 
 
 def test_preparerconfig_path_coercion_and_resolve(
