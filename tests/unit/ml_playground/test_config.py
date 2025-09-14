@@ -460,10 +460,10 @@ def test_preparerconfig_path_coercion_and_resolve(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Paths are strictly Path-typed; resolve is best-effort
-    pc = PreparerConfig(dataset_dir=tmp_path / "ds", raw_dir=tmp_path / "raw")
-    assert isinstance(pc.dataset_dir, Path) and isinstance(pc.raw_dir, Path)
+    pc = PreparerConfig(raw_dir=tmp_path / "raw")
+    assert isinstance(pc.raw_dir, Path)
     # ensure resolve does not crash on non-existent
-    _ = pc.dataset_dir and pc.raw_dir
+    _ = pc.raw_dir
 
 
 def test_sampleconfig_more_ranges() -> None:

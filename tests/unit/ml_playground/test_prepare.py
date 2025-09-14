@@ -309,7 +309,6 @@ def test_make_preparer_runs_and_writes(tmp_path: Path) -> None:
 
     # Provide raw text via extras to avoid file IO
     cfg = prep.Preparer.Config(  # type: ignore[attr-defined]
-        dataset_dir=ds,
         extras={
             "tokenizer_type": "char",
             "raw_text": "abbaabba",
@@ -320,6 +319,7 @@ def test_make_preparer_runs_and_writes(tmp_path: Path) -> None:
     # make_preparer should construct _PreparerInstance and write files
     p = prep.make_preparer(cfg)
     from ml_playground.config import SharedConfig
+
     shared = SharedConfig(
         experiment="unit",
         config_path=tmp_path / "cfg.toml",

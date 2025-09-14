@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import logging
-import tomllib
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
-from copy import deepcopy
 
+import tomllib
+from pydantic_core import ValidationError
 
 from ml_playground.config import (
+    ExperimentConfig,
     PreparerConfig,
     SamplerConfig,
     TrainerConfig,
-    ExperimentConfig,
 )
 
 # Module-level logger
@@ -88,7 +89,9 @@ def fs_is_dir(path: Path) -> bool:
 
 def _default_config_path_from_root(project_root: Path) -> Path:
     """Compute the canonical default_config.toml from the project root."""
-    return (project_root / "ml_playground" / "experiments" / "default_config.toml").resolve()
+    return (
+        project_root / "ml_playground" / "experiments" / "default_config.toml"
+    ).resolve()
 
 
 def deep_merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -109,7 +112,7 @@ def _coerce_known_paths_to_path(eff: dict[str, Any]) -> dict[str, Any]:
     # prepare paths
     prep = out.get("prepare")
     if isinstance(prep, dict):
-        for k in ("dataset_dir", "raw_dir"):
+        for k in ("raw_dir",):
             if k in prep and isinstance(prep[k], str):
                 prep[k] = Path(prep[k])
     # train paths
@@ -134,7 +137,13 @@ def _coerce_known_paths_to_path(eff: dict[str, Any]) -> dict[str, Any]:
     # shared paths
     shared = out.get("shared")
     if isinstance(shared, dict):
-        for key in ("config_path", "project_home", "dataset_dir", "train_out_dir", "sample_out_dir"):
+        for key in (
+            "config_path",
+            "project_home",
+            "dataset_dir",
+            "train_out_dir",
+            "sample_out_dir",
+        ):
             if key in shared and isinstance(shared[key], str):
                 shared[key] = Path(shared[key])
     return out
@@ -154,14 +163,14 @@ def _resolve_relative_paths(merged: dict[str, Any], cfg_path: Path) -> dict[str,
     # prepare.dataset_dir, prepare.raw_dir
     prep = out.get("prepare")
     if isinstance(prep, dict):
-        for key in ("dataset_dir", "raw_dir"):
+        for key in ("raw_dir",):
             if (
                 key in prep
                 and isinstance(prep[key], str)
                 and not prep[key].startswith("/")
             ):
                 prep[key] = _resolve_path_if_relative(base, prep[key])
-    # train.data.dataset_dir (keep runtime.out_dir as provided to preserve relative semantics)
+    # train.data.dataset_dir and train.runtime.out_dir
     train = out.get("train")
     if isinstance(train, dict):
         data = train.get("data")
@@ -172,6 +181,15 @@ def _resolve_relative_paths(merged: dict[str, Any], cfg_path: Path) -> dict[str,
             and not data["dataset_dir"].startswith("/")
         ):
             data["dataset_dir"] = _resolve_path_if_relative(base, data["dataset_dir"])
+        # Resolve train.runtime.out_dir for partial loader
+        runtime = train.get("runtime")
+        if (
+            isinstance(runtime, dict)
+            and "out_dir" in runtime
+            and isinstance(runtime["out_dir"], str)
+            and not runtime["out_dir"].startswith("/")
+        ):
+            runtime["out_dir"] = _resolve_path_if_relative(base, runtime["out_dir"])
     # sample.runtime.out_dir: do not resolve; preserve as provided
     sample = out.get("sample")
     if isinstance(sample, dict):
@@ -193,8 +211,36 @@ def load_full_experiment_config(
         raise FileNotFoundError(f"Config file not found: {config_path}")
 
     raw_exp = read_toml_dict(config_path)
-    # Strict: validate raw experiment config without defaults; will raise ValidationError on missing sections
-    ExperimentConfig.model_validate(raw_exp)
+    
+    # Strict validation: require mandatory sections in experiment config
+    required_sections = ["prepare", "train", "sample"]
+    for section in required_sections:
+        if section not in raw_exp:
+            raise ValidationError.from_exception_data(
+                "ExperimentConfig", 
+                [{"type": "missing", "loc": (section,), "input": raw_exp}]
+            )
+    
+    # Validate train subsections
+    if "train" in raw_exp and isinstance(raw_exp["train"], dict):
+        train_required = ["model", "data", "optim", "schedule", "runtime"]
+        for subsection in train_required:
+            if subsection not in raw_exp["train"]:
+                raise ValidationError.from_exception_data(
+                    "TrainerConfig",
+                    [{"type": "missing", "loc": ("train", subsection), "input": raw_exp["train"]}]
+                )
+    
+    # Validate sample subsections  
+    if "sample" in raw_exp and isinstance(raw_exp["sample"], dict):
+        sample_required = ["runtime", "sample"]
+        for subsection in sample_required:
+            if subsection not in raw_exp["sample"]:
+                raise ValidationError.from_exception_data(
+                    "SamplerConfig",
+                    [{"type": "missing", "loc": ("sample", subsection), "input": raw_exp["sample"]}]
+                )
+    
     defaults_path = _default_config_path_from_root(project_home)
     defaults_raw = {}
     if defaults_path.exists():
@@ -224,8 +270,15 @@ def load_full_experiment_config(
     # Merge order: defaults -> experiment config -> .ldres config
     merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
     merged = deep_merge_dicts(merged, deepcopy(ldres_raw))
-    # Rely on strict Pydantic validation and model-level path coercion
-    return ExperimentConfig(**merged)
+    # Resolve relative strings and coerce known paths to Path before strict validation
+    merged = _resolve_relative_paths(merged, config_path)
+    effective = _coerce_known_paths_to_path(merged)
+
+    # Clean up fields that have been moved to SharedConfig
+    if "prepare" in effective and isinstance(effective["prepare"], dict):
+        effective["prepare"].pop("dataset_dir", None)
+
+    return ExperimentConfig(**effective)
 
 
 def load_train_config(config_path: Path) -> TrainerConfig:
@@ -242,7 +295,10 @@ def load_train_config(config_path: Path) -> TrainerConfig:
     else:
         defaults_raw = {}
     raw_merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
-    td = dict(raw_merged.get("train", {}))
+    # Resolve relative paths and coerce known paths to Path objects
+    merged = _resolve_relative_paths(raw_merged, config_path)
+    effective = _coerce_known_paths_to_path(merged)
+    td = dict(effective.get("train", {}))
     # Populate required nested sections with defaults when omitted
     td.setdefault("model", {})
     td.setdefault("data", {})

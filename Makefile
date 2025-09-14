@@ -8,7 +8,8 @@ SHELL := /bin/bash
 
 .PHONY: help test unit unit-cov integration e2e acceptance test-file coverage quality quality-ext quality-ci lint format pyright mypy typecheck setup sync verify clean prepare train sample loop tensorboard deadcode gguf-help pytest-verify-layout pytest-core pytest-all check-exp check-exp-config check-tool ai-guidelines
 
-PYTEST_BASE=-n auto -W error --strict-markers --strict-config -v
+# Be quieter and focus output on failures only
+PYTEST_BASE=-q -n auto -W error --strict-markers --strict-config
 RUN=uv run
 PKG=ml_playground
 VERIFY_TOOL=tools/verify_unit_test_layout.py
@@ -68,7 +69,8 @@ test-file: ## Run a single test file: make test-file FILE=path/to/test_*.py
 
 # Quality gates
 
-quality: format typecheck test ## Lint, format, type-check, and run tests
+# Run type checking first to fail fast on typing issues
+quality: typecheck lint format test ## Type-check, lint, format, and run tests
 
 # Extended quality: dead code + core quality + mutation testing (non-fatal) 
 quality-ext: ## Extended quality: vulture + quality + mutation tests (non-fatal)
@@ -98,7 +100,7 @@ deadcode: ## Scan for dead code with vulture
 	$(RUN) vulture $(PKG) --min-confidence 90
 
 pyright: ## Run Pyright type checker
-	$(RUN) pyright
+	$(RUN) pyright $(PKG)
 
 mypy: ## Run Mypy type checker on $(PKG)
 	$(RUN) mypy --incremental $(PKG)

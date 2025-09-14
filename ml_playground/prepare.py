@@ -240,9 +240,9 @@ def write_bin_and_meta(
 
     # Use DataConfig-computed paths when provided, otherwise default filenames
     if data_cfg is not None:
-        train_path = data_cfg.train_path
-        val_path = data_cfg.val_path
-        meta_path = data_cfg.meta_path
+        train_path = data_cfg.train_path(ds_dir)
+        val_path = data_cfg.val_path(ds_dir)
+        meta_path = data_cfg.meta_path(ds_dir)
     else:
         train_path = ds_dir / "train.bin"
         val_path = ds_dir / "val.bin"

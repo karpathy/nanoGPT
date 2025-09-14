@@ -74,7 +74,7 @@ def minimal_full_experiment_toml(
     [train.model]
     """
     if include_train_data:
-        base += f"""
+        base += """
         [train.data]
         """
     base += f"""
@@ -102,9 +102,8 @@ def minimal_full_experiment_toml(
     base += f"""
     [shared]
     experiment = "exp"
-    # Use relative placeholders; tests focus on schema validity rather than these paths
-    config_path = "./cfg.toml"
-    project_home = "."
+    config_path = "{_fmt_path(out_dir.parent / "cfg.toml")}"
+    project_home = "{_fmt_path(out_dir.parent)}"
     dataset_dir = "{_fmt_path(dataset_dir)}"
     train_out_dir = "{_fmt_path(out_dir)}"
     sample_out_dir = "{_fmt_path(out_dir)}"

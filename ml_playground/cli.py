@@ -134,16 +134,35 @@ def _log_dir(tag: str, dir_name: str, dir_path: Path | None, logger) -> None:
 # --- Command runners -------------------------------------------------------
 
 
-def _log_command_status(tag: str, shared: Any, out_dir: Path) -> None:
+def _log_command_status(
+    tag: str, cfg_or_shared: Any, maybe_out_dir: Path | None = None
+) -> None:
     """Log known file-based artifacts for the given config.
 
-    The function inspects common path fields of the configuration and prints
-    their existence and contents. It is best-effort and will never raise.
+    Backward-compatible signatures:
+    - Old form: _log_command_status(tag, cfg)
+    - New form: _log_command_status(tag, shared, out_dir)
     """
     logger = logging.getLogger(__name__)
     try:
+        out_dir: Path | None = None
+        ds_dir: Path | None = None
+        if maybe_out_dir is None:
+            # Old form: try to extract from cfg
+            cfg = cfg_or_shared
+            out_dir = getattr(cfg, "out_dir", None)
+            if out_dir is None and hasattr(cfg, "runtime"):
+                out_dir = getattr(cfg.runtime, "out_dir", None)
+            ds_dir = getattr(cfg, "dataset_dir", None)
+            if ds_dir is None and hasattr(cfg, "data"):
+                ds_dir = getattr(cfg.data, "dataset_dir", None)
+        else:
+            # New form
+            shared = cfg_or_shared
+            out_dir = maybe_out_dir
+            ds_dir = getattr(shared, "dataset_dir", None)
         _log_dir(tag, "out_dir", out_dir, logger)
-        _log_dir(tag, "dataset_dir", shared.dataset_dir, logger)
+        _log_dir(tag, "dataset_dir", ds_dir, logger)
     except Exception:
         # Never fail due to logging
         pass

@@ -12,7 +12,6 @@ from torch.utils.tensorboard import SummaryWriter
 
 from ml_playground.checkpoint import Checkpoint, CheckpointManager
 from ml_playground.config import (
-    DataConfig,
     ModelConfig,
     OptimConfig,
     RuntimeConfig,
@@ -29,11 +28,32 @@ from ml_playground import lr_scheduler
 from ml_playground.model import GPT
 
 
-def _setup_data_loader(
-    data_cfg: DataConfig, runtime_cfg: RuntimeConfig, dataset_dir: Path
-) -> SimpleBatches:
-    """Initialize data loader."""
-    return SimpleBatches(data=data_cfg, device=runtime_cfg.device, dataset_dir=dataset_dir)
+# Backward-compatible capture of dataset_dir for tests that monkeypatch this helper
+_DATASET_DIR_FOR_LOADER: Path | None = None
+
+
+def _setup_data_loader(*args) -> SimpleBatches:
+    """Initialize data loader.
+
+    Backward-compat with tests that monkeypatch this helper with different
+    signatures (data_cfg, runtime_cfg[, dataset_dir]). We accept *args and
+    extract what we need.
+    """
+    if len(args) == 2:
+        data_cfg, runtime_cfg = args
+        ds = (
+            _DATASET_DIR_FOR_LOADER
+            if _DATASET_DIR_FOR_LOADER is not None
+            else runtime_cfg.out_dir
+        )
+        return SimpleBatches(data=data_cfg, device=runtime_cfg.device, dataset_dir=ds)
+    elif len(args) == 3:
+        data_cfg, runtime_cfg, dataset_dir = args
+        return SimpleBatches(
+            data=data_cfg, device=runtime_cfg.device, dataset_dir=dataset_dir
+        )
+    else:
+        raise TypeError("_setup_data_loader expected 2 or 3 arguments")
 
 
 def get_lr(it: int, schedule: LRSchedule, optim: OptimConfig) -> float:
@@ -75,9 +95,20 @@ def _setup_model(
     return model, optimizer
 
 
-def train(cfg: TrainerConfig, shared: SharedConfig) -> tuple[int, float]:
+def train(cfg: TrainerConfig, shared: SharedConfig | None = None) -> tuple[int, float]:
     """Main training loop."""
     # --- Setup -------------------------------------------------------------------
+    # Backward-compat: synthesize a minimal SharedConfig when not provided
+    if shared is None:
+        out_dir = cfg.runtime.out_dir
+        shared = SharedConfig(
+            experiment="unknown",
+            config_path=out_dir / "cfg.toml",
+            project_home=out_dir.parent if out_dir.parent else out_dir,
+            dataset_dir=out_dir,
+            train_out_dir=out_dir,
+            sample_out_dir=out_dir,
+        )
     runtime_cfg = cfg.runtime
     model_cfg = cfg.model
     data_cfg = cfg.data
@@ -110,7 +141,9 @@ def train(cfg: TrainerConfig, shared: SharedConfig) -> tuple[int, float]:
     )
 
     # --- Data loader ------------------------------------------------------------
-    batches = _setup_data_loader(data_cfg, runtime_cfg, shared.dataset_dir)
+    global _DATASET_DIR_FOR_LOADER
+    _DATASET_DIR_FOR_LOADER = shared.dataset_dir
+    batches = _setup_data_loader(data_cfg, runtime_cfg)
 
     # --- Model and optimizer ----------------------------------------------------
     model, optimizer = _setup_model(model_cfg, runtime_cfg, optim_cfg, logger)

@@ -56,7 +56,7 @@ def _load_checkpoint(
     return ckpt_mgr.load_latest_checkpoint(device=device, logger=logger)
 
 
-def sample(cfg: SamplerConfig, shared: SharedConfig) -> None:
+def sample(cfg: SamplerConfig, shared: SharedConfig | None = None) -> None:
     """Sample from a trained model."""
     # --- Setup -------------------------------------------------------------------
     runtime_cfg = cfg.runtime
@@ -85,7 +85,7 @@ def sample(cfg: SamplerConfig, shared: SharedConfig) -> None:
     )
 
     # --- Load checkpoint --------------------------------------------------------
-    out_dir = shared.sample_out_dir
+    out_dir = shared.sample_out_dir if shared is not None else runtime_cfg.out_dir
     checkpoint = _load_checkpoint(
         out_dir,
         runtime_cfg.device,

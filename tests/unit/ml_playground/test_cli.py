@@ -396,7 +396,6 @@ def test_load_train_config_resolves_relative_paths(tmp_path: Path):
     config_path = exp_dir / "config.toml"
     toml_text = """
 [train.data]
- dataset_dir = "data_rel"
 
 [train.runtime]
  out_dir = "out_rel"
@@ -405,6 +404,16 @@ def test_load_train_config_resolves_relative_paths(tmp_path: Path):
 
     # Use strict partial loader with explicit path so we don't depend on package experiments root
     cfg = config_loader.load_train_config(config_path)
+    # Manually attach a shared config for this partial-load test
+    shared = SharedConfig(
+        experiment="exp",
+        config_path=config_path,
+        project_home=tmp_path,
+        dataset_dir=exp_dir / "data_rel",
+        train_out_dir=exp_dir / "out_rel",
+        sample_out_dir=exp_dir / "out_rel",
+    )
+    cfg = cfg.model_copy(update={"shared": shared})
     # With Shared-only paths, partial loader resolves runtime.out_dir; dataset_dir lives in Shared
     assert str(cfg.runtime.out_dir).startswith(str(exp_dir))
 
@@ -518,11 +527,11 @@ def test_log_command_status_covers_paths(tmp_path: Path):
         runtime=RuntimeConfig(out_dir=out),
     )
     # Should not raise
-    cli._log_command_status("train", train_cfg)
+    cli._log_command_status("train", train_cfg.runtime)
 
     # Sampler with runtime
     samp_cfg = SamplerConfig(runtime=RuntimeConfig(out_dir=out), sample=SampleConfig())
-    cli._log_command_status("sample", samp_cfg)
+    cli._log_command_status("sample", samp_cfg.runtime)
 
 
 def test_log_command_status_missing_paths(tmp_path: Path):
@@ -545,7 +554,7 @@ def test_log_command_status_missing_paths(tmp_path: Path):
         runtime=RuntimeConfig(out_dir=out),
     )
     # Should not raise
-    cli._log_command_status("train", cfg)
+    cli._log_command_status("train", cfg.runtime)
 
 
 def test_extract_exp_config_edge_cases():
@@ -678,10 +687,16 @@ def test_load_config_error_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         "[train]\n[train.runtime]\nout_dir='.'\n[train.model]\n[train.data]\n[train.optim]\n[train.schedule]"
     )
 
-    # 2) Defaults invalid -> exit mentioning defaults path sibling to experiments/
-    defaults_path = tmp_path / "default_config.toml"
-    defaults_path.write_text("this is not valid toml")
-
+    # 2) Defaults invalid -> exit mentioning defaults path
+    # Mock the defaults path to point to our test location
+    test_defaults_path = tmp_path / "default_config.toml"
+    test_defaults_path.write_text("this is not valid toml")
+    
+    def mock_default_config_path_from_root(project_root: Path) -> Path:
+        return test_defaults_path
+    
+    monkeypatch.setattr(config_loader, "_default_config_path_from_root", mock_default_config_path_from_root)
+    
     with pytest.raises(Exception) as ei3:
         config_loader.load_train_config(cfg)
     assert "default_config.toml" in str(ei3.value).lower()
@@ -765,7 +780,9 @@ def test_run_loop_calls_in_order_and_handles_print_errors(
 
     monkeypatch.setattr(prepare_mod, "make_preparer", lambda cfg: fake_preparer)
     monkeypatch.setattr(trainer_mod, "train", lambda cfg, shared: calls.append("train"))
-    monkeypatch.setattr(sampler_mod, "sample", lambda cfg, shared: calls.append("sample"))
+    monkeypatch.setattr(
+        sampler_mod, "sample", lambda cfg, shared: calls.append("sample")
+    )
 
     # Configs
     from ml_playground.config import (
@@ -840,7 +857,7 @@ def test_sample_routes_to_injected_sampler(
             prepare=PreparerConfig(),
             train=TrainerConfig(
                 model=ModelConfig(),
-                data=DataConfig(dataset_dir=Path(".")),
+                data=DataConfig(),
                 optim=OptimConfig(),
                 schedule=LRSchedule(),
                 runtime=RuntimeConfig(out_dir=Path(".")),

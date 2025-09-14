@@ -46,7 +46,6 @@ bias = false
 vocab_size = 256
 
 [train.data]
-dataset_dir = "{dataset_dir}"
 train_bin = "train.bin"
 val_bin = "val.bin"
 batch_size = 4
