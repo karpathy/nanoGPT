@@ -7,7 +7,7 @@ device, dtype, and autocast contexts locally without exposing legacy shims.
 from __future__ import annotations
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Protocol
+from typing import cast
 import logging
 import torch
 from torch import autocast
@@ -35,105 +35,117 @@ All experiments should use these utilities to ensure consistency and proper erro
 """
 
 
-class Sampler(Protocol):
-    def __call__(self, cfg: SamplerConfig) -> None: ...
+class Sampler:
+    def __init__(self, cfg: SamplerConfig, shared: SharedConfig):
+        """Initialize the sampler."""
+        self.cfg = cfg
+        self.shared = shared
+        self.runtime_cfg = cfg.runtime
+        self.sample_cfg = cfg.sample
+
+        if self.runtime_cfg is None:
+            raise ValueError("Runtime configuration is missing")
+
+        self.out_dir = shared.sample_out_dir
+        setup_logging(str(self.out_dir))
+        self.logger = logging.getLogger(__name__)
+
+        torch.manual_seed(self.runtime_cfg.seed)
+        torch.cuda.manual_seed(self.runtime_cfg.seed)
+
+        self.device_type = "cuda" if "cuda" in self.runtime_cfg.device else "cpu"
+        pt_dtype = {
+            "float32": torch.float32,
+            "bfloat16": torch.bfloat16,
+            "float16": torch.float16,
+        }[self.runtime_cfg.dtype]
+        self.ctx = (
+            nullcontext()
+            if self.device_type == "cpu"
+            else autocast(device_type=self.device_type, dtype=pt_dtype)
+        )
+
+        checkpoint = self._load_checkpoint()
+        self.model = self._setup_model(checkpoint)
+        self.tokenizer = self._setup_tokenizer()
+
+    def _load_checkpoint(self) -> Checkpoint:
+        """Load model checkpoint."""
+        ckpt_mgr = CheckpointManager(out_dir=self.out_dir)
+        if self.runtime_cfg.checkpointing.read_policy == READ_POLICY_BEST:
+            return ckpt_mgr.load_best_checkpoint(
+                device=self.runtime_cfg.device, logger=self.logger
+            )
+        return ckpt_mgr.load_latest_checkpoint(
+            device=self.runtime_cfg.device, logger=self.logger
+        )
+
+    def _setup_model(self, checkpoint: Checkpoint) -> GPT:
+        model_cfg = ModelConfig(**checkpoint.model_args)
+        model = GPT(model_cfg)
+        model.load_state_dict(checkpoint.model, strict=False)
+        model.eval()
+        model.to(self.runtime_cfg.device)
+        if self.runtime_cfg.compile:
+            # torch.compile returns Any; cast to GPT for static typing
+            model = cast(GPT, torch.compile(model))
+        return model
+
+    def _setup_tokenizer(self):
+        tokenizer = setup_tokenizer(self.out_dir)
+        if not tokenizer:
+            raise DataError(
+                f"Tokenizer metadata not found in {self.out_dir} (expected meta.pkl)."
+            )
+        return tokenizer
+
+    def run(self) -> None:
+        """Run the sampling process."""
+        start_text = self.sample_cfg.start
+        if isinstance(start_text, str) and start_text.startswith("FILE:"):
+            prompt_path = Path(start_text[5:])
+            try:
+                start_text = prompt_path.read_text(encoding="utf-8")
+            except Exception as e:
+                self.logger.error(f"Failed to read prompt file {prompt_path}: {e}")
+                return
+        start_ids = self.tokenizer.encode(start_text)
+        x = torch.tensor(start_ids, dtype=torch.long, device=self.runtime_cfg.device)[None, ...]
+
+        self.logger.info("Sampling...")
+        with torch.no_grad():
+            with self.ctx:
+                for k in range(self.sample_cfg.num_samples):
+                    y = self.model.generate(
+                        x,
+                        self.sample_cfg.max_new_tokens,
+                        temperature=self.sample_cfg.temperature,
+                        top_k=self.sample_cfg.top_k,
+                    )
+                    output = self.tokenizer.decode(y[0].tolist())
+                    self.logger.info(output)
+                    self.logger.info("---------------")
 
 
-def _load_checkpoint(
-    out_dir: Path,
-    device: str,
-    logger: logging.Logger,
-    read_policy: str,
-) -> Checkpoint:
-    """Load model checkpoint.
-
-    Strict: surface errors to caller.
-    """
-    ckpt_mgr = CheckpointManager(out_dir=out_dir)
-    if read_policy == READ_POLICY_BEST:
-        return ckpt_mgr.load_best_checkpoint(device=device, logger=logger)
-    # Strict: default/latest only
-    return ckpt_mgr.load_latest_checkpoint(device=device, logger=logger)
 
 
 def sample(cfg: SamplerConfig, shared: SharedConfig | None = None) -> None:
     """Sample from a trained model."""
-    # --- Setup -------------------------------------------------------------------
-    runtime_cfg = cfg.runtime
-    sample_cfg = cfg.sample
-    if runtime_cfg is None:
-        raise ValueError("Runtime configuration is missing")
-
-    setup_logging(str(runtime_cfg.out_dir))
-    logger = logging.getLogger(__name__)
-
-    # --- Set random seeds -------------------------------------------------------
-    torch.manual_seed(runtime_cfg.seed)
-    torch.cuda.manual_seed(runtime_cfg.seed)
-
-    # --- Device setup -----------------------------------------------------------
-    device_type = "cuda" if "cuda" in runtime_cfg.device else "cpu"
-    pt_dtype = {
-        "float32": torch.float32,
-        "bfloat16": torch.bfloat16,
-        "float16": torch.float16,
-    }[runtime_cfg.dtype]
-    ctx = (
-        nullcontext()
-        if device_type == "cpu"
-        else autocast(device_type=device_type, dtype=pt_dtype)
-    )
-
-    # --- Load checkpoint --------------------------------------------------------
-    out_dir = shared.sample_out_dir if shared is not None else runtime_cfg.out_dir
-    checkpoint = _load_checkpoint(
-        out_dir,
-        runtime_cfg.device,
-        logger,
-        read_policy=runtime_cfg.checkpointing.read_policy,
-    )
-
-    # --- Model setup ------------------------------------------------------------
-    model_cfg = ModelConfig(**checkpoint.model_args)
-    model = GPT(model_cfg)
-    model.load_state_dict(checkpoint.model, strict=False)
-    model.eval()
-    model.to(runtime_cfg.device)
-    if runtime_cfg.compile:
-        model = torch.compile(model)  # type: ignore
-
-    # --- Tokenizer setup --------------------------------------------------------
-    tokenizer = setup_tokenizer(out_dir)
-    if not tokenizer:
-        raise DataError(
-            f"Tokenizer metadata not found in {runtime_cfg.out_dir} (expected meta.pkl)."
+    if shared is None:
+        if cfg.runtime is None:
+            raise ValueError("Runtime configuration is missing")
+        out_dir = cfg.runtime.out_dir
+        shared = SharedConfig(
+            experiment="unknown",
+            config_path=out_dir / "config.toml",
+            project_home=out_dir.parent.parent,
+            dataset_dir=out_dir,  # Assume same as out_dir for backward compat
+            train_out_dir=out_dir,
+            sample_out_dir=out_dir,
         )
-
-    # --- Sampling ---------------------------------------------------------------
-    start_text = sample_cfg.start
-    if isinstance(start_text, str) and start_text.startswith("FILE:"):
-        prompt_path = Path(start_text[5:])
-        try:
-            start_text = prompt_path.read_text(encoding="utf-8")
-        except Exception as e:  # pragma: no cover - robust IO guard
-            logger.error(f"Failed to read prompt file {prompt_path}: {e}")
-            return
-    start_ids = tokenizer.encode(start_text)
-    x = torch.tensor(start_ids, dtype=torch.long, device=runtime_cfg.device)[None, ...]
-
-    logger.info("Sampling...")
-    with torch.no_grad():
-        with ctx:
-            for k in range(sample_cfg.num_samples):
-                y = model.generate(  # type: ignore
-                    x,
-                    sample_cfg.max_new_tokens,
-                    temperature=sample_cfg.temperature,
-                    top_k=sample_cfg.top_k,
-                )
-                output = tokenizer.decode(y[0].tolist())
-                logger.info(output)
-                logger.info("---------------")
+    sampler = Sampler(cfg, shared)
+    sampler.run()
+    """Sample from a trained model."""
 
 
 __all__ = [

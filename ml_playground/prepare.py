@@ -27,10 +27,6 @@ class Encoder(Protocol):
     def encode_ordinary(self, text: str) -> list[int]: ...
 
 
-class Preparer(Protocol):
-    cfg: PreparerConfig
-
-    def __call__(self, shared: SharedConfig) -> None: ...
 
 
 def snapshot_files(paths: Iterable[Path]) -> dict[Path, tuple[bool, float, int]]:
@@ -117,7 +113,7 @@ def create_standardized_metadata(
     return meta
 
 
-class _PreparerInstance:
+class Preparer:
     """
     Instance-based Preparer that captures behavior via the provided PreparerConfig.
     Assumes the cfg is already valid and fully resolved by the CLI.
@@ -175,16 +171,6 @@ class _PreparerInstance:
         )
 
 
-def make_preparer(cfg: PreparerConfig) -> Preparer:
-    """
-    Factory for an instance-based Preparer. The returned object conforms to the Preparer protocol.
-    The CLI constructs this instance and invokes it.
-    """
-    return _PreparerInstance(cfg)
-
-
-# Expose config type alongside the protocol for discoverability from the CLI
-Preparer.Config = PreparerConfig  # type: ignore[attr-defined]
 
 
 def split_train_val(text: str, split: float = 0.9) -> tuple[str, str]:
@@ -351,7 +337,6 @@ __all__ = [
     "snapshot_files",
     "diff_files",
     "create_standardized_metadata",
-    "make_preparer",
     "split_train_val",
     "create_tokenizer_for_preparation",
     "prepare_with_tokenizer",
