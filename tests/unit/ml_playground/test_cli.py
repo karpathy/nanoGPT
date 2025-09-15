@@ -502,15 +502,6 @@ def test_global_options_without_handlers_sets_basic_config(tmp_path: Path):
 
 
 def test_log_command_status_covers_paths(tmp_path: Path):
-    from ml_playground.config import (
-        TrainerConfig,
-        ModelConfig,
-        DataConfig,
-        OptimConfig,
-        LRSchedule,
-        RuntimeConfig,
-    )
-
     ds = tmp_path / "dataset"
     ds.mkdir(parents=True, exist_ok=True)
     (ds / "a.txt").write_text("x")
@@ -541,15 +532,6 @@ def test_log_command_status_covers_paths(tmp_path: Path):
 
 
 def test_log_command_status_missing_paths(tmp_path: Path):
-    from ml_playground.config import (
-        TrainerConfig,
-        ModelConfig,
-        DataConfig,
-        OptimConfig,
-        LRSchedule,
-        RuntimeConfig,
-    )
-
     # None of these paths exist
     out = tmp_path / "missing_out"
     shared = SharedConfig(

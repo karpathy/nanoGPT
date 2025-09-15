@@ -96,7 +96,7 @@ class Trainer:
         self._load_checkpoint()
         self._setup_components()
 
-    def _setup_torch_env(self):
+    def _setup_torch_env(self) -> None:
         torch.manual_seed(self.runtime_cfg.seed)
         torch.cuda.manual_seed(self.runtime_cfg.seed)
         torch.backends.cuda.matmul.allow_tf32 = True
@@ -141,7 +141,7 @@ class Trainer:
             keep_best=self.runtime_cfg.checkpointing.keep.best,
         )
 
-    def _setup_components(self):
+    def _setup_components(self) -> None:
         if self.runtime_cfg.compile:
             self.logger.info("Compiling the model... (takes a ~minute)")
             self.model = cast(GPT, torch.compile(self.model))
@@ -160,7 +160,7 @@ class Trainer:
         if self.runtime_cfg.tensorboard_enabled:
             self.writer = SummaryWriter(log_dir=str(self.out_dir))
 
-    def _load_checkpoint(self):
+    def _load_checkpoint(self) -> None:
         checkpoint: Checkpoint | None = None
         if self.out_dir.exists():
             try:
@@ -256,7 +256,7 @@ class Trainer:
         )
         return running_mfu
 
-    def _evaluate(self, lr: float, raw_model: GPT):
+    def _evaluate(self, lr: float, raw_model: GPT) -> None:
         # Use raw_model to satisfy type checker regardless of compile() wrapping
         losses = estimate_loss(
             raw_model, self.batches, self.runtime_cfg.eval_iters, self.ctx
@@ -274,7 +274,7 @@ class Trainer:
             if self.iter_num > 0:
                 self._save_checkpoint(raw_model, is_best=True)
 
-    def _train_step(self, X, Y):
+    def _train_step(self, X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
         loss_tensor = torch.tensor(0.0)
         for micro_step in range(self.data_cfg.grad_accum_steps):
             with self.ctx:
@@ -296,7 +296,7 @@ class Trainer:
             self.ema.update(self.model)
         return loss_tensor
 
-    def _save_checkpoint(self, raw_model, is_best: bool):
+    def _save_checkpoint(self, raw_model: GPT, is_best: bool) -> None:
         checkpoint = Checkpoint(
             model=raw_model.state_dict(),
             optimizer=self.optimizer.state_dict(),
@@ -316,7 +316,7 @@ class Trainer:
             is_best=is_best,
         )
 
-    def _propagate_meta(self):
+    def _propagate_meta(self) -> None:
         try:
             meta_src = self.data_cfg.meta_path(self.shared.dataset_dir)
             if meta_src and meta_src.exists():
