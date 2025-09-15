@@ -100,8 +100,6 @@ n_layer=1
 # Consolidated: validators and util tests previously in fragmented files
 
 
-
-
 def test_full_loader_unknown_top_level_sections_raise(tmp_path: Path) -> None:
     p = tmp_path / "cfg.toml"
     base = minimal_full_experiment_toml(

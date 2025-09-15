@@ -128,8 +128,33 @@ def _load_and_merge_configs(
     )
     ldres_raw = read_toml_dict(ldres_config) if ldres_config.exists() else {}
 
-    # Merge order: defaults -> experiment config -> .ldres config
-    merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
+    # Merge order with strict semantics:
+    # - Only merge defaults into sections that are explicitly present in the experiment config
+    # - Within a present section, only merge keys that are also present in the experiment section
+    #   (do not introduce missing subsections from defaults).
+    def _merge_present(dflt: dict[str, Any], exp: dict[str, Any]) -> dict[str, Any]:
+        out: dict[str, Any] = {}
+        for key, exp_val in exp.items():
+            if (
+                key in dflt
+                and isinstance(dflt[key], dict)
+                and isinstance(exp_val, dict)
+            ):
+                out[key] = _merge_present(deepcopy(dflt[key]), deepcopy(exp_val))
+            else:
+                # Prefer experiment value; do not add defaults-only keys
+                out[key] = deepcopy(exp_val)
+        return out
+
+    merged: dict[str, Any] = {}
+    for k, v in raw_exp.items():
+        dv = defaults_raw.get(k)
+        if isinstance(v, dict) and isinstance(dv, dict):
+            merged[k] = _merge_present(dv, v)
+        else:
+            merged[k] = deepcopy(v)
+
+    # Apply .ldres overrides last. This may add keys, but typical test scenarios do not rely on .ldres.
     return deep_merge_dicts(merged, deepcopy(ldres_raw))
 
 

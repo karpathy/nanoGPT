@@ -71,7 +71,6 @@ class BundestagCharPreparer(_PreparerProto):
         if n < 1:
             raise DataError(f"ngram_size must be >= 1, got {n}")
 
-
         validate_file_exists(input_file_path, "Input text file")
 
         data = input_file_path.read_text(encoding="utf-8")

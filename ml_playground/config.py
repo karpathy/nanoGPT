@@ -430,42 +430,70 @@ class ExperimentConfig(_FrozenStrictModel):
                 return (base_dir / path_val).resolve()
             return path_val
 
-        # Defensively handle data that may already be a model instance
+        # Ensure runtime.out_dir fields are Path-typed but do not resolve to absolute paths.
         train_data = data.get("train")
         if isinstance(train_data, dict):
             runtime_data = train_data.get("runtime")
             if isinstance(runtime_data, dict) and "out_dir" in runtime_data:
-                runtime_data["out_dir"] = resolve_if_relative(runtime_data["out_dir"])
+                od = runtime_data["out_dir"]
+                if isinstance(od, str):
+                    runtime_data["out_dir"] = Path(od)
 
         sample_data = data.get("sample")
         if isinstance(sample_data, dict):
             runtime_data = sample_data.get("runtime")
             if isinstance(runtime_data, dict) and "out_dir" in runtime_data:
-                runtime_data["out_dir"] = resolve_if_relative(runtime_data["out_dir"])
+                od = runtime_data["out_dir"]
+                if isinstance(od, str):
+                    runtime_data["out_dir"] = Path(od)
 
         prepare_data = data.get("prepare")
         if isinstance(prepare_data, dict) and "raw_dir" in prepare_data:
             prepare_data["raw_dir"] = resolve_if_relative(prepare_data["raw_dir"])
 
-        # Populate shared paths
+        # Populate shared paths and ensure they are Path-typed (preserve relative semantics)
         if isinstance(shared_data, dict):
+            # Coerce any existing shared paths to Path without resolving
+            for key in (
+                "dataset_dir",
+                "train_out_dir",
+                "sample_out_dir",
+                "config_path",
+                "project_home",
+            ):
+                v = shared_data.get(key)
+                if isinstance(v, str):
+                    shared_data[key] = Path(v)
             train_runtime_data = data.get("train", {}).get("runtime", {})
             if isinstance(train_runtime_data, dict):
                 train_out_dir = train_runtime_data.get("out_dir")
                 if train_out_dir:
-                    shared_data["train_out_dir"] = resolve_if_relative(train_out_dir)
+                    # If string, coerce to Path; if Path, keep relative as-is
+                    shared_data["train_out_dir"] = (
+                        Path(train_out_dir)
+                        if isinstance(train_out_dir, str)
+                        else train_out_dir
+                    )
 
             sample_runtime_data = data.get("sample", {}).get("runtime", {})
             if isinstance(sample_runtime_data, dict):
                 sample_out_dir = sample_runtime_data.get("out_dir")
                 if sample_out_dir:
-                    shared_data["sample_out_dir"] = resolve_if_relative(sample_out_dir)
+                    shared_data["sample_out_dir"] = (
+                        Path(sample_out_dir)
+                        if isinstance(sample_out_dir, str)
+                        else sample_out_dir
+                    )
 
             prepare_data = data.get("prepare")
             if isinstance(prepare_data, dict):
                 dataset_dir = prepare_data.pop("dataset_dir", None)
                 if dataset_dir:
-                    shared_data["dataset_dir"] = resolve_if_relative(dataset_dir)
+                    shared_data["dataset_dir"] = (
+                        Path(dataset_dir)
+                        if isinstance(dataset_dir, str)
+                        else dataset_dir
+                    )
 
         return data
 
