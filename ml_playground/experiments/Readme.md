@@ -54,10 +54,10 @@ Important: Strict configuration injection
 
 Common CLI patterns
 
-- Prepare: `make prepare EXP=<name> [CONFIG=path]` (e.g., `make prepare EXP=shakespeare`).
-- Train: `make train EXP=<name> CONFIG=path` (e.g., `make train EXP=shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml`).
-- Sample: `make sample EXP=<name> CONFIG=path` (e.g., `make sample EXP=shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml`).
-- End‑to‑end: `make loop EXP=<name> CONFIG=path` (e.g., `make loop EXP=bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml`).
+- Prepare: `make prepare <name> [CONFIG=path]` (e.g., `make prepare shakespeare`).
+- Train: `make train <name> CONFIG=path` (e.g., `make train shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml`).
+- Sample: `make sample <name> CONFIG=path` (e.g., `make sample shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml`).
+- End‑to‑end: `make loop <name> CONFIG=path` (e.g., `make loop bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml`).
 
 Implemented experiments (current)
 
@@ -151,25 +151,25 @@ make verify
 Prepare dataset:
 
 ```bash
-make prepare EXP=<name>
+make prepare <name>
 ```
 
 Train:
 
 ```bash
-make train EXP=<name> CONFIG=ml_playground/experiments/<name>/config.toml
+make train <name> CONFIG=ml_playground/experiments/<name>/config.toml
 ```
 
 Sample:
 
 ```bash
-make sample EXP=<name> CONFIG=ml_playground/experiments/<name>/config.toml
+make sample <name> CONFIG=ml_playground/experiments/<name>/config.toml
 ```
 
 End-to-end loop:
 
 ```bash
-make loop EXP=<name> CONFIG=ml_playground/experiments/<name>/config.toml
+make loop <name> CONFIG=ml_playground/experiments/<name>/config.toml
 ```
 
 ## Configuration

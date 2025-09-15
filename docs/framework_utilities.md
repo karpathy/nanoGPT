@@ -97,17 +97,19 @@ Run subcommands via Make targets (preferred):
 
 ```bash
 # Prepare data for an experiment
-make prepare EXP=<experiment> [CONFIG=/path/to/config.toml]
+make prepare <experiment> [CONFIG=/path/to/config.toml]
 
 # Train a model for an experiment
-make train EXP=<experiment> CONFIG=/path/to/config.toml
+make train <experiment> CONFIG=/path/to/config.toml
 
 # Sample from a trained model
-make sample EXP=<experiment> CONFIG=/path/to/config.toml
+make sample <experiment> CONFIG=/path/to/config.toml
 
 # Run prepare -> train -> sample in one go
-make loop EXP=<experiment> CONFIG=/path/to/config.toml
+make loop <experiment> CONFIG=/path/to/config.toml
 ```
+
+Output is quieter by default due to a global `.SILENT:` in the Makefile; only explicit messages are printed.
 
 ## Configuration System
 
