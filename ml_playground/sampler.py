@@ -19,7 +19,7 @@ from ml_playground.config import (
     READ_POLICY_BEST,
     SharedConfig,
 )
-from ml_playground.error_handling import DataError, setup_logging
+from ml_playground.error_handling import DataError, FileOperationError, setup_logging
 from ml_playground.model import GPT
 from ml_playground.prepare import setup_tokenizer
 
@@ -47,8 +47,9 @@ class Sampler:
             raise ValueError("Runtime configuration is missing")
 
         self.out_dir = shared.sample_out_dir
-        self.logger = logging.getLogger(__name__)
-        setup_logging(str(self.out_dir))
+        # Standardize logger naming for cohesion across modules
+        self.logger = logging.getLogger("ml_playground.sampler")
+        setup_logging("ml_playground.sampler")
 
         self._setup_torch_env()
 
@@ -112,9 +113,11 @@ class Sampler:
             prompt_path = Path(start_text[5:])
             try:
                 start_text = prompt_path.read_text(encoding="utf-8")
-            except Exception as e:
-                self.logger.error(f"Failed to read prompt file {prompt_path}: {e}")
-                return []
+            except (OSError, IOError) as e:
+                # Replace bare except with explicit file operation error
+                raise FileOperationError(
+                    f"Failed to read prompt file {prompt_path}: {e}"
+                ) from e
         return self.tokenizer.encode(start_text)
 
     def run(self) -> None:
@@ -142,26 +145,23 @@ class Sampler:
                     self.logger.info("---------------")
 
 
+class SampleCommand:
+    """Command class for executing a sampling run."""
+
+    def __init__(self, cfg: SamplerConfig, shared: SharedConfig):
+        self.cfg = cfg
+        self.shared = shared
+
+    def execute(self) -> None:
+        sampler = Sampler(self.cfg, self.shared)
+        sampler.run()
+
+
 def sample(cfg: SamplerConfig, shared: SharedConfig | None = None) -> None:
     """Sample from a trained model."""
     if shared is None:
-        if cfg.runtime is None:
-            raise ValueError("Runtime configuration is missing")
-        out_dir = cfg.runtime.out_dir
-        shared = SharedConfig(
-            experiment="unknown",
-            config_path=out_dir / "config.toml",
-            project_home=out_dir.parent.parent,
-            dataset_dir=out_dir,  # Assume same as out_dir for backward compat
-            train_out_dir=out_dir,
-            sample_out_dir=out_dir,
-        )
-    """Sample from a trained model."""
-    sampler = Sampler(cfg, shared)
-    sampler.run()
+        raise ValueError("shared parameter is required and cannot be None")
+    SampleCommand(cfg, shared).execute()
 
 
-__all__ = [
-    "Sampler",
-    "sample",
-]
+__all__ = ["Sampler", "SampleCommand", "sample"]

@@ -51,8 +51,9 @@ class Trainer:
         self.shared = shared
 
         self.out_dir = shared.train_out_dir
-        self.logger = logging.getLogger(__name__)
-        setup_logging(str(self.out_dir))
+        # Standardize logger naming for cohesion across modules
+        self.logger = logging.getLogger("ml_playground.trainer")
+        setup_logging("ml_playground.trainer")
 
         self._setup_torch_env()
 
