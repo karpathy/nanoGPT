@@ -107,7 +107,7 @@ class Trainer:
 
     def _setup_checkpoint_manager(self) -> CheckpointManager:
         return CheckpointManager(
-            out_dir=self.out_dir,
+            out_dir=self.shared.out_dir,
             atomic=self.cfg.runtime.ckpt_atomic,
             keep_last=self.cfg.runtime.checkpointing.keep.last,
             keep_best=self.cfg.runtime.checkpointing.keep.best,
@@ -300,17 +300,6 @@ class Trainer:
 
 def train(cfg: TrainerConfig, shared: SharedConfig | None = None) -> tuple[int, float]:
     """Main training loop."""
-    # Backward-compat: synthesize a minimal SharedConfig when not provided
-    if shared is None:
-        out_dir = cfg.runtime.out_dir
-        shared = SharedConfig(
-            experiment="unknown",
-            config_path=out_dir / "cfg.toml",
-            project_home=out_dir.parent if out_dir.parent else out_dir,
-            dataset_dir=out_dir,
-            train_out_dir=out_dir,
-            sample_out_dir=out_dir,
-        )
     trainer = Trainer(cfg, shared)
     return trainer.run()
 

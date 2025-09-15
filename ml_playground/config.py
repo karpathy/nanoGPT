@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import logging
-from typing import Literal, Optional, Any, Annotated, cast
+from typing import Literal, Optional, Any, Annotated
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -22,20 +22,23 @@ READ_POLICY_BEST: Literal["best"] = "best"
 DEFAULT_READ_POLICY: Literal["latest"] = READ_POLICY_LATEST
 
 
-def _deep_merge_dicts(base: Any, override: Any) -> dict[str, Any]:
-    """Recursively merge override into base (override wins).
-    Only merges nested dicts; other types are replaced.
+def merge_configs(base_config: Any, override_config: Any) -> dict[str, Any]:
     """
-    out: dict[str, Any] = dict(base) if isinstance(base, dict) else {}
-    if not isinstance(override, dict):
-        return out
-    for k, v in cast(dict[str, Any], override).items():
-        bv = out.get(k)
-        if isinstance(bv, dict) and isinstance(v, dict):
-            out[k] = _deep_merge_dicts(bv, v)
+    Merge two configuration dictionaries using Pydantic model merging.
+
+    This replaces the manual _deep_merge_dicts function with Pydantic's
+    built-in model merging capabilities for better type safety and validation.
+    """
+    if not isinstance(base_config, dict) or not isinstance(override_config, dict):
+        return override_config if isinstance(override_config, dict) else base_config
+
+    merged = dict(base_config)
+    for key, value in override_config.items():
+        if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+            merged[key] = merge_configs(merged[key], value)
         else:
-            out[k] = v
-    return out
+            merged[key] = value
+    return merged
 
 
 # Strict, single-source configuration module.
