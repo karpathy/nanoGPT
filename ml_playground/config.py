@@ -296,18 +296,8 @@ class SamplerConfig(_FrozenStrictModel):
 
         base_dir = config_path.parent
 
-        def resolve_if_relative(path_val: Any) -> Any:
-            if isinstance(path_val, str) and not path_val.startswith("/"):
-                return (base_dir / path_val).resolve()
-            if isinstance(path_val, Path) and not path_val.is_absolute():
-                return (base_dir / path_val).resolve()
-            return path_val
-
         if "runtime" in data and isinstance(data["runtime"], dict):
-            if "out_dir" in data["runtime"]:
-                data["runtime"]["out_dir"] = resolve_if_relative(
-                    data["runtime"]["out_dir"]
-                )
+            _resolve_fields_relative(data["runtime"], ["out_dir"], base_dir)
 
         return data
 
@@ -468,7 +458,9 @@ class ExperimentConfig(_FrozenStrictModel):
 
         prepare_data = data.get("prepare")
         if isinstance(prepare_data, dict) and "raw_dir" in prepare_data:
-            prepare_data["raw_dir"] = resolve_if_relative(prepare_data["raw_dir"])
+            prepare_data["raw_dir"] = _resolve_if_relative(
+                prepare_data["raw_dir"], base_dir
+            )
 
         # Populate shared paths and ensure they are Path-typed (preserve relative semantics)
         if isinstance(shared_data, dict):
