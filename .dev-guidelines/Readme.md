@@ -99,17 +99,17 @@ make quality
 
 ```bash
 # Prepare datasets
-make prepare EXP=shakespeare
-make prepare EXP=bundestag_char
+make prepare shakespeare
+make prepare bundestag_char
 
 # Train (select config path explicitly)
-make train EXP=shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml
+make train shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml
 
 # Sample from trained model
-make sample EXP=shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml
+make sample shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml
 
 # End-to-end pipeline
-make loop EXP=bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
+make loop bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
 ```
 
 ## Need Help?

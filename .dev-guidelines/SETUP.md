@@ -32,8 +32,8 @@ make verify
 ### Dataset Preparation
 
 ```bash
-make prepare EXP=shakespeare
-make prepare EXP=bundestag_char
+make prepare shakespeare
+make prepare bundestag_char
 ```
 
 Notes:
@@ -44,8 +44,8 @@ Notes:
 ### Training
 
 ```bash
-make train EXP=shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml
-make train EXP=bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
+make train shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml
+make train bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
 ```
 
 Notes:
@@ -56,8 +56,8 @@ Notes:
 ### Sampling
 
 ```bash
-make sample EXP=shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml
-make sample EXP=bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
+make sample shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml
+make sample bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
 ```
 
 Notes:
@@ -68,8 +68,10 @@ Notes:
 ### End-to-End Loop
 
 ```bash
-make loop EXP=bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
+make loop bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
 ```
+
+Make output is intentionally quieter by default via a global `.SILENT:` directive; only explicit messages are printed.
 
 Notes:
 
