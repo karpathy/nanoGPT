@@ -90,9 +90,8 @@ Testing Docs
 ### 1. Test Framework and Runner
 
 - **Framework**: pytest only. Do not use unittest or nose.
-- **Runner (preferred)**: `make test` (invokes `uv run pytest` under the hood)
-- **Runner (direct)**: `uv run pytest`
-- **Coverage**: `uv run coverage run -m pytest; uv run coverage report; uv run coverage xml`
+- **Runner**: `make test` (invokes pytest under the hood)
+- **Coverage**: `make coverage`
 - **Random seed**: Enforced determinism via `tests/conftest.py` with fixed seed.
 
 **Rationale**: One toolchain avoids fragmentation and flakiness.
@@ -219,23 +218,20 @@ make quality-ext
 
 ```bash
 # Fast check
-uv run pytest -q
+make pytest-core PYARGS="-q"
 
 # With markers (exclude slow/perf)
-uv run pytest -m "not slow and not perf" -q
+make pytest-core PYARGS='-m "not slow and not perf" -q'
 
 # Full suite with coverage
-uv run coverage run -m pytest -m "not perf"
-uv run coverage report -m
+make coverage
 ```
 
 #### CI Commands
 
 ```bash
 # Coverage check (CI)
-uv run coverage run -m pytest -m "not perf"
-uv run coverage report -m
-uv run coverage xml
+make coverage
 ```
 
 ### Example Test Patterns

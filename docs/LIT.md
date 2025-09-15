@@ -20,7 +20,7 @@ References:
 This project uses UV exclusively. LIT is optional. Install it via the dedicated script:
 
 ```bash
-uv run setup-lit
+make lit-setup
 ```
 
 If you prefer manual installation, install `lit-nlp` in a compatible environment following the upstream docs.
@@ -34,7 +34,7 @@ Python version: 3.13.x
 Launch the local LIT UI for the bundestag_char PoC (default host 127.0.0.1, port 5432):
 
 ```bash
-uv run analyze-bundestag-char --port 5432
+make lit PORT=5432
 ```
 
 Flags:
