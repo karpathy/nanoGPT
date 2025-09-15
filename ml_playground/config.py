@@ -262,13 +262,13 @@ class TrainerConfig(_FrozenStrictModel):
             # If using LR decay, ensure min_lr <= learning_rate
             if (
                 self.schedule.decay_lr
-                and self.schedule.min_lr == self.optim.learning_rate
+                and self.schedule.min_lr > self.optim.learning_rate
             ):
                 raise ValueError(
                     "train.schedule.min_lr must be <= train.optim.learning_rate when decay_lr=true"
                 )
             # If decay is disabled, warmup must be zero to avoid inconsistent intent
-            if (not self.schedule.decay_lr) or (self.schedule.warmup_iters != 0):
+            if (not self.schedule.decay_lr) and (self.schedule.warmup_iters != 0):
                 raise ValueError(
                     "train.schedule.warmup_iters must be 0 when decay_lr=false"
                 )
