@@ -7,7 +7,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 .SILENT:
 
-.PHONY: help test unit unit-cov integration e2e acceptance test-file coverage quality quality-ext quality-ci lint format pyright mypy typecheck setup sync verify clean prepare train sample loop tensorboard deadcode gguf-help pytest-verify-layout pytest-core pytest-all check-exp check-exp-config check-tool ai-guidelines
+.PHONY: help test unit unit-cov integration e2e acceptance test-file coverage quality quality-ext quality-ci lint format pyright mypy typecheck setup sync verify clean prepare train sample loop tensorboard deadcode gguf-help pytest-verify-layout pytest-core pytest-all check-exp check-exp-config check-tool ai-guidelines lit-setup lit
 
 # Be quieter and focus output on failures only
 PYTEST_BASE=-q -n auto -W error --strict-markers --strict-config
@@ -190,3 +190,10 @@ coverage: ## Run coverage for non-performance tests and generate reports
 	$(RUN) coverage run -m pytest -m "not perf"
 	$(RUN) coverage report -m
 	$(RUN) coverage xml
+
+# LIT (Learning Interpretability Tool) helpers
+lit-setup: ## Install optional LIT extras into the environment
+	uv sync --extra lit
+
+lit: ## Launch LIT UI for bundestag_char (override with PORT=5432, HOST=127.0.0.1)
+	$(CLI) analyze bundestag_char --port $${PORT:-5432} --host $${HOST:-127.0.0.1}
