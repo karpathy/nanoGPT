@@ -384,10 +384,6 @@ def main(argv: list[str] | None = None) -> int | None:
     return cmd.main(args=argv or [], standalone_mode=False)
 
 
-if __name__ == "__main__":
-    # When executed as a script, run with default behavior (may exit)
-    get_command(app)()
-
 # ---------------------------------------------------------------------------
 # Simplified command implementations
 # ---------------------------------------------------------------------------
@@ -440,3 +436,8 @@ def _run_loop_cmd(experiment: str, exp_config_path: Path | None) -> None:
         exp.sample,
         exp.shared,
     )
+
+
+if __name__ == "__main__":
+    # When executed as a script, run with default behavior (may exit)
+    get_command(app)()

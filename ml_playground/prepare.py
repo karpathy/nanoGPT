@@ -96,13 +96,30 @@ def create_standardized_metadata(
         "val_tokens": val_tokens,
     }
 
-    # Add tokenizer-specific information (mandatory name)
-    meta["tokenizer"] = tokenizer.name
+    # Add tokenizer-specific information (mandatory type/name)
+    meta["tokenizer_type"] = getattr(tokenizer, "name", None) or "unknown"
+    # Backward-compat key for any existing code that looked for 'tokenizer'
+    meta["tokenizer"] = meta["tokenizer_type"]
 
     # Add encoding information if available
     if hasattr(tokenizer, "encode") and hasattr(tokenizer, "decode"):
         meta["has_encode"] = True
         meta["has_decode"] = True
+
+    # Include tokenizer details to support reconstruction during sampling
+    try:
+        if meta["tokenizer_type"] in ("char", "word"):
+            # Capture vocab if present
+            vocab = getattr(tokenizer, "stoi", None)
+            if isinstance(vocab, dict) and vocab:
+                meta["stoi"] = vocab
+        elif meta["tokenizer_type"] == "tiktoken":
+            enc_name = getattr(tokenizer, "encoding_name", None)
+            if isinstance(enc_name, str):
+                meta["encoding_name"] = enc_name
+    except Exception:
+        # Metadata enrichment is best-effort; never fail preparation
+        pass
 
     # Include extras if provided
     if extras:
@@ -215,7 +232,7 @@ def write_bin_and_meta(
     before = snapshot_files([train_path, val_path, meta_path])
 
     if train_path.exists() and val_path.exists() and meta_path.exists():
-        # Strict: meta.pkl must be valid; do not regenerate silently
+        # Validate existing meta and upgrade schema if needed
         try:
             with meta_path.open("rb") as f:
                 existing_meta = pickle.load(f)
@@ -224,6 +241,28 @@ def write_bin_and_meta(
                 f"Failed to read existing meta.pkl at {meta_path}: {e}"
             ) from e
         if isinstance(existing_meta, dict) and "meta_version" in existing_meta:
+            # Upgrade path: add tokenizer_type and optional details if missing
+            needs_upgrade = False
+            upgrade_meta = dict(existing_meta)
+            if "tokenizer_type" not in upgrade_meta:
+                # Best-effort inference from keys
+                if "tokenizer" in upgrade_meta and isinstance(
+                    upgrade_meta["tokenizer"], str
+                ):
+                    upgrade_meta["tokenizer_type"] = upgrade_meta["tokenizer"]
+                else:
+                    # Default to char if unknown
+                    upgrade_meta["tokenizer_type"] = "char"
+                needs_upgrade = True
+            # Persist upgrade only when needed
+            if needs_upgrade:
+                tmp_meta = meta_path.with_name("." + meta_path.name + ".tmp")
+                try:
+                    with tmp_meta.open("wb") as f:
+                        pickle.dump(upgrade_meta, f)
+                    tmp_meta.replace(meta_path)
+                finally:
+                    tmp_meta.unlink(missing_ok=True)
             return
         raise DataError(
             f"Invalid existing meta.pkl at {meta_path}: expected dict with 'meta_version'"

@@ -131,14 +131,20 @@ prepare: check-exp ## Prepare dataset (EXP=<name> [CONFIG=path])
 	if [ -n "$(CONFIG)" ]; then cmd="$$cmd --exp-config $(CONFIG)"; fi; \
 	echo $$cmd; $$cmd
 
-train: check-exp-config ## Train model (EXP=<name> CONFIG=path)
-	$(CLI) train $(EXP) --exp-config $(CONFIG)
+train: check-exp ## Train model (EXP=<name> [CONFIG=path])
+	cmd="$(CLI) train $(EXP)"; \
+	if [ -n "$(CONFIG)" ]; then cmd="$$cmd --exp-config $(CONFIG)"; fi; \
+	echo $$cmd; $$cmd
 
-sample: check-exp-config ## Sample model (EXP=<name> CONFIG=path)
-	$(CLI) sample $(EXP) --exp-config $(CONFIG)
+sample: check-exp ## Sample model (EXP=<name> [CONFIG=path])
+	cmd="$(CLI) sample $(EXP)"; \
+	if [ -n "$(CONFIG)" ]; then cmd="$$cmd --exp-config $(CONFIG)"; fi; \
+	echo $$cmd; $$cmd
 
-loop: check-exp-config ## Full loop (EXP=<name> CONFIG=path)
-	$(CLI) loop $(EXP) --exp-config $(CONFIG)
+loop: check-exp ## Full loop (EXP=<name> [CONFIG=path])
+	cmd="$(CLI) loop $(EXP)"; \
+	if [ -n "$(CONFIG)" ]; then cmd="$$cmd --exp-config $(CONFIG)"; fi; \
+	echo $$cmd; $$cmd
 
 # Tools
 ai-guidelines: check-tool ## Setup AI guidelines symlinks for a TOOL (TOOL=<$(TOOLS)> [DRY_RUN=1])

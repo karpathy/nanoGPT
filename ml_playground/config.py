@@ -20,7 +20,7 @@ from pydantic import (
 # Read policy constants to avoid hardcoded strings in code/tests
 READ_POLICY_LATEST: Literal["latest"] = "latest"
 READ_POLICY_BEST: Literal["best"] = "best"
-DEFAULT_READ_POLICY: Literal["latest"] = READ_POLICY_LATEST
+DEFAULT_READ_POLICY: Literal["best"] = READ_POLICY_BEST
 
 
 def merge_configs(base_config: Any, override_config: Any) -> dict[str, Any]:
@@ -139,6 +139,13 @@ class PreparerConfig(_FrozenStrictModel):
             return data
         base_dir = config_path.parent
         _resolve_fields_relative(data, ["raw_dir"], base_dir)
+        # Resolve known extras paths relative to the experiment config directory
+        extras = data.get("extras")
+        if isinstance(extras, dict):
+            if "raw_text_path" in extras:
+                extras["raw_text_path"] = _resolve_if_relative(
+                    extras["raw_text_path"], base_dir
+                )
         return data
 
 
@@ -457,10 +464,17 @@ class ExperimentConfig(_FrozenStrictModel):
                     runtime_data["out_dir"] = Path(od)
 
         prepare_data = data.get("prepare")
-        if isinstance(prepare_data, dict) and "raw_dir" in prepare_data:
-            prepare_data["raw_dir"] = _resolve_if_relative(
-                prepare_data["raw_dir"], base_dir
-            )
+        if isinstance(prepare_data, dict):
+            if "raw_dir" in prepare_data:
+                prepare_data["raw_dir"] = _resolve_if_relative(
+                    prepare_data["raw_dir"], base_dir
+                )
+            # Resolve known extras paths relative to the experiment config directory
+            extras = prepare_data.get("extras")
+            if isinstance(extras, dict) and "raw_text_path" in extras:
+                extras["raw_text_path"] = _resolve_if_relative(
+                    extras["raw_text_path"], base_dir
+                )
 
         # Populate shared paths and ensure they are Path-typed (preserve relative semantics)
         if isinstance(shared_data, dict):

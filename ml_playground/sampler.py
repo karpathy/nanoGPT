@@ -57,7 +57,12 @@ class Sampler:
 
     def _setup_torch_env(self):
         torch.manual_seed(self.runtime_cfg.seed)
-        torch.cuda.manual_seed(self.runtime_cfg.seed)
+        # Guard CUDA-specific calls for non-CUDA environments
+        try:
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed(self.runtime_cfg.seed)
+        except Exception:
+            pass
 
         self.device_type = "cuda" if "cuda" in self.runtime_cfg.device else "cpu"
         pt_dtype = {
@@ -98,12 +103,17 @@ class Sampler:
         return model
 
     def _setup_tokenizer(self):
+        # Try the sampling out_dir first
         tokenizer = setup_tokenizer(self.out_dir)
-        if not tokenizer:
-            raise DataError(
-                f"Tokenizer metadata not found in {self.out_dir} (expected meta.pkl)."
-            )
-        return tokenizer
+        if tokenizer:
+            return tokenizer
+        # Fallback: try dataset_dir to find meta if not propagated yet
+        tokenizer = setup_tokenizer(self.shared.dataset_dir)
+        if tokenizer:
+            return tokenizer
+        raise DataError(
+            f"Tokenizer metadata not found in {self.out_dir} or {self.shared.dataset_dir} (expected meta.pkl)."
+        )
 
     def _get_start_ids(self) -> list[int]:
         """Get the tokenized start IDs from the config."""

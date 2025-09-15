@@ -6,6 +6,16 @@
 # - If [train.schedule].decay_lr = false, warmup/decay/min_lr are ignored.
 # - Checkpoint selection uses ckpt_metric with optional smoothing and EMA if configured.
 
+[prepare]
+# Default locations used by preparers; resolved relative to this experiment dir
+dataset_dir = "./datasets"
+raw_dir = "./raw"
+
+[prepare.extras]
+# Provide source text and tokenizer for the preparer
+raw_text_path = "./raw/corpus.txt"
+tokenizer_type = "char"
+
 [train.model]
 # mid-size model tuned for Apple Silicon (M2 Pro) with fp16 on MPS
 
@@ -22,12 +32,12 @@ block_size = 256
 dropout = 0.2
 # Whether to include bias terms in linear/LayerNorm layers; false is common for GPT-style models.
 bias = false
+vocab_size = 256
 
 [train.data]
 # Folder containing the preprocessed dataset files referenced below.
-dataset_dir = "./datasets"
 # Tokenizer selection: "char" (default) or "word" for word-level vocabulary
-tokenizer = "word"
+tokenizer = "char"
 # Character-level n-gram size used during dataset preparation (1 = single/chars, 3 = trigrams, etc.)
 ngram_size = 1
 # Micro-batch size per optimization step (per device); tuned for MPS memory
@@ -38,6 +48,14 @@ block_size = 256
 grad_accum_steps = 4
 # Sampling policy: deterministic sequential coverage for char dataset
 sampler = "random"
+
+[train.optim]
+# Optimizer hyperparameters (copied from defaults and tuned as needed)
+learning_rate = 0.001
+weight_decay = 0.1
+beta1 = 0.9
+beta2 = 0.95
+grad_clip = 1.0
 
 [train.schedule]
 # Whether to apply a learning-rate schedule (typically warmup + decay).
@@ -73,32 +91,9 @@ dtype = "bfloat16"
 # If true, compile/optimize the model/graph (when supported); speeds up but increases startup time.
 compile = false
 
-# checkpoint policy
-# Filename for the most recent checkpoint snapshot saved (rolling "last" save).
-ckpt_last_filename = "ckpt_last.pt"
-# Filename pattern/name for the best-scoring checkpoint according to ckpt_metric.
-ckpt_best_filename = "ckpt_best.pt"
-# Keep the top-K best checkpoints (by ckpt_metric) in addition to "last"; 0 disables top-K retention.
-ckpt_top_k = 0
-# Metric key to select "best" (e.g., "val_loss"); must match what evaluation reports.
-ckpt_metric = "val_loss"
-# Whether higher metric values are better (true) or lower are better (false); e.g., false for "val_loss".
-ckpt_greater_is_better = false
-# Atomic write of checkpoint files to avoid partial files on crashes.
-ckpt_atomic = true
-# If true, write extra metadata (e.g., config, metrics) alongside checkpoints for reproducibility.
-ckpt_write_metadata = true
-# Minimum time between time-based checkpoint saves; 0 disables time-based saves.
-# When > 0, can save on a timer in addition to eval_interval-driven saves.
-ckpt_time_interval_minutes = 0
-# Exponential smoothing coefficient for the metric used to decide "best"; 0.0 disables smoothing.
-# Smoothing can reduce checkpoint churn and interacts with early_stop_patience.
-best_smoothing_alpha = 0.9
-# Early stopping patience in number of evaluations without improvement; 0 disables early stopping.
-early_stop_patience = 0
-# Exponential Moving Average (EMA) decay for model weights; 0.0 disables.
-# If >0, evaluations/checkpoints may use EMA weights for better validation stability.
-ema_decay = 0.999
+# Prefer reading the best checkpoint during sampling by default
+[sample.runtime.checkpointing]
+read_policy = "best"
 
 [sample.runtime]
 # Output directory to read checkpoints from (and optionally write samples/logs to).
@@ -139,21 +134,4 @@ temperature = 0.8
 top_k = 100
 
 
-# Ollama export configuration (POC)
-[export.ollama]
-# Enable/disable the Ollama export flow.
-enabled = true
-# Directory where the Ollama-ready files will be written.
-# If empty or omitted, defaults to an 'export' folder inside this experiment directory.
-export_dir = "export"
-# Name used in Modelfile and suggested 'ollama create' target.
-model_name = "bundestag-char"
-# Quantization preset to use during gguf quantization (requires llama.cpp tools available).
-quant = "q4_K_M"
-# Optional template file path for chat formatting; omit or empty to keep the Modelfile minimal.
-template = ""
-# Optional: paths to external tools; if empty, assume on PATH.
-# e.g., convert_bin = "llama.cpp/convert-hf-to-gguf.py"
-# e.g., quant_bin = "llama.cpp/quantize"
-convert_bin = "/Users/tv/code/nanoGPT/tools/llama_cpp/llama-gguf"
-quant_bin = "/Users/tv/code/nanoGPT/tools/llama_cpp/llama-quantize"
+# Export config is not supported by the strict schema at the top level; removed for compatibility

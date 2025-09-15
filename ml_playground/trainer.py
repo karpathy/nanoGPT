@@ -63,14 +63,24 @@ class Trainer:
         self.out_dir.mkdir(parents=True, exist_ok=True)
         self.ckpt_mgr = self._setup_checkpoint_manager()
 
+        # Ensure optional components exist before checkpoint loading may reference them
+        self.ema: EMA | None = None
+        self.writer: SummaryWriter | None = None
+
         self._load_checkpoint()
         self._setup_components()
 
     def _setup_torch_env(self) -> None:
         torch.manual_seed(self.cfg.runtime.seed)
-        torch.cuda.manual_seed(self.cfg.runtime.seed)
-        torch.backends.cuda.matmul.allow_tf32 = True
-        torch.backends.cudnn.allow_tf32 = True
+        # Guard CUDA-specific configuration for non-CUDA environments
+        try:
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed(self.cfg.runtime.seed)
+                torch.backends.cuda.matmul.allow_tf32 = True
+                torch.backends.cudnn.allow_tf32 = True
+        except Exception:
+            # Don't fail initialization due to CUDA-specific environment issues
+            pass
 
         self.device_type = "cuda" if "cuda" in self.cfg.runtime.device else "cpu"
         pt_dtype = {
@@ -120,14 +130,10 @@ class Trainer:
             enabled=(self.device_type == "cuda" and self.cfg.runtime.dtype == "float16")
         )
 
-        self.ema: EMA | None = None
-        if self.cfg.runtime.ema_decay > 0.0:
-            self.ema = EMA(
-                self.model, self.cfg.runtime.ema_decay, self.cfg.runtime.device
-            )
+        if self.ema is None and self.cfg.runtime.ema_decay > 0.0:
+            self.ema = EMA(self.model, self.cfg.runtime.ema_decay, self.cfg.runtime.device)
 
-        self.writer: SummaryWriter | None = None
-        if self.cfg.runtime.tensorboard_enabled:
+        if self.writer is None and self.cfg.runtime.tensorboard_enabled:
             self.writer = SummaryWriter(log_dir=str(self.out_dir))
 
     def _load_checkpoint(self) -> None:
