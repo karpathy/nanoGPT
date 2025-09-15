@@ -537,6 +537,37 @@ class SharedConfig(_FrozenStrictModel):
     train_out_dir: Path
     sample_out_dir: Path
 
+    @model_validator(mode="before")
+    @classmethod
+    def _resolve_shared_paths(cls, data: Any) -> Any:
+        """Resolve shared path fields relative to the directory of config_path.
+
+        Accept both str and Path for incoming values and normalize to absolute Paths
+        when they are relative. If config_path is missing or not a Path-like, return as-is.
+        """
+        if not isinstance(data, dict):
+            return data
+        cfg_path = data.get("config_path")
+        try:
+            base_dir = Path(cfg_path).parent if cfg_path is not None else None
+        except Exception:
+            base_dir = None
+        if base_dir is None:
+            return data
+
+        def norm(v: Any) -> Any:
+            if isinstance(v, (str, Path)):
+                p = Path(v)
+                if not p.is_absolute():
+                    return (base_dir / p).resolve()
+                return p
+            return v
+
+        for key in ("project_home", "dataset_dir", "train_out_dir", "sample_out_dir"):
+            if key in data:
+                data[key] = norm(data[key])
+        return data
+
     @field_validator(
         "config_path",
         "project_home",
