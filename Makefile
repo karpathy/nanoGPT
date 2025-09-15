@@ -5,6 +5,7 @@ SHELL := /bin/bash
 .SHELLFLAGS := -e -o pipefail -c
 .ONESHELL:
 .DEFAULT_GOAL := help
+.SILENT:
 
 .PHONY: help test unit unit-cov integration e2e acceptance test-file coverage quality quality-ext quality-ci lint format pyright mypy typecheck setup sync verify clean prepare train sample loop tensorboard deadcode gguf-help pytest-verify-layout pytest-core pytest-all check-exp check-exp-config check-tool ai-guidelines
 
@@ -16,6 +17,31 @@ VERIFY_TOOL=tools/verify_unit_test_layout.py
 CLI=$(RUN) python -m $(PKG).cli
 PYTEST_CMD=$(RUN) pytest $(PYTEST_BASE)
 TOOLS=copilot aiassistant junie kiro windsurf cursor
+
+# Allow positional EXP argument for runtime targets, e.g.:
+#   make prepare bundestag_char
+#   make train bundestag_char CONFIG=path/to/config.toml
+# If EXP is not explicitly set (e.g., EXP=foo), capture the second word
+# of MAKECMDGOALS for these targets and convert it into EXP. Also define
+# a no-op target for that second word so Make doesn't try to build it.
+ifeq ($(origin EXP), undefined)
+ifneq ($(filter prepare,$(firstword $(MAKECMDGOALS))),)
+  EXP := $(word 2,$(MAKECMDGOALS))
+  $(eval $(EXP):;@:)
+endif
+ifneq ($(filter train,$(firstword $(MAKECMDGOALS))),)
+  EXP := $(word 2,$(MAKECMDGOALS))
+  $(eval $(EXP):;@:)
+endif
+ifneq ($(filter sample,$(firstword $(MAKECMDGOALS))),)
+  EXP := $(word 2,$(MAKECMDGOALS))
+  $(eval $(EXP):;@:)
+endif
+ifneq ($(filter loop,$(firstword $(MAKECMDGOALS))),)
+  EXP := $(word 2,$(MAKECMDGOALS))
+  $(eval $(EXP):;@:)
+endif
+endif
 
 help: ## Show this help
 	@echo "Available targets:" && \
@@ -129,7 +155,7 @@ check-tool: ## Validate TOOL is provided (e.g., TOOL=windsurf)
 prepare: check-exp ## Prepare dataset (EXP=<name> [CONFIG=path])
 	cmd="$(CLI) prepare $(EXP)"; \
 	if [ -n "$(CONFIG)" ]; then cmd="$$cmd --exp-config $(CONFIG)"; fi; \
-	echo $$cmd; $$cmd
+	$$cmd
 
 train: check-exp ## Train model (EXP=<name> [CONFIG=path])
 	cmd="$(CLI) train $(EXP)"; \
