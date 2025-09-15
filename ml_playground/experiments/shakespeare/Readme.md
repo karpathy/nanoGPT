@@ -26,13 +26,17 @@ For framework utilities, see [../../docs/framework_utilities.md](../../docs/fram
 - Config: `ml_playground/experiments/shakespeare/config.toml`
 
 ```bash
+# Environment setup (once)
+make setup
+make verify
+
 # Prepare → Train → Sample (separate)
-uv run prepare-shakespeare
-uv run train-shakespeare-cpu
-uv run sample-shakespeare-cpu
+make prepare shakespeare
+make train shakespeare CONFIG=ml_playground/experiments/shakespeare/config.toml
+make sample shakespeare CONFIG=ml_playground/experiments/shakespeare/config.toml
 
 # Or end-to-end
-uv run loop-shakespeare-cpu
+make loop shakespeare CONFIG=ml_playground/experiments/shakespeare/config.toml
 ```
 
 ## Configuration Highlights

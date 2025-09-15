@@ -42,25 +42,25 @@ uv run setup
 Prepare:
 
 ```bash
-uv run prepare-bundestag-char
+make prepare bundestag_char
 ```
 
 Train:
 
 ```bash
-uv run train-bundestag-char-cpu
+make train bundestag_char CONFIG=ml_playground/experiments/bundestag_char/config.toml
 ```
 
 Sample:
 
 ```bash
-uv run sample-bundestag-char-cpu
+make sample bundestag_char CONFIG=ml_playground/experiments/bundestag_char/config.toml
 ```
 
 End-to-end loop:
 
 ```bash
-uv run loop-bundestag-char-cpu
+make loop bundestag_char CONFIG=ml_playground/experiments/bundestag_char/config.toml
 ```
 
 ## Configuration Highlights

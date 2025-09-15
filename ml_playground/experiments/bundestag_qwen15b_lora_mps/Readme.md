@@ -28,9 +28,9 @@ For framework utilities, see [../../docs/framework_utilities.md](../../docs/fram
 ## Environment Setup (UV-only)
 
 ```bash
-uv run setup
+make setup
 # If needed, add runtime packages
-uv add peft transformers torch tensorboard
+make verify
 ```
 
 ## How to Run
@@ -40,20 +40,20 @@ This preset uses the `bundestag_finetuning_mps` integration under the hood.
 End‑to‑end loop:
 
 ```bash
-uv run loop-bundestag-qwen15b-lora-mps
+make loop bundestag_qwen15b_lora_mps CONFIG=ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 ```
 
 Individual steps:
 
 ```bash
 # Prepare
-uv run prepare-bundestag-qwen15b-lora-mps
+make prepare bundestag_qwen15b_lora_mps
 
 # Train
-uv run train-bundestag-qwen15b-lora-mps
+make train bundestag_qwen15b_lora_mps CONFIG=ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 
 # Sample
-uv run sample-bundestag-qwen15b-lora-mps
+make sample bundestag_qwen15b_lora_mps CONFIG=ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 ```
 
 ## Configuration Highlights
