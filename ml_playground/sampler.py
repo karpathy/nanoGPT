@@ -19,7 +19,7 @@ from ml_playground.config import (
     READ_POLICY_BEST,
     SharedConfig,
 )
-from ml_playground.error_handling import DataError, FileOperationError, setup_logging
+from ml_playground.error_handling import DataError, FileOperationError
 from ml_playground.model import GPT
 from ml_playground.prepare import setup_tokenizer
 
@@ -47,9 +47,8 @@ class Sampler:
             raise ValueError("Runtime configuration is missing")
 
         self.out_dir = shared.sample_out_dir
-        # Standardize logger naming for cohesion across modules
+        # Use a stable, module-level logger name for predictable capture in tests
         self.logger = logging.getLogger("ml_playground.sampler")
-        setup_logging("ml_playground.sampler")
 
         self._setup_torch_env()
 
@@ -145,23 +144,4 @@ class Sampler:
                     self.logger.info("---------------")
 
 
-class SampleCommand:
-    """Command class for executing a sampling run."""
-
-    def __init__(self, cfg: SamplerConfig, shared: SharedConfig):
-        self.cfg = cfg
-        self.shared = shared
-
-    def execute(self) -> None:
-        sampler = Sampler(self.cfg, self.shared)
-        sampler.run()
-
-
-def sample(cfg: SamplerConfig, shared: SharedConfig | None = None) -> None:
-    """Sample from a trained model."""
-    if shared is None:
-        raise ValueError("shared parameter is required and cannot be None")
-    SampleCommand(cfg, shared).execute()
-
-
-__all__ = ["Sampler", "SampleCommand", "sample"]
+__all__ = ["Sampler"]

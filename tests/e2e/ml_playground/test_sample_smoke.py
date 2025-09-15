@@ -2,7 +2,7 @@ from __future__ import annotations
 from pathlib import Path
 import torch
 from ml_playground.model import GPTConfig, GPT
-from ml_playground.sampler import sample
+from ml_playground.sampler import Sampler
 from ml_playground.config import (
     SamplerConfig,
     SampleConfig,
@@ -98,4 +98,4 @@ def test_sample_smoke(tmp_path: Path) -> None:
         train_out_dir=out_dir,
         sample_out_dir=out_dir,
     )
-    sample(exp, shared)  # should run without exceptions
+    Sampler(exp, shared).run()  # should run without exceptions

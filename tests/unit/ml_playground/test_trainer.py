@@ -180,7 +180,7 @@ def test_train_eval_only_breaks_early_and_returns(
         train_out_dir=cfg.runtime.out_dir,
         sample_out_dir=cfg.runtime.out_dir,
     )
-    it, best = trainer_mod.train(cfg, shared)
+    it, best = trainer_mod.Trainer(cfg, shared).run()
     assert it == 0
     assert best == pytest.approx(0.4)
 
@@ -221,7 +221,7 @@ def test_train_writes_best_checkpoint_on_improvement_after_first_iter(
         train_out_dir=cfg.runtime.out_dir,
         sample_out_dir=cfg.runtime.out_dir,
     )
-    it, best = trainer_mod.train(cfg, shared)
+    it, best = trainer_mod.Trainer(cfg, shared).run()
 
     assert it >= 1
     assert any(s.is_best and s.iter_num == 1 for s in fake_mgr.saved)

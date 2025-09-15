@@ -1,6 +1,4 @@
 from __future__ import annotations
-
-import logging
 import shutil
 import time
 from contextlib import nullcontext
@@ -21,7 +19,7 @@ from ml_playground.config import (
 )
 from ml_playground.data import SimpleBatches
 from ml_playground.ema import EMA
-from ml_playground.error_handling import CheckpointError, setup_logging
+from ml_playground.error_handling import CheckpointError
 from ml_playground.estimator import estimate_loss
 from ml_playground import lr_scheduler
 from ml_playground.model import GPT
@@ -51,9 +49,8 @@ class Trainer:
         self.shared = shared
 
         self.out_dir = shared.train_out_dir
-        # Standardize logger naming for cohesion across modules
-        self.logger = logging.getLogger("ml_playground.trainer")
-        setup_logging("ml_playground.trainer")
+        # Use logger provided by strict config models
+        self.logger = self.cfg.logger
 
         self._setup_torch_env()
 
@@ -299,13 +296,5 @@ class Trainer:
             self.logger.warning(f"Failed to propagate meta file: {e}")
 
 
-def train(cfg: TrainerConfig, shared: SharedConfig | None = None) -> tuple[int, float]:
-    """Main training loop."""
-    if shared is None:
-        raise ValueError("shared parameter is required and cannot be None")
-    trainer = Trainer(cfg, shared)
-    return trainer.run()
-
-
 # Explicit public API for this module
-__all__ = ["get_lr", "Trainer", "train"]
+__all__ = ["get_lr", "Trainer"]

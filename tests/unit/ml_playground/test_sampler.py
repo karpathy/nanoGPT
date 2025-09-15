@@ -342,7 +342,8 @@ def test_sample_happy_path_with_file_prompt_and_char_meta(
         train_out_dir=out_dir,
         sample_out_dir=out_dir,
     )
-    sampler.sample(exp, shared)
+    s = sampler.Sampler(exp, shared)
+    s.run()
 
     # Verify via logs (sampler logs instead of printing)
     text = caplog.text
@@ -399,7 +400,7 @@ def test_sample_with_compile_flag_uses_compiled_model(
     )
     exp = SamplerConfig(runtime=rt, sample=sc)
 
-    # Call sample function directly
+    # Call sampler directly
     shared = SharedConfig(
         experiment="unit",
         config_path=out_dir / "cfg.toml",
@@ -408,7 +409,7 @@ def test_sample_with_compile_flag_uses_compiled_model(
         train_out_dir=out_dir,
         sample_out_dir=out_dir,
     )
-    sampler.sample(exp, shared)
+    sampler.Sampler(exp, shared).run()
     assert called["compiled"] == 1
 
 
@@ -503,7 +504,8 @@ def test_setup_tokenizer_requires_tokenizer_type(out_dir: Path) -> None:
         sample_out_dir=out_dir,
     )
     with pytest.raises(DataError):
-        sampler.sample(cfg, shared)
+        s = sampler.Sampler(cfg, shared)
+        s.run()
 
 
 def test_sampler_requires_rotated_checkpoints(out_dir: Path) -> None:
@@ -531,4 +533,5 @@ def test_sampler_requires_rotated_checkpoints(out_dir: Path) -> None:
         sample_out_dir=out_dir,
     )
     with pytest.raises(CheckpointError):
-        sampler.sample(cfg, shared)
+        s = sampler.Sampler(cfg, shared)
+        s.run()

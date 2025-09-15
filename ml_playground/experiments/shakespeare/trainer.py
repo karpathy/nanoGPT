@@ -1,16 +1,26 @@
 from __future__ import annotations
 
-from ml_playground.config import TrainerConfig
+from pathlib import Path
+from ml_playground.config import TrainerConfig, SharedConfig
 from ml_playground.experiments.protocol import (
     Trainer as _TrainerProto,
     TrainReport,
 )
-from ml_playground.trainer import train as _core_train
+from ml_playground.trainer import Trainer as _CoreTrainer
 
 
 class ShakespeareTrainer(_TrainerProto):
     def train(self, cfg: TrainerConfig) -> TrainReport:  # type: ignore[override]
-        _core_train(cfg)
+        out_dir: Path = cfg.runtime.out_dir
+        shared = SharedConfig(
+            experiment="shakespeare",
+            config_path=out_dir / "cfg.toml",
+            project_home=out_dir.parent,
+            dataset_dir=out_dir,
+            train_out_dir=out_dir,
+            sample_out_dir=out_dir,
+        )
+        _CoreTrainer(cfg, shared).run()
         return TrainReport(
             created_files=(),
             updated_files=(),

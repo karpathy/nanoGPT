@@ -10,7 +10,7 @@ from ml_playground.config import (
     LRSchedule,
     RuntimeConfig,
 )
-from ml_playground.trainer import train
+from ml_playground.trainer import Trainer
 from ml_playground.config import SharedConfig
 
 
@@ -72,5 +72,5 @@ def test_train_smoke(tmp_path: Path) -> None:
         train_out_dir=exp.runtime.out_dir,
         sample_out_dir=exp.runtime.out_dir,
     )
-    iters, best = train(exp, shared)
+    iters, best = Trainer(exp, shared).run()
     assert iters >= 2
