@@ -14,6 +14,7 @@ from pydantic import (
     StrictFloat,
     AfterValidator,
     ValidationInfo,
+    computed_field,
 )
 
 # Read policy constants to avoid hardcoded strings in code/tests
@@ -198,6 +199,25 @@ class RuntimeConfig(_FrozenStrictModel):
     def _resolve_out_dir(cls, v: Path) -> Path:
         # Preserve as provided (relative or absolute). Resolution is handled by loaders when desired.
         return v
+
+    @model_validator(mode="after")
+    def _check_logging_intervals(self) -> "RuntimeConfig":
+        # Ensure log_interval is not greater than eval_interval for sensible logging cadence
+        try:
+            if self.log_interval > self.eval_interval:
+                raise ValueError(
+                    "train.runtime.log_interval must be <= train.runtime.eval_interval"
+                )
+        except Exception:
+            pass
+        return self
+
+    @computed_field(return_type=int)
+    def total_eval_steps(self) -> int:
+        """Total number of scheduled evaluations over the run (informational)."""
+        if self.eval_interval <= 0:
+            return 0
+        return int(self.max_iters // self.eval_interval)
 
 
 class TrainerConfig(_FrozenStrictModel):
