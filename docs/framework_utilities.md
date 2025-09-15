@@ -152,7 +152,8 @@ Examples:
 ### Path Handling
 
 - Path fields (e.g., `dataset_dir`, `raw_dir`, `out_dir`) are `pathlib.Path` in models.
-- Loaders (`ml_playground/config_loader.py` and `load_experiment_toml`) resolve relative strings against the TOML file location and coerce to `Path` before validation.
+- `SharedConfig` is the single authority for resolving project-scoped paths. A `@model_validator(before=True)` resolves `project_home`, `dataset_dir`, `train_out_dir`, and `sample_out_dir` relative to `config_path` when provided as strings or relative Paths.
+- Section models (`PreparerConfig`, `TrainerConfig`, `SamplerConfig`) no longer carry ad-hoc path resolution; they accept already-normalized values. Minimal relative resolution remains for section-local fields when explicitly needed and context is available.
 
 ### Logger Behavior
 
@@ -355,8 +356,7 @@ These rules ensure deterministic behavior, type safety, and maintainability. Tes
    - Ensure validation uses strict models; no reference-resolution mechanics are supported.
 
 3) Normalize path handling
-   - Always resolve relative paths against the TOML file directory in the loader.
-   - Store resolved paths as `Path` in runtime configs; keep resolution centralized in the loader, not spread across modules.
+   - Resolve relative paths against the TOML file directory via `SharedConfig`'s pre-validator. Downstream modules must treat these paths as canonical and avoid re-resolving.
 
 4) Tokenization
    - Use `create_tokenizer()` exclusively. Migrate any custom tokenization code into the unified protocol or remove it.
