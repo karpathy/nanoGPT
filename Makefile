@@ -70,7 +70,7 @@ test-file: ## Run a single test file: make test-file FILE=path/to/test_*.py
 # Quality gates
 
 # Run type checking first to fail fast on typing issues
-quality: typecheck lint format test ## Type-check, lint, format, and run tests
+quality: format deadcode typecheck test ## Type-check, lint, format, and run tests
 
 # Extended quality: dead code + core quality + mutation testing (non-fatal) 
 quality-ext: ## Extended quality: vulture + quality + mutation tests (non-fatal)

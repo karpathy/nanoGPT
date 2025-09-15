@@ -107,7 +107,7 @@ class Trainer:
 
     def _setup_checkpoint_manager(self) -> CheckpointManager:
         return CheckpointManager(
-            out_dir=self.shared.out_dir,
+            out_dir=self.shared.train_out_dir,
             atomic=self.cfg.runtime.ckpt_atomic,
             keep_last=self.cfg.runtime.checkpointing.keep.last,
             keep_best=self.cfg.runtime.checkpointing.keep.best,
@@ -300,6 +300,8 @@ class Trainer:
 
 def train(cfg: TrainerConfig, shared: SharedConfig | None = None) -> tuple[int, float]:
     """Main training loop."""
+    if shared is None:
+        raise ValueError("shared parameter is required and cannot be None")
     trainer = Trainer(cfg, shared)
     return trainer.run()
 

@@ -44,12 +44,30 @@ def merge_configs(base_config: Any, override_config: Any) -> dict[str, Any]:
 # Strict, single-source configuration module.
 
 
-# Central strict resolver for all config path fields
+# Central strict resolver for all config path fields and helpers
 def _resolve_path_strict(v: Path) -> Path:
     try:
         return v.resolve()
     except OSError:
         raise ValueError(f"Invalid path: {v}")
+
+
+def _resolve_if_relative(value: Any, base_dir: Path) -> Any:
+    """Resolve a string or Path relative to base_dir when not absolute."""
+    if isinstance(value, str) and not value.startswith("/"):
+        return (base_dir / value).resolve()
+    if isinstance(value, Path) and not value.is_absolute():
+        return (base_dir / value).resolve()
+    return value
+
+
+def _resolve_fields_relative(
+    data: dict[str, Any], keys: list[str], base_dir: Path
+) -> None:
+    """In-place: resolve specific keys in a mapping relative to base_dir when present."""
+    for key in keys:
+        if key in data:
+            data[key] = _resolve_if_relative(data[key], base_dir)
 
 
 # Section/key constants to avoid scattered magic strings
@@ -115,23 +133,11 @@ class PreparerConfig(_FrozenStrictModel):
     def _resolve_paths(cls, data: Any, info: ValidationInfo) -> Any:
         if not isinstance(data, dict) or not info.context:
             return data
-
         config_path = info.context.get("config_path")
         if not config_path or not isinstance(config_path, Path):
             return data
-
         base_dir = config_path.parent
-
-        def resolve_if_relative(path_val: Any) -> Any:
-            if isinstance(path_val, str) and not path_val.startswith("/"):
-                return (base_dir / path_val).resolve()
-            if isinstance(path_val, Path) and not path_val.is_absolute():
-                return (base_dir / path_val).resolve()
-            return path_val
-
-        if "raw_dir" in data:
-            data["raw_dir"] = resolve_if_relative(data["raw_dir"])
-
+        _resolve_fields_relative(data, ["raw_dir"], base_dir)
         return data
 
 
@@ -212,18 +218,8 @@ class TrainerConfig(_FrozenStrictModel):
 
         base_dir = config_path.parent
 
-        def resolve_if_relative(path_val: Any) -> Any:
-            if isinstance(path_val, str) and not path_val.startswith("/"):
-                return (base_dir / path_val).resolve()
-            if isinstance(path_val, Path) and not path_val.is_absolute():
-                return (base_dir / path_val).resolve()
-            return path_val
-
         if "runtime" in data and isinstance(data["runtime"], dict):
-            if "out_dir" in data["runtime"]:
-                data["runtime"]["out_dir"] = resolve_if_relative(
-                    data["runtime"]["out_dir"]
-                )
+            _resolve_fields_relative(data["runtime"], ["out_dir"], base_dir)
 
         return data
 
