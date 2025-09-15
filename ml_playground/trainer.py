@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import shutil
 import time
 from contextlib import nullcontext
 from typing import cast
@@ -12,9 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from ml_playground.checkpoint import Checkpoint, CheckpointManager
 from ml_playground.config import (
-    ModelConfig,
     OptimConfig,
-    RuntimeConfig,
     TrainerConfig,
     LRSchedule,
     READ_POLICY_BEST,
@@ -45,38 +44,11 @@ def get_lr(it: int, schedule: LRSchedule, optim: OptimConfig) -> float:
     )
 
 
-def _setup_model(
-    model_cfg: ModelConfig,
-    runtime_cfg: RuntimeConfig,
-    optim_cfg: OptimConfig,
-    logger: logging.Logger,
-) -> tuple[GPT, torch.optim.Optimizer]:
-    """Initialize model and optimizer."""
-    logger.info("Initializing model")
-    model = GPT(model_cfg)
-    model.to(runtime_cfg.device)
-
-    logger.info("Initializing optimizer")
-    optimizer = model.configure_optimizers(
-        optim_cfg.weight_decay,
-        optim_cfg.learning_rate,
-        (optim_cfg.beta1, optim_cfg.beta2),
-        runtime_cfg.device,
-    )
-
-    return model, optimizer
-
-
 class Trainer:
     def __init__(self, cfg: TrainerConfig, shared: SharedConfig):
         """Initialize the trainer."""
         self.cfg = cfg
         self.shared = shared
-        self.runtime_cfg = cfg.runtime
-        self.model_cfg = cfg.model
-        self.data_cfg = cfg.data
-        self.optim_cfg = cfg.optim
-        self.schedule_cfg = cfg.schedule
 
         self.out_dir = shared.train_out_dir
         self.logger = logging.getLogger(__name__)
@@ -97,17 +69,17 @@ class Trainer:
         self._setup_components()
 
     def _setup_torch_env(self) -> None:
-        torch.manual_seed(self.runtime_cfg.seed)
-        torch.cuda.manual_seed(self.runtime_cfg.seed)
+        torch.manual_seed(self.cfg.runtime.seed)
+        torch.cuda.manual_seed(self.cfg.runtime.seed)
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
 
-        self.device_type = "cuda" if "cuda" in self.runtime_cfg.device else "cpu"
+        self.device_type = "cuda" if "cuda" in self.cfg.runtime.device else "cpu"
         pt_dtype = {
             "float32": torch.float32,
             "bfloat16": torch.bfloat16,
             "float16": torch.float16,
-        }[self.runtime_cfg.dtype]
+        }[self.cfg.runtime.dtype]
         self.ctx = (
             nullcontext()
             if self.device_type == "cpu"
@@ -116,65 +88,65 @@ class Trainer:
 
     def _setup_data_loader(self) -> SimpleBatches:
         return SimpleBatches(
-            data=self.data_cfg,
-            device=self.runtime_cfg.device,
+            data=self.cfg.data,
+            device=self.cfg.runtime.device,
             dataset_dir=self.shared.dataset_dir,
         )
 
     def _setup_model(self) -> tuple[GPT, torch.optim.Optimizer]:
         self.logger.info("Initializing model and optimizer")
-        model = GPT(self.model_cfg)
-        model.to(self.runtime_cfg.device)
+        model = GPT(self.cfg.model)
+        model.to(self.cfg.runtime.device)
         optimizer = model.configure_optimizers(
-            self.optim_cfg.weight_decay,
-            self.optim_cfg.learning_rate,
-            (self.optim_cfg.beta1, self.optim_cfg.beta2),
-            self.runtime_cfg.device,
+            self.cfg.optim.weight_decay,
+            self.cfg.optim.learning_rate,
+            (self.cfg.optim.beta1, self.cfg.optim.beta2),
+            self.cfg.runtime.device,
         )
         return model, optimizer
 
     def _setup_checkpoint_manager(self) -> CheckpointManager:
         return CheckpointManager(
             out_dir=self.out_dir,
-            atomic=self.runtime_cfg.ckpt_atomic,
-            keep_last=self.runtime_cfg.checkpointing.keep.last,
-            keep_best=self.runtime_cfg.checkpointing.keep.best,
+            atomic=self.cfg.runtime.ckpt_atomic,
+            keep_last=self.cfg.runtime.checkpointing.keep.last,
+            keep_best=self.cfg.runtime.checkpointing.keep.best,
         )
 
     def _setup_components(self) -> None:
-        if self.runtime_cfg.compile:
+        if self.cfg.runtime.compile:
             self.logger.info("Compiling the model... (takes a ~minute)")
             self.model = cast(GPT, torch.compile(self.model))
 
         self.scaler = GradScaler(
-            enabled=(self.device_type == "cuda" and self.runtime_cfg.dtype == "float16")
+            enabled=(self.device_type == "cuda" and self.cfg.runtime.dtype == "float16")
         )
 
         self.ema: EMA | None = None
-        if self.runtime_cfg.ema_decay > 0.0:
+        if self.cfg.runtime.ema_decay > 0.0:
             self.ema = EMA(
-                self.model, self.runtime_cfg.ema_decay, self.runtime_cfg.device
+                self.model, self.cfg.runtime.ema_decay, self.cfg.runtime.device
             )
 
         self.writer: SummaryWriter | None = None
-        if self.runtime_cfg.tensorboard_enabled:
+        if self.cfg.runtime.tensorboard_enabled:
             self.writer = SummaryWriter(log_dir=str(self.out_dir))
 
     def _load_checkpoint(self) -> None:
         checkpoint: Checkpoint | None = None
         if self.out_dir.exists():
             try:
-                if self.runtime_cfg.checkpointing.read_policy == READ_POLICY_BEST:
+                if self.cfg.runtime.checkpointing.read_policy == READ_POLICY_BEST:
                     checkpoint = self.ckpt_mgr.load_best_checkpoint(
-                        device=self.runtime_cfg.device, logger=self.logger
+                        device=self.cfg.runtime.device, logger=self.logger
                     )
                 else:
                     checkpoint = self.ckpt_mgr.load_latest_checkpoint(
-                        device=self.runtime_cfg.device, logger=self.logger
+                        device=self.cfg.runtime.device, logger=self.logger
                     )
             except CheckpointError as e:
                 self.logger.warning(
-                    f"Could not load checkpoint ({self.runtime_cfg.checkpointing.read_policy}): {e}"
+                    f"Could not load checkpoint ({self.cfg.runtime.checkpointing.read_policy}): {e}"
                 )
 
         if checkpoint:
@@ -197,17 +169,17 @@ class Trainer:
         running_mfu = -1.0
 
         while True:
-            lr = get_lr(self.iter_num, self.schedule_cfg, self.optim_cfg)
+            lr = get_lr(self.iter_num, self.cfg.schedule, self.cfg.optim)
             for param_group in self.optimizer.param_groups:
                 param_group["lr"] = lr
 
             if (
-                self.iter_num % self.runtime_cfg.eval_interval == 0
-                and self.runtime_cfg.eval_iters > 0
+                self.iter_num % self.cfg.runtime.eval_interval == 0
+                and self.cfg.runtime.eval_iters > 0
             ):
                 self._evaluate(lr, raw_model)
 
-            if self.iter_num == 0 and self.runtime_cfg.eval_only:
+            if self.iter_num == 0 and self.cfg.runtime.eval_only:
                 break
 
             loss = self._train_step(X, Y)
@@ -216,7 +188,7 @@ class Trainer:
             t1 = time.time()
             dt = t1 - t0
             t0 = t1
-            if self.iter_num % self.runtime_cfg.log_interval == 0:
+            if self.iter_num % self.cfg.runtime.log_interval == 0:
                 running_mfu = self._log_step(
                     loss, dt, local_iter_num, raw_model, running_mfu
                 )
@@ -224,7 +196,7 @@ class Trainer:
             self.iter_num += 1
             local_iter_num += 1
 
-            if self.iter_num > self.runtime_cfg.max_iters:
+            if self.iter_num > self.cfg.runtime.max_iters:
                 break
 
         self._save_checkpoint(raw_model, is_best=False)
@@ -243,10 +215,10 @@ class Trainer:
         raw_model: GPT,
         running_mfu: float,
     ) -> float:
-        lossf = loss.item() * self.data_cfg.grad_accum_steps
+        lossf = loss.item() * self.cfg.data.grad_accum_steps
         if local_iter_num >= 5:
             mfu = raw_model.estimate_mfu(
-                self.data_cfg.batch_size * self.data_cfg.grad_accum_steps, dt
+                self.cfg.data.batch_size * self.cfg.data.grad_accum_steps, dt
             )
             running_mfu = mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
 
@@ -259,7 +231,7 @@ class Trainer:
     def _evaluate(self, lr: float, raw_model: GPT) -> None:
         # Use raw_model to satisfy type checker regardless of compile() wrapping
         losses = estimate_loss(
-            raw_model, self.batches, self.runtime_cfg.eval_iters, self.ctx
+            raw_model, self.batches, self.cfg.runtime.eval_iters, self.ctx
         )
         self.logger.info(
             f"step {self.iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
@@ -276,16 +248,16 @@ class Trainer:
 
     def _train_step(self, X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
         loss_tensor = torch.tensor(0.0)
-        for micro_step in range(self.data_cfg.grad_accum_steps):
+        for micro_step in range(self.cfg.data.grad_accum_steps):
             with self.ctx:
                 logits, loss_tensor = self.model(X, Y)
-                loss_tensor = loss_tensor / self.data_cfg.grad_accum_steps
+                loss_tensor = loss_tensor / self.cfg.data.grad_accum_steps
             self.scaler.scale(loss_tensor).backward()
 
-        if self.optim_cfg.grad_clip != 0.0:
+        if self.cfg.optim.grad_clip != 0.0:
             self.scaler.unscale_(self.optimizer)
             torch.nn.utils.clip_grad_norm_(
-                self.model.parameters(), self.optim_cfg.grad_clip
+                self.model.parameters(), self.cfg.optim.grad_clip
             )
 
         self.scaler.step(self.optimizer)
@@ -300,7 +272,7 @@ class Trainer:
         checkpoint = Checkpoint(
             model=raw_model.state_dict(),
             optimizer=self.optimizer.state_dict(),
-            model_args=self.model_cfg.model_dump(),
+            model_args=self.cfg.model.model_dump(),
             iter_num=self.iter_num,
             best_val_loss=self.best_val_loss,
             config=self.cfg.model_dump(),
@@ -318,14 +290,12 @@ class Trainer:
 
     def _propagate_meta(self) -> None:
         try:
-            meta_src = self.data_cfg.meta_path(self.shared.dataset_dir)
+            meta_src = self.cfg.data.meta_path(self.shared.dataset_dir)
             if meta_src and meta_src.exists():
                 meta_dst = self.out_dir / meta_src.name
-                import shutil
-
                 shutil.copy2(meta_src, meta_dst)
-        except Exception:
-            pass
+        except (OSError, IOError) as e:
+            self.logger.warning(f"Failed to propagate meta file: {e}")
 
 
 def train(cfg: TrainerConfig, shared: SharedConfig | None = None) -> tuple[int, float]:
