@@ -131,7 +131,9 @@ class Trainer:
         )
 
         if self.ema is None and self.cfg.runtime.ema_decay > 0.0:
-            self.ema = EMA(self.model, self.cfg.runtime.ema_decay, self.cfg.runtime.device)
+            self.ema = EMA(
+                self.model, self.cfg.runtime.ema_decay, self.cfg.runtime.device
+            )
 
         if self.writer is None and self.cfg.runtime.tensorboard_enabled:
             self.writer = SummaryWriter(log_dir=str(self.out_dir))
