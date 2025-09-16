@@ -7,7 +7,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 .SILENT:
 
-.PHONY: help test unit unit-cov integration e2e acceptance test-file coverage quality quality-ext quality-ci lint format pyright mypy typecheck setup sync verify clean prepare train sample loop tensorboard deadcode gguf-help pytest-verify-layout pytest-core pytest-all check-exp check-exp-config check-tool ai-guidelines lit-setup lit
+.PHONY: help test unit unit-cov integration e2e acceptance test-file coverage quality quality-ext quality-ci lint format pyright mypy typecheck setup sync verify clean prepare train sample loop tensorboard deadcode gguf-help pytest-verify-layout pytest-core pytest-all check-exp check-exp-config check-tool ai-guidelines lit-setup lit lit-ephemeral-312 lit-venv-312-setup lit-venv-312 lit-docker-build lit-docker-up lit-docker-down lit-demo-penguin-uv lit-demo-glue-uv venv312-setup venv312-penguin venv312-glue
 
 # Be quieter and focus output on failures only
 PYTEST_BASE=-q -n auto -W error --strict-markers --strict-config
@@ -197,3 +197,222 @@ lit-setup: ## Install optional LIT extras into the environment
 
 lit: ## Launch LIT UI for bundestag_char (override with PORT=5432, HOST=127.0.0.1)
 	$(CLI) analyze bundestag_char --port $${PORT:-5432} --host $${HOST:-127.0.0.1}
+
+# ---------------------------------------------------------------------------
+# LIT: Python 3.12 isolated runs (work around NumPy 1.x vs 2.x mismatch)
+# These targets avoid the project environment (Python>=3.13, NumPy>=2) and
+# run LIT in a dedicated Python 3.12 context with NumPy<2.
+#
+# Requirements:
+# - uv (https://docs.astral.sh/uv)
+# - Python 3.12 will be auto-downloaded by uv if missing
+#
+# Usage examples:
+#   make lit-ephemeral-312 PORT=5432 HOST=127.0.0.1
+#   make lit-venv-312-setup  # one-time setup
+#   make lit-venv-312 PORT=5432 HOST=127.0.0.1
+# ---------------------------------------------------------------------------
+
+lit-ephemeral-312: ## Launch LIT UI in an ephemeral Python 3.12 env (NumPy<2)
+	# Use an isolated run that ignores the project pyproject.toml
+	HOST="$${HOST:-127.0.0.1}" PORT="$${PORT:-5432}" \
+	uv run \
+	  --no-project \
+	  --python 3.12 \
+	  --with "lit-nlp>=1.3.1" \
+	  --with "numpy<2" \
+	  -- \
+	  python -m ml_playground.analysis.lit_integration --host "$${HOST}" --port "$${PORT}"
+
+lit-venv-312-setup: ## Create persistent .venv-lit312 and install lit-nlp with NumPy<2
+	uv venv --python 3.12 .venv-lit312
+	uv pip install -p .venv-lit312/bin/python "lit-nlp>=1.3.1" "numpy<2"
+
+lit-venv-312: ## Launch LIT UI using persistent .venv-lit312 (NumPy<2)
+	@if [ ! -x .venv-lit312/bin/python ]; then \
+	  echo "Missing .venv-lit312; run: make lit-venv-312-setup"; exit 2; \
+	fi; \
+	HOST="$${HOST:-127.0.0.1}" PORT="$${PORT:-5432}" \
+	.venv-lit312/bin/python -m ml_playground.analysis.lit_integration --host "$${HOST}" --port "$${PORT}"
+
+# ---------------------------------------------------------------------------
+# LIT: Official demos via uv (ephemeral, Python 3.12, NumPy<2)
+# ---------------------------------------------------------------------------
+
+lit-demo-penguin-uv: ## Run official Penguin demo (ephemeral Python 3.12)
+	HOST="$${HOST:-127.0.0.1}" PORT="$${PORT:-5432}" \
+	OMP_NUM_THREADS=1 TF_NUM_INTEROP_THREADS=1 TF_NUM_INTRAOP_THREADS=1 \
+	uv run \
+	  --no-project \
+	  --python 3.12 \
+	  --with "numpy<2" \
+	  --with lit-nlp==1.3.1 \
+	  --with tensorflow-datasets \
+	  --with tensorflow \
+	  --with tf-keras \
+	  -- \
+	  python -m lit_nlp.examples.penguin.demo --host "$$HOST" --port "$$PORT"
+
+lit-demo-glue-uv: ## Run official GLUE demo (ephemeral Python 3.12)
+	HOST="$${HOST:-127.0.0.1}" PORT="$${PORT:-5432}" \
+	OMP_NUM_THREADS=1 TF_NUM_INTEROP_THREADS=1 TF_NUM_INTRAOP_THREADS=1 \
+	uv run \
+	  --no-project \
+	  --python 3.12 \
+	  --with "numpy<2" \
+	  --with lit-nlp==1.3.1 \
+	  --with tensorflow-datasets \
+	  --with transformers \
+	  --with sentencepiece \
+	  --with tensorflow \
+	  -- \
+	  python -m lit_nlp.examples.glue.demo --host "$$HOST" --port "$$PORT"
+
+# ---------------------------------------------------------------------------
+# LIT: Official demos via persistent .venv312 (Python 3.12, NumPy<2)
+# ---------------------------------------------------------------------------
+
+venv312-setup: ## Create persistent .venv312 with Python 3.12 and base deps (NumPy<2)
+	uv venv --python 3.12 .venv312
+	uv pip install -p .venv312/bin/python "numpy<2" "lit-nlp==1.3.1"
+
+venv312-penguin: ## Run Penguin demo using .venv312
+	@if [ ! -x .venv312/bin/python ]; then \
+	  echo "Missing .venv312; run: make venv312-setup"; exit 2; \
+	fi; \
+	printf "\n[venv312-penguin] Ensuring demo dependencies...\n"; \
+	OS="$$(uname -s)"; ARCH="$$(uname -m)"; \
+	if [ "$$OS" = "Darwin" ] && [ "$$ARCH" = "arm64" ]; then \
+	  echo "[venv312-penguin] Detected macOS/arm64 -> cleaning & installing TF stack (tensorflow-macos==2.16.2 + tensorflow-metal + tf-keras)"; \
+	  .venv312/bin/python -m pip uninstall -y tensorflow tensorflow-macos tensorflow-metal tf-keras keras >/dev/null 2>&1 || true; \
+	  uv pip install -p .venv312/bin/python 'tensorflow-macos==2.16.2' tensorflow-metal tf-keras tensorflow-datasets || true; \
+	else \
+	  echo "[venv312-penguin] Installing tensorflow (Linux/other)"; \
+	  uv pip install -p .venv312/bin/python tensorflow tensorflow-datasets tf-keras || true; \
+	fi; \
+	TFDS_DIR="$$(pwd)/.cache/tensorflow_datasets"; mkdir -p "$$TFDS_DIR"; \
+	printf "[venv312-penguin] TFDS_DATA_DIR=%s\n" "$$TFDS_DIR"; \
+	printf "[venv312-penguin] Starting server on %s:%s ...\n" "$${HOST:-127.0.0.1}" "$${PORT:-5432}"; \
+	HOST="$${HOST:-127.0.0.1}" PORT="$${PORT:-5432}" \
+	PYTHONUNBUFFERED=1 OMP_NUM_THREADS=1 TF_CPP_MIN_LOG_LEVEL=0 TF_NUM_INTEROP_THREADS=1 TF_NUM_INTRAOP_THREADS=1 TF_ENABLE_ONEDNN_OPTS=0 TF_FORCE_GPU_ALLOW_GROWTH=true TFDS_DATA_DIR="$$TFDS_DIR" \
+	  .venv312/bin/python -m lit_nlp.examples.penguin.demo --host "$${HOST}" --port "$${PORT}" --alsologtostderr
+
+venv312-glue: ## Run GLUE demo using .venv312 (TensorFlow backend)
+	@if [ ! -x .venv312/bin/python ]; then \
+	  echo "Missing .venv312; run: make venv312-setup"; exit 2; \
+	fi; \
+	printf "\n[venv312-glue] Ensuring demo dependencies...\n"; \
+	OS="$$(uname -s)"; ARCH="$$(uname -m)"; \
+	if [ "$$OS" = "Darwin" ] && [ "$$ARCH" = "arm64" ]; then \
+	  echo "[venv312-glue] Detected macOS/arm64 -> cleaning & installing TF stack (tensorflow-macos==2.16.2 + tensorflow-metal + tf-keras)"; \
+	  .venv312/bin/python -m pip uninstall -y tensorflow tensorflow-macos tensorflow-metal tf-keras keras >/dev/null 2>&1 || true; \
+	  uv pip install -p .venv312/bin/python 'tensorflow-macos==2.16.2' tensorflow-metal tf-keras tensorflow-datasets transformers sentencepiece || true; \
+	else \
+	  echo "[venv312-glue] Installing tensorflow (Linux/other)"; \
+	  uv pip install -p .venv312/bin/python tensorflow tensorflow-datasets transformers sentencepiece tf-keras || true; \
+	fi; \
+	TFDS_DIR="$$(pwd)/.cache/tensorflow_datasets"; mkdir -p "$$TFDS_DIR"; \
+	printf "[venv312-glue] TFDS_DATA_DIR=%s\n" "$$TFDS_DIR"; \
+	printf "[venv312-glue] Starting server on %s:%s ...\n" "$${HOST:-127.0.0.1}" "$${PORT:-5432}"; \
+	HOST="$${HOST:-127.0.0.1}" PORT="$${PORT:-5432}" \
+	PYTHONUNBUFFERED=1 OMP_NUM_THREADS=1 TF_CPP_MIN_LOG_LEVEL=0 TF_NUM_INTEROP_THREADS=1 TF_NUM_INTRAOP_THREADS=1 TFDS_DATA_DIR="$$TFDS_DIR" \
+	  .venv312/bin/python -m lit_nlp.examples.glue.demo --host "$${HOST}" --port "$${PORT}" --alsologtostderr
+
+# ---------------------------------------------------------------------------
+# LIT: Penguin TFDS pre-download + run (persistent .venv312)
+# ---------------------------------------------------------------------------
+
+venv312-penguin-prep: ## Pre-download TFDS 'penguins' to .cache/tensorflow_datasets
+	@if [ ! -x .venv312/bin/python ]; then \
+	  echo "Missing .venv312; run: make venv312-setup"; exit 2; \
+	fi; \
+	OS="$$(uname -s)"; ARCH="$$(uname -m)"; \
+	if [ "$$OS" = "Darwin" ] && [ "$$ARCH" = "arm64" ]; then \
+	  echo "[venv312-penguin-prep] Cleaning & installing TF stack for macOS/arm64 (tensorflow-macos==2.16.2 + tensorflow-metal + tf-keras)"; \
+	  .venv312/bin/python -m pip uninstall -y tensorflow tensorflow-macos tensorflow-metal tf-keras keras >/dev/null 2>&1 || true; \
+	  uv pip install -p .venv312/bin/python 'tensorflow-macos==2.16.2' tensorflow-metal tf-keras tensorflow-datasets || true; \
+	else \
+	  echo "[venv312-penguin-prep] Installing tensorflow + tensorflow-datasets"; \
+	  uv pip install -p .venv312/bin/python tensorflow tensorflow-datasets tf-keras || true; \
+	fi; \
+	TFDS_DIR="$$(pwd)/.cache/tensorflow_datasets"; mkdir -p "$$TFDS_DIR"; \
+	echo "[venv312-penguin-prep] TFDS_DATA_DIR=$$TFDS_DIR"; \
+	TF_ENABLE_ONEDNN_OPTS=0 TF_FORCE_GPU_ALLOW_GROWTH=true \
+	.venv312/bin/python -c "import os; os.environ['TFDS_DATA_DIR']='.cache/tensorflow_datasets'; print('[prep] Using TFDS_DATA_DIR=', os.environ['TFDS_DATA_DIR']); import tensorflow_datasets as tfds; b=tfds.builder('penguins', data_dir=os.environ['TFDS_DATA_DIR']); print('[prep] Downloading and preparing:', b.name); b.download_and_prepare(); print('[prep] Prepared at:', b.data_dir)"
+
+venv312-penguin-run: ## Run Penguin demo using prepared TFDS cache
+	@if [ ! -x .venv312/bin/python ]; then \
+	  echo "Missing .venv312; run: make venv312-setup"; exit 2; \
+	fi; \
+	TFDS_DIR="$$(pwd)/.cache/tensorflow_datasets"; mkdir -p "$$TFDS_DIR"; \
+	LIT_CACHE_DIR="$$(pwd)/.cache/lit_nlp/file_cache"; mkdir -p "$$LIT_CACHE_DIR"; \
+	printf "[venv312-penguin-run] TFDS_DATA_DIR=%s\n" "$$TFDS_DIR"; \
+	printf "[venv312-penguin-run] LIT_CACHE_DIR=%s\n" "$$LIT_CACHE_DIR"; \
+	HOST="$${HOST:-127.0.0.1}" PORT="$${PORT:-5432}" \
+	PYTHONUNBUFFERED=1 OMP_NUM_THREADS=1 TF_CPP_MIN_LOG_LEVEL=0 TF_NUM_INTEROP_THREADS=1 TF_NUM_INTRAOP_THREADS=1 TFDS_DATA_DIR="$$TFDS_DIR" LIT_CACHE_DIR="$$LIT_CACHE_DIR" \
+	  .venv312/bin/python -m lit_nlp.examples.penguin.demo --host "$${HOST}" --port "$${PORT}" --alsologtostderr
+
+venv312-penguin-stop: ## Stop any process listening on PORT (default 5432)
+	PORT="$${PORT:-5432}"; \
+	PID_LIST=$$(lsof -t -iTCP:$$PORT -sTCP:LISTEN 2>/dev/null || true); \
+	if [ -n "$$PID_LIST" ]; then \
+	  echo "Stopping PIDs on port $$PORT: $$PID_LIST"; \
+	  kill -INT $$PID_LIST || true; \
+	  sleep 1; \
+	  PID_LIST2=$$(lsof -t -iTCP:$$PORT -sTCP:LISTEN 2>/dev/null || true); \
+	  if [ -n "$$PID_LIST2" ]; then echo "Force killing: $$PID_LIST2"; kill -TERM $$PID_LIST2 || true; fi; \
+	else \
+	  echo "No process listening on $$PORT"; \
+	fi
+
+# ---------------------------------------------------------------------------
+# LIT: GLUE demo via persistent .venv312 (prep/run/all)
+# ---------------------------------------------------------------------------
+
+venv312-glue-prep: ## Pre-download TFDS GLUE 'sst2' to .cache/tensorflow_datasets
+	@if [ ! -x .venv312/bin/python ]; then \
+	  echo "Missing .venv312; run: make venv312-setup"; exit 2; \
+	fi; \
+	OS="$$(uname -s)"; ARCH="$$(uname -m)"; \
+	if [ "$$OS" = "Darwin" ] && [ "$$ARCH" = "arm64" ]; then \
+	  echo "[venv312-glue-prep] Cleaning & installing TF stack for macOS/arm64 (tensorflow-macos==2.16.2 + tensorflow-metal + tf-keras)"; \
+	  .venv312/bin/python -m pip uninstall -y tensorflow tensorflow-macos tensorflow-metal tf-keras keras >/dev/null 2>&1 || true; \
+	  uv pip install -p .venv312/bin/python 'tensorflow-macos==2.16.2' tensorflow-metal tf-keras tensorflow-datasets transformers sentencepiece || true; \
+	else \
+	  echo "[venv312-glue-prep] Installing tensorflow + extras"; \
+	  uv pip install -p .venv312/bin/python tensorflow tensorflow-datasets transformers sentencepiece tf-keras || true; \
+	fi; \
+	TFDS_DIR="$$(pwd)/.cache/tensorflow_datasets"; mkdir -p "$$TFDS_DIR"; \
+	echo "[venv312-glue-prep] TFDS_DATA_DIR=$$TFDS_DIR"; \
+	TF_ENABLE_ONEDNN_OPTS=0 TF_FORCE_GPU_ALLOW_GROWTH=true \
+	.venv312/bin/python -c "import os; os.environ['TFDS_DATA_DIR']='.cache/tensorflow_datasets'; print('[prep] Using TFDS_DATA_DIR=', os.environ['TFDS_DATA_DIR']); import tensorflow_datasets as tfds; b=tfds.builder('glue/sst2', data_dir=os.environ['TFDS_DATA_DIR']); print('[prep] Downloading and preparing:', b.name); b.download_and_prepare(); print('[prep] Prepared at:', b.data_dir)"
+
+venv312-glue-run: ## Run GLUE demo using prepared TFDS cache (SST-2 available)
+	@if [ ! -x .venv312/bin/python ]; then \
+	  echo "Missing .venv312; run: make venv312-setup"; exit 2; \
+	fi; \
+	TFDS_DIR="$$(pwd)/.cache/tensorflow_datasets"; mkdir -p "$$TFDS_DIR"; \
+	LIT_CACHE_DIR="$$(pwd)/.cache/lit_nlp/file_cache"; mkdir -p "$$LIT_CACHE_DIR"; \
+	printf "[venv312-glue-run] TFDS_DATA_DIR=%s\n" "$$TFDS_DIR"; \
+	printf "[venv312-glue-run] LIT_CACHE_DIR=%s\n" "$$LIT_CACHE_DIR"; \
+	HOST="$${HOST:-127.0.0.1}" PORT="$${PORT:-5432}" \
+	PYTHONUNBUFFERED=1 OMP_NUM_THREADS=1 TF_CPP_MIN_LOG_LEVEL=0 TF_NUM_INTEROP_THREADS=1 TF_NUM_INTRAOP_THREADS=1 TF_ENABLE_ONEDNN_OPTS=0 TF_FORCE_GPU_ALLOW_GROWTH=true TFDS_DATA_DIR="$$TFDS_DIR" LIT_CACHE_DIR="$$LIT_CACHE_DIR" \
+	  .venv312/bin/python -m lit_nlp.examples.glue.demo --host "$${HOST}" --port "$${PORT}" --alsologtostderr
+
+venv312-glue-all: venv312-glue-prep venv312-glue-run ## Prepare TFDS then start GLUE demo
+venv312-penguin-all: venv312-penguin-prep venv312-penguin-run ## Prepare TFDS then start Penguin demo
+
+# ---------------------------------------------------------------------------
+# LIT: Dockerized service (fully encapsulated)
+# Requires: Docker and Docker Compose v2 (`docker compose`)
+# Files: docker/lit/Dockerfile, docker/lit/docker-compose.lit.yml
+# ---------------------------------------------------------------------------
+
+lit-docker-build: ## Build the LIT Docker image
+	docker compose -f docker/lit/docker-compose.lit.yml build
+
+lit-docker-up: ## Run the LIT Docker service (PORT=5432)
+	PORT=$${PORT:-5432} docker compose -f docker/lit/docker-compose.lit.yml up --remove-orphans
+
+lit-docker-down: ## Stop the LIT Docker service
+	docker compose -f docker/lit/docker-compose.lit.yml down --remove-orphans

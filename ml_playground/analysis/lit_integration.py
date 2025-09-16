@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping
+import importlib
 
 
 def run_server_bundestag_char(
@@ -13,18 +14,58 @@ def run_server_bundestag_char(
     This uses a tiny embedded text dataset and a trivial echo model to
     demonstrate the LIT UI without requiring trained checkpoints.
     """
+
+    def _import_lit_server():
+        paths = [
+            "lit_nlp.server",
+            "lit_nlp.dev_server",
+            "lit_nlp.runtime.server",
+            "lit_nlp.lib.server",
+        ]
+        last_err: Exception | None = None
+        for p in paths:
+            try:
+                return importlib.import_module(p)
+            except Exception as err:  # pragma: no cover - best-effort compatibility
+                last_err = err
+        # If all imports failed, raise with context
+        try:
+            import lit_nlp  # type: ignore
+
+            lit_ver = getattr(lit_nlp, "__version__", "<unknown>")
+            ver_msg = f"(detected lit-nlp version: {lit_ver})"
+        except Exception:
+            ver_msg = "(lit-nlp not importable)"
+        raise RuntimeError(
+            "Unable to import LIT server module. Tried: lit_nlp.server, "
+            "lit_nlp.dev_server, lit_nlp.runtime.server, lit_nlp.lib.server.\n"
+            f"{ver_msg}. Last error: {last_err}"
+        )
+
     try:
         # Lazy imports to avoid hard-dependency unless the command is used.
         from lit_nlp.api import dataset as lit_dataset  # type: ignore
         from lit_nlp.api import model as lit_model  # type: ignore
         from lit_nlp.api import types as lit_types  # type: ignore
-        from lit_nlp import server as lit_server  # type: ignore
+
+        lit_server = _import_lit_server()
     except ImportError as e:  # pragma: no cover - import-guard path
+        # Try to include lit-nlp version info to aid debugging
+        try:
+            import lit_nlp  # type: ignore
+
+            lit_ver = getattr(lit_nlp, "__version__", "<unknown>")
+            ver_msg = f"(detected lit-nlp version: {lit_ver})"
+        except Exception:
+            ver_msg = "(lit-nlp not importable)"
         raise RuntimeError(
-            "LIT is not available. Install the optional dependency first:\n"
-            "  uv sync --extra lit\n"
-            "or explicitly:\n"
+            "LIT is not available or incompatible. "
+            f"{ver_msg}\n"
+            "Install an appropriate version in an isolated Python 3.12 env, e.g.:\n"
+            "  uv run --no-project --python 3.12 --with 'lit-nlp>=1.3.1' --with 'numpy<2' -- python -m ml_playground.analysis.lit_integration\n"
+            "Alternatively, add the extra directly to your project with:\n"
             "  uv add lit-nlp\n"
+            "Or use the Make targets: 'make lit-ephemeral-312' or 'make lit-venv-312-setup && make lit-venv-312'.\n"
             "See docs/LIT.md for details."
         ) from e
 
@@ -112,7 +153,119 @@ def run_server_bundestag_char(
     print(f"[LIT] Starting server at {url}")
     sys.stdout.flush()
 
-    try:
-        lit_server.serve(app, port=port, host=host, open_browser=open_browser)
-    except TypeError:
-        lit_server.serve(app, port, host)
+    # Start server with maximum compatibility across LIT versions
+    started = False
+    tried_calls: list[str] = []
+
+    def _try_call(target, name: str) -> bool:
+        fn = getattr(target, name, None)
+        if not callable(fn):
+            return False
+        tried_calls.append(f"{target.__class__.__name__}.{name}")
+        try:
+            fn(app, port=port, host=host, open_browser=open_browser)
+            print(
+                f"[LIT] Started via {name}(app, port=..., host=..., open_browser=...)"
+            )
+            return True
+        except TypeError:
+            try:
+                fn(app, port, host)
+                print(f"[LIT] Started via {name}(app, port, host)")
+                return True
+            except TypeError:
+                try:
+                    fn(port=port, host=host, open_browser=open_browser)
+                    print(
+                        f"[LIT] Started via {name}(port=..., host=..., open_browser=...)"
+                    )
+                    return True
+                except TypeError:
+                    try:
+                        fn(port, host)
+                        print(f"[LIT] Started via {name}(port, host)")
+                        return True
+                    except Exception:
+                        return False
+
+    # 1) Try common module-level starters
+    for fname in ("serve", "run", "start", "launch"):
+        if _try_call(lit_server, fname):
+            started = True
+            break
+
+    # 2) Try common app-level starters
+    if not started:
+        for fname in ("serve", "run", "start", "launch", "serve_forever"):
+            fn = getattr(app, fname, None)
+            if not callable(fn):
+                continue
+            tried_calls.append(f"app.{fname}")
+            try:
+                fn(port=port, host=host, open_browser=open_browser)  # type: ignore[misc]
+                print(
+                    f"[LIT] Started via app.{fname}(port=..., host=..., open_browser=...)"
+                )
+                started = True
+                break
+            except TypeError:
+                try:
+                    fn(port, host)  # type: ignore[misc]
+                    print(f"[LIT] Started via app.{fname}(port, host)")
+                    started = True
+                    break
+                except Exception:
+                    continue
+
+    # 3) Final fallback: try to run via werkzeug.run_simple using common WSGI callables
+    if not started:
+        try:
+            from werkzeug.serving import run_simple  # type: ignore
+
+            # 3a) Try the object itself as a WSGI application
+            try:
+                print(
+                    "[LIT] Fallback: starting via werkzeug.run_simple(...) using app as WSGI application"
+                )
+                run_simple(hostname=host, port=port or 5432, application=app)  # blocks
+                started = True
+            except Exception:
+                # 3b) Try a nested .app attribute (common Flask pattern)
+                if hasattr(app, "app"):
+                    wsgi_app = getattr(app, "app")
+                    print(
+                        "[LIT] Fallback: starting via werkzeug.run_simple(...) using app.app as WSGI application"
+                    )
+                    run_simple(
+                        hostname=host, port=port or 5432, application=wsgi_app
+                    )  # blocks
+                    started = True
+        except Exception:  # pragma: no cover
+            tried_calls.append("werkzeug.run_simple(app|app.app)")
+
+    if not started:
+        tried = ", ".join(tried_calls) if tried_calls else "<none>"
+        raise RuntimeError(
+            "Unable to start LIT server: no compatible entrypoint found.\n"
+            f"Tried call patterns on: {tried}.\n"
+            "Consider updating lit-nlp or using an alternative version compatible with this integration."
+        )
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Run LIT server for bundestag_char PoC"
+    )
+    parser.add_argument("--host", type=str, default="127.0.0.1", help="Host to bind")
+    parser.add_argument(
+        "--port", type=int, default=5432, help="Port to bind (0 for auto)"
+    )
+    parser.add_argument(
+        "--open-browser", action="store_true", help="Open browser on start"
+    )
+    args = parser.parse_args()
+    run_server_bundestag_char(
+        host=args.host, port=args.port, open_browser=args.open_browser
+    )
