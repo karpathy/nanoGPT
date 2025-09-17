@@ -1,0 +1,18 @@
+# Minimal, pinned requirements for running the LIT demo in an isolated Python 3.12 venv.
+# Platform-specific TensorFlow packages are installed by the Makefile after this file.
+
+# Core pins compatible with TF 2.16.x
+numpy==1.26.4
+scipy==1.11.4
+pandas==2.1.4
+pyarrow==14.0.2
+h5py>=3.10,<4
+
+# LIT and ecosystem
+lit-nlp==1.3.1
+tensorflow-datasets>=4.9,<5
+transformers>=4.40,<5
+sentencepiece>=0.1.99,<0.2
+
+# Utilities used by tooling
+psutil>=5.9,<6

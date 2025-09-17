@@ -198,7 +198,7 @@ coverage: ## Run coverage for non-performance tests and generate reports
 
 venv312-lit-setup: ## Create/refresh .venv312 for LIT integration (uses constraints + platform extras)
 	uv venv --python 3.12 .venv312
-	uv pip install -p .venv312/bin/python -r requirements/lit-demos.constraints.txt
+	uv pip install -p .venv312/bin/python -r ml_playground/analysis/lit/requirements.txt
 	OS="$$(uname -s)"; ARCH="$$(uname -m)"; \
 	if [ "$$OS" = "Darwin" ] && [ "$$ARCH" = "arm64" ]; then \
 	  .venv312/bin/python -m pip uninstall -y tensorflow tensorflow-macos tensorflow-metal tf-keras keras >/dev/null 2>&1 || true; \
