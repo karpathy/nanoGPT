@@ -26,7 +26,7 @@ __pycache__/
 *.weights
 *.pyc
 env/
-.venv/
+**/.venv*/
 
 # Project artifacts and caches
 out/
