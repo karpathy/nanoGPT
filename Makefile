@@ -7,7 +7,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 .SILENT:
 
-.PHONY: help test unit unit-cov integration e2e acceptance test-file coverage quality quality-ext quality-ci lint format pyright mypy typecheck setup sync verify clean prepare train sample loop tensorboard deadcode gguf-help pytest-verify-layout pytest-core pytest-all check-exp check-exp-config check-tool ai-guidelines lit-setup lit lit-ephemeral-312 lit-venv-312-setup lit-venv-312 lit-docker-build lit-docker-up lit-docker-down lit-demo-penguin-uv lit-demo-glue-uv venv312-setup venv312-penguin venv312-glue
+.PHONY: help test unit unit-cov integration e2e acceptance test-file coverage quality quality-ext quality-ci lint format pyright mypy typecheck setup sync verify clean prepare train sample loop tensorboard deadcode gguf-help pytest-verify-layout pytest-core pytest-all check-exp check-exp-config check-tool ai-guidelines lit-setup lit lit-ephemeral-312 lit-venv-312-setup lit-venv-312 lit-docker-build lit-docker-up lit-docker-down lit-demo-penguin-uv lit-demo-glue-uv venv312-setup venv312-penguin venv312-glue venv312-lit-setup venv312-lit-run venv312-lit-stop
 
 # Be quieter and focus output on failures only
 PYTEST_BASE=-q -n auto -W error --strict-markers --strict-config
@@ -401,6 +401,36 @@ venv312-glue-run: ## Run GLUE demo using prepared TFDS cache (SST-2 available)
 
 venv312-glue-all: venv312-glue-prep venv312-glue-run ## Prepare TFDS then start GLUE demo
 venv312-penguin-all: venv312-penguin-prep venv312-penguin-run ## Prepare TFDS then start Penguin demo
+
+# ---------------------------------------------------------------------------
+# LIT: Minimal integration runner (persistent .venv312)
+# Uses ml_playground/analysis/lit/integration.py
+# ---------------------------------------------------------------------------
+
+venv312-lit-setup: ## Create/refresh .venv312 for LIT integration (uses constraints + platform extras)
+	uv venv --python 3.12 .venv312
+	uv pip install -p .venv312/bin/python -r requirements/lit-demos.constraints.txt
+	OS="$$(uname -s)"; ARCH="$$(uname -m)"; \
+	if [ "$$OS" = "Darwin" ] && [ "$$ARCH" = "arm64" ]; then \
+	  .venv312/bin/python -m pip uninstall -y tensorflow tensorflow-macos tensorflow-metal tf-keras keras >/dev/null 2>&1 || true; \
+	  uv pip install -p .venv312/bin/python 'tensorflow-macos==2.16.2' tensorflow-metal tf-keras || true; \
+	else \
+	  uv pip install -p .venv312/bin/python tensorflow tf-keras || true; \
+	fi
+
+venv312-lit-run: ## Run our LIT integration (bundestag_char PoC) on .venv312
+	@if [ ! -x .venv312/bin/python ]; then \
+	  echo "Missing .venv312; run: make venv312-lit-setup"; exit 2; \
+	fi; \
+	TFDS_DIR="$$(pwd)/.cache/tensorflow_datasets"; mkdir -p "$$TFDS_DIR"; \
+	LIT_CACHE_DIR="$$(pwd)/.cache/lit_nlp/file_cache"; mkdir -p "$$LIT_CACHE_DIR"; \
+	HOST="$${HOST:-127.0.0.1}" PORT="$${PORT:-5432}" \
+	PYTHONUNBUFFERED=1 OMP_NUM_THREADS=1 TF_ENABLE_ONEDNN_OPTS=0 TF_FORCE_GPU_ALLOW_GROWTH=true TFDS_DATA_DIR="$$TFDS_DIR" LIT_CACHE_DIR="$$LIT_CACHE_DIR" \
+	  .venv312/bin/python -m ml_playground.analysis.lit.integration --host "$$HOST" --port "$$PORT"
+
+venv312-lit-stop: ## Stop LIT integration server by port (default 5432)
+	PORT="$${PORT:-5432}" \
+	&& .venv312/bin/python tools/port_kill.py --port "$$PORT" --graceful || true
 
 # ---------------------------------------------------------------------------
 # LIT: Dockerized service (fully encapsulated)
