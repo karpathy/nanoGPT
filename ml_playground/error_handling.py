@@ -12,6 +12,7 @@ from ml_playground.config_loader import (
     fs_is_file,
     fs_is_dir,
 )
+from ml_playground.logging_protocol import LoggerLike
 
 # Type variable for generic error handling
 T = TypeVar("T")
@@ -59,7 +60,7 @@ class FileOperationError(MLPlaygroundError):
     pass
 
 
-def setup_logging(name: str, level: int = logging.INFO) -> logging.Logger:
+def setup_logging(name: str, level: int = logging.INFO) -> LoggerLike:
     """Set up a logger with a sensible default configuration."""
     logger = logging.getLogger(name)
     if not logger.handlers:
@@ -77,11 +78,9 @@ def handle_exception(
     exc_type: Type[BaseException],
     exc_value: BaseException,
     exc_traceback: Any,
-    logger: Optional[logging.Logger] = None,
+    logger: LoggerLike,
 ) -> None:
     """Handle uncaught exceptions with logging."""
-    if logger is None:
-        logger = logging.getLogger("ml_playground")
 
     if issubclass(exc_type, KeyboardInterrupt):
         # Handle keyboard interrupt gracefully
@@ -96,12 +95,10 @@ def safe_call(
     func: Callable[..., T],
     *args: Any,
     default: Optional[T] = None,
-    logger: Optional[logging.Logger] = None,
+    logger: LoggerLike,
     **kwargs: Any,
 ) -> T:
     """Safely call a function, catching and logging any exceptions."""
-    if logger is None:
-        logger = logging.getLogger("ml_playground")
 
     try:
         return func(*args, **kwargs)
@@ -116,19 +113,17 @@ def safe_call(
 def safe_file_operation(
     func: Callable[..., T],
     *args: Any,
-    logger: Optional[logging.Logger] = None,
+    logger: LoggerLike,
     **kwargs: Any,
 ) -> T:
     """Safely execute a file operation, catching and logging FileOperationError exceptions."""
     try:
         return func(*args, **kwargs)
     except (IOError, OSError) as e:
-        if logger:
-            logger.error(f"File operation failed: {e}")
+        logger.error(f"File operation failed: {e}")
         raise FileOperationError(f"File operation failed: {e}") from e
     except Exception as e:
-        if logger:
-            logger.error(f"Unexpected error during file operation: {e}")
+        logger.error(f"Unexpected error during file operation: {e}")
         raise FileOperationError(f"Unexpected error during file operation: {e}") from e
 
 
@@ -172,10 +167,8 @@ def format_error_message(error: Exception, context: str = "") -> str:
 class ProgressReporter:
     """A utility class for reporting progress during long-running operations."""
 
-    def __init__(
-        self, logger: Optional[logging.Logger] = None, total_steps: Optional[int] = None
-    ):
-        self.logger = logger or logging.getLogger(__name__)
+    def __init__(self, logger: LoggerLike, total_steps: Optional[int] = None):
+        self.logger = logger
         self.total_steps = total_steps
         self.current_step = 0
         self.last_reported_percent = 0
@@ -209,9 +202,7 @@ class ProgressReporter:
         self.logger.info(message)
 
 
-def log_operation_start(
-    logger: logging.Logger, operation: str, details: str = ""
-) -> None:
+def log_operation_start(logger: LoggerLike, operation: str, details: str = "") -> None:
     """Log the start of an operation."""
     msg = f"Starting {operation}"
     if details:
@@ -219,15 +210,13 @@ def log_operation_start(
     logger.info(msg)
 
 
-def log_operation_progress(
-    logger: logging.Logger, operation: str, progress: str
-) -> None:
+def log_operation_progress(logger: LoggerLike, operation: str, progress: str) -> None:
     """Log progress of an operation."""
     logger.info(f"{operation}: {progress}")
 
 
 def log_operation_complete(
-    logger: logging.Logger, operation: str, result: str = ""
+    logger: LoggerLike, operation: str, result: str = ""
 ) -> None:
     """Log the completion of an operation."""
     msg = f"Completed {operation}"
@@ -236,9 +225,7 @@ def log_operation_complete(
     logger.info(msg)
 
 
-def log_operation_error(
-    logger: logging.Logger, operation: str, error: Exception
-) -> None:
+def log_operation_error(logger: LoggerLike, operation: str, error: Exception) -> None:
     """Log an error during an operation."""
     logger.error(f"Error during {operation}: {error}")
 
