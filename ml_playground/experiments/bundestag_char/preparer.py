@@ -84,7 +84,7 @@ class BundestagCharPreparer(_PreparerProto):
 
         train_arr, val_arr, meta = prepare_with_tokenizer(data, tokenizer)
 
-        write_bin_and_meta(ds_dir, train_arr, val_arr, meta)
+        write_bin_and_meta(ds_dir, train_arr, val_arr, meta, logger=cfg.logger)
 
         created, updated, skipped = diff_files(outputs, pre)
 

@@ -17,7 +17,6 @@ from ml_playground.experiments.protocol import (
     PrepareReport,
 )
 from ml_playground.error_handling import validate_file_exists, ProgressReporter
-import logging
 
 
 class BundestagTiktokenPreparer(_PreparerProto):
@@ -44,7 +43,7 @@ class BundestagTiktokenPreparer(_PreparerProto):
         data = input_file_path.read_text(encoding="utf-8")
         train_text, val_text = split_train_val(data)
 
-        logger = cfg.logger or logging.getLogger(__name__)
+        logger = cfg.logger
         progress = ProgressReporter(logger, total_steps=4)
 
         progress.start("Starting Bundestag tiktoken preparation")
@@ -64,7 +63,7 @@ class BundestagTiktokenPreparer(_PreparerProto):
             tokenizer=tokenizer, train_tokens=len(train_ids), val_tokens=len(val_ids)
         )
 
-        write_bin_and_meta(ds_dir, train_ids_arr, val_ids_arr, meta)
+        write_bin_and_meta(ds_dir, train_ids_arr, val_ids_arr, meta, logger=cfg.logger)
 
         progress.finish("Bundestag tiktoken preparation completed")
 

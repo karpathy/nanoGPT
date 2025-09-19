@@ -21,7 +21,6 @@ from ml_playground.error_handling import (
     validate_file_exists,
     ProgressReporter,
 )
-import logging
 
 DATA_URL = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
 
@@ -50,7 +49,7 @@ class ShakespearePreparer(_PreparerProto):
         data = f_input.read_text(encoding="utf-8")
         train_text, val_text = split_train_val(data)
 
-        logger = cfg.logger or logging.getLogger(__name__)
+        logger = cfg.logger
         progress = ProgressReporter(logger, total_steps=4)
 
         progress.start("Starting Shakespeare dataset preparation")
@@ -70,7 +69,7 @@ class ShakespearePreparer(_PreparerProto):
         progress.update(1, "Creating metadata")
         meta = create_standardized_metadata(tokenizer, len(train_ids), len(val_ids))
 
-        write_bin_and_meta(ds_dir, train_ids_arr, val_ids_arr, meta)
+        write_bin_and_meta(ds_dir, train_ids_arr, val_ids_arr, meta, logger=cfg.logger)
 
         progress.finish("Shakespeare dataset preparation completed")
 
