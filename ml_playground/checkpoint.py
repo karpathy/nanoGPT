@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,6 +8,7 @@ from typing import Any, Dict, List, Optional
 import torch
 
 from ml_playground.error_handling import CheckpointError
+from ml_playground.logging_protocol import LoggerLike
 
 
 def _atomic_save(obj: Any, path: Path, atomic: bool) -> None:
@@ -128,7 +128,7 @@ class CheckpointManager:
         base_filename: str,
         metric: float,
         iter_num: int,
-        logger: Optional[logging.Logger] = None,
+        logger: LoggerLike,
         is_best: bool = False,
     ) -> Path:
         """Save a checkpoint with metadata and manage last and best checkpoints.
@@ -160,8 +160,7 @@ class CheckpointManager:
                 old = self.last_checkpoints.pop(0)
                 try:
                     old.path.unlink()
-                    if logger:
-                        logger.info(f"Removed old last checkpoint: {old.path}")
+                    logger.info(f"Removed old last checkpoint: {old.path}")
                 except Exception as e:
                     raise CheckpointError(
                         f"Failed to remove old last checkpoint {old.path}: {e}"
@@ -191,8 +190,7 @@ class CheckpointManager:
                         sidecar = ckpt.path.with_suffix(ckpt.path.suffix + ".json")
                         if sidecar.exists():
                             sidecar.unlink()
-                        if logger:
-                            logger.info(f"Removed old best checkpoint: {ckpt.path}")
+                        logger.info(f"Removed old best checkpoint: {ckpt.path}")
                     except Exception as e:
                         raise CheckpointError(
                             f"Failed to remove old best checkpoint {ckpt.path}: {e}"
@@ -201,13 +199,10 @@ class CheckpointManager:
         # Strict mode: do NOT create or update any stable checkpoint pointers.
         # Only rotated checkpoints are produced.
 
-        if logger:
-            logger.info(f"Saved checkpoint to {path}")
+        logger.info(f"Saved checkpoint to {path}")
         return path
 
-    def load_latest_checkpoint(
-        self, device: str, logger: Optional[logging.Logger] = None
-    ) -> Checkpoint:
+    def load_latest_checkpoint(self, device: str, logger: LoggerLike) -> Checkpoint:
         """Load the latest checkpoint from the last checkpoints list."""
         if not self.last_checkpoints:
             # try discovering from disk
@@ -233,8 +228,7 @@ class CheckpointManager:
                 str(latest_ckpt.path), map_location=device, weights_only=False
             )
         except Exception as e:
-            if logger:
-                logger.error(f"Error loading checkpoint from {latest_ckpt.path}: {e}")
+            logger.error(f"Error loading checkpoint from {latest_ckpt.path}: {e}")
             raise CheckpointError(
                 f"Failed to load checkpoint from {latest_ckpt.path}: {e}"
             ) from e
@@ -266,13 +260,10 @@ class CheckpointManager:
             ema=checkpoint_dict.get("ema"),
         )
 
-        if logger:
-            logger.info(f"Loaded checkpoint from {latest_ckpt.path}")
+        logger.info(f"Loaded checkpoint from {latest_ckpt.path}")
         return checkpoint
 
-    def load_best_checkpoint(
-        self, device: str, logger: Optional[logging.Logger] = None
-    ) -> Checkpoint:
+    def load_best_checkpoint(self, device: str, logger: LoggerLike) -> Checkpoint:
         """Load the best checkpoint from the best checkpoints list."""
         if not self.best_checkpoints:
             self._discover_existing()
@@ -296,10 +287,7 @@ class CheckpointManager:
                 str(best_ckpt.path), map_location=device, weights_only=False
             )
         except Exception as e:
-            if logger:
-                logger.error(
-                    f"Error loading best checkpoint from {best_ckpt.path}: {e}"
-                )
+            logger.error(f"Error loading best checkpoint from {best_ckpt.path}: {e}")
             raise CheckpointError(
                 f"Failed to load best checkpoint from {best_ckpt.path}: {e}"
             ) from e
@@ -331,6 +319,5 @@ class CheckpointManager:
             ema=checkpoint_dict.get("ema"),
         )
 
-        if logger:
-            logger.info(f"Loaded checkpoint from {best_ckpt.path}")
+        logger.info(f"Loaded checkpoint from {best_ckpt.path}")
         return checkpoint
