@@ -55,18 +55,24 @@ def test_safe_call_success_and_defaults():
     def bad(_):
         raise RuntimeError("boom")
 
-    assert safe_call(ok, 1) == 2
-    assert safe_call(bad, 0, default=42) == 42
+    import logging
+
+    logger = logging.getLogger("ml_pg_test")
+    assert safe_call(ok, 1, logger=logger) == 2
+    assert safe_call(bad, 0, default=42, logger=logger) == 42
     with pytest.raises(RuntimeError):
-        safe_call(bad, 0)
+        safe_call(bad, 0, logger=logger)
 
 
 def test_safe_file_operation_wraps_ioerror():
     def bad_io():
         raise OSError("disk full")
 
+    import logging
+
+    logger = logging.getLogger("ml_pg_test")
     with pytest.raises(FileOperationError, match="disk full"):
-        safe_file_operation(bad_io)
+        safe_file_operation(bad_io, logger=logger)
 
 
 def test_validate_file_and_directory(tmp_path: Path):

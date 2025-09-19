@@ -67,7 +67,12 @@ def save_checkpoints_sequentially(manager: CheckpointManager, count: int):
     for i in range(count):
         ckpt = _dummy_checkpoint(i, 1e9)
         manager.save_checkpoint(
-            ckpt, "ckpt_last.pt", metric=1e9, iter_num=i, logger=None, is_best=False
+            ckpt,
+            "ckpt_last.pt",
+            metric=1e9,
+            iter_num=i,
+            logger=__import__("logging").getLogger("test"),
+            is_best=False,
         )
         time.sleep(0.01)
 
@@ -91,7 +96,7 @@ def save_checkpoints_with_metrics(manager: CheckpointManager, datatable):
                 "ckpt_best.pt",
                 metric=metric,
                 iter_num=iter_num,
-                logger=None,
+                logger=__import__("logging").getLogger("test"),
                 is_best=True,
             )
             time.sleep(0.01)
@@ -123,7 +128,7 @@ def simulate_evaluation_improvement(manager: CheckpointManager, iter_num: int):
         "ckpt_best.pt",
         metric=metric,
         iter_num=iter_num,
-        logger=None,
+        logger=__import__("logging").getLogger("test"),
         is_best=True,
     )
     # Only save last checkpoint if it's the first improvement
@@ -133,7 +138,7 @@ def simulate_evaluation_improvement(manager: CheckpointManager, iter_num: int):
             "ckpt_last.pt",
             metric=metric,
             iter_num=iter_num,
-            logger=None,
+            logger=__import__("logging").getLogger("test"),
             is_best=False,
         )
 

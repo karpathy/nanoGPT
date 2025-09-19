@@ -45,7 +45,11 @@ def test_checkpoint_manager_rotation_and_latest(
     # Save 3 last checkpoints -> only last 2 should remain
     for it in range(3):
         mgr.save_checkpoint(
-            ckpt_obj, base_filename="ignored", metric=float("inf"), iter_num=it
+            ckpt_obj,
+            base_filename="ignored",
+            metric=float("inf"),
+            iter_num=it,
+            logger=logging.getLogger("test"),
         )
 
     last_files = sorted(out.glob("ckpt_last_*.pt"))
@@ -54,7 +58,7 @@ def test_checkpoint_manager_rotation_and_latest(
     assert last_files[-1].name.endswith("00000002.pt")
 
     # Load latest works
-    ck = mgr.load_latest_checkpoint(device="cpu")
+    ck = mgr.load_latest_checkpoint(device="cpu", logger=logging.getLogger("test"))
     assert isinstance(ck, Checkpoint)
     assert ck.model_args["vocab_size"] == 16
 
@@ -114,7 +118,7 @@ def test_load_latest_errors_and_type_validation(tmp_path: Path) -> None:
 
     # No checkpoints present -> error on load_latest
     with pytest.raises(CheckpointError):
-        mgr.load_latest_checkpoint(device="cpu")
+        mgr.load_latest_checkpoint(device="cpu", logger=logging.getLogger("test"))
 
     # Write a non-dict checkpoint that will be discovered and fail validation
     p = out / "ckpt_last_00000001.pt"
@@ -122,7 +126,7 @@ def test_load_latest_errors_and_type_validation(tmp_path: Path) -> None:
     # Clear any cached state to force discovery
     mgr.last_checkpoints.clear()
     with pytest.raises(CheckpointError, match="does not contain a dictionary"):
-        mgr.load_latest_checkpoint(device="cpu")
+        mgr.load_latest_checkpoint(device="cpu", logger=logging.getLogger("test"))
 
 
 def test_keep_policy_validation() -> None:
@@ -159,7 +163,7 @@ def test_save_checkpoint_atomic_and_readback(tmp_path: Path) -> None:
         base_filename="ckpt_last.pt",
         metric=float("inf"),
         iter_num=1,
-        logger=None,
+        logger=logging.getLogger("test"),
         is_best=False,
     )
     assert rotated.exists()
@@ -190,7 +194,7 @@ def test_save_checkpoint_non_atomic(tmp_path: Path) -> None:
         base_filename="ckpt_last.pt",
         metric=float("inf"),
         iter_num=2,
-        logger=None,
+        logger=logging.getLogger("test"),
         is_best=False,
     )
     assert rotated.exists()

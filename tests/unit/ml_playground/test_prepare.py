@@ -131,7 +131,9 @@ def test_prepare_with_tokenizer_splits_and_encodes() -> None:
 # ---- write_bin_and_meta (public) ----
 
 
-def test_write_bin_and_meta_creates_and_is_idempotent(tmp_path: Path) -> None:
+def test_write_bin_and_meta_creates_and_is_idempotent(
+    tmp_path: Path, list_logger
+) -> None:
     ds = tmp_path / "dataset"
     tok = CharTokenizer(vocab={"a": 1})
     train = np.array([1, 1, 1], dtype=np.uint16)
@@ -139,19 +141,46 @@ def test_write_bin_and_meta_creates_and_is_idempotent(tmp_path: Path) -> None:
     meta = prep.create_standardized_metadata(tok, 3, 1)
 
     # First write creates files
-    prep.write_bin_and_meta(ds, train, val, meta)
+    prep.write_bin_and_meta(ds, train, val, meta, logger=list_logger)
     assert (ds / "train.bin").exists()
     assert (ds / "val.bin").exists()
     assert (ds / "meta.pkl").exists()
 
     # Second write should detect valid meta and skip rewriting
     before_mtime = (ds / "meta.pkl").stat().st_mtime
-    prep.write_bin_and_meta(ds, train, val, meta)
+    prep.write_bin_and_meta(ds, train, val, meta, logger=list_logger)
     after_mtime = (ds / "meta.pkl").stat().st_mtime
     assert before_mtime == after_mtime
 
 
-def test_write_bin_and_meta_regenerates_on_invalid_meta(tmp_path: Path) -> None:
+def test_write_bin_and_meta_logs_skipped_on_idempotent_run(
+    tmp_path: Path, list_logger, list_logger_factory
+) -> None:
+    ds = tmp_path / "dataset2"
+    tok = CharTokenizer(vocab={"a": 1})
+    train = np.array([1, 1, 1], dtype=np.uint16)
+    val = np.array([1], dtype=np.uint16)
+    meta = prep.create_standardized_metadata(tok, 3, 1)
+
+    # First run: create files
+    write_bin_and_meta(ds, train, val, meta, logger=list_logger)
+    assert (
+        (ds / "train.bin").exists()
+        and (ds / "val.bin").exists()
+        and (ds / "meta.pkl").exists()
+    )
+
+    # Second run: nothing to change, should log Skipped entries
+    logger2 = list_logger_factory()
+    write_bin_and_meta(ds, train, val, meta, logger=logger2)
+    infos = "\n".join(logger2.infos)
+    assert "Created:" in infos
+    assert "Skipped:" in infos
+
+
+def test_write_bin_and_meta_regenerates_on_invalid_meta(
+    tmp_path: Path, list_logger
+) -> None:
     ds = tmp_path / "ds"
     ds.mkdir()
     # Create initial valid files
@@ -174,7 +203,7 @@ def test_write_bin_and_meta_regenerates_on_invalid_meta(tmp_path: Path) -> None:
     }
 
     with pytest.raises(DataError):
-        write_bin_and_meta(ds, train, val, meta)
+        write_bin_and_meta(ds, train, val, meta, logger=list_logger)
 
 
 # ---- snapshot/diff helpers ----
@@ -235,7 +264,9 @@ def test_write_bin_and_meta_raises_on_invalid_existing_meta(
         write_bin_and_meta(ds, tr, va, meta, logger=list_logger)
 
 
-def test_write_bin_and_meta_raises_on_unreadable_meta(tmp_path: Path) -> None:
+def test_write_bin_and_meta_raises_on_unreadable_meta(
+    tmp_path: Path, list_logger
+) -> None:
     ds = tmp_path / "ds2"
     ds.mkdir()
     # Pre-create files with unreadable meta (corrupted bytes)
@@ -245,7 +276,7 @@ def test_write_bin_and_meta_raises_on_unreadable_meta(tmp_path: Path) -> None:
 
     tr, va, meta = _mk_arrays(6)
     with pytest.raises(DataError):
-        write_bin_and_meta(ds, tr, va, meta)
+        write_bin_and_meta(ds, tr, va, meta, logger=list_logger)
 
 
 def test_write_bin_and_meta_info_logs_created_then_raises_on_invalid_second_run(

@@ -8,6 +8,7 @@ Usage:
 - On all platforms, uses psutil to identify listeners and sends SIGINT, then SIGTERM.
 - Requires 'psutil' (lightweight); if missing, instructs how to install.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -40,7 +41,9 @@ def listeners_on_port(port: int) -> List[int]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, required=True)
-    ap.add_argument("--graceful", action="store_true", help="Send SIGINT before SIGTERM")
+    ap.add_argument(
+        "--graceful", action="store_true", help="Send SIGINT before SIGTERM"
+    )
     args = ap.parse_args()
 
     pids = listeners_on_port(args.port)

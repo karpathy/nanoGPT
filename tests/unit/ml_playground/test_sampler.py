@@ -174,7 +174,9 @@ def test_load_checkpoint_no_files_raises(
     """It should raise CheckpointError when no checkpoint files exist."""
     mgr = CheckpointManager(tmp_path)
     with pytest.raises(CheckpointError) as e:
-        mgr.load_latest_checkpoint(device="cpu")
+        mgr.load_latest_checkpoint(
+            device="cpu", logger=__import__("logging").getLogger("test")
+        )
     assert "No last checkpoints discovered" in str(e.value)
 
 
@@ -189,7 +191,9 @@ def test_load_checkpoint_non_dict_raises(
     (tmp_path / "ckpt_last_00000001.pt").write_bytes(ckpt.read_bytes())
     mgr = CheckpointManager(tmp_path)
     with pytest.raises(CheckpointError) as e:
-        mgr.load_latest_checkpoint(device="cpu")
+        mgr.load_latest_checkpoint(
+            device="cpu", logger=__import__("logging").getLogger("test")
+        )
     assert "does not contain a dictionary" in str(e.value)
 
 
@@ -211,7 +215,9 @@ def test_load_checkpoint_missing_keys_raises(
     )
     mgr = CheckpointManager(tmp_path)
     with pytest.raises(CheckpointError) as e:
-        mgr.load_latest_checkpoint(device="cpu")
+        mgr.load_latest_checkpoint(
+            device="cpu", logger=__import__("logging").getLogger("test")
+        )
     # Expect the error to mention the first missing required key
     assert "model_args" in str(e.value)
 
@@ -226,7 +232,9 @@ def test_load_checkpoint_bad_model_args_raises(
     mgr = CheckpointManager(tmp_path)
     # This now fails later when constructing a Checkpoint; manager validates required keys first
     with pytest.raises(CheckpointError):
-        mgr.load_latest_checkpoint(device="cpu")
+        mgr.load_latest_checkpoint(
+            device="cpu", logger=__import__("logging").getLogger("test")
+        )
 
 
 def test_load_checkpoint_load_state_error_is_wrapped(
@@ -267,7 +275,9 @@ def test_load_checkpoint_load_state_error_is_wrapped(
     mgr = CheckpointManager(tmp_path)
     # The manager doesn't construct GPT; it only returns typed dicts. The ModelError is raised when applying state.
     # Simulate consumer applying load and catching a ModelError with path context in higher-level code; here we just ensure manager loads dicts.
-    ckpt_obj = mgr.load_latest_checkpoint(device="cpu")
+    ckpt_obj = mgr.load_latest_checkpoint(
+        device="cpu", logger=__import__("logging").getLogger("test")
+    )
     assert ckpt_obj is not None
 
 
