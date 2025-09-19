@@ -16,6 +16,7 @@ from pydantic import (
     ValidationInfo,
     computed_field,
 )
+from ml_playground.logging_protocol import LoggerLike
 
 # Read policy constants to avoid hardcoded strings in code/tests
 READ_POLICY_LATEST: Literal["latest"] = "latest"
@@ -95,7 +96,7 @@ class _FrozenStrictModel(BaseModel):
     )
 
     # Common logger available on all configs; allow custom test doubles
-    logger: Any = Field(default_factory=lambda: logging.getLogger(__name__))
+    logger: LoggerLike = Field(default_factory=lambda: logging.getLogger(__name__))
 
 
 # Reusable strict type aliases
