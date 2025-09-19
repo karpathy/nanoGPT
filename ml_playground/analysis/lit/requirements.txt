@@ -1,5 +1,5 @@
 # Minimal, pinned requirements for running the LIT demo in an isolated Python 3.12 venv.
-# Platform-specific TensorFlow packages are installed by the Makefile after this file.
+# Platform-specific TensorFlow packages are selected via environment markers below.
 
 # Core pins compatible with TF 2.16.x
 numpy==1.26.4
@@ -13,6 +13,16 @@ lit-nlp==1.3.1
 tensorflow-datasets>=4.9,<5
 transformers>=4.40,<5
 sentencepiece>=0.1.99,<0.2
+
+# Keras API used by TF 2.16.x
+tf-keras==2.16.0
+
+# TensorFlow selection by platform
+# - On macOS/arm64 use the Apple Silicon stack
+tensorflow-macos==2.16.2; platform_system == "Darwin" and platform_machine == "arm64"
+tensorflow-metal==1.2.0; platform_system == "Darwin" and platform_machine == "arm64"
+# - On all other platforms, install upstream TensorFlow
+tensorflow==2.16.2; not (platform_system == "Darwin" and platform_machine == "arm64")
 
 # Utilities used by tooling
 psutil>=5.9,<6

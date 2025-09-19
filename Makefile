@@ -14,9 +14,12 @@ PYTEST_BASE=-q -n auto -W error --strict-markers --strict-config
 RUN=uv run
 PKG=ml_playground
 VERIFY_TOOL=tools/verify_unit_test_layout.py
-CLI=$(RUN) python -m $(PKG).cli
+# Allow targets to select a specific interpreter for uv via RUN_PY (e.g., --python .venv312/bin/python)
+RUN_PY?=
+CLI=$(RUN) $(RUN_PY) python -m $(PKG).cli
 PYTEST_CMD=$(RUN) pytest $(PYTEST_BASE)
 TOOLS=copilot aiassistant junie kiro windsurf cursor
+LIT_RUN=$(RUN) --python .venv312/bin/python
 
 # Allow positional EXP argument for runtime targets, e.g.:
 #   make prepare bundestag_char
@@ -199,13 +202,6 @@ coverage: ## Run coverage for non-performance tests and generate reports
 venv312-lit-setup: ## Create/refresh .venv312 for LIT integration (uses constraints + platform extras)
 	uv venv --python 3.12 .venv312
 	uv pip install -p .venv312/bin/python -r ml_playground/analysis/lit/requirements.txt
-	OS="$$(uname -s)"; ARCH="$$(uname -m)"; \
-	if [ "$$OS" = "Darwin" ] && [ "$$ARCH" = "arm64" ]; then \
-	  .venv312/bin/python -m pip uninstall -y tensorflow tensorflow-macos tensorflow-metal tf-keras keras >/dev/null 2>&1 || true; \
-	  uv pip install -p .venv312/bin/python 'tensorflow-macos==2.16.2' tensorflow-metal tf-keras || true; \
-	else \
-	  uv pip install -p .venv312/bin/python tensorflow tf-keras || true; \
-	fi
 
 venv312-lit-run: ## Run our LIT integration (bundestag_char PoC) on .venv312
 	@if [ ! -x .venv312/bin/python ]; then \
@@ -213,12 +209,10 @@ venv312-lit-run: ## Run our LIT integration (bundestag_char PoC) on .venv312
 	fi; \
 	TFDS_DIR="$$(pwd)/.cache/tensorflow_datasets"; mkdir -p "$$TFDS_DIR"; \
 	LIT_CACHE_DIR="$$(pwd)/.cache/lit_nlp/file_cache"; mkdir -p "$$LIT_CACHE_DIR"; \
-	HOST="$${HOST:-127.0.0.1}" PORT="$${PORT:-5432}" \
+	HOST="$${HOST:-127.0.0.1}" PORT="$${PORT:-5432}" RUN_PY="--python .venv312/bin/python" \
 	PYTHONUNBUFFERED=1 OMP_NUM_THREADS=1 TF_ENABLE_ONEDNN_OPTS=0 TF_FORCE_GPU_ALLOW_GROWTH=true TFDS_DATA_DIR="$$TFDS_DIR" LIT_CACHE_DIR="$$LIT_CACHE_DIR" \
-	  .venv312/bin/python -m ml_playground.analysis.lit.integration --host "$$HOST" --port "$$PORT"
+	  $(CLI) analyze bundestag_char --host "$$HOST" --port "$$PORT"
 
 venv312-lit-stop: ## Stop LIT integration server by port (default 5432)
-	PORT="$${PORT:-5432}" \
-	&& .venv312/bin/python tools/port_kill.py --port "$$PORT" --graceful || true
-
-# (docker-based LIT targets removed for now to keep the surface minimal)
+	PORT="$${PORT:-5432}" RUN_PY="--python .venv312/bin/python" \
+	&& $(RUN) $(RUN_PY) python tools/port_kill.py --port "$$PORT" --graceful || true
