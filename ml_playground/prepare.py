@@ -5,6 +5,7 @@ from pathlib import Path
 import pickle
 import numpy as np
 from ml_playground.tokenizer_protocol import Tokenizer
+from ml_playground.logging_protocol import LoggerLike
 from ml_playground.tokenizer import create_tokenizer
 from ml_playground.error_handling import DataError
 from ml_playground.config import DataConfig, PreparerConfig, SharedConfig
@@ -146,12 +147,11 @@ class Preparer:
         train_arr, val_arr, meta = prepare_with_tokenizer(text, tokenizer)
 
         data_cfg = self.cfg.extras.get("data_config")
-        write_bin_and_meta(
+        self._write_bin_and_meta(
             shared.dataset_dir,
             train_arr,
             val_arr,
             meta,
-            logger=self.cfg.logger,
             data_cfg=data_cfg if isinstance(data_cfg, DataConfig) else None,
         )
 
@@ -166,6 +166,24 @@ class Preparer:
             return Path(raw_text_path).read_text(encoding="utf-8")
 
         raise DataError("No raw text or path provided in preparer extras")
+
+    def _write_bin_and_meta(
+        self,
+        ds_dir: Path,
+        train: np.ndarray,
+        val: np.ndarray,
+        meta: dict,
+        data_cfg: DataConfig | None = None,
+    ) -> None:
+        """Instance helper that delegates to module-level write_bin_and_meta using cfg.logger."""
+        write_bin_and_meta(
+            ds_dir,
+            train,
+            val,
+            meta,
+            logger=self.cfg.logger,
+            data_cfg=data_cfg,
+        )
 
 
 def split_train_val(text: str, split: float = 0.9) -> tuple[str, str]:
@@ -209,7 +227,7 @@ def write_bin_and_meta(
     train: np.ndarray,
     val: np.ndarray,
     meta: dict,
-    logger: Any | None = None,
+    logger: LoggerLike,
     data_cfg: DataConfig | None = None,
 ) -> None:
     """Write train.bin, val.bin, and meta.pkl atomically and idempotently.
@@ -232,7 +250,7 @@ def write_bin_and_meta(
     before = snapshot_files([train_path, val_path, meta_path])
 
     if train_path.exists() and val_path.exists() and meta_path.exists():
-        # Validate existing meta and upgrade schema if needed
+        # Validate existing meta; do not mutate existing artifacts
         try:
             with meta_path.open("rb") as f:
                 existing_meta = pickle.load(f)
@@ -241,28 +259,15 @@ def write_bin_and_meta(
                 f"Failed to read existing meta.pkl at {meta_path}: {e}"
             ) from e
         if isinstance(existing_meta, dict) and "meta_version" in existing_meta:
-            # Upgrade path: add tokenizer_type and optional details if missing
-            needs_upgrade = False
-            upgrade_meta = dict(existing_meta)
-            if "tokenizer_type" not in upgrade_meta:
-                # Best-effort inference from keys
-                if "tokenizer" in upgrade_meta and isinstance(
-                    upgrade_meta["tokenizer"], str
-                ):
-                    upgrade_meta["tokenizer_type"] = upgrade_meta["tokenizer"]
-                else:
-                    # Default to char if unknown
-                    upgrade_meta["tokenizer_type"] = "char"
-                needs_upgrade = True
-            # Persist upgrade only when needed
-            if needs_upgrade:
-                tmp_meta = meta_path.with_name("." + meta_path.name + ".tmp")
-                try:
-                    with tmp_meta.open("wb") as f:
-                        pickle.dump(upgrade_meta, f)
-                    tmp_meta.replace(meta_path)
-                finally:
-                    tmp_meta.unlink(missing_ok=True)
+            # Production policy: do not mutate existing artifacts. If meta is valid, report status and return.
+            created, updated, skipped = diff_files(
+                [train_path, val_path, meta_path], before
+            )
+            try:
+                logger.info(f"[prepare] Created: {list(created) if created else '[]'}")
+                logger.info(f"[prepare] Skipped: {list(skipped) if skipped else '[]'}")
+            except Exception:
+                pass  # Logging should not fail the operation
             return
         raise DataError(
             f"Invalid existing meta.pkl at {meta_path}: expected dict with 'meta_version'"
@@ -289,19 +294,11 @@ def write_bin_and_meta(
 
     created, updated, skipped = diff_files([train_path, val_path, meta_path], before)
 
-    log_func = None
-    if logger and hasattr(logger, "info"):
-        log_func = logger.info
-    elif logger is None:
-        log_func = print
-
-    if log_func:
-        try:
-            log_func(f"[prepare] Created: {list(created) if created else '[]'}")
-            log_func(f"[prepare] Updated: {list(updated) if updated else '[]'}")
-            log_func(f"[prepare] Skipped: {list(skipped) if skipped else '[]'}")
-        except Exception:
-            pass  # Logging should not fail the operation
+    try:
+        logger.info(f"[prepare] Created: {list(created) if created else '[]'}")
+        logger.info(f"[prepare] Skipped: {list(skipped) if skipped else '[]'}")
+    except Exception:
+        pass  # Logging should not fail the operation
 
 
 def seed_text_file(dst: Path, candidates: list[Path]) -> None:
