@@ -82,6 +82,47 @@ DeviceKind = Literal["cpu", "mps", "cuda"]
 DTypeKind = Literal["float32", "bfloat16", "float16"]
 
 
+class _ConfigCrossFieldValidator:
+    """Centralized cross-field validation helpers for configuration models."""
+
+    @staticmethod
+    def runtime(runtime: "RuntimeConfig") -> None:
+        if runtime.log_interval > runtime.eval_interval:
+            raise ValueError(
+                "train.runtime.log_interval must be <= train.runtime.eval_interval"
+            )
+
+    @staticmethod
+    def trainer(trainer: "TrainerConfig") -> None:
+        if trainer.data.block_size > trainer.model.block_size:
+            raise ValueError("train.data.block_size must be <= train.model.block_size")
+
+        if (
+            trainer.schedule.decay_lr
+            and trainer.schedule.min_lr > trainer.optim.learning_rate
+        ):
+            raise ValueError(
+                "train.schedule.min_lr must be <= train.optim.learning_rate when decay_lr=true"
+            )
+
+        if not trainer.schedule.decay_lr and trainer.schedule.warmup_iters != 0:
+            raise ValueError(
+                "train.schedule.warmup_iters must be 0 when decay_lr=false"
+            )
+
+    @staticmethod
+    def lr_schedule(schedule: "LRSchedule") -> None:
+        if schedule.warmup_iters > schedule.lr_decay_iters:
+            raise ValueError("warmup_iters must be <= lr_decay_iters")
+
+    @staticmethod
+    def data(data: "DataConfig") -> None:
+        if data.tokenizer != "tiktoken" and data.ngram_size != 1:
+            raise ValueError(
+                "train.data.ngram_size must be 1 when tokenizer='tiktoken'"
+            )
+
+
 class _FrozenStrictModel(BaseModel):
     """
     Base model that is immutable (frozen) and forbids extra fields. Used to enforce strict schema in all configs.
@@ -210,14 +251,7 @@ class RuntimeConfig(_FrozenStrictModel):
 
     @model_validator(mode="after")
     def _check_logging_intervals(self) -> "RuntimeConfig":
-        # Ensure log_interval is not greater than eval_interval for sensible logging cadence
-        try:
-            if self.log_interval > self.eval_interval:
-                raise ValueError(
-                    "train.runtime.log_interval must be <= train.runtime.eval_interval"
-                )
-        except Exception:
-            pass
+        _ConfigCrossFieldValidator.runtime(self)
         return self
 
     @computed_field(return_type=int)
@@ -261,28 +295,7 @@ class TrainerConfig(_FrozenStrictModel):
 
     @model_validator(mode="after")
     def _cross_field_checks(self) -> "TrainerConfig":
-        # Ensure data.block_size <= model.block_size
-        try:
-            if self.data.block_size > self.model.block_size:
-                raise ValueError(
-                    "train.data.block_size must be <= train.model.block_size"
-                )
-            # If using LR decay, ensure min_lr <= learning_rate
-            if (
-                self.schedule.decay_lr
-                and self.schedule.min_lr > self.optim.learning_rate
-            ):
-                raise ValueError(
-                    "train.schedule.min_lr must be <= train.optim.learning_rate when decay_lr=true"
-                )
-            # If decay is disabled, warmup must be zero to avoid inconsistent intent
-            if (not self.schedule.decay_lr) and (self.schedule.warmup_iters != 0):
-                raise ValueError(
-                    "train.schedule.warmup_iters must be 0 when decay_lr=false"
-                )
-        except Exception:
-            # If any attribute missing due to prior validation, let pydantic report it
-            pass
+        _ConfigCrossFieldValidator.trainer(self)
         return self
 
 
@@ -341,9 +354,7 @@ class LRSchedule(_FrozenStrictModel):
 
     @model_validator(mode="after")
     def _check_warmup_le_decay(self) -> "LRSchedule":
-        # Type aliases enforce non-negativity; only cross-field relation remains
-        if self.warmup_iters > self.lr_decay_iters:
-            raise ValueError("warmup_iters must be <= lr_decay_iters")
+        _ConfigCrossFieldValidator.lr_schedule(self)
         return self
 
 
@@ -383,11 +394,7 @@ class DataConfig(_FrozenStrictModel):
 
     @model_validator(mode="after")
     def _check_tokenizer_compat(self) -> "DataConfig":
-        # tiktoken does not use ngram grouping; enforce neutral ngram_size
-        if not self.tokenizer == "tiktoken" and self.ngram_size != 1:
-            raise ValueError(
-                "train.data.ngram_size must be 1 when tokenizer='tiktoken'"
-            )
+        _ConfigCrossFieldValidator.data(self)
         return self
 
     # Path construction methods
