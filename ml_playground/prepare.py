@@ -6,7 +6,7 @@ import pickle
 import numpy as np
 from ml_playground.tokenizer_protocol import Tokenizer
 from ml_playground.logging_protocol import LoggerLike
-from ml_playground.tokenizer import create_tokenizer
+from ml_playground.tokenizer import create_tokenizer, CharTokenizer, WordTokenizer
 from ml_playground.error_handling import DataError
 from ml_playground.config import DataConfig, PreparerConfig, SharedConfig
 
@@ -144,7 +144,7 @@ class Preparer:
 
         text = self._get_raw_text()
 
-        train_arr, val_arr, meta = prepare_with_tokenizer(text, tokenizer)
+        train_arr, val_arr, meta, tokenizer = prepare_with_tokenizer(text, tokenizer)
 
         data_cfg = self.cfg.extras.get("data_config")
         self._write_bin_and_meta(
@@ -203,26 +203,26 @@ def create_tokenizer_for_preparation(tokenizer_type: str, **kwargs) -> Tokenizer
 
 def prepare_with_tokenizer(
     text: str, tokenizer: Tokenizer, split: float = 0.9
-) -> tuple[np.ndarray, np.ndarray, dict]:
+) -> tuple[np.ndarray, np.ndarray, dict, Tokenizer]:
     """Prepare train/val data and metadata using a tokenizer."""
     # Split text into train/val
     train_text, val_text = split_train_val(text, split)
 
-    # Build vocab for char/word tokenizers if not already built
-    if hasattr(tokenizer, "stoi") and not getattr(tokenizer, "stoi", {}):
+    # Build vocab for char/word tokenizers and recreate tokenizer with vocab
+    if isinstance(tokenizer, (CharTokenizer, WordTokenizer)):
         all_text = train_text + val_text
-        if tokenizer.name == "char":
+        if isinstance(tokenizer, CharTokenizer):
             chars = sorted(set(all_text))
-            setattr(tokenizer, "stoi", {ch: i for i, ch in enumerate(chars)})
-            setattr(tokenizer, "itos", {i: ch for i, ch in enumerate(chars)})
-        elif tokenizer.name == "word":
+            vocab = {ch: i for i, ch in enumerate(chars)}
+            tokenizer = create_tokenizer("char", vocab=vocab)
+        elif isinstance(tokenizer, WordTokenizer):
             # For word tokenizer, split into words and build vocab
             import re
 
             words = re.findall(r"\w+|[^\w\s]", all_text)
             unique_words = sorted(set(words))
-            setattr(tokenizer, "stoi", {word: i for i, word in enumerate(unique_words)})
-            setattr(tokenizer, "itos", {i: word for i, word in enumerate(unique_words)})
+            vocab = {word: i for i, word in enumerate(unique_words)}
+            tokenizer = create_tokenizer("word", vocab=vocab)
 
     # Encode train/val data
     train_ids = tokenizer.encode(train_text)
@@ -235,7 +235,7 @@ def prepare_with_tokenizer(
     # Create metadata
     meta = create_standardized_metadata(tokenizer, len(train_ids), len(val_ids))
 
-    return train_arr, val_arr, meta
+    return train_arr, val_arr, meta, tokenizer
 
 
 def write_bin_and_meta(
