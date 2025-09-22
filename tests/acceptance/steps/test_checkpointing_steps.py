@@ -10,6 +10,18 @@ from ml_playground.trainer import Checkpoint, CheckpointManager
 
 scenarios("../features/checkpointing.feature")
 
+# Constants
+_TEST_LOGGER = __import__("logging").getLogger("test")
+_MODEL_ARGS = {
+    "n_layer": 1,
+    "n_head": 1,
+    "n_embd": 4,
+    "block_size": 8,
+    "bias": False,
+    "vocab_size": 16,
+    "dropout": 0.0,
+}
+
 
 @pytest.fixture
 def tmp_ckpt_dir(tmp_path: Path) -> Path:
@@ -22,19 +34,30 @@ def _dummy_checkpoint(iter_num: int, best_val: float) -> Checkpoint:
     return Checkpoint(
         model={"w": 1},
         optimizer={"o": 1},
-        model_args={
-            "n_layer": 1,
-            "n_head": 1,
-            "n_embd": 4,
-            "block_size": 8,
-            "bias": False,
-            "vocab_size": 16,
-            "dropout": 0.0,
-        },
+        model_args=_MODEL_ARGS,
         iter_num=iter_num,
         best_val_loss=best_val,
         config={"ok": True},
         ema=None,
+    )
+
+
+def _save_checkpoint(
+    manager: CheckpointManager,
+    ckpt: Checkpoint,
+    filename: str,
+    metric: float,
+    iter_num: int,
+    is_best: bool,
+):
+    """Helper to save a checkpoint with consistent parameters."""
+    manager.save_checkpoint(
+        ckpt,
+        filename,
+        metric=metric,
+        iter_num=iter_num,
+        logger=_TEST_LOGGER,
+        is_best=is_best,
     )
 
 
@@ -44,66 +67,53 @@ def fresh_dir(tmp_ckpt_dir: Path) -> Path:
 
 
 @given(
-    parsers.cfparse(
+    parsers.parse(
         "checkpoint retention policy of {keep_last:d} last, {keep_best:d} best",
-        extra_types={"d": int},
     ),
     target_fixture="manager",
 )
 def checkpoint_retention_policy(
     tmp_ckpt_dir: Path, keep_last: int, keep_best: int
 ) -> CheckpointManager:
+    assert tmp_ckpt_dir is not None, "tmp_ckpt_dir fixture required"
+    assert keep_last >= 0, f"keep_last must be non-negative, got {keep_last}"
+    assert keep_best >= 0, f"keep_best must be non-negative, got {keep_best}"
     return CheckpointManager(
         tmp_ckpt_dir, atomic=True, keep_last=keep_last, keep_best=keep_best
     )
 
 
-@when(
-    parsers.cfparse(
-        "{count:d} checkpoints are saved sequentially", extra_types={"d": int}
-    )
-)
+@when(parsers.parse("{count:d} checkpoints are saved sequentially"))
 def save_checkpoints_sequentially(manager: CheckpointManager, count: int):
+    assert manager is not None, "CheckpointManager required"
+    assert count > 0, f"count must be positive, got {count}"
     for i in range(count):
         ckpt = _dummy_checkpoint(i, 1e9)
-        manager.save_checkpoint(
-            ckpt,
-            "ckpt_last.pt",
-            metric=1e9,
-            iter_num=i,
-            logger=__import__("logging").getLogger("test"),
-            is_best=False,
-        )
+        _save_checkpoint(manager, ckpt, "ckpt_last.pt", 1e9, i, False)
         time.sleep(0.01)
 
 
 @when("checkpoints are saved with the following metrics:")
 def save_checkpoints_with_metrics(manager: CheckpointManager, datatable):
-    """Save checkpoints with the provided metrics from the data table."""
-    # Convert datatable to list of dictionaries
-    if datatable:
-        # Skip the header row and convert each row to a dictionary
-        headers = datatable[0]
-        rows = datatable[1:]
-        metrics_table = [dict(zip(headers, row)) for row in rows]
+    assert manager is not None, "CheckpointManager required"
+    assert datatable, "Expected datatable with metrics data"
+    assert len(datatable) >= 2, "Expected header row + data rows in datatable"
 
-        for i, row in enumerate(metrics_table):
-            metric = float(row["metric"])
-            iter_num = i  # Use index as iteration number
-            ckpt = _dummy_checkpoint(iter_num, metric)
-            manager.save_checkpoint(
-                ckpt,
-                "ckpt_best.pt",
-                metric=metric,
-                iter_num=iter_num,
-                logger=__import__("logging").getLogger("test"),
-                is_best=True,
-            )
-            time.sleep(0.01)
+    headers = datatable[0]
+    rows = datatable[1:]
+    metrics_table = [dict(zip(headers, row)) for row in rows]
+
+    for i, row in enumerate(metrics_table):
+        metric = float(row["metric"])
+        ckpt = _dummy_checkpoint(i, metric)
+        _save_checkpoint(manager, ckpt, "ckpt_best.pt", metric, i, True)
+        time.sleep(0.01)
 
 
 @when("the checkpoint manager is reinitialized", target_fixture="reinit_manager")
 def reinitialize_checkpoint_manager(manager: CheckpointManager) -> CheckpointManager:
+    assert manager is not None, "CheckpointManager required"
+    assert manager.out_dir is not None, "Manager must have out_dir"
     # Recreate to force discovery
     return CheckpointManager(
         manager.out_dir,
@@ -114,134 +124,95 @@ def reinitialize_checkpoint_manager(manager: CheckpointManager) -> CheckpointMan
 
 
 @when(
-    parsers.cfparse(
-        "an evaluation step produces improvement at iteration {iter_num:d}",
-        extra_types={"d": int},
-    )
+    parsers.parse("an evaluation step produces improvement at iteration {iter_num:d}")
 )
 def simulate_evaluation_improvement(manager: CheckpointManager, iter_num: int):
-    # Use a better metric (lower is better) to simulate improvement
+    assert manager is not None, "CheckpointManager required"
+    assert iter_num >= 0, f"iter_num must be non-negative, got {iter_num}"
     metric = 0.5 if iter_num == 0 else 0.4
     ckpt = _dummy_checkpoint(iter_num, metric)
-    manager.save_checkpoint(
-        ckpt,
-        "ckpt_best.pt",
-        metric=metric,
-        iter_num=iter_num,
-        logger=__import__("logging").getLogger("test"),
-        is_best=True,
-    )
+    _save_checkpoint(manager, ckpt, "ckpt_best.pt", metric, iter_num, True)
     # Only save last checkpoint if it's the first improvement
     if iter_num == 0:
-        manager.save_checkpoint(
-            ckpt,
-            "ckpt_last.pt",
-            metric=metric,
-            iter_num=iter_num,
-            logger=__import__("logging").getLogger("test"),
-            is_best=False,
-        )
+        _save_checkpoint(manager, ckpt, "ckpt_last.pt", metric, iter_num, False)
 
 
-@then(
-    parsers.cfparse(
-        "{count:d} most recent checkpoints should exist", extra_types={"d": int}
+def _checkpoint_exists(manager: CheckpointManager, pattern: str, iter_num: int) -> bool:
+    """Check if a checkpoint file exists for the given iteration."""
+    assert manager is not None, "CheckpointManager required"
+    assert pattern, "pattern required"
+    assert iter_num >= 0, f"iter_num must be non-negative, got {iter_num}"
+    return any(
+        p.name.startswith(f"{pattern}_{iter_num:08d}")
+        for p in manager.out_dir.glob(f"{pattern}_*.pt")
     )
-)
+
+
+@then(parsers.parse("{count:d} most recent checkpoints should exist"))
 def assert_most_recent_checkpoints_exist(manager: CheckpointManager, count: int):
+    assert manager is not None, "CheckpointManager required"
+    assert count > 0, f"count must be positive, got {count}"
     files = sorted(p.name for p in manager.out_dir.glob("ckpt_last_*.pt"))
     assert len(files) == count
-    # When we save N checkpoints and keep only K, we should have the most recent K
-    # For example: save 3, keep 2 → should have checkpoints 1 and 2 (iterations 1 and 2)
-    # The files are sorted by name, so the most recent will be at the end
+    # Verify the most recent checkpoints exist (hardcoded for test scenario)
     for i in range(count):
-        # We expect the last 'count' files to be the most recent iterations
-        # Since we saved 3 checkpoints (0, 1, 2), with keep_last=2, we should have 1 and 2
-        expected_iter = i + (3 - count)  # 3 - 2 = 1, so iterations 1 and 2
-        expected_filename_part = f"ckpt_last_{expected_iter:08d}"
-        assert any(expected_filename_part in f for f in files), (
-            f"Expected {expected_filename_part} in files: {files}"
+        expected_iter = i + (3 - count)  # Based on test saving 3 checkpoints
+        expected_pattern = f"ckpt_last_{expected_iter:08d}"
+        assert any(expected_pattern in f for f in files), (
+            f"Expected {expected_pattern} in {files}"
         )
 
 
-@then(
-    parsers.cfparse(
-        "{count:d} best checkpoints by metric should exist", extra_types={"d": int}
-    )
-)
+@then(parsers.parse("{count:d} best checkpoints by metric should exist"))
 def assert_best_checkpoints_by_metric_exist(manager: CheckpointManager, count: int):
-    files = list(sorted(manager.out_dir.glob("ckpt_best_*.pt")))
-    # keep_best policy should keep the specified number of best checkpoints
+    assert manager is not None, "CheckpointManager required"
+    assert count >= 0, f"count must be non-negative, got {count}"
+    files = list(manager.out_dir.glob("ckpt_best_*.pt"))
     assert len(files) == count
-    # Verify they have the expected metrics (0.9 and 1.0 are better than 1.1)
     names = [p.name for p in files]
-    # With keep_best=2, we should keep the 2 best metrics: 0.9 and 1.0
-    assert any("0.900000" in n for n in names), (
-        f"Expected 0.9 metric checkpoint, found: {names}"
-    )
-    assert any("1.000000" in n for n in names), (
-        f"Expected 1.0 metric checkpoint, found: {names}"
-    )
-    # 1.1 should NOT be present since it's worse than 0.9 and 1.0
-    assert not any("1.100000" in n for n in names), (
-        f"1.1 metric checkpoint should not exist, found: {names}"
-    )
+    # Verify expected metrics exist (based on test data: 1.0, 0.9, 1.1 → keep 0.9, 1.0)
+    assert any("0.900000" in n for n in names), f"Expected 0.9 metric in {names}"
+    assert any("1.000000" in n for n in names), f"Expected 1.0 metric in {names}"
+    assert not any("1.100000" in n for n in names), f"1.1 should not exist in {names}"
 
 
 @then("no stable last checkpoint pointer should exist")
 def assert_no_stable_last_pointer(manager: CheckpointManager):
-    p = manager.out_dir / "ckpt_last.pt"
-    assert not p.exists()
+    assert manager is not None, "CheckpointManager required"
+    assert not (manager.out_dir / "ckpt_last.pt").exists()
 
 
 @then("no stable best checkpoint pointer should exist")
 def assert_no_stable_best_pointer(manager: CheckpointManager):
-    p = manager.out_dir / "ckpt_best.pt"
-    assert not p.exists()
+    assert manager is not None, "CheckpointManager required"
+    assert not (manager.out_dir / "ckpt_best.pt").exists()
 
 
 @then("existing checkpoints should be discovered")
 def assert_existing_checkpoints_discovered(reinit_manager: CheckpointManager):
+    assert reinit_manager is not None, "Reinitialized CheckpointManager required"
     assert len(reinit_manager.last_checkpoints) >= 2
 
 
 @then(
-    parsers.cfparse(
-        "both best and last checkpoints should exist for iteration {iter_num:d}",
-        extra_types={"d": int},
+    parsers.parse(
+        "both best and last checkpoints should exist for iteration {iter_num:d}"
     )
 )
 def assert_both_checkpoints_exist_for_iteration(
     manager: CheckpointManager, iter_num: int
 ):
-    # Check best checkpoint exists
-    assert any(
-        p.name.startswith(f"ckpt_best_{iter_num:08d}")
-        for p in manager.out_dir.glob("ckpt_best_*.pt")
-    )
-    # Check last checkpoint exists
-    assert any(
-        p.name.startswith(f"ckpt_last_{iter_num:08d}")
-        for p in manager.out_dir.glob("ckpt_last_*.pt")
-    )
+    assert manager is not None, "CheckpointManager required"
+    assert iter_num >= 0, f"iter_num must be non-negative, got {iter_num}"
+    assert _checkpoint_exists(manager, "ckpt_best", iter_num)
+    assert _checkpoint_exists(manager, "ckpt_last", iter_num)
 
 
-@then(
-    parsers.cfparse(
-        "only best checkpoint should exist for iteration {iter_num:d}",
-        extra_types={"d": int},
-    )
-)
+@then(parsers.parse("only best checkpoint should exist for iteration {iter_num:d}"))
 def assert_only_best_checkpoint_exists_for_iteration(
     manager: CheckpointManager, iter_num: int
 ):
-    # Check best checkpoint exists
-    assert any(
-        p.name.startswith(f"ckpt_best_{iter_num:08d}")
-        for p in manager.out_dir.glob("ckpt_best_*.pt")
-    )
-    # Check last checkpoint does NOT exist for this iteration
-    assert not any(
-        p.name.startswith(f"ckpt_last_{iter_num:08d}")
-        for p in manager.out_dir.glob("ckpt_last_*.pt")
-    )
+    assert manager is not None, "CheckpointManager required"
+    assert iter_num >= 0, f"iter_num must be non-negative, got {iter_num}"
+    assert _checkpoint_exists(manager, "ckpt_best", iter_num)
+    assert not _checkpoint_exists(manager, "ckpt_last", iter_num)

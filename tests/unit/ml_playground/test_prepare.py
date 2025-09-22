@@ -109,23 +109,27 @@ def test_create_standardized_metadata_sets_flags_and_extras() -> None:
 
 def test_prepare_with_tokenizer_arrays_and_meta() -> None:
     tok = CharTokenizer(vocab={"a": 1, "b": 2})
-    train, val, meta = prep.prepare_with_tokenizer("abba", tok, split=0.5)
+    train, val, meta, tokenizer = prep.prepare_with_tokenizer("abba", tok, split=0.5)
     assert isinstance(train, np.ndarray) and train.dtype == np.uint16
     assert isinstance(val, np.ndarray) and val.dtype == np.uint16
     # With split=0.5, first half "ab" then "ba"
-    assert train.tolist() == [1, 2]
-    assert val.tolist() == [2, 1]
+    # Function rebuilds vocab from text: {'a': 0, 'b': 1}
+    assert train.tolist() == [0, 1]  # "ab" -> [0, 1]
+    assert val.tolist() == [1, 0]  # "ba" -> [1, 0]
     assert meta["tokenizer"] == "char"
+    assert tokenizer is not None
+    assert tokenizer.stoi == {"a": 0, "b": 1}  # Rebuilt vocab
 
 
 def test_prepare_with_tokenizer_splits_and_encodes() -> None:
     tok = DummyTok()
     text = "abcdefghij"  # len 10 -> split 9/1 by default
-    train_arr, val_arr, meta = prepare_with_tokenizer(text, tok)
+    train_arr, val_arr, meta, tokenizer = prepare_with_tokenizer(text, tok)
 
     assert isinstance(train_arr, np.ndarray) and isinstance(val_arr, np.ndarray)
     assert train_arr.dtype == np.uint16 and val_arr.dtype == np.uint16
     assert meta["train_tokens"] == 9 and meta["val_tokens"] == 1
+    assert tokenizer is not None
 
 
 # ---- write_bin_and_meta (public) ----

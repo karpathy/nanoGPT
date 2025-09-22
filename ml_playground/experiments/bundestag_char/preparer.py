@@ -76,13 +76,11 @@ class BundestagCharPreparer(_PreparerProto):
         data = input_file_path.read_text(encoding="utf-8")
 
         if n == 1:
-            tokens = sorted(set(data))
-            stoi = {tok: i for i, tok in enumerate(tokens)}
-            tokenizer = CharTokenizer(vocab=stoi)
+            tokenizer = CharTokenizer()  # Let prepare_with_tokenizer build the vocab
         else:
             return self._legacy_prepare(cfg, data, n, ds_dir, pre, outputs)
 
-        train_arr, val_arr, meta = prepare_with_tokenizer(data, tokenizer)
+        train_arr, val_arr, meta, tokenizer = prepare_with_tokenizer(data, tokenizer)
 
         write_bin_and_meta(ds_dir, train_arr, val_arr, meta, logger=cfg.logger)
 
