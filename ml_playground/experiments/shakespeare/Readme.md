@@ -80,7 +80,7 @@ ml_playground/experiments/shakespeare/
 
 ## Checklist
 
-- Adheres to `.dev-guidelines/DOCUMENTATION.md` (abstraction, required sections).
+- Adheres to [.dev-guidelines/Readme.md](../../.dev-guidelines/Readme.md) (abstraction, required sections).
 - Folder tree includes inline descriptions for each entry.
 - Links to shared docs where applicable (e.g., `../../docs/framework_utilities.md`).
 - Commands are copy-pasteable and minimal (setup, prepare/train/sample/loop).

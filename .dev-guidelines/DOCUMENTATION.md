@@ -61,12 +61,19 @@ ml_playground/experiments/shakespeare/
 
 - Use relative links within the repository: `../../docs/framework_utilities.md` from experiment folders.
 - Prefer short, stable link text.
+- When linking to another folder, link to that folder's `Readme.md` (single entry point) instead of deep files. Deep documents should be discovered from that folder's `Readme.md`.
 
 ## DRY Documentation
 
 - Avoid repeating extensive “what each file does” prose—lean on the annotated folder tree.
 - Avoid restating default configuration; point to config sections instead.
 - Prefer one canonical place for shared narratives, and link to it.
+
+## Brevity
+
+- Keep documents concise. Prefer bulleted lists over long paragraphs.
+- Avoid duplicating content across files; link to the canonical source instead.
+- Trim examples to the minimal set needed to illustrate usage.
 
 ## Commit and Review Expectations
 

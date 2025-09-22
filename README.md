@@ -3,6 +3,8 @@
 This module provides a single, one-way interface to prepare data, train, and sample.
 It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 
+- Developer Guidelines: see `.dev-guidelines/Readme.md` for setup, development workflow, and policies.
+
 ## Documentation abstraction policy
 
 - Top-level docs are high-level and describe the why and the overall layout.
@@ -36,14 +38,13 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 - Use Make targets for all workflows (env setup, quality, tests, runtime). Under the hood, they run via uv.
 - Never set PYTHONPATH. Running inside the project venv ensures `ml_playground` is importable.
 - Quality tooling is mandatory before commit (ruff, mypy, pyright), and tests must pass.
-- Linear history for own work: rebase your branches and avoid merge commits; fast-forward only. See DEVELOPMENT.md → “Git Workflow: Linear history”.
+- Linear history for own work: rebase your branches and avoid merge commits; fast-forward only. See `.dev-guidelines/Readme.md` for developer policies.
 - Test-Driven Development (TDD) is required for functional changes: write a failing test, implement minimal code to pass, then refactor.
 - Granular commits are required. Each functional/behavioral change MUST pair its production code with the corresponding tests in the same commit (unit/integration). Exceptions: documentation-only, test-only refactors, and mechanical formatting.
 
 Setup and Developer Workflow
 
-- See `.dev-guidelines/SETUP.md` for environment setup, quality gates, and the TDD-first developer workflow.
-- See `.dev-guidelines/DEVELOPMENT.md` for full development and testing policies.
+- See `.dev-guidelines/Readme.md` for environment setup, development practices, and testing policies (entry point to all developer guidelines).
 
 Datasets
 
@@ -53,28 +54,28 @@ Datasets
 
 Workflows (high-level)
 
-- Prepare/train/sample workflows are driven by Make targets. For exact commands, refer to each experiment's `Readme.md` and `.dev-guidelines/SETUP.md`.
+- Prepare/train/sample workflows are driven by Make targets. For exact commands, refer to each experiment's `Readme.md` and `.dev-guidelines/Readme.md`.
 - Universal meta policy: the data directory must contain a `meta.pkl` file used by training and sampling. The `prepare` step is responsible for writing `meta.pkl`.
 
 Notes
 
 - Configuration is defined via TOML dataclasses (see `ml_playground/config.py`).
 - CPU/MPS are first-class. CUDA may be selected in TOML if available.
-- Checkpoint behavior and policies are described in `.dev-guidelines/DEVELOPMENT.md` and `.dev-guidelines/REQUIREMENTS.md`.
+- Checkpoint behavior and policies are described in `.dev-guidelines/Readme.md`.
 - For framework utilities, see [Framework Utilities Documentation](docs/framework_utilities.md).
  - CLI validations: train and sample commands now fail fast if `meta.pkl` is missing. The loop's prepare-skip logic also requires `meta.pkl` to be present alongside `train.bin` and `val.bin`.
 
 Mutation testing
 
-- See `.dev-guidelines/SETUP.md` for how to run optional mutation testing (Cosmic Ray).
+- See `.dev-guidelines/Readme.md` for how to run optional mutation testing (Cosmic Ray).
 
 Loop
 
-- See `.dev-guidelines/SETUP.md` for end-to-end loop examples.
+- See `.dev-guidelines/Readme.md` for end-to-end loop examples.
 
 TensorBoard (auto-enabled)
 
-- Training logs to TensorBoard. See `.dev-guidelines/SETUP.md` for commands.
+- Training logs to TensorBoard. See `.dev-guidelines/Readme.md` for commands.
 
 GGUF export (vendor approach)
 
@@ -82,5 +83,5 @@ GGUF export (vendor approach)
 
 Testing
 
-- See `.dev-guidelines/DEVELOPMENT.md` for testing standards and gates.
+- See `.dev-guidelines/Readme.md` for testing standards and gates.
 - See `tests/*/README.md` for folder-specific scope and patterns.

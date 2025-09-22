@@ -41,21 +41,23 @@ CI and pre-commit both invoke `make quality` as the core gate.
 - Pair production and test changes: when adding/refactoring code, include the minimal tests that specify the behavior in the same commit.
 - Acceptable exceptions: documentation only commits, pure test refactors (no behavior change), or mechanical formatting. For everything else, pair code+tests.
 
+### Runnable State Requirement (MANDATORY)
+
+- Every commit MUST be in a runnable state when checked out.
+- Runnable means:
+  - `make quality` passes locally (same as pre-commit/CI gate).
+  - No partially applied migrations or broken CLI entry points.
+  - Documentation build (if modified) is not broken.
+- Do not commit code that knowingly breaks the build with intent to "fix later". Split work into smaller, independently runnable commits.
+
+### Branching Model (Feature Branches REQUIRED)
+
+- All work MUST happen on short-lived feature branches. Do not commit directly to `main`.
+- For naming conventions, linear history, and rebase policy, see `GIT_VERSIONING.md`.
+
 ### Conventional Commit Format
 
-**Required format**: `<type>(<scope>): <subject>`
-
-**Types**: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
-**Scope**: module or area (e.g., trainer, config, guidelines, tests)
-**Subject**: imperative, concise, lowercase (no trailing period)
-
-**Examples**:
-
-- `feat(trainer): write checkpoint sidecar JSON with decision inputs/outputs`
-- `test(trainer): add tests for checkpoint sidecar schema and behavior`
-- `feat(config): reject invalid out_dir` + tests in same commit (preferred)
-- `chore(config): centralize tooling settings in pyproject.toml`
-- `docs(guidelines): document pyproject-only config and granular commits + TDD`
+See `GIT_VERSIONING.md` for the required Conventional Commits format, examples, and usage notes.
 
 ## Test-Driven Development (REQUIRED)
 

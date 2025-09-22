@@ -42,6 +42,12 @@ This guideline system is organized into focused documents for easy navigation:
 - Code style standards and tooling
 - Architecture notes and best practices
 
+### 🔀 [GIT_VERSIONING.md](GIT_VERSIONING.md) - Git Versioning & Workflow
+
+- Feature branch model, naming conventions, and linear history/rebase policy
+- Conventional Commits format with examples
+- Runnable-commit verification gates and commit granularity
+
 ### 📦 [IMPORT_GUIDELINES.md](IMPORT_GUIDELINES.md) - Import Standards
 
 - Strict import policies and rationale
@@ -69,6 +75,10 @@ All documentation in this repo must adhere to [DOCUMENTATION.md](DOCUMENTATION.m
 - Tests with warnings as errors
 
 **Granular Commits**: Make small, focused commits with conventional commit messages. Run quality gates before each commit, not just before PR.
+
+**Runnable Commits**: Every commit must be in a runnable state when checked out. Do not land commits that break `make quality`, CLI entry points, or docs builds. Never bypass verification (avoid `--no-verify`).
+
+**Feature Branches Only**: All work happens on short‑lived feature branches; no direct commits to `main`. Use kebab-case names like `feat/<scope>-<short-desc>`, `fix/<scope>-<short-desc>`. Keep branches focused and prefer multiple small PRs.
 
 **TOML Configuration**: TOML is the primary source of truth, mapped to dataclasses. No ad‑hoc CLI parameter overrides.
 

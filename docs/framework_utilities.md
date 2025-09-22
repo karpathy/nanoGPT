@@ -306,7 +306,7 @@ The following guidance operationalizes the Developer Guidelines and Import Stand
 
 - __Import Hygiene (zero workarounds)__
   - Absolute, submodule-level imports only. No umbrella re-exports or star imports. No local imports except documented cycle breaks.
-  - Follow `.dev-guidelines/IMPORT_GUIDELINES.md` strictly.
+  - Follow `.dev-guidelines/Readme.md` (Import Standards) strictly.
 
 - __Tests updated first, then code in small steps__
   - For each refactor, update or remove obsolete tests in the same commit. Run all quality gates before committing.
