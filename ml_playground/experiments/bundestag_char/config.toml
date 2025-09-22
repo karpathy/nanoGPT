@@ -13,7 +13,7 @@ raw_dir = "./raw"
 
 [prepare.extras]
 # Provide source text and tokenizer for the preparer
-raw_text_path = "./raw/corpus.txt"
+raw_text_path = "./raw/input.txt"
 tokenizer_type = "char"
 
 [train.model]
