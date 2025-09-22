@@ -208,6 +208,22 @@ def prepare_with_tokenizer(
     # Split text into train/val
     train_text, val_text = split_train_val(text, split)
 
+    # Build vocab for char/word tokenizers if not already built
+    if hasattr(tokenizer, "stoi") and not getattr(tokenizer, "stoi", {}):
+        all_text = train_text + val_text
+        if tokenizer.name == "char":
+            chars = sorted(set(all_text))
+            setattr(tokenizer, "stoi", {ch: i for i, ch in enumerate(chars)})
+            setattr(tokenizer, "itos", {i: ch for i, ch in enumerate(chars)})
+        elif tokenizer.name == "word":
+            # For word tokenizer, split into words and build vocab
+            import re
+
+            words = re.findall(r"\w+|[^\w\s]", all_text)
+            unique_words = sorted(set(words))
+            setattr(tokenizer, "stoi", {word: i for i, word in enumerate(unique_words)})
+            setattr(tokenizer, "itos", {i: word for i, word in enumerate(unique_words)})
+
     # Encode train/val data
     train_ids = tokenizer.encode(train_text)
     val_ids = tokenizer.encode(val_text)
