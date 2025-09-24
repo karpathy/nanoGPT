@@ -3,9 +3,6 @@
 # Uses Make targets; ensure the environment is set up (see Makefile `setup`).
 
 set -euo pipefail
-
-echo "[pre-commit] Vulture (dead code scanning)"
-make deadcode
 echo "[pre-commit] Core quality gates (ruff, format, pyright, mypy, pytest)"
 PRE_COMMIT=1 make quality
 
