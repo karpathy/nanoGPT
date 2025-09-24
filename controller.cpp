@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
     }
     int gpu_id = std::stoi(argv[2]);
 
-    const unsigned int UTILIZATION_THRESHOLD = 50;
+    const unsigned int UTILIZATION_THRESHOLD = 25;
     const unsigned int POLLING_INTERVAL_US = 50000;
 
     // --- Setup Signal Handler for graceful exit ---
