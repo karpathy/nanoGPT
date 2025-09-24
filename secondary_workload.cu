@@ -35,9 +35,6 @@ void signalHandler(int signum) {
     
     // Detach shared memory
     if (shared_flag) {
-        // --- FIX IS HERE ---
-        // We explicitly cast away the 'volatile' qualifier for the same reason
-        // as in the controller.
         shmdt(const_cast<int*>(shared_flag));
     }
 
@@ -86,17 +83,23 @@ int main(int argc, char* argv[]) {
         perror("shmat");
         return 1;
     }
-    std::cout << "Secondary workload for GPU " << gpu_id << " attached to shared memory." << std::endl;
+    std::cout << "Secondary workload for physical GPU " << gpu_id << " attached to shared memory." << std::endl;
 
     // --- Setup CUDA and cuBLAS ---
-    CUDA_CHECK(cudaSetDevice(gpu_id));
+    // --- FIX IS HERE ---
+    // When CUDA_VISIBLE_DEVICES is set to a single GPU, that GPU always appears
+    // as device index 0 to the program.
+    CUDA_CHECK(cudaSetDevice(0));
 
+    // Allocate matrices on the GPU
     CUDA_CHECK(cudaMalloc((void**)&d_A, sizeof(float) * M * K));
     CUDA_CHECK(cudaMalloc((void**)&d_B, sizeof(float) * K * N));
     CUDA_CHECK(cudaMalloc((void**)&d_C, sizeof(float) * M * N));
 
+    // Initialize cuBLAS
     cublasCreate(&cublas_handle);
     
+    // GEMM calculation constants
     const float alpha = 1.0f;
     const float beta = 0.0f;
 
@@ -113,11 +116,10 @@ int main(int argc, char* argv[]) {
                         &beta,
                         d_C, M);
         } else {
-            usleep(1000);
+            usleep(1000); // Sleep for 1ms
         }
     }
 
     signalHandler(0);
     return 0;
 }
-
