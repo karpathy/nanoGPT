@@ -24,9 +24,6 @@ void signalHandler(int signum) {
 
     // Detach and remove the shared memory segment
     if (shared_flag) {
-        // --- FIX IS HERE ---
-        // We explicitly cast away the 'volatile' qualifier to match the
-        // function signature of shmdt(), which expects a 'const void*'.
         shmdt(const_cast<int*>(shared_flag));
     }
     if (shmid != -1) {
@@ -73,7 +70,7 @@ int main(int argc, char* argv[]) {
     }
     
     *shared_flag = 0;
-    std::cout << "Controller for GPU " << gpu_id << " started. Shared memory key: " << key << std::endl;
+    std::cout << "Controller for physical GPU " << gpu_id << " started. Shared memory key: " << key << std::endl;
 
     // --- Setup NVML for GPU Monitoring ---
     nvmlReturn_t result = nvmlInit();
@@ -83,24 +80,27 @@ int main(int argc, char* argv[]) {
     }
 
     nvmlDevice_t device;
-    result = nvmlDeviceGetHandleByIndex(gpu_id, &device);
+    // --- FIX IS HERE ---
+    // When CUDA_VISIBLE_DEVICES is set to a single GPU, that GPU always appears
+    // as device index 0 to the program. We use the gpu_id argument only for IPC.
+    result = nvmlDeviceGetHandleByIndex(0, &device);
     if (result != NVML_SUCCESS) {
-        std::cerr << "Failed to get handle for GPU " << gpu_id << ": " << nvmlErrorString(result) << std::endl;
+        std::cerr << "Failed to get handle for GPU " << gpu_id << " (logical index 0): " << nvmlErrorString(result) << std::endl;
         nvmlShutdown();
         return 1;
     }
     
     // --- Main Control Loop ---
-    std::cout << "Monitoring GPU " << gpu_id << ". Press Ctrl+C to exit." << std::endl;
+    std::cout << "Monitoring physical GPU " << gpu_id << ". Press Ctrl+C to exit." << std::endl;
     while (true) {
         nvmlUtilization_t util;
         result = nvmlDeviceGetUtilizationRates(device, &util);
 
         if (result == NVML_SUCCESS) {
             if (util.gpu < UTILIZATION_THRESHOLD) {
-                *shared_flag = 1;
+                *shared_flag = 1; // Signal RUN
             } else {
-                *shared_flag = 0;
+                *shared_flag = 0; // Signal STOP
             }
         } else {
             std::cerr << "Failed to get utilization for GPU " << gpu_id << ": " << nvmlErrorString(result) << std::endl;
@@ -113,4 +113,3 @@ int main(int argc, char* argv[]) {
     signalHandler(0);
     return 0;
 }
-
