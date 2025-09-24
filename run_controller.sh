@@ -4,8 +4,9 @@ echo "Stopping any old controller or workload processes..."
 # --- FIX IS HERE ---
 # By removing the '-f' flag, we now match only the exact process name,
 # not the full command line path. This prevents the script from killing itself.
-pkill controller || true
-pkill secondary_workload || true
+
+# pkill controller || true
+# pkill secondary_workload || true
 
 echo "Starting NVIDIA Multi-Process Service (MPS) daemon..."
 # This allows multiple processes to share a single GPU context efficiently
