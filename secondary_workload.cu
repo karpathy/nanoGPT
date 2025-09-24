@@ -35,7 +35,10 @@ void signalHandler(int signum) {
     
     // Detach shared memory
     if (shared_flag) {
-        shmdt(shared_flag);
+        // --- FIX IS HERE ---
+        // We explicitly cast away the 'volatile' qualifier for the same reason
+        // as in the controller.
+        shmdt(const_cast<int*>(shared_flag));
     }
 
     // Free GPU memory
@@ -57,9 +60,6 @@ int main(int argc, char* argv[]) {
     }
     int gpu_id = std::stoi(argv[2]);
 
-    // Matrix dimensions for the GEMM. Larger values = more power.
-    // Tune these values to get the desired power draw on your H100.
-    // Using powers of 2 is common for performance.
     const int M = 8192;
     const int N = 8192;
     const int K = 8192;
@@ -69,21 +69,18 @@ int main(int argc, char* argv[]) {
     signal(SIGTERM, signalHandler);
 
     // --- Setup Shared Memory ---
-    // The key must be identical to the one used in controller.cpp
     key_t key = ftok("firefly_ipc_key", gpu_id);
     if (key == -1) {
         perror("ftok");
         return 1;
     }
 
-    // Get the existing shared memory segment created by the controller.
     int shmid = shmget(key, sizeof(int), 0666);
     if (shmid == -1) {
         perror("shmget");
         return 1;
     }
 
-    // Attach to the segment.
     shared_flag = (int*)shmat(shmid, (void*)0, 0);
     if (shared_flag == (int*)(-1)) {
         perror("shmat");
@@ -94,24 +91,19 @@ int main(int argc, char* argv[]) {
     // --- Setup CUDA and cuBLAS ---
     CUDA_CHECK(cudaSetDevice(gpu_id));
 
-    // Allocate matrices on the GPU
     CUDA_CHECK(cudaMalloc((void**)&d_A, sizeof(float) * M * K));
     CUDA_CHECK(cudaMalloc((void**)&d_B, sizeof(float) * K * N));
     CUDA_CHECK(cudaMalloc((void**)&d_C, sizeof(float) * M * N));
 
-    // Initialize cuBLAS
     cublasCreate(&cublas_handle);
     
-    // GEMM calculation constants
     const float alpha = 1.0f;
     const float beta = 0.0f;
 
     // --- Main Workload Loop ---
     std::cout << "Waiting for signal from controller..." << std::endl;
     while(true) {
-        // Check the flag set by the controller.
         if (*shared_flag == 1) {
-            // If flag is 1, launch the GEMM kernel to burn power.
             cublasSgemm(cublas_handle,
                         CUBLAS_OP_N, CUBLAS_OP_N,
                         M, N, K,
@@ -121,12 +113,11 @@ int main(int argc, char* argv[]) {
                         &beta,
                         d_C, M);
         } else {
-            // If flag is 0, do nothing. A small sleep prevents this loop
-            // from needlessly consuming CPU cycles (busy-waiting).
-            usleep(1000); // Sleep for 1ms
+            usleep(1000);
         }
     }
 
     signalHandler(0);
     return 0;
 }
+
