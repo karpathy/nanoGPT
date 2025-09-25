@@ -7,7 +7,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 .SILENT:
 
-.PHONY: all help test unit unit-cov integration e2e acceptance test-file coverage quality quality-ext quality-ci lint format pyright mypy typecheck setup sync verify clean prepare train sample loop tensorboard deadcode gguf-help pytest-verify-layout pytest-core pytest-all check-exp check-exp-config check-tool ai-guidelines venv312-lit-setup venv312-lit-run venv312-lit-stop
+.PHONY: all help test unit unit-cov integration e2e acceptance test-file coverage quality quality-ext quality-ci lint format pyright mypy typecheck setup sync verify clean prepare train sample loop tensorboard deadcode gguf-help pytest-core pytest-all check-exp check-exp-config check-tool ai-guidelines venv312-lit-setup venv312-lit-run venv312-lit-stop
 
 all: quality
 
@@ -15,7 +15,6 @@ all: quality
 PYTEST_BASE=-q -n auto -W error --strict-markers --strict-config
 RUN=uv run
 PKG=ml_playground
-VERIFY_TOOL=tools/verify_unit_test_layout.py
 # Allow targets to select a specific interpreter for uv via RUN_PY (e.g., --python .venv312/bin/python)
 RUN_PY?=
 CLI=$(RUN) $(RUN_PY) python -m $(PKG).cli
@@ -64,22 +63,18 @@ verify: ## Quick sanity check that $(PKG) imports
 
 # Test targets
 
-# Helper: verify unit test layout (if tool exists)
-pytest-verify-layout: ## Verify unit test layout if verification tool exists
-	[ -f $(VERIFY_TOOL) ] && $(RUN) python $(VERIFY_TOOL) || true
-
 # Helper: core pytest invoker; pass extra args with PYARGS="..."
 pytest-core: ## Run pytest with $(PYTEST_BASE); pass extra args via PYARGS
 	$(PYTEST_CMD) $(PYARGS)
 
-# Full test suite with layout verification
-pytest-all: pytest-verify-layout ## Full test suite with layout verification
+# Full test suite
+pytest-all: ## Full test suite
 	$(PYTEST_CMD)
 
 test: ## Run full test suite
 	$(MAKE) pytest-all
 
-unit: pytest-verify-layout ## Run unit tests only
+unit: ## Run unit tests only
 	$(MAKE) pytest-core PYARGS="tests/unit"
 
 unit-cov: ## Run unit tests with coverage for $(PKG)

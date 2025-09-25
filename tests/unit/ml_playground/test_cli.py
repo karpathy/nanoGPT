@@ -244,22 +244,20 @@ def test_main_sample_no_sample_block_fails(
 
 def test_main_loop_success(tmp_path: Path, mocker: MockerFixture) -> None:
     """Test loop command executes via _run_loop with loaded configs."""
-    mock_train_config = mocker.Mock(spec=None)
-    # Configure mock with required attributes for cross-field validation
-    mock_data = mocker.Mock()
-    mock_data.block_size = 10
-    mock_model = mocker.Mock()
-    mock_model.block_size = 20
-    mock_schedule = mocker.Mock()
-    mock_schedule.decay_lr = False
-    mock_schedule.warmup_iters = 0
-    mock_optim = mocker.Mock()
-    mock_optim.learning_rate = 0.001
-    mock_train_config.configure_mock(
-        data=mock_data, model=mock_model, schedule=mock_schedule, optim=mock_optim
+    trainer_cfg = TrainerConfig(
+        model=ModelConfig(block_size=20),
+        data=DataConfig(block_size=10),
+        optim=OptimConfig(learning_rate=0.001),
+        schedule=LRSchedule(
+            decay_lr=False,
+            warmup_iters=0,
+            lr_decay_iters=600_000,
+            min_lr=6e-5,
+        ),
+        runtime=RuntimeConfig(out_dir=tmp_path / "train-out"),
     )
     mock_sample_config = SamplerConfig(
-        runtime=RuntimeConfig(out_dir=Path("out")),
+        runtime=RuntimeConfig(out_dir=tmp_path / "sample-out"),
         sample=SampleConfig(start="x"),
     )
     mock_run = mocker.patch("ml_playground.cli._run_loop")
@@ -275,7 +273,7 @@ def test_main_loop_success(tmp_path: Path, mocker: MockerFixture) -> None:
         "ml_playground.config_loader.load_full_experiment_config",
         return_value=ExperimentConfig(
             prepare=PreparerConfig(),
-            train=mock_train_config,  # type: ignore[arg-type]
+            train=trainer_cfg,
             sample=mock_sample_config,
             shared=shared,
         ),
