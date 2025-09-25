@@ -25,8 +25,6 @@ repos:
     pass_filenames: false
   - id: pytest
     name: pytest
-    entry: uv run pytest -q -n auto --strict-markers --strict-config --ignore-glob=.hypothesis --disable-warnings -p no:warnings --ignore-glob=**/test_cli.py --ignore-glob=tests/e2e/** tests/
-    env:
-      PYTHONWARNINGS: ignore::UserWarning
+    entry: env PYTHONWARNINGS=ignore::UserWarning uv run pytest -q -n auto --strict-markers --strict-config --ignore-glob=.hypothesis --disable-warnings -p no:warnings --ignore-glob=**/test_cli.py --ignore-glob=tests/e2e/** tests/
     language: system
     pass_filenames: false
