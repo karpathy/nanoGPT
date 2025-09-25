@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 import pickle
-from typing import Protocol, Any, Iterable, Literal, cast
+from typing import Any, Iterable, Literal, cast
 
 import numpy as np
 
@@ -11,6 +12,7 @@ from ml_playground.error_handling import DataError
 from ml_playground.logging_protocol import LoggerLike
 from ml_playground.tokenizer import CharTokenizer, WordTokenizer, create_tokenizer
 from ml_playground.tokenizer_protocol import Tokenizer
+from ml_playground._file_state import FileState, diff_file_states, snapshot_file_states
 
 
 """Core data preparation utilities shared across experiments."""
@@ -28,56 +30,12 @@ def _coerce_tokenizer_type(value: str) -> TokenizerKind:
     return cast(TokenizerKind, value)
 
 
-class Encoder(Protocol):
-    def encode_ordinary(self, text: str) -> list[int]: ...
-
-
-def snapshot_files(paths: Iterable[Path]) -> dict[Path, tuple[bool, float, int]]:
-    """Public utility to take a snapshot of file states for diffing later.
-
-    Returns a dict mapping each path to (exists, mtime, size).
-    """
-    m: dict[Path, tuple[bool, float, int]] = {}
-    for p in paths:
-        try:
-            if p.exists():
-                st = p.stat()
-                m[p] = (True, st.st_mtime, st.st_size)
-            else:
-                m[p] = (False, 0.0, 0)
-        except OSError:
-            m[p] = (False, 0.0, 0)
-    return m
-
-
-def diff_files(
-    paths: Iterable[Path], before: dict[Path, tuple[bool, float, int]]
-) -> tuple[set[Path], set[Path], set[Path]]:
-    """Public utility to compare file states and determine what changed.
-
-    Returns (created, updated, skipped) as sets of paths.
-    """
-    after = snapshot_files(paths)
-    created, updated, skipped = set(), set(), set()
-
-    all_paths = set(before.keys()) | set(after.keys())
-
-    for p in all_paths:
-        b_exists, b_mtime, b_size = before.get(p, (False, 0.0, 0))
-        a_exists, a_mtime, a_size = after.get(p, (False, 0.0, 0))
-
-        if not b_exists and a_exists:
-            created.add(p)
-        elif b_exists and not a_exists:
-            # File was deleted, not typically expected in this workflow
-            pass
-        elif b_exists and a_exists:
-            if b_mtime != a_mtime or b_size != a_size:
-                updated.add(p)
-            else:
-                skipped.add(p)
-
-    return created, updated, skipped
+@dataclass(frozen=True)
+class PreparationOutcome:
+    created_files: tuple[Path, ...]
+    updated_files: tuple[Path, ...]
+    skipped_files: tuple[Path, ...]
+    metadata: dict[str, Any]
 
 
 def create_standardized_metadata(
@@ -133,85 +91,151 @@ def create_standardized_metadata(
     return meta
 
 
-class Preparer:
-    """
-    Instance-based Preparer that captures behavior via the provided PreparerConfig.
-    Assumes the cfg is already valid and fully resolved by the CLI.
-    """
+class _PreparationPipeline:
+    def __init__(self, cfg: PreparerConfig, shared: SharedConfig) -> None:
+        self._cfg = cfg
+        self._shared = shared
+        self._logger = cfg.logger
 
-    def __init__(self, cfg: PreparerConfig) -> None:
-        self.cfg = cfg
+    @property
+    def cfg(self) -> PreparerConfig:
+        return self._cfg
 
-    def __call__(self, shared: SharedConfig) -> None:
-        """Execute the configured preprocessing pipeline and emit dataset artifacts.
+    @property
+    def shared(self) -> SharedConfig:
+        return self._shared
 
-        Args:
-            shared: Experiment-level shared configuration providing resolved directories.
-
-        Raises:
-            DataError: If the preparer configuration is missing required raw text inputs.
-        """
-        tokenizer_type_raw = str(self.cfg.extras.get("tokenizer_type", "char"))
-        tokenizer_type = _coerce_tokenizer_type(tokenizer_type_raw)
+    def run(self) -> PreparationOutcome:
+        tokenizer_type = self._resolve_tokenizer_type()
         tokenizer = create_tokenizer(tokenizer_type)
+        raw_text = self._load_raw_text()
+        return self.prepare_from_text(raw_text, tokenizer)
 
-        text = self._get_raw_text()
+    def prepare_from_text(
+        self,
+        text: str,
+        tokenizer: Tokenizer,
+        *,
+        split: float | None = None,
+        meta_extras: dict[str, Any] | None = None,
+    ) -> PreparationOutcome:
+        data_cfg = self._resolve_data_config()
+        outputs = self._output_paths(data_cfg)
+        before = snapshot_file_states(outputs)
 
-        train_arr, val_arr, meta, tokenizer = prepare_with_tokenizer(text, tokenizer)
+        ratio = float(split) if split is not None else self._default_split()
+        train_arr, val_arr, meta, tokenizer = prepare_with_tokenizer(
+            text,
+            tokenizer,
+            split=ratio,
+        )
 
-        data_cfg = self.cfg.extras.get("data_config")
-        self._write_bin_and_meta(
-            shared.dataset_dir,
+        if meta_extras:
+            meta.update(meta_extras)
+
+        write_bin_and_meta(
+            self._shared.dataset_dir,
             train_arr,
             val_arr,
             meta,
-            data_cfg=data_cfg if isinstance(data_cfg, DataConfig) else None,
+            logger=self._logger,
+            data_cfg=data_cfg,
         )
 
-    def _get_raw_text(self) -> str:
-        """Resolve the raw corpus specified in the preparer configuration.
+        created, updated, skipped = diff_file_states(outputs, before)
+        return PreparationOutcome(
+            created_files=tuple(created),
+            updated_files=tuple(updated),
+            skipped_files=tuple(skipped),
+            metadata=meta,
+        )
 
-        Returns:
-            The raw text payload used for tokenization and splitting.
+    def _resolve_tokenizer_type(self) -> TokenizerKind:
+        raw_value = self._cfg.extras.get("tokenizer_type", "char")
+        return _coerce_tokenizer_type(str(raw_value))
 
-        Raises:
-            DataError: If neither inline text nor a file path is provided.
-        """
-        text = self.cfg.extras.get("raw_text")
+    def _resolve_data_config(self) -> DataConfig | None:
+        data_cfg = self._cfg.extras.get("data_config")
+        if data_cfg is None:
+            return None
+        if isinstance(data_cfg, DataConfig):
+            return data_cfg
+        raise DataError(
+            "prepare.extras.data_config must be a DataConfig instance when provided"
+        )
+
+    def _default_split(self) -> float:
+        raw = self._cfg.extras.get("split")
+        if raw is None:
+            return 0.9
+        try:
+            ratio = float(raw)
+        except (TypeError, ValueError) as exc:
+            raise DataError(f"Invalid split ratio in extras: {raw!r}") from exc
+        if not (0.0 <= ratio <= 1.0):
+            raise DataError(f"split ratio must be within [0.0, 1.0]; received {ratio}")
+        return ratio
+
+    def _load_raw_text(self) -> str:
+        text = self._cfg.extras.get("raw_text")
         if text is not None:
             return str(text)
 
-        raw_text_path = self.cfg.extras.get("raw_text_path")
+        raw_text_path = self._cfg.extras.get("raw_text_path")
         if raw_text_path is not None:
             return Path(raw_text_path).read_text(encoding="utf-8")
 
         raise DataError("No raw text or path provided in preparer extras")
 
-    def _write_bin_and_meta(
-        self,
-        ds_dir: Path,
-        train: np.ndarray,
-        val: np.ndarray,
-        meta: dict,
-        data_cfg: DataConfig | None = None,
-    ) -> None:
-        """Persist tokenized artifacts to disk using the preparer's configured logger.
+    def _output_paths(self, data_cfg: DataConfig | None) -> list[Path]:
+        if data_cfg is not None:
+            return [
+                data_cfg.train_path(self._shared.dataset_dir),
+                data_cfg.val_path(self._shared.dataset_dir),
+                data_cfg.meta_path(self._shared.dataset_dir),
+            ]
+        return [
+            self._shared.dataset_dir / "train.bin",
+            self._shared.dataset_dir / "val.bin",
+            self._shared.dataset_dir / "meta.pkl",
+        ]
 
-        Args:
-            ds_dir: Destination directory for dataset artifacts.
-            train: Numpy array of training token ids.
-            val: Numpy array of validation token ids.
-            meta: Metadata dictionary describing the dataset.
-            data_cfg: Optional `DataConfig` determining canonical output filenames.
-        """
-        write_bin_and_meta(
-            ds_dir,
-            train,
-            val,
-            meta,
-            logger=self.cfg.logger,
-            data_cfg=data_cfg,
-        )
+    def output_snapshot(self, paths: Iterable[Path]) -> dict:
+        return snapshot_file_states(paths)
+
+
+def create_pipeline(cfg: PreparerConfig, shared: SharedConfig) -> _PreparationPipeline:
+    return _PreparationPipeline(cfg, shared)
+
+
+def snapshot_files(paths: Iterable[Path]) -> dict[Path, FileState]:
+    """Backward-compatible wrapper for ``snapshot_file_states``."""
+
+    return snapshot_file_states(paths)
+
+
+def diff_files(
+    paths: Iterable[Path], before: dict[Path, FileState]
+) -> tuple[
+    set[Path],
+    set[Path],
+    set[Path],
+]:
+    """Backward-compatible wrapper for ``diff_file_states``."""
+
+    created, updated, skipped = diff_file_states(paths, before)
+    return created, updated, skipped
+
+
+class Preparer:
+    """Legacy callable wrapper retained for backwards compatibility."""
+
+    def __init__(self, cfg: PreparerConfig) -> None:
+        self.cfg = cfg
+
+    def __call__(self, shared: SharedConfig) -> None:
+        pipeline = create_pipeline(self.cfg, shared)
+        pipeline.run()
 
 
 def split_train_val(text: str, split: float = 0.9) -> tuple[str, str]:
@@ -222,13 +246,6 @@ def split_train_val(text: str, split: float = 0.9) -> tuple[str, str]:
     n = len(text)
     train_end = int(n * split)
     return text[:train_end], text[train_end:]
-
-
-def create_tokenizer_for_preparation(
-    tokenizer_type: TokenizerKind | str, **kwargs
-) -> Tokenizer:
-    """Create a tokenizer for data preparation based on type."""
-    return create_tokenizer(_coerce_tokenizer_type(str(tokenizer_type)), **kwargs)
 
 
 def prepare_with_tokenizer(
@@ -302,7 +319,7 @@ def write_bin_and_meta(
         val_path = ds_dir / "val.bin"
         meta_path = ds_dir / "meta.pkl"
 
-    before = snapshot_files([train_path, val_path, meta_path])
+    before = snapshot_file_states([train_path, val_path, meta_path])
 
     if train_path.exists() and val_path.exists() and meta_path.exists():
         # Validate existing meta; do not mutate existing artifacts
@@ -315,7 +332,7 @@ def write_bin_and_meta(
             ) from e
         if isinstance(existing_meta, dict) and "meta_version" in existing_meta:
             # Production policy: do not mutate existing artifacts. If meta is valid, report status and return.
-            created, updated, skipped = diff_files(
+            created, updated, skipped = diff_file_states(
                 [train_path, val_path, meta_path], before
             )
             try:
@@ -347,13 +364,15 @@ def write_bin_and_meta(
         tmp_val.unlink(missing_ok=True)
         tmp_meta.unlink(missing_ok=True)
 
-    created, updated, skipped = diff_files([train_path, val_path, meta_path], before)
+    created, updated, skipped = diff_file_states(
+        [train_path, val_path, meta_path], before
+    )
 
     try:
         logger.info(f"[prepare] Created: {list(created) if created else '[]'}")
         logger.info(f"[prepare] Skipped: {list(skipped) if skipped else '[]'}")
     except Exception:
-        pass  # Logging should not fail the operation
+        pass
 
 
 def seed_text_file(dst: Path, candidates: list[Path]) -> None:
@@ -403,15 +422,15 @@ def setup_tokenizer(
 
 # Explicit public API for this module
 __all__ = [
-    "Encoder",
+    "PreparationOutcome",
+    "create_pipeline",
     "Preparer",
-    "snapshot_files",
-    "diff_files",
     "create_standardized_metadata",
     "split_train_val",
-    "create_tokenizer_for_preparation",
     "prepare_with_tokenizer",
     "write_bin_and_meta",
     "seed_text_file",
     "setup_tokenizer",
+    "snapshot_files",
+    "diff_files",
 ]

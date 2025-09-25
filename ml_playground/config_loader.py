@@ -19,18 +19,19 @@ logger = logging.getLogger(__name__)
 
 
 def get_cfg_path(experiment: str, exp_config: Path | None) -> Path:
-    """Compute the canonical configuration path for an experiment.
+    """Compute the canonical configuration path for an experiment."""
 
-    Args:
-        experiment: Name of the experiment directory under `ml_playground/experiments/`.
-        exp_config: Optional override path provided through the CLI.
-
-    Returns:
-        Absolute path to the TOML file for the experiment.
-    """
     if exp_config:
         return exp_config
     return Path(__file__).resolve().parent / "experiments" / experiment / "config.toml"
+
+
+def get_default_config_path(project_root: Path | None = None) -> Path:
+    """Return the repository-wide default experiment configuration path."""
+
+    if project_root is None:
+        project_root = Path(__file__).resolve().parent.parent
+    return _default_config_path_from_root(project_root)
 
 
 def list_experiments_with_config(prefix: str = "") -> list[str]:
@@ -83,33 +84,9 @@ def read_toml_dict(path: Path) -> dict[str, Any]:
         raise Exception(f"{path.name}: {e}")
 
 
-# Centralized filesystem query helpers (single FS boundary policy)
-def fs_path_exists(path: Path) -> bool:
-    try:
-        return path.exists()
-    except Exception:
-        return False
-
-
-def fs_is_file(path: Path) -> bool:
-    try:
-        return path.is_file()
-    except Exception:
-        return False
-
-
-def fs_is_dir(path: Path) -> bool:
-    try:
-        return path.is_dir()
-    except Exception:
-        return False
-
-
 def _default_config_path_from_root(project_root: Path) -> Path:
     """Compute the path to the repository-wide default configuration file."""
-    return (
-        project_root / "ml_playground" / "experiments" / "default_config.toml"
-    ).resolve()
+    return project_root / "ml_playground" / "experiments" / "default_config.toml"
 
 
 def deep_merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -122,6 +99,30 @@ def deep_merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str
         else:
             out[k] = v
     return out
+
+
+def _coerce_path(path: Path | str) -> Path:
+    if isinstance(path, Path):
+        return path
+    return Path(path)
+
+
+def fs_path_exists(path: Path | str) -> bool:
+    """Return ``True`` if ``path`` exists on disk."""
+
+    return _coerce_path(path).exists()
+
+
+def fs_is_file(path: Path | str) -> bool:
+    """Return ``True`` if ``path`` is an existing file."""
+
+    return _coerce_path(path).is_file()
+
+
+def fs_is_dir(path: Path | str) -> bool:
+    """Return ``True`` if ``path`` is an existing directory."""
+
+    return _coerce_path(path).is_dir()
 
 
 def _load_and_merge_configs(
@@ -213,6 +214,19 @@ def load_train_config(config_path: Path) -> TrainerConfig:
     info = {"raw": raw_merged, "context": {"config_path": str(config_path)}}
     cfg.extras["provenance"] = info
     return cfg
+
+
+__all__ = [
+    "fs_path_exists",
+    "fs_is_file",
+    "fs_is_dir",
+    "get_cfg_path",
+    "get_default_config_path",
+    "load_full_experiment_config",
+    "load_train_config",
+    "load_sample_config",
+    "load_prepare_config",
+]
 
 
 def load_sample_config(config_path: Path) -> SamplerConfig:
