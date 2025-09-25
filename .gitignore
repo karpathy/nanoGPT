@@ -34,6 +34,7 @@ out/
 .mypy_cache/
 .ruff_cache/
 .coverage
+.hypothesis/
 
 
 logs/
