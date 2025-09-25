@@ -77,7 +77,7 @@ eval_interval = 25
 # Number of evaluation batches to average per evaluation; higher reduces noise but takes longer.
 eval_iters = 10
 # How often (in iterations) to log training metrics.
-log_interval = 100
+log_interval = 25
 # If true, only runs evaluation and exits (no training updates); useful for validating or benchmarking.
 eval_only = false
 # If true, save a checkpoint on every eval (last and/or best/top-k as configured); increases disk usage.
