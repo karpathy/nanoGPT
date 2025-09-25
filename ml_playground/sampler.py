@@ -36,8 +36,19 @@ All experiments should use these utilities to ensure consistency and proper erro
 
 
 class Sampler:
+    """Generate samples from a trained `GPT` model using a strict configuration."""
+
     def __init__(self, cfg: SamplerConfig, shared: SharedConfig):
-        """Initialize the sampler."""
+        """Instantiate the sampler and eagerly load required runtime state.
+
+        Args:
+            cfg: Fully validated sampler configuration produced by the CLI.
+            shared: Shared experiment metadata, including dataset and output directories.
+
+        Raises:
+            ValueError: If the runtime section of the configuration is missing.
+            DataError: If tokenizer metadata cannot be located.
+        """
         self.cfg = cfg
         self.shared = shared
         self.runtime_cfg = cfg.runtime
@@ -55,13 +66,14 @@ class Sampler:
         self.model = self._load_checkpoint_and_model()
         self.tokenizer = self._setup_tokenizer()
 
-    def _setup_torch_env(self):
+    def _setup_torch_env(self) -> None:
+        """Seed global torch RNG state and prepare autocast context."""
         torch.manual_seed(self.runtime_cfg.seed)
         # Guard CUDA-specific calls for non-CUDA environments
         try:
             if torch.cuda.is_available():
                 torch.cuda.manual_seed(self.runtime_cfg.seed)
-        except Exception:
+        except (RuntimeError, AssertionError, AttributeError):
             pass
 
         self.device_type = "cuda" if "cuda" in self.runtime_cfg.device else "cpu"
@@ -77,11 +89,12 @@ class Sampler:
         )
 
     def _load_checkpoint_and_model(self) -> GPT:
+        """Load the configured checkpoint and materialize a `GPT` model."""
         checkpoint = self._load_checkpoint()
         return self._init_model_from_checkpoint(checkpoint)
 
     def _load_checkpoint(self) -> Checkpoint:
-        """Load model checkpoint."""
+        """Load a checkpoint according to the configured read policy."""
         ckpt_mgr = CheckpointManager(out_dir=self.out_dir)
         if self.runtime_cfg.checkpointing.read_policy == READ_POLICY_BEST:
             return ckpt_mgr.load_best_checkpoint(
@@ -92,6 +105,7 @@ class Sampler:
         )
 
     def _init_model_from_checkpoint(self, checkpoint: Checkpoint) -> GPT:
+        """Rebuild a `GPT` instance from checkpointed weights and metadata."""
         model_cfg = ModelConfig(**checkpoint.model_args)
         model = GPT(model_cfg)
         model.load_state_dict(checkpoint.model, strict=False)
@@ -103,6 +117,7 @@ class Sampler:
         return model
 
     def _setup_tokenizer(self):
+        """Load tokenizer metadata from the sampling or dataset directories."""
         # Try the sampling out_dir first
         tokenizer = setup_tokenizer(self.out_dir)
         if tokenizer:
@@ -116,7 +131,7 @@ class Sampler:
         )
 
     def _get_start_ids(self) -> list[int]:
-        """Get the tokenized start IDs from the config."""
+        """Resolve the configured prompt source and tokenize it."""
         start_text = self.sample_cfg.start
         if isinstance(start_text, str) and start_text.startswith("FILE:"):
             prompt_path = Path(start_text[5:])
@@ -130,7 +145,7 @@ class Sampler:
         return self.tokenizer.encode(start_text)
 
     def run(self) -> None:
-        """Run the sampling process."""
+        """Generate one or more samples and stream them through the logger."""
         start_ids = self._get_start_ids()
         if not start_ids:
             return
