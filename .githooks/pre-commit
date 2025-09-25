@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# Pre-commit hook to run the quality gate. Fails the commit on any gate failure.
-# Uses Make targets; ensure the environment is set up (see Makefile `setup`).
+# Pre-commit hook using pre-commit framework with uv
 
 set -euo pipefail
 echo "[pre-commit] Core quality gates (ruff, format, pyright, mypy, pytest)"
-PRE_COMMIT=1 make quality
+uv run pre-commit run --config .githooks/.pre-commit-config.yaml
 
 # Note: Mutation testing is excluded from pre-commit. Run manually via `make quality-ext` when needed.

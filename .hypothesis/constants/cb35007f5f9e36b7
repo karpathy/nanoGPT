@@ -1,0 +1,4 @@
+# file: /Users/tv/code/nanoGPT/ml_playground/analysis/lit/integration.py
+# hypothesis_version: 6.140.2
+
+[5432, '\n\n[echo] ', ', ', '--host', '--open-browser', '--port', '127.0.0.1', '<none>', '<unknown>', 'Host to bind', '__main__', '__version__', 'app', 'bundestag_char', 'datasets', 'echo_model', 'experiments', 'generated', 'ignore', 'input.txt', 'launch', 'lit_nlp.dev_server', 'lit_nlp.lib.server', 'lit_nlp.server', 'run', 'serve', 'serve_forever', 'start', 'store_true', 'text', 'utf-8']

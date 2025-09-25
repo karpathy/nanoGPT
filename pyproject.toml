@@ -75,6 +75,9 @@ dev = [
     "types-requests>=2.32.4.20250809",
     "vulture>=2.11.0",
     "cosmic-ray>=8.3.0",
+    "hypothesis>=6.0.0",
+    "tomli-w>=1.0.0",
+    "pre-commit>=4.3.0",
 ]
 
 
@@ -137,6 +140,7 @@ testpaths = [
 ]
 norecursedirs = [
     ".git",
+    ".hypothesis",
     ".idea",
     ".vscode",
     ".venv",
@@ -161,7 +165,7 @@ markers = [
     "slow: marks tests as slow (deselected by default)",
     "integration: marks tests as integration tests",
     "perf: marks tests as performance tests (deselected by default)",
-    "acceptance: marks tests as acceptance tests",
+    "acceptance: marks tests as acceptance (deselect with '-m \"not acceptance\"')",
     "e2e: marks tests as end-to-end tests",
 ]
 # BDD configuration for pytest-bdd

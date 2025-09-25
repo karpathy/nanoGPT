@@ -8,6 +8,19 @@ Unit tests validate individual functions, classes, and small modules in isolatio
 - No I/O or network by default; use pure functions where possible.
 - No test-specific branches in production code.
 
+## Testing Approaches
+
+### Traditional Unit Tests
+Standard unit tests that validate specific behaviors with hand-crafted examples.
+
+### Property-Based Tests
+Property-based tests using Hypothesis to validate invariants across a wide range of generated inputs:
+
+- **Configuration System**: Tests dictionary merging, TOML serialization, and path computation with generated data structures
+- **Data Loading Logic**: Tests batch sampling, memory mapping, and device placement with various array sizes and configurations
+
+Property-based tests help catch edge cases that traditional unit tests might miss by testing against thousands of generated examples.
+
 ## Run Locally
 
 - Run all unit tests: `make unit`
@@ -20,5 +33,10 @@ Unit tests validate individual functions, classes, and small modules in isolatio
 tests/unit/
 ├── README.md                 - scope and rules for unit tests
 ├── ml_playground/            - unit tests per module/package
+│   ├── test_config.py        - traditional config tests
+│   ├── test_config_property.py - property-based config tests (Hypothesis)
+│   ├── test_data.py          - traditional data tests
+│   ├── test_data_property.py - property-based data tests (Hypothesis)
+│   └── ...
 ├── test_public_api_policy.py - enforcement of public API policy
 └── conftest.py               - unit pytest fixtures and helpers

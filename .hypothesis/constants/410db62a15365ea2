@@ -1,0 +1,4 @@
+# file: /Users/tv/code/nanoGPT/ml_playground/experiments/shakespeare/preparer.py
+# hypothesis_version: 6.140.2
+
+['Creating metadata', 'Creating tokenizer', 'datasets', 'gpt2', 'input.txt', 'meta.pkl', 'tiktoken', 'train.bin', 'utf-8', 'val.bin']

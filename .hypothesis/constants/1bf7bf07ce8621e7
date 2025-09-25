@@ -1,0 +1,4 @@
+# file: /Users/tv/code/nanoGPT/ml_playground/model.py
+# hypothesis_version: 6.140.2
+
+[-1.0, 0.0, 1e-05, 0.02, 1.0, 1000000.0, 312000000000000.0, 'Inf', 'c_proj.weight', 'cuda', 'params', 'tanh', 'weight_decay', 'wte']

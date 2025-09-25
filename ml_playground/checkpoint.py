@@ -12,6 +12,7 @@ from ml_playground.logging_protocol import LoggerLike
 
 
 def _atomic_save(obj: Any, path: Path, atomic: bool) -> None:
+    """Persist an object to disk, optionally using an atomic rename step."""
     if atomic:
         # Atomic save via rename
         tmp_path = path.with_suffix(path.suffix + ".tmp")
@@ -34,7 +35,7 @@ class Checkpoint:
     ema: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert checkpoint to dictionary for serialization."""
+        """Convert checkpoint to a serialization-friendly dictionary."""
         result = {
             "model": self.model,
             "optimizer": self.optimizer,
@@ -78,7 +79,7 @@ class CheckpointManager:
         self._discover_existing()
 
     def _discover_existing(self) -> None:
-        """Scan filesystem for existing rotated checkpoints and rebuild state."""
+        """Scan the filesystem for rotated checkpoints and rebuild manager state."""
         for p in sorted(self.out_dir.glob("ckpt_last_*.pt")):
             # iter from filename suffix
             stem = p.stem  # e.g., ckpt_last_00000010
@@ -131,10 +132,7 @@ class CheckpointManager:
         logger: LoggerLike,
         is_best: bool = False,
     ) -> Path:
-        """Save a checkpoint with metadata and manage last and best checkpoints.
-
-        Returns the rotated checkpoint path that was written.
-        """
+        """Persist a checkpoint and enforce retention policies for last and best entries."""
         # API compatibility: base_filename kept but unused with rotated-only scheme
         _ = base_filename
         # Determine rotated filename based on kind
@@ -203,7 +201,7 @@ class CheckpointManager:
         return path
 
     def load_latest_checkpoint(self, device: str, logger: LoggerLike) -> Checkpoint:
-        """Load the latest checkpoint from the last checkpoints list."""
+        """Load the most recent checkpoint that tracks iteration progress."""
         if not self.last_checkpoints:
             # try discovering from disk
             self._discover_existing()
@@ -264,7 +262,7 @@ class CheckpointManager:
         return checkpoint
 
     def load_best_checkpoint(self, device: str, logger: LoggerLike) -> Checkpoint:
-        """Load the best checkpoint from the best checkpoints list."""
+        """Load the best-performing checkpoint according to recorded metric."""
         if not self.best_checkpoints:
             self._discover_existing()
             if not self.best_checkpoints:

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import typer
-from typer.main import get_command
-
 import logging
 from pathlib import Path
 from typing import Annotated, Any, Callable
+
 import torch
+import typer
+from typer.main import get_command
 
 from ml_playground.config import (
     TrainerConfig,

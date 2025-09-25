@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 
+from ml_playground.config import DeviceKind
 from ml_playground.model import GPT
 
 
 class EMA:
-    """Exponential Moving Average for model weights."""
+    """Maintain an exponential moving average (EMA) of model parameters."""
 
-    def __init__(self, model: GPT, decay: float, device: str):
+    def __init__(self, model: GPT, decay: float, device: DeviceKind):
+        """Snapshot trainable floating-point parameters onto the target device.
+
+        Args:
+            model: The model whose parameters will be tracked.
+            decay: EMA decay factor in ``[0, 1)`` controlling smoothing strength.
+            device: Target device identifier onto which the shadow weights are moved.
+        """
         self.decay = decay
         self.shadow = {
             k: v.detach().clone().to(device)
@@ -16,7 +24,7 @@ class EMA:
         }
 
     def update(self, model: GPT) -> None:
-        """Update shadow weights with new model weights."""
+        """Update stored shadow weights with the latest model parameters."""
         for name, param in model.named_parameters():
             if param.requires_grad and param.dtype.is_floating_point:
                 assert name in self.shadow
@@ -27,5 +35,5 @@ class EMA:
                 self.shadow[name] = new_average.detach()
 
     def apply_to(self, model: GPT) -> None:
-        """Apply shadow weights to the model."""
+        """Load the EMA weights into ``model`` (typically for evaluation)."""
         model.load_state_dict(self.shadow, strict=False)

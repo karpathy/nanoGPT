@@ -1,0 +1,4 @@
+# file: /Users/tv/code/nanoGPT/ml_playground/error_handling.py
+# hypothesis_version: 6.140.2
+
+[100, 'Directory', 'File', 'Operation completed', 'Starting operation', 'T', 'Uncaught exception']

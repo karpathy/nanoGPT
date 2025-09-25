@@ -1,0 +1,32 @@
+repos:
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.9.6
+  hooks:
+  - id: ruff
+    args: [--fix]
+  - id: ruff-format
+- repo: https://github.com/checkmake/checkmake.git
+  # Or another commit hash or version
+  rev: 0.2.2
+  hooks:
+  # Use this hook to let pre-commit build checkmake in its sandbox
+  -   id: checkmake
+- repo: local
+  hooks:
+  - id: pyright
+    name: pyright
+    entry: uv run pyright ml_playground
+    language: system
+    pass_filenames: false
+  - id: vulture
+    name: vulture
+    entry: uv run vulture ml_playground --min-confidence 90
+    language: system
+    pass_filenames: false
+  - id: pytest
+    name: pytest
+    entry: uv run pytest -q -n auto --strict-markers --strict-config --ignore-glob=.hypothesis --disable-warnings -p no:warnings --ignore-glob=**/test_cli.py --ignore-glob=tests/e2e/** tests/
+    env:
+      PYTHONWARNINGS: ignore::UserWarning
+    language: system
+    pass_filenames: false

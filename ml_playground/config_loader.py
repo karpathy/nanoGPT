@@ -19,17 +19,28 @@ logger = logging.getLogger(__name__)
 
 
 def get_cfg_path(experiment: str, exp_config: Path | None) -> Path:
-    """Return the path to an experiment's config.toml."""
+    """Compute the canonical configuration path for an experiment.
+
+    Args:
+        experiment: Name of the experiment directory under `ml_playground/experiments/`.
+        exp_config: Optional override path provided through the CLI.
+
+    Returns:
+        Absolute path to the TOML file for the experiment.
+    """
     if exp_config:
         return exp_config
     return Path(__file__).resolve().parent / "experiments" / experiment / "config.toml"
 
 
 def list_experiments_with_config(prefix: str = "") -> list[str]:
-    """List experiment directory names under experiments/ that contain a config.toml.
+    """Enumerate experiment directories that provide a configuration file.
 
-    This is used by CLI autocompletion, centralizing the filesystem touchpoint for
-    configuration discovery.
+    Args:
+        prefix: Optional name prefix used by Typer auto-completion.
+
+    Returns:
+        Sorted list of experiment names that contain a `config.toml` file.
     """
     root = Path(__file__).resolve().parent / "experiments"
     if not root.exists():
@@ -49,9 +60,17 @@ def list_experiments_with_config(prefix: str = "") -> list[str]:
 
 
 def read_toml_dict(path: Path) -> dict[str, Any]:
-    """Reads a TOML file and returns a dictionary.
+    """Read a TOML document from disk into a dictionary.
 
-    Canonical loader: Path-only, reads UTF-8 text, uses tomllib.loads.
+    Args:
+        path: Absolute path to the TOML file.
+
+    Returns:
+        Parsed TOML content as a dictionary.
+
+    Raises:
+        FileNotFoundError: If the requested path does not exist.
+        Exception: If TOML parsing fails, augmented with the filename.
     """
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {path}")
@@ -87,14 +106,14 @@ def fs_is_dir(path: Path) -> bool:
 
 
 def _default_config_path_from_root(project_root: Path) -> Path:
-    """Compute the canonical default_config.toml from the project root."""
+    """Compute the path to the repository-wide default configuration file."""
     return (
         project_root / "ml_playground" / "experiments" / "default_config.toml"
     ).resolve()
 
 
 def deep_merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
-    """Recursively merges two dictionaries. `override` wins."""
+    """Recursively merge two dictionaries preferring values from ``override``."""
     out: dict[str, Any] = dict(base)
     for k, v in override.items():
         existing = out.get(k)
@@ -161,7 +180,7 @@ def _load_and_merge_configs(
 def load_full_experiment_config(
     config_path: Path, project_home: Path, experiment_name: str
 ) -> ExperimentConfig:
-    """Canonical loader for a full experiment configuration."""
+    """Load and validate the full experiment configuration object."""
     effective_config = _load_and_merge_configs(
         config_path, project_home, experiment_name
     )
@@ -176,7 +195,7 @@ def load_full_experiment_config(
 
 
 def load_train_config(config_path: Path) -> TrainerConfig:
-    """Load config from a file path."""
+    """Load the `[train]` section from a configuration file."""
     raw_exp = read_toml_dict(config_path)
     project_root = Path(__file__).resolve().parent.parent
     defaults_path = _default_config_path_from_root(project_root)
@@ -197,7 +216,7 @@ def load_train_config(config_path: Path) -> TrainerConfig:
 
 
 def load_sample_config(config_path: Path) -> SamplerConfig:
-    """Load config from a file path."""
+    """Load the `[sample]` section from a configuration file."""
     raw_exp = read_toml_dict(config_path)
     project_root = Path(__file__).resolve().parent.parent
     defaults_path = _default_config_path_from_root(project_root)
@@ -219,7 +238,7 @@ def load_sample_config(config_path: Path) -> SamplerConfig:
 
 
 def load_prepare_config(path: Path) -> PreparerConfig:
-    """Public wrapper to load and validate preparer config."""
+    """Load the `[prepare]` section from a configuration file."""
     raw_exp = read_toml_dict(path)
     project_root = Path(__file__).resolve().parent.parent
     defaults_path = _default_config_path_from_root(project_root)

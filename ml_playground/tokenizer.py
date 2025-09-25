@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import List, Dict, Optional, Mapping
+from typing import Dict, Mapping, Optional, Sequence, Literal
 from types import MappingProxyType
-from .tokenizer_protocol import Tokenizer
+from ml_playground.tokenizer_protocol import Tokenizer
 
 
 class CharTokenizer:
-    """Character-level tokenizer."""
+    """Character-level tokenizer that maps single characters to integer ids."""
 
     def __init__(self, vocab: Optional[Dict[str, int]] = None):
         self._name = "char"
@@ -30,15 +30,17 @@ class CharTokenizer:
     def vocab(self) -> Mapping[str, int]:
         return MappingProxyType(self.stoi)
 
-    def encode(self, text: str) -> List[int]:
+    def encode(self, text: str) -> list[int]:
+        """Encode `text` character-by-character returning integer token ids."""
         return [self.stoi.get(ch, 0) for ch in text]
 
-    def decode(self, token_ids: List[int]) -> str:
-        return "".join([self.itos.get(i, "") for i in token_ids])
+    def decode(self, token_ids: Sequence[int]) -> str:
+        """Decode a sequence of ids back into a character string."""
+        return "".join(self.itos.get(int(i), "") for i in token_ids)
 
 
 class WordTokenizer:
-    """Word-level tokenizer."""
+    """Word-level tokenizer that segments text via a simple regex pattern."""
 
     def __init__(self, vocab: Optional[Dict[str, int]] = None):
         self._name = "word"
@@ -54,15 +56,15 @@ class WordTokenizer:
     def name(self) -> str:
         return self._name
 
-    def encode(self, text: str) -> List[int]:
+    def encode(self, text: str) -> list[int]:
         import re
 
         # Simple word tokenization
         words = re.findall(r"\w+|[^\w\s]", text)
         return [self.stoi.get(word, 0) for word in words]
 
-    def decode(self, token_ids: List[int]) -> str:
-        return " ".join([self.itos.get(i, "") for i in token_ids])
+    def decode(self, token_ids: Sequence[int]) -> str:
+        return " ".join(self.itos.get(int(i), "") for i in token_ids)
 
     @property
     def vocab_size(self) -> int:
@@ -77,11 +79,12 @@ class WordTokenizer:
         return self.vocab_size
 
     def get_vocab(self) -> Dict[str, int]:
+        """Return a mutable copy of the underlying word vocabulary."""
         return self.stoi.copy()
 
 
 class TiktokenTokenizer:
-    """Tiktoken-based BPE tokenizer."""
+    """`tiktoken`-based BPE tokenizer supporting GPT-style byte pair encoding."""
 
     def __init__(self, encoding_name: str = "cl100k_base"):
         try:
@@ -100,10 +103,10 @@ class TiktokenTokenizer:
     def name(self) -> str:
         return self._name
 
-    def encode(self, text: str) -> List[int]:
+    def encode(self, text: str) -> list[int]:
         return self.encoder.encode(text, allowed_special={"<|endoftext|>"})
 
-    def decode(self, token_ids: List[int]) -> str:
+    def decode(self, token_ids: Sequence[int]) -> str:
         return self.encoder.decode(token_ids)
 
     @property
@@ -120,14 +123,26 @@ class TiktokenTokenizer:
         return MappingProxyType({})
 
 
-def create_tokenizer(tokenizer_type: str, **kwargs) -> Tokenizer:
-    """Factory function to create a tokenizer based on type."""
+def create_tokenizer(
+    tokenizer_type: Literal["char", "word", "tiktoken"], **kwargs
+) -> Tokenizer:
+    """Factory for known tokenizer implementations.
+
+    Args:
+        tokenizer_type: Name of the tokenizer family to instantiate.
+        **kwargs: Implementation-specific keyword arguments (e.g., vocab, encoding_name).
+
+    Returns:
+        A concrete `Tokenizer` implementation associated with the supplied name.
+
+    Raises:
+        ValueError: If an unknown tokenizer type is requested.
+    """
     if tokenizer_type == "char":
         return CharTokenizer(**kwargs)
-    elif tokenizer_type == "word":
+    if tokenizer_type == "word":
         return WordTokenizer(**kwargs)
-    elif tokenizer_type == "tiktoken":
+    if tokenizer_type == "tiktoken":
         encoding_name = kwargs.get("encoding_name", "cl100k_base")
         return TiktokenTokenizer(encoding_name=encoding_name)
-    else:
-        raise ValueError(f"Unknown tokenizer type: {tokenizer_type}")
+    raise ValueError(f"Unknown tokenizer type: {tokenizer_type}")

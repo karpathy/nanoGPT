@@ -1,0 +1,4 @@
+# file: /Users/tv/code/nanoGPT/ml_playground/tokenizer.py
+# hypothesis_version: 6.140.2
+
+['<|endoftext|>', '\\w+|[^\\w\\s]', '_mergeable_ranks', 'char', 'cl100k_base', 'encoding_name', 'tiktoken', 'word']

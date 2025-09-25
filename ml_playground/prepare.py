@@ -1,27 +1,31 @@
 from __future__ import annotations
 
-from typing import Protocol, Any, Iterable
 from pathlib import Path
 import pickle
+from typing import Protocol, Any, Iterable, Literal, cast
+
 import numpy as np
-from ml_playground.tokenizer_protocol import Tokenizer
-from ml_playground.logging_protocol import LoggerLike
-from ml_playground.tokenizer import create_tokenizer, CharTokenizer, WordTokenizer
-from ml_playground.error_handling import DataError
+
 from ml_playground.config import DataConfig, PreparerConfig, SharedConfig
+from ml_playground.error_handling import DataError
+from ml_playground.logging_protocol import LoggerLike
+from ml_playground.tokenizer import CharTokenizer, WordTokenizer, create_tokenizer
+from ml_playground.tokenizer_protocol import Tokenizer
 
 
-"""
-Centralized data preparation utilities for ml_playground experiments.
+"""Core data preparation utilities shared across experiments."""
 
-This module provides standardized utilities for data preparation including:
-- File state management for tracking changes
-- Standardized metadata creation
-- Data splitting and encoding utilities
-- Atomic file writing operations
+TokenizerKind = Literal["char", "word", "tiktoken"]
 
-All experiments should use these utilities to ensure consistency and proper error handling.
-"""
+
+def _coerce_tokenizer_type(value: str) -> TokenizerKind:
+    """Validate and cast raw configuration values to ``TokenizerKind``."""
+
+    if value not in {"char", "word", "tiktoken"}:
+        raise DataError(
+            "Unsupported tokenizer type. Expected one of {'char', 'word', 'tiktoken'}"
+        )
+    return cast(TokenizerKind, value)
 
 
 class Encoder(Protocol):
@@ -41,7 +45,7 @@ def snapshot_files(paths: Iterable[Path]) -> dict[Path, tuple[bool, float, int]]
                 m[p] = (True, st.st_mtime, st.st_size)
             else:
                 m[p] = (False, 0.0, 0)
-        except Exception:
+        except OSError:
             m[p] = (False, 0.0, 0)
     return m
 
@@ -118,7 +122,7 @@ def create_standardized_metadata(
             enc_name = getattr(tokenizer, "encoding_name", None)
             if isinstance(enc_name, str):
                 meta["encoding_name"] = enc_name
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         # Metadata enrichment is best-effort; never fail preparation
         pass
 
@@ -139,7 +143,16 @@ class Preparer:
         self.cfg = cfg
 
     def __call__(self, shared: SharedConfig) -> None:
-        tokenizer_type = self.cfg.extras.get("tokenizer_type", "char")
+        """Execute the configured preprocessing pipeline and emit dataset artifacts.
+
+        Args:
+            shared: Experiment-level shared configuration providing resolved directories.
+
+        Raises:
+            DataError: If the preparer configuration is missing required raw text inputs.
+        """
+        tokenizer_type_raw = str(self.cfg.extras.get("tokenizer_type", "char"))
+        tokenizer_type = _coerce_tokenizer_type(tokenizer_type_raw)
         tokenizer = create_tokenizer(tokenizer_type)
 
         text = self._get_raw_text()
@@ -156,7 +169,14 @@ class Preparer:
         )
 
     def _get_raw_text(self) -> str:
-        """Get raw text from config extras."""
+        """Resolve the raw corpus specified in the preparer configuration.
+
+        Returns:
+            The raw text payload used for tokenization and splitting.
+
+        Raises:
+            DataError: If neither inline text nor a file path is provided.
+        """
         text = self.cfg.extras.get("raw_text")
         if text is not None:
             return str(text)
@@ -175,7 +195,15 @@ class Preparer:
         meta: dict,
         data_cfg: DataConfig | None = None,
     ) -> None:
-        """Instance helper that delegates to module-level write_bin_and_meta using cfg.logger."""
+        """Persist tokenized artifacts to disk using the preparer's configured logger.
+
+        Args:
+            ds_dir: Destination directory for dataset artifacts.
+            train: Numpy array of training token ids.
+            val: Numpy array of validation token ids.
+            meta: Metadata dictionary describing the dataset.
+            data_cfg: Optional `DataConfig` determining canonical output filenames.
+        """
         write_bin_and_meta(
             ds_dir,
             train,
@@ -196,15 +224,26 @@ def split_train_val(text: str, split: float = 0.9) -> tuple[str, str]:
     return text[:train_end], text[train_end:]
 
 
-def create_tokenizer_for_preparation(tokenizer_type: str, **kwargs) -> Tokenizer:
+def create_tokenizer_for_preparation(
+    tokenizer_type: TokenizerKind | str, **kwargs
+) -> Tokenizer:
     """Create a tokenizer for data preparation based on type."""
-    return create_tokenizer(tokenizer_type, **kwargs)
+    return create_tokenizer(_coerce_tokenizer_type(str(tokenizer_type)), **kwargs)
 
 
 def prepare_with_tokenizer(
     text: str, tokenizer: Tokenizer, split: float = 0.9
-) -> tuple[np.ndarray, np.ndarray, dict, Tokenizer]:
-    """Prepare train/val data and metadata using a tokenizer."""
+) -> tuple[np.ndarray, np.ndarray, dict[str, Any], Tokenizer]:
+    """Tokenize raw text into dataset artifacts and metadata.
+
+    Args:
+        text: Complete corpus that will be split into train and validation sets.
+        tokenizer: Concrete tokenizer implementation used for encoding.
+        split: Fraction of tokens assigned to the training split.
+
+    Returns:
+        Tuple containing train tokens, validation tokens, metadata dictionary, and the tokenizer used.
+    """
     # Split text into train/val
     train_text, val_text = split_train_val(text, split)
 
@@ -270,7 +309,7 @@ def write_bin_and_meta(
         try:
             with meta_path.open("rb") as f:
                 existing_meta = pickle.load(f)
-        except Exception as e:
+        except (OSError, pickle.UnpicklingError, EOFError) as e:
             raise DataError(
                 f"Failed to read existing meta.pkl at {meta_path}: {e}"
             ) from e
@@ -351,12 +390,14 @@ def setup_tokenizer(
     # Prefer vocab/encoding settings from meta when available
     if tokenizer_type in ("char", "word"):
         vocab = meta.get("stoi") or meta.get("vocab")
-        tokenizer = create_tokenizer(tokenizer_type, vocab=vocab)
+        tokenizer = create_tokenizer(
+            _coerce_tokenizer_type(tokenizer_type), vocab=vocab
+        )
     elif tokenizer_type == "tiktoken":
         encoding_name = meta.get("encoding_name", "cl100k_base")
         tokenizer = create_tokenizer(tokenizer_type, encoding_name=encoding_name)
     else:
-        tokenizer = create_tokenizer(tokenizer_type)
+        tokenizer = create_tokenizer(_coerce_tokenizer_type(tokenizer_type))
     return tokenizer
 
 

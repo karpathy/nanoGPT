@@ -7,7 +7,9 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 .SILENT:
 
-.PHONY: help test unit unit-cov integration e2e acceptance test-file coverage quality quality-ext quality-ci lint format pyright mypy typecheck setup sync verify clean prepare train sample loop tensorboard deadcode gguf-help pytest-verify-layout pytest-core pytest-all check-exp check-exp-config check-tool ai-guidelines venv312-lit-setup venv312-lit-run venv312-lit-stop
+.PHONY: all help test unit unit-cov integration e2e acceptance test-file coverage quality quality-ext quality-ci lint format pyright mypy typecheck setup sync verify clean prepare train sample loop tensorboard deadcode gguf-help pytest-verify-layout pytest-core pytest-all check-exp check-exp-config check-tool ai-guidelines venv312-lit-setup venv312-lit-run venv312-lit-stop
+
+all: quality
 
 # Be quieter and focus output on failures only
 PYTEST_BASE=-q -n auto -W error --strict-markers --strict-config

@@ -1,0 +1,4 @@
+# file: /Users/tv/code/nanoGPT/.venv/bin/pytest
+# hypothesis_version: 6.140.2
+
+['-script.pyw', '.exe', '__main__']

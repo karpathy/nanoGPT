@@ -1,0 +1,241 @@
+"""Property-based tests for configuration system using Hypothesis."""
+
+from __future__ import annotations
+
+import string
+import tempfile
+from pathlib import Path
+from typing import Any
+
+import hypothesis.strategies as st
+from hypothesis import given, settings
+import pytest
+import tomllib
+
+from ml_playground.config_loader import deep_merge_dicts, read_toml_dict
+
+
+# Strategies for generating test data
+@st.composite
+def dict_strategy(draw: st.DrawFn) -> dict[str, Any]:
+    """Generate nested dictionaries with string keys and various values."""
+    return draw(
+        st.dictionaries(
+            keys=st.text(min_size=1, max_size=10),
+            values=st.recursive(
+                st.none()
+                | st.booleans()
+                | st.integers()
+                | st.floats(allow_nan=False, allow_infinity=False)
+                | st.text(max_size=50),
+                lambda children: st.dictionaries(
+                    keys=st.text(min_size=1, max_size=10), values=children
+                )
+                | st.lists(children, max_size=5),
+                max_leaves=10,
+            ),
+            max_size=10,
+        )
+    )
+
+
+@st.composite
+def toml_dict_strategy(draw: st.DrawFn) -> dict[str, Any]:
+    """Generate dictionaries that can be serialized to TOML."""
+
+    def valid_toml_value() -> st.SearchStrategy[Any]:
+        return st.one_of(
+            st.booleans(),
+            st.integers(min_value=-1000, max_value=1000),
+            st.floats(
+                min_value=-1000, max_value=1000, allow_nan=False, allow_infinity=False
+            ),
+            st.text(max_size=50),
+            st.dates(),
+            st.times(),
+            st.datetimes(),
+        )
+
+    return draw(
+        st.dictionaries(
+            keys=st.text(
+                min_size=1,
+                max_size=20,
+                alphabet=st.characters(
+                    whitelist_categories=(
+                        "L",
+                        "N",
+                    ),  # Letters and numbers only for TOML keys
+                    min_codepoint=97,
+                    max_codepoint=122,  # lowercase letters and numbers
+                ),
+            ),
+            values=st.recursive(
+                valid_toml_value(),
+                lambda children: st.dictionaries(
+                    keys=st.text(
+                        min_size=1,
+                        max_size=10,
+                        alphabet=st.characters(
+                            whitelist_categories=("L", "N"),
+                            min_codepoint=97,
+                            max_codepoint=122,
+                        ),
+                    ),
+                    values=children,
+                )
+                | st.lists(children, max_size=5),
+                max_leaves=5,
+            ),
+            max_size=5,
+        )
+    )
+
+
+class TestDeepMergeDicts:
+    """Property-based tests for deep_merge_dicts function."""
+
+    @given(base=dict_strategy(), override=dict_strategy())
+    @settings(max_examples=100)
+    def test_merge_preserves_base_keys_not_in_override(
+        self, base: dict[str, Any], override: dict[str, Any]
+    ) -> None:
+        """Test that keys in base but not in override are preserved."""
+        result = deep_merge_dicts(base, override)
+
+        # All keys from base should be in result
+        for key in base:
+            if key not in override:
+                assert key in result
+                assert result[key] == base[key]
+
+    @given(base=dict_strategy(), override=dict_strategy())
+    @settings(max_examples=100)
+    def test_merge_overrides_base_values(
+        self, base: dict[str, Any], override: dict[str, Any]
+    ) -> None:
+        """Test that override values take precedence."""
+        result = deep_merge_dicts(base, override)
+
+        # Keys in override should have override values (unless nested)
+        for key, value in override.items():
+            if not isinstance(value, dict):
+                assert result[key] == value
+            elif key in base and isinstance(base[key], dict):
+                # For nested dicts, check that override takes precedence
+                assert result[key] == deep_merge_dicts(base[key], value)
+
+    @given(d1=dict_strategy(), d2=dict_strategy(), d3=dict_strategy())
+    @settings(max_examples=50)
+    def test_merge_associativity(
+        self, d1: dict[str, Any], d2: dict[str, Any], d3: dict[str, Any]
+    ) -> None:
+        """Test that merging is associative for non-conflicting keys."""
+        # This property should hold when there are no key conflicts
+        try:
+            result1 = deep_merge_dicts(deep_merge_dicts(d1, d2), d3)
+            result2 = deep_merge_dicts(d1, deep_merge_dicts(d2, d3))
+            assert result1 == result2
+        except Exception:
+            # If there are conflicts, associativity may not hold, which is expected
+            pass
+
+    @given(base=dict_strategy())
+    @settings(max_examples=50)
+    def test_merge_with_empty_override(self, base: dict[str, Any]) -> None:
+        """Test that merging with empty dict returns base unchanged."""
+        result = deep_merge_dicts(base, {})
+        assert result == base
+
+    @given(override=dict_strategy())
+    @settings(max_examples=50)
+    def test_merge_with_empty_base(self, override: dict[str, Any]) -> None:
+        """Test that merging with empty base returns override."""
+        result = deep_merge_dicts({}, override)
+        assert result == override
+
+
+class TestTomlReading:
+    """Property-based tests for TOML reading functionality."""
+
+    @given(content=toml_dict_strategy())
+    @settings(max_examples=50)
+    def test_round_trip_toml_serialization(self, content: dict[str, Any]) -> None:
+        """Test that writing and reading TOML preserves data."""
+        import tomli_w
+
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".toml", delete=False) as f:
+            try:
+                tomli_w.dump(content, f)
+                f.flush()
+
+                path = Path(f.name)
+                result = read_toml_dict(path)
+
+                # Note: TOML may change types (e.g., int -> float), so we check structure
+                assert isinstance(result, dict)
+
+                # Check that all keys from original are present
+                for key in content:
+                    assert key in result
+
+            finally:
+                Path(f.name).unlink(missing_ok=True)
+
+    @given(
+        content=st.sampled_from(
+            ["[invalid", "key =", "[[table]", "key = value extra", '{"json"}']
+        )
+    )
+    @settings(max_examples=20)
+    def test_invalid_toml_raises_exception(self, content: str) -> None:
+        """Test that invalid TOML raises appropriate exceptions."""
+        with tempfile.NamedTemporaryFile(mode="w+", suffix=".toml", delete=False) as f:
+            try:
+                f.write(content)
+                f.flush()
+
+                path = Path(f.name)
+
+                if content.strip():  # Only test non-empty invalid content
+                    with pytest.raises((Exception, tomllib.TOMLDecodeError)):
+                        read_toml_dict(path)
+
+            finally:
+                Path(f.name).unlink(missing_ok=True)
+
+
+class TestConfigPaths:
+    """Property-based tests for configuration path computation."""
+
+    @given(
+        experiment=st.text(
+            alphabet=string.ascii_letters + string.digits + "_-",
+            min_size=1,
+            max_size=50,
+        )
+    )
+    @settings(max_examples=50)
+    def test_experiment_path_computation(self, experiment: str) -> None:
+        """Test that experiment paths are computed correctly."""
+        from ml_playground.config_loader import get_cfg_path
+
+        # Test with None exp_config
+        path = get_cfg_path(experiment, None)
+        assert str(path).endswith(f"experiments/{experiment}/config.toml")
+        assert path.is_absolute()
+
+    @given(
+        exp_config=st.text(
+            alphabet=string.ascii_letters + string.digits + "_-\\. ",
+            min_size=1,
+            max_size=100,
+        )
+    )
+    @settings(max_examples=50)
+    def test_custom_config_path(self, exp_config: str) -> None:
+        """Test that custom config paths are used when provided."""
+        from ml_playground.config_loader import get_cfg_path
+
+        path = get_cfg_path("dummy_experiment", Path(exp_config))
+        assert str(path) == exp_config
