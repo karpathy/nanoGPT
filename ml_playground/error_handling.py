@@ -61,7 +61,7 @@ class FileOperationError(MLPlaygroundError):
 
 
 def setup_logging(name: str, level: int = logging.INFO) -> LoggerLike:
-    """Set up a logger with a sensible default configuration."""
+    """Construct a logger with a stream handler and consistent formatting."""
     logger = logging.getLogger(name)
     if not logger.handlers:
         handler = logging.StreamHandler()
@@ -80,7 +80,7 @@ def handle_exception(
     exc_traceback: Any,
     logger: LoggerLike,
 ) -> None:
-    """Handle uncaught exceptions with logging."""
+    """Log uncaught exceptions while preserving keyboard interrupt semantics."""
 
     if issubclass(exc_type, KeyboardInterrupt):
         # Handle keyboard interrupt gracefully
@@ -98,7 +98,7 @@ def safe_call(
     logger: LoggerLike,
     **kwargs: Any,
 ) -> T:
-    """Safely call a function, catching and logging any exceptions."""
+    """Invoke ``func`` and capture exceptions, optionally returning a default."""
 
     try:
         return func(*args, **kwargs)
@@ -116,7 +116,7 @@ def safe_file_operation(
     logger: LoggerLike,
     **kwargs: Any,
 ) -> T:
-    """Safely execute a file operation, catching and logging FileOperationError exceptions."""
+    """Execute a file operation and wrap IO errors in ``FileOperationError``."""
     try:
         return func(*args, **kwargs)
     except (IOError, OSError) as e:
@@ -128,7 +128,7 @@ def safe_file_operation(
 
 
 def validate_file_exists(path: Path, description: str = "File") -> None:
-    """Validate that a file exists, raising a DataError if not."""
+    """Ensure that ``path`` refers to an existing file, raising ``DataError`` otherwise."""
     if not fs_path_exists(path):
         raise DataError(f"{description} not found at {path}")
     if not fs_is_file(path):
@@ -136,7 +136,7 @@ def validate_file_exists(path: Path, description: str = "File") -> None:
 
 
 def validate_directory_exists(path: Path, description: str = "Directory") -> None:
-    """Validate that a directory exists, raising a DataError if not."""
+    """Ensure that ``path`` refers to an existing directory, raising ``DataError`` otherwise."""
     if not fs_path_exists(path):
         raise DataError(f"{description} not found at {path}")
     if not fs_is_dir(path):
@@ -144,9 +144,9 @@ def validate_directory_exists(path: Path, description: str = "Directory") -> Non
 
 
 def validate_config_value(
-    value: Any, name: str, expected_type: Type, required: bool = True
+    value: Any, name: str, expected_type: Type[Any], required: bool = True
 ) -> None:
-    """Validate a configuration value's type and presence."""
+    """Validate presence and type of a configuration entry."""
     if required and value is None:
         raise ValidationError(f"Required configuration value '{name}' is missing")
     if value is not None and not isinstance(value, expected_type):

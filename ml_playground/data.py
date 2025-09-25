@@ -1,12 +1,15 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple, Any, Dict
+import pickle
+from typing import Any, Literal, cast
+
 import numpy as np
 import numpy.typing as npt
 import torch
-import pickle
-from ml_playground.config import DataConfig
+
+from ml_playground.config import DataConfig, DeviceKind
 
 
 @dataclass
@@ -21,8 +24,11 @@ class _MemmapReader:
 
 
 def _sample_batch(
-    reader: _MemmapReader, batch_size: int, block_size: int, device: str
-) -> Tuple[torch.Tensor, torch.Tensor]:
+    reader: _MemmapReader,
+    batch_size: int,
+    block_size: int,
+    device: DeviceKind,
+) -> tuple[torch.Tensor, torch.Tensor]:
     L = int(reader.length)
     if L == 0:
         raise ValueError(
@@ -69,9 +75,30 @@ def _sample_batch(
 
 
 class SimpleBatches:
-    def __init__(self, data: DataConfig, device: str, dataset_dir: Path) -> None:
+    """Iterate over memory-mapped training and validation datasets.
+
+    The class encapsulates the logic to create either random or sequential batches
+    using the sampling policy defined on the associated `DataConfig`.
+    """
+
+    def __init__(
+        self,
+        data: DataConfig,
+        device: DeviceKind,
+        dataset_dir: Path,
+    ) -> None:
+        """Initialize the batch provider with dataset metadata and storage paths.
+
+        Args:
+            data: Fully validated runtime data configuration.
+            device: Target device on which mini-batches should be materialized.
+            dataset_dir: Directory containing the `train.bin`, `val.bin`, and `meta.pkl` artifacts.
+
+        Raises:
+            FileNotFoundError: If required dataset artifacts are missing.
+        """
         self.data = data
-        self.device = device
+        self.device: DeviceKind = device
         self._dataset_dir = dataset_dir
         train_path = data.train_path(dataset_dir)
         val_path = data.val_path(dataset_dir)
@@ -81,87 +108,113 @@ class SimpleBatches:
             )
         # Determine dtype from meta.pkl if available; default to uint16
         dtype: np.dtype[Any] = np.dtype(np.uint16)
-        try:
-            # Read dtype from meta.pkl when present
-            meta_path = data.meta_path(dataset_dir)
-            if meta_path.exists():
+        # Read dtype from meta.pkl when present
+        meta_path = data.meta_path(dataset_dir)
+        if meta_path.exists():
+            try:
                 with meta_path.open("rb") as f:
                     meta = pickle.load(f)
-                dts = meta.get("dtype")
-                if dts == "uint32":
-                    dtype = np.dtype(np.uint32)
-                elif dts == "uint16":
-                    dtype = np.dtype(np.uint16)
-        except Exception:
-            # If meta cannot be read, default remains uint16
-            pass
+            except (OSError, pickle.UnpicklingError, EOFError):
+                # If meta cannot be read, default remains uint16
+                pass
+            else:
+                if isinstance(meta, dict):
+                    dts = meta.get("dtype")
+                    if dts == "uint32":
+                        dtype = np.dtype(np.uint32)
+                    elif dts == "uint16":
+                        dtype = np.dtype(np.uint16)
         self.train = _MemmapReader.open(train_path, dtype=dtype)
         self.val = _MemmapReader.open(val_path, dtype=dtype)
         # Maintain per-split cursors for sequential sampling
-        self._cursor: Dict[str, int] = {"train": 0, "val": 0}
+        self._cursor: dict[Literal["train", "val"], int] = {"train": 0, "val": 0}
 
-    def get_batch(self, split: str) -> Tuple[torch.Tensor, torch.Tensor]:
+    def get_batch(
+        self, split: Literal["train", "val"]
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return a batch of token ids for the requested dataset split.
+
+        Args:
+            split: Dataset split to draw from ("train" or "val").
+
+        Returns:
+            A tuple of tensors `(x, y)` where `x` contains input token ids and
+            `y` contains the shift-left targets.
+
+        Raises:
+            ValueError: If the sampling strategy is unknown.
+        """
         reader = self.train if split == "train" else self.val
-        if getattr(self.data, "sampler", "random") == "sequential":
-            # Deterministic, strided coverage with wrap-around
-            L = int(reader.length)
-            if L == 0:
-                raise ValueError(
-                    "Dataset is empty: no tokens available. Ensure the dataset preparation wrote non-empty train/val bins."
-                )
-            bsz = int(self.data.batch_size)
-            T = int(self.data.block_size)
-            cur = self._cursor[split]
-            base = np.asarray(reader.arr)
-            x_list: list[np.ndarray] = []
-            y_list: list[np.ndarray] = []
-            for _ in range(bsz):
-                s = cur
-                if L <= T:
-                    # wrap-around sequence
-                    offs: npt.NDArray[np.int64] = (s + np.arange(T, dtype=np.int64)) % L
-                    x_seq = base[offs].astype(np.int64, copy=False)
-                    offs_y: npt.NDArray[np.int64] = (
-                        (s + 1) + np.arange(T, dtype=np.int64)
-                    ) % L
-                    y_seq = base[offs_y].astype(np.int64, copy=False)
-                    cur = (cur + T) % L
-                else:
-                    si = int(s)
-                    if si + T <= L:
-                        # straight slice without wrap
-                        x_seq = base[si : si + T].astype(np.int64, copy=False)
-                        y_seq = base[si + 1 : si + 1 + T].astype(np.int64, copy=False)
-                        cur = si + T
-                        if cur >= L - T:
-                            # stride by 1 at epoch boundary to avoid repeating last token window
-                            cur = (cur + 1) % L
-                    else:
-                        # need to wrap for last few tokens
-                        x_first = base[si:L].astype(np.int64, copy=False)
-                        x_rem = T - int(x_first.shape[0])
-                        if x_rem > 0:
-                            x_wrap = base[:x_rem].astype(np.int64, copy=False)
-                            x_seq = np.concatenate([x_first, x_wrap], axis=0)
-                        else:
-                            x_seq = x_first
-                        y_first = base[si + 1 : L].astype(np.int64, copy=False)
-                        y_rem = T - int(y_first.shape[0])
-                        if y_rem > 0:
-                            y_wrap = base[:y_rem].astype(np.int64, copy=False)
-                            y_seq = np.concatenate([y_first, y_wrap], axis=0)
-                        else:
-                            y_seq = y_first
-                        cur = (si + T) % L
-                x_list.append(x_seq)
-                y_list.append(y_seq)
-            self._cursor[split] = cur
-            x_np = np.stack(x_list)
-            y_np = np.stack(y_list)
-            x = torch.from_numpy(x_np).to(self.device)
-            y = torch.from_numpy(y_np).to(self.device)
-            return x, y
-        else:
-            return _sample_batch(
-                reader, self.data.batch_size, self.data.block_size, self.device
+        sampler = cast(
+            Literal["random", "sequential"],
+            getattr(self.data, "sampler", "random"),
+        )
+        if sampler == "sequential":
+            return self._get_sequential_batch(split, reader)
+        if sampler == "random":
+            return self._get_random_batch(reader)
+        raise ValueError(f"Unknown sampler '{sampler}'")
+
+    def _get_random_batch(
+        self, reader: _MemmapReader
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        return _sample_batch(
+            reader, self.data.batch_size, self.data.block_size, self.device
+        )
+
+    def _get_sequential_batch(
+        self, split: Literal["train", "val"], reader: _MemmapReader
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        L = int(reader.length)
+        if L == 0:
+            raise ValueError(
+                "Dataset is empty: no tokens available. Ensure the dataset preparation wrote non-empty train/val bins."
             )
+        bsz = int(self.data.batch_size)
+        T = int(self.data.block_size)
+        cur = self._cursor[split]
+        base = np.asarray(reader.arr)
+        x_list: list[np.ndarray] = []
+        y_list: list[np.ndarray] = []
+        for _ in range(bsz):
+            s = cur
+            if L <= T:
+                offs: npt.NDArray[np.int64] = (s + np.arange(T, dtype=np.int64)) % L
+                x_seq = base[offs].astype(np.int64, copy=False)
+                offs_y: npt.NDArray[np.int64] = (
+                    (s + 1) + np.arange(T, dtype=np.int64)
+                ) % L
+                y_seq = base[offs_y].astype(np.int64, copy=False)
+                cur = (cur + T) % L
+            else:
+                si = int(s)
+                if si + T <= L:
+                    x_seq = base[si : si + T].astype(np.int64, copy=False)
+                    y_seq = base[si + 1 : si + 1 + T].astype(np.int64, copy=False)
+                    cur = si + T
+                    if cur >= L - T:
+                        cur = (cur + 1) % L
+                else:
+                    x_first = base[si:L].astype(np.int64, copy=False)
+                    x_rem = T - int(x_first.shape[0])
+                    if x_rem > 0:
+                        x_wrap = base[:x_rem].astype(np.int64, copy=False)
+                        x_seq = np.concatenate([x_first, x_wrap], axis=0)
+                    else:
+                        x_seq = x_first
+                    y_first = base[si + 1 : L].astype(np.int64, copy=False)
+                    y_rem = T - int(y_first.shape[0])
+                    if y_rem > 0:
+                        y_wrap = base[:y_rem].astype(np.int64, copy=False)
+                        y_seq = np.concatenate([y_first, y_wrap], axis=0)
+                    else:
+                        y_seq = y_first
+                    cur = (si + T) % L
+            x_list.append(x_seq)
+            y_list.append(y_seq)
+        self._cursor[split] = cur
+        x_np = np.stack(x_list)
+        y_np = np.stack(y_list)
+        x = torch.from_numpy(x_np).to(self.device)
+        y = torch.from_numpy(y_np).to(self.device)
+        return x, y

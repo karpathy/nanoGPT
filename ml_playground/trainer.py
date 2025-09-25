@@ -43,8 +43,15 @@ def get_lr(it: int, schedule: LRSchedule, optim: OptimConfig) -> float:
 
 
 class Trainer:
+    """Coordinate the end-to-end training loop for a configured experiment."""
+
     def __init__(self, cfg: TrainerConfig, shared: SharedConfig):
-        """Initialize the trainer."""
+        """Initialize runtime state, data loaders, and checkpoint management.
+
+        Args:
+            cfg: Fully validated trainer configuration for the experiment.
+            shared: Experiment-scoped shared configuration including dataset directories.
+        """
         self.cfg = cfg
         self.shared = shared
 
@@ -71,6 +78,7 @@ class Trainer:
         self._setup_components()
 
     def _setup_torch_env(self) -> None:
+        """Seed torch RNGs and configure autocast context based on runtime settings."""
         torch.manual_seed(self.cfg.runtime.seed)
         # Guard CUDA-specific configuration for non-CUDA environments
         try:
@@ -78,7 +86,7 @@ class Trainer:
                 torch.cuda.manual_seed(self.cfg.runtime.seed)
                 torch.backends.cuda.matmul.allow_tf32 = True
                 torch.backends.cudnn.allow_tf32 = True
-        except Exception:
+        except (RuntimeError, AssertionError, AttributeError):
             # Don't fail initialization due to CUDA-specific environment issues
             pass
 
@@ -95,6 +103,7 @@ class Trainer:
         )
 
     def _setup_data_loader(self) -> SimpleBatches:
+        """Create a `SimpleBatches` iterator bound to the resolved dataset directory."""
         return SimpleBatches(
             data=self.cfg.data,
             device=self.cfg.runtime.device,
@@ -102,6 +111,7 @@ class Trainer:
         )
 
     def _setup_model(self) -> tuple[GPT, torch.optim.Optimizer]:
+        """Materialize the GPT model and its optimizer with configured hyperparameters."""
         self.logger.info("Initializing model and optimizer")
         model = GPT(self.cfg.model)
         model.to(self.cfg.runtime.device)
@@ -114,6 +124,7 @@ class Trainer:
         return model, optimizer
 
     def _setup_checkpoint_manager(self) -> CheckpointManager:
+        """Construct a checkpoint manager respecting the retention policy."""
         return CheckpointManager(
             out_dir=self.shared.train_out_dir,
             atomic=self.cfg.runtime.ckpt_atomic,
@@ -122,6 +133,7 @@ class Trainer:
         )
 
     def _setup_components(self) -> None:
+        """Initialize optional training components such as EMA, GradScaler, and TensorBoard."""
         if self.cfg.runtime.compile:
             self.logger.info("Compiling the model... (takes a ~minute)")
             self.model = cast(GPT, torch.compile(self.model))
@@ -139,6 +151,7 @@ class Trainer:
             self.writer = SummaryWriter(log_dir=str(self.out_dir))
 
     def _load_checkpoint(self) -> None:
+        """Resume training from the latest/best checkpoint when available."""
         checkpoint: Checkpoint | None = None
         if self.out_dir.exists():
             try:
@@ -165,7 +178,7 @@ class Trainer:
                 self.ema.shadow = checkpoint.ema
 
     def run(self) -> tuple[int, float]:
-        """Main training loop."""
+        """Execute the main training loop until reaching the maximum iteration count."""
         self.logger.info("Starting training loop")
         X, Y = self.batches.get_batch("train")
         t0 = time.time()
@@ -221,6 +234,7 @@ class Trainer:
         raw_model: GPT,
         running_mfu: float,
     ) -> float:
+        """Log training progress and compute updated model FLOPS utilization."""
         lossf = loss.item() * self.cfg.data.grad_accum_steps
         if local_iter_num >= 5:
             mfu = raw_model.estimate_mfu(
@@ -235,6 +249,7 @@ class Trainer:
         return running_mfu
 
     def _evaluate(self, lr: float, raw_model: GPT) -> None:
+        """Run validation, log metrics, and persist best checkpoints."""
         # Use raw_model to satisfy type checker regardless of compile() wrapping
         losses = estimate_loss(
             raw_model, self.batches, self.cfg.runtime.eval_iters, self.ctx
@@ -253,6 +268,7 @@ class Trainer:
                 self._save_checkpoint(raw_model, is_best=True)
 
     def _train_step(self, X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
+        """Perform a gradient accumulation step and update EMA if configured."""
         loss_tensor = torch.tensor(0.0)
         for micro_step in range(self.cfg.data.grad_accum_steps):
             with self.ctx:
@@ -275,6 +291,7 @@ class Trainer:
         return loss_tensor
 
     def _save_checkpoint(self, raw_model: GPT, is_best: bool) -> None:
+        """Persist the current training state via the checkpoint manager."""
         checkpoint = Checkpoint(
             model=raw_model.state_dict(),
             optimizer=self.optimizer.state_dict(),
@@ -295,6 +312,7 @@ class Trainer:
         )
 
     def _propagate_meta(self) -> None:
+        """Copy dataset metadata into the training output directory when available."""
         try:
             meta_src = self.cfg.data.meta_path(self.shared.dataset_dir)
             if meta_src and meta_src.exists():

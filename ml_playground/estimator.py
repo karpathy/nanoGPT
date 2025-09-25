@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Literal, Tuple, cast
 
 import torch
 
@@ -15,10 +15,11 @@ def estimate_loss(
     """Estimate loss on train/val splits."""
     out: Dict[str, float] = {}
     model.eval()
-    for split in ["train", "val"]:
+    splits: Tuple[Literal["train"], Literal["val"]] = ("train", "val")
+    for split in splits:
         losses = torch.zeros(eval_iters, dtype=torch.float32)
         for k in range(eval_iters):
-            X, Y = batches.get_batch(split)
+            X, Y = batches.get_batch(cast(Literal["train", "val"], split))
             with ctx:
                 _, loss = model(X, Y)
             losses[k] = loss.item()
