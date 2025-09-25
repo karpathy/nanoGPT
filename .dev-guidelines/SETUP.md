@@ -10,7 +10,7 @@ Quick start guide for setting up the ml_playground development environment.
 
 ## Prerequisites
 
-- Python version: see pyproject.toml (currently "<3.13")
+- Python version: see pyproject.toml (currently ">=3.13")
 - UV package manager installed
 
 ## Environment Setup
