@@ -169,4 +169,28 @@ class Sampler:
                     self.logger.info("---------------")
 
 
-__all__ = ["Sampler"]
+def sample(cfg: SamplerConfig, shared: SharedConfig | None = None) -> None:
+    """Run sampling with optional shared configuration fallback."""
+
+    if shared is None:
+        runtime = cfg.runtime
+        if runtime is None:
+            raise ValueError("Runtime configuration is missing")
+        out_dir = runtime.out_dir
+        shared = SharedConfig(
+            experiment="unknown",
+            config_path=out_dir / "config.toml",
+            project_home=out_dir.parent if out_dir.parent else out_dir,
+            dataset_dir=out_dir,
+            train_out_dir=out_dir,
+            sample_out_dir=out_dir,
+        )
+
+    sampler_instance = Sampler(cfg, shared)
+    sampler_instance.run()
+
+
+__all__ = [
+    "Sampler",
+    "sample",
+]

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import pickle
 from pathlib import Path
-from typing import Any, Tuple
+from typing import Any, Tuple, cast
 
 import pytest
 import torch
 import numpy as np
+from numpy.typing import NDArray
 
 from ml_playground.config import (
     RuntimeConfig,
@@ -55,7 +56,9 @@ def _write_bin(path: Path, arr: np.ndarray) -> None:
 def _prepare_dataset(tmp_path: Path, L: int, dtype: str = "uint16") -> Path:
     ddir = tmp_path / "ds"
     ddir.mkdir(parents=True, exist_ok=True)
-    arr = (np.arange(L) % np.iinfo(np.uint16).max).astype(dtype)
+    arr = cast(
+        NDArray[np.generic], (np.arange(L) % np.iinfo(np.uint16).max).astype(dtype)
+    )
     _write_bin(ddir / "train.bin", arr)
     _write_bin(ddir / "val.bin", arr)
     return ddir
@@ -315,8 +318,8 @@ def test_sample_happy_path_with_file_prompt_and_char_meta(
 
     class _MiniCkpt:
         def __init__(self) -> None:
-            self.model = {"weights": []}
-            self.model_args = {
+            self.model: dict[str, Any] = {"weights": []}
+            self.model_args: dict[str, int] = {
                 "block_size": 4,
                 "vocab_size": 16,
                 "n_layer": 1,
@@ -352,8 +355,7 @@ def test_sample_happy_path_with_file_prompt_and_char_meta(
         train_out_dir=out_dir,
         sample_out_dir=out_dir,
     )
-    s = sampler.Sampler(exp, shared)
-    s.run()
+    sampler.sample(exp, shared)
 
     # Verify via logs (sampler logs instead of printing)
     text = caplog.text
@@ -389,8 +391,8 @@ def test_sample_with_compile_flag_uses_compiled_model(
 
     class _MiniCkpt2:
         def __init__(self) -> None:
-            self.model = {"weights": []}
-            self.model_args = {
+            self.model: dict[str, Any] = {"weights": []}
+            self.model_args: dict[str, int] = {
                 "block_size": 4,
                 "vocab_size": 16,
                 "n_layer": 1,
@@ -419,7 +421,7 @@ def test_sample_with_compile_flag_uses_compiled_model(
         train_out_dir=out_dir,
         sample_out_dir=out_dir,
     )
-    sampler.Sampler(exp, shared).run()
+    sampler.sample(exp, shared)
     assert called["compiled"] == 1
 
 

@@ -322,5 +322,23 @@ class Trainer:
             self.logger.warning(f"Failed to propagate meta file: {e}")
 
 
+def train(cfg: TrainerConfig, shared: SharedConfig | None = None) -> tuple[int, float]:
+    """Run the strict trainer with optional shared metadata fallback."""
+
+    if shared is None:
+        out_dir = cfg.runtime.out_dir
+        shared = SharedConfig(
+            experiment="unknown",
+            config_path=out_dir / "cfg.toml",
+            project_home=out_dir.parent if out_dir.parent else out_dir,
+            dataset_dir=out_dir,
+            train_out_dir=out_dir,
+            sample_out_dir=out_dir,
+        )
+
+    trainer = Trainer(cfg, shared)
+    return trainer.run()
+
+
 # Explicit public API for this module
-__all__ = ["get_lr", "Trainer"]
+__all__ = ["get_lr", "Trainer", "train"]
