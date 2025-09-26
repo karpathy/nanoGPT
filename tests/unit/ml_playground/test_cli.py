@@ -779,14 +779,13 @@ def test_run_loop_calls_in_order_and_handles_print_errors(
     import ml_playground.trainer as trainer_mod
     import ml_playground.sampler as sampler_mod
 
-    class FakePreparer:
-        def __init__(self, cfg):
-            pass
-
-        def __call__(self, shared):
+    class FakePipeline:
+        def run(self):
             calls.append("prepare")
 
-    monkeypatch.setattr(prepare_mod, "Preparer", FakePreparer)
+    monkeypatch.setattr(
+        prepare_mod, "create_pipeline", lambda cfg, shared: FakePipeline()
+    )
 
     class FakeTrainer:
         def __init__(self, cfg, shared):

@@ -145,10 +145,10 @@ def _run_prepare(
     shared: Any,
 ) -> None:
     """Run the full prepare flow for an experiment."""
-    print(f"---\nRunning preparer for experiment: {experiment}")
-    preparer = prepare_mod.Preparer(prepare_cfg)
-    preparer(shared)
-    print(f"Preparer for {experiment} finished.\n---")
+    print(f"---\nRunning pipeline for experiment: {experiment}")
+    pipeline = prepare_mod.create_pipeline(prepare_cfg, shared)
+    pipeline.run()
+    print(f"Pipeline for {experiment} finished.\n---")
 
 
 def _run_train(
