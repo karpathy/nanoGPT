@@ -19,6 +19,7 @@ import ml_playground.config_loader as config_loader
 import ml_playground.prepare as prepare_mod
 import ml_playground.sampler as sampler_mod
 import ml_playground.trainer as trainer_mod
+from ml_playground.experiments import registry
 
 # (Removed unused type aliases)
 
@@ -387,6 +388,9 @@ def main(argv: list[str] | None = None) -> int | None:
 
     Passes standalone_mode=False so Click returns instead of exiting.
     """
+    # Load experiment preparers explicitly at startup
+    registry.load_preparers()
+
     cmd = get_command(app)
     return cmd.main(args=argv or [], standalone_mode=False)
 
