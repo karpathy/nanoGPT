@@ -51,7 +51,7 @@ def test_word_tokenizer():
     print(f"Original: {text}")
     print(f"Encoded: {encoded}")
     print(f"Decoded: {decoded}")
-    print(f"Vocab size: {tokenizer.get_vocab_size()}")
+    print(f"Vocab size: {tokenizer.vocab_size}")
 
     # Note: Word tokenizer adds spaces between words during decoding
     # So we can't directly compare with the original text

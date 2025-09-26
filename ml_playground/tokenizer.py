@@ -77,14 +77,6 @@ class WordTokenizer:
     def vocab(self) -> Mapping[str, int]:
         return MappingProxyType(self.stoi)
 
-    # Backward compatibility methods
-    def get_vocab_size(self) -> int:
-        return self.vocab_size
-
-    def get_vocab(self) -> Dict[str, int]:
-        """Return a mutable copy of the underlying word vocabulary."""
-        return self.stoi.copy()
-
 
 class TiktokenTokenizer:
     """`tiktoken`-based BPE tokenizer supporting GPT-style byte pair encoding."""

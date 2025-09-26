@@ -604,9 +604,7 @@ class SharedConfig(_FrozenStrictModel):
         return v
 
 
-# Backward-compatible aliases for newer API names used by some modules
-TrainExperiment = TrainerConfig
-SampleExperiment = SamplerConfig
+# Strict, single-source configuration module.
 
 
 __all__ = [
