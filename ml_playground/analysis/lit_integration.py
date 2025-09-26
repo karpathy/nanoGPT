@@ -26,7 +26,7 @@ def run_server_bundestag_char(
         for p in paths:
             try:
                 return importlib.import_module(p)
-            except Exception as err:  # pragma: no cover - best-effort compatibility
+            except ImportError as err:  # pragma: no cover - best-effort compatibility
                 last_err = err
         # If all imports failed, raise with context
         try:
@@ -34,7 +34,7 @@ def run_server_bundestag_char(
 
             lit_ver = getattr(lit_nlp, "__version__", "<unknown>")
             ver_msg = f"(detected lit-nlp version: {lit_ver})"
-        except Exception:
+        except ImportError:
             ver_msg = "(lit-nlp not importable)"
         raise RuntimeError(
             "Unable to import LIT server module. Tried: lit_nlp.server, "
@@ -56,7 +56,7 @@ def run_server_bundestag_char(
 
             lit_ver = getattr(lit_nlp, "__version__", "<unknown>")
             ver_msg = f"(detected lit-nlp version: {lit_ver})"
-        except Exception:
+        except ImportError:
             ver_msg = "(lit-nlp not importable)"
         raise RuntimeError(
             "LIT is not available or incompatible. "
@@ -96,7 +96,7 @@ def run_server_bundestag_char(
             file_lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
             if file_lines:
                 samples = file_lines[:10]
-    except Exception:
+    except OSError:
         # Non-fatal; keep embedded samples
         pass
 
