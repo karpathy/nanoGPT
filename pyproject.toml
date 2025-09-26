@@ -135,6 +135,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 # Updated pytest settings for ml_playground
 addopts = "-W error --strict-markers --strict-config -v"
+pythonpath = ["."]
 testpaths = [
     "tests",
 ]
@@ -223,3 +224,11 @@ no-copy-source-files = false
 
 [cosmic-ray.distributor]
 name = "local"
+
+[tool.mutmut]
+paths_to_mutate = [
+    "ml_playground/checkpoint.py",
+    "ml_playground/error_handling.py",
+]
+test_command = "pytest -q -n auto tests/unit/ml_playground/test_checkpoint.py tests/unit/ml_playground/test_error_handling.py"
+runner = "pytest"

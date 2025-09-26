@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import logging
+import sys
 from pathlib import Path
 
 import pytest
@@ -134,6 +135,63 @@ def test_progress_reporter_percentages(caplog: pytest.LogCaptureFixture) -> None
     assert "Progress: 80% (4/5) - main work" in messages
     assert "Progress: 100% (5/5)" in messages
     assert messages[-1] == "Done"
+
+
+def test_handle_exception_keyboard_interrupt(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure KeyboardInterrupt is handled gracefully."""
+    logger = logging.getLogger("ml_pg_test_kb")
+    stream = io.StringIO()
+    monkeypatch.setattr(sys, "__excepthook__", lambda *a, **kw: None)  # Suppress exit
+    logger.setLevel(logging.INFO)
+    logger.addHandler(logging.StreamHandler(stream))
+
+    from ml_playground.error_handling import handle_exception
+
+    try:
+        raise KeyboardInterrupt
+    except KeyboardInterrupt as e:
+        handle_exception(type(e), e, e.__traceback__, logger)
+
+    assert "Received keyboard interrupt" in stream.getvalue()
+
+
+def test_safe_file_operation_unexpected_error() -> None:
+    """Ensure non-IO errors are wrapped correctly."""
+
+    def bad_logic():
+        raise ValueError("logic error")
+
+    logger = logging.getLogger("ml_pg_test_unexpected")
+    with pytest.raises(FileOperationError, match="Unexpected error"):
+        safe_file_operation(bad_logic, logger=logger)
+
+
+def test_progress_reporter_no_total_and_small_updates(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Test progress reporting without a total and with small increments."""
+    caplog.set_level(logging.INFO)
+    logger = logging.getLogger("ml_pg_progress_no_total")
+
+    # Test without total_steps
+    pr_no_total = ProgressReporter(logger=logger)
+    pr_no_total.update(message="Step 1")
+    assert "Step 1: Step 1" in caplog.text
+
+    # Test with small increments that don't trigger a log
+    pr_small_steps = ProgressReporter(logger=logger, total_steps=100)
+    pr_small_steps.update(step=5)  # 5% < 10%, should not log
+    assert "Progress: 5%" not in caplog.text
+
+
+def test_log_helpers_no_details(caplog: pytest.LogCaptureFixture) -> None:
+    """Ensure log helpers work without optional details."""
+    caplog.set_level(logging.INFO)
+    logger = logging.getLogger("ml_pg_log_helpers")
+    log_operation_start(logger, "op_simple")
+    log_operation_complete(logger, "op_simple")
+    assert "Starting op_simple" in caplog.text
+    assert "Completed op_simple" in caplog.text
 
 
 def test_progress_reporter_clamps_and_log_helpers(

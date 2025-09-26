@@ -19,6 +19,7 @@ __all__ = [
     "DataError",
     "ModelError",
     "CheckpointError",
+    "CheckpointLoadError",
     "ValidationError",
     "FileOperationError",
     "setup_logging",
@@ -63,6 +64,12 @@ class ModelError(MLPlaygroundError):
 
 class CheckpointError(MLPlaygroundError):
     """Raised when there are checkpoint-related errors."""
+
+    pass
+
+
+class CheckpointLoadError(CheckpointError):
+    """Raised when loading a checkpoint fails."""
 
     pass
 

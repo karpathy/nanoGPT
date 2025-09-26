@@ -6,8 +6,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Tuple, TypedDict, Union, cast
 
 import torch
-from ml_playground.error_handling import CheckpointError
+from torch.serialization import pickle as _torch_pickle  # type: ignore[attr-defined]
+
+from ml_playground.error_handling import CheckpointError, CheckpointLoadError
 from ml_playground.logging_protocol import LoggerLike
+
+TorchUnpicklingError = _torch_pickle.UnpicklingError  # type: ignore[attr-defined]
 
 
 __all__ = ["Checkpoint", "CheckpointManager"]
@@ -169,8 +173,6 @@ class CheckpointManager:
             # iter from filename suffix
             stem = p.stem  # e.g., ckpt_last_00000010
             parts = stem.split("_")
-            if len(parts) < 3:
-                raise CheckpointError(f"Malformed last-checkpoint filename: {p.name}")
             iter_str = parts[-1]
             try:
                 it = int(iter_str)
@@ -186,8 +188,6 @@ class CheckpointManager:
         for p in sorted(self.out_dir.glob("ckpt_best_*.pt")):
             stem = p.stem  # e.g., ckpt_best_00000010_1.234567
             parts = stem.split("_")
-            if len(parts) < 3:
-                raise CheckpointError(f"Malformed best-checkpoint filename: {p.name}")
             try:
                 it = int(parts[2])
             except ValueError as e:
@@ -301,18 +301,25 @@ class CheckpointManager:
         try:
             # PyTorch 2.6+: default weights_only=True breaks loading objects like PosixPath;
             # use safe allowlist to enable loading our known globals and set weights_only=False for tests
-            try:
-                import pathlib
+            import pathlib
 
-                torch.serialization.add_safe_globals([pathlib._local.PosixPath])  # type: ignore[attr-defined]
-            except Exception:
-                pass
+            add_safe_globals = getattr(torch.serialization, "add_safe_globals", None)
+            if callable(add_safe_globals):
+                posix_path_cls = getattr(
+                    getattr(pathlib, "_local", None), "PosixPath", None
+                )
+                if posix_path_cls is not None:
+                    try:
+                        add_safe_globals([posix_path_cls])  # type: ignore[arg-type]
+                    except (RuntimeError, TypeError):
+                        # Ignore duplicates or incompatible registrations
+                        pass
             checkpoint_dict = torch.load(
                 str(latest_ckpt.path), map_location=device, weights_only=False
             )
-        except Exception as e:
+        except (OSError, RuntimeError, TorchUnpicklingError) as e:
             logger.error(f"Error loading checkpoint from {latest_ckpt.path}: {e}")
-            raise CheckpointError(
+            raise CheckpointLoadError(
                 f"Failed to load checkpoint from {latest_ckpt.path}: {e}"
             ) from e
 
@@ -338,18 +345,24 @@ class CheckpointManager:
 
         try:
             # See comment in load_latest_checkpoint regarding safe loading
-            try:
-                import pathlib
+            import pathlib
 
-                torch.serialization.add_safe_globals([pathlib._local.PosixPath])  # type: ignore[attr-defined]
-            except Exception:
-                pass
+            add_safe_globals = getattr(torch.serialization, "add_safe_globals", None)
+            if callable(add_safe_globals):
+                posix_path_cls = getattr(
+                    getattr(pathlib, "_local", None), "PosixPath", None
+                )
+                if posix_path_cls is not None:
+                    try:
+                        add_safe_globals([posix_path_cls])  # type: ignore[arg-type]
+                    except (RuntimeError, TypeError):
+                        pass
             checkpoint_dict = torch.load(
                 str(best_ckpt.path), map_location=device, weights_only=False
             )
-        except Exception as e:
+        except (OSError, RuntimeError, TorchUnpicklingError) as e:
             logger.error(f"Error loading best checkpoint from {best_ckpt.path}: {e}")
-            raise CheckpointError(
+            raise CheckpointLoadError(
                 f"Failed to load best checkpoint from {best_ckpt.path}: {e}"
             ) from e
 
