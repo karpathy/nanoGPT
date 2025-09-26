@@ -5,6 +5,9 @@ from ml_playground.config import DeviceKind
 from ml_playground.model import GPT
 
 
+__all__ = ["EMA"]
+
+
 class EMA:
     """Maintain an exponential moving average (EMA) of model parameters."""
 

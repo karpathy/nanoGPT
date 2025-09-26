@@ -8,6 +8,9 @@ from ml_playground.data import SimpleBatches
 from ml_playground.model import GPT
 
 
+__all__ = ["estimate_loss"]
+
+
 @torch.no_grad()
 def estimate_loss(
     model: GPT, batches: SimpleBatches, eval_iters: int, ctx: Any

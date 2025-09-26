@@ -11,6 +11,9 @@ from ml_playground.error_handling import CheckpointError
 from ml_playground.logging_protocol import LoggerLike
 
 
+__all__ = ["Checkpoint", "CheckpointManager"]
+
+
 def _atomic_save(obj: Any, path: Path, atomic: bool) -> None:
     """Persist an object to disk, optionally using an atomic rename step."""
     if atomic:

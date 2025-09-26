@@ -3,6 +3,9 @@ from __future__ import annotations
 import math
 
 
+__all__ = ["get_lr"]
+
+
 def get_lr(
     it: int, *, warmup: int, decay_iters: int, min_lr: float, base_lr: float
 ) -> float:

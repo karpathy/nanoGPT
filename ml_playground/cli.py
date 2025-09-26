@@ -23,6 +23,9 @@ import ml_playground.trainer as trainer_mod
 # (Removed unused type aliases)
 
 
+__all__ = ["main"]
+
+
 # --- Global device setup ---------------------------------------------------
 def _global_device_setup(device: str, dtype: str, seed: int) -> None:
     """Set global seeds and enable TF32 as needed.

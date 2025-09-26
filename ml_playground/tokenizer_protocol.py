@@ -3,6 +3,9 @@ from __future__ import annotations
 from typing import Protocol, List, Mapping
 
 
+__all__ = ["Tokenizer"]
+
+
 class Tokenizer(Protocol):
     """Protocol for tokenizers that can encode/decode text to/from token IDs."""
 

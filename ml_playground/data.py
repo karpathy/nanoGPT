@@ -12,6 +12,9 @@ import torch
 from ml_playground.config import DataConfig, DeviceKind
 
 
+__all__ = ["SimpleBatches"]
+
+
 @dataclass
 class _MemmapReader:
     arr: npt.NDArray[Any]
