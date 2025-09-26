@@ -805,30 +805,9 @@ def test_run_loop_calls_in_order_and_handles_print_errors(
     monkeypatch.setattr(sampler_mod, "Sampler", FakeSampler)
 
     # Configs
-    from ml_playground.config import (
-        ModelConfig,
-        DataConfig,
-        OptimConfig,
-        LRSchedule,
-    )
+    from tests.support import create_basic_configs
 
-    prep_cfg = PreparerConfig()
-    tcfg = TrainerConfig(
-        model=ModelConfig(),
-        data=DataConfig(),
-        optim=OptimConfig(),
-        schedule=LRSchedule(),
-        runtime=RuntimeConfig(out_dir=tmp_path),
-    )
-    scfg = SamplerConfig(runtime=RuntimeConfig(out_dir=tmp_path), sample=SampleConfig())
-    shared = SharedConfig(
-        experiment="exp",
-        config_path=tmp_path / "cfg.toml",
-        project_home=tmp_path,
-        dataset_dir=tmp_path,
-        train_out_dir=tmp_path,
-        sample_out_dir=tmp_path,
-    )
+    prep_cfg, tcfg, scfg, shared = create_basic_configs(tmp_path)
 
     # Should not raise; ensure order prepare -> train -> sample
     cli._run_loop("exp", tmp_path / "cfg.toml", prep_cfg, tcfg, scfg, shared)
