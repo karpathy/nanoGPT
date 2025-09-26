@@ -402,7 +402,7 @@ def _run_train_cmd(experiment: str, exp_config_path: Path | None) -> None:
     """Run train command: load full ExperimentConfig once and pass section."""
     exp = _load_experiment(experiment, exp_config_path)
     train_meta = exp.shared.dataset_dir / "meta.pkl"
-    if not config_loader.fs_path_exists(train_meta):
+    if not train_meta.exists():
         raise ValueError(
             f"Missing required meta file for training: {train_meta}.\n"
             "Run 'prepare' first or ensure your preparer writes meta.pkl."
@@ -416,10 +416,7 @@ def _run_sample_cmd(experiment: str, exp_config_path: Path | None) -> None:
     # E1.2/E5: Validate meta existence for sample using SharedConfig only
     train_meta = exp.shared.dataset_dir / "meta.pkl"
     runtime_meta = exp.shared.sample_out_dir / experiment / "meta.pkl"
-    if not (
-        config_loader.fs_path_exists(train_meta)
-        or config_loader.fs_path_exists(runtime_meta)
-    ):
+    if not (train_meta.exists() or runtime_meta.exists()):
         raise ValueError(
             "Missing required meta file for sampling. Checked: "
             f"train.meta={train_meta}, runtime.meta={runtime_meta}.\n"

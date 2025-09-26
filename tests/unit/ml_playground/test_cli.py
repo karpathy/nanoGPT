@@ -67,7 +67,7 @@ def test_main_prepare_shakespeare_success(mocker: MockerFixture) -> None:
 
 def test_main_sample_missing_meta_fails(tmp_path: Path, mocker: MockerFixture) -> None:
     """Sample should fail fast when neither train meta nor runtime meta exist."""
-    mocker.patch("ml_playground.config_loader.fs_path_exists", return_value=False)
+    mocker.patch("pathlib.Path.exists", return_value=False)
     shared = SharedConfig(
         experiment="shakespeare",
         config_path=Path("config.toml"),
@@ -147,7 +147,7 @@ def test_main_prepare_unknown_dataset_fails(
 def test_main_train_success(tmp_path: Path, mocker: MockerFixture) -> None:
     """Test train command auto-resolves config for experiment and calls train (strict loader)."""
     # E1.2: mock meta existence
-    mocker.patch("ml_playground.config_loader.fs_path_exists", return_value=True)
+    mocker.patch("pathlib.Path.exists", return_value=True)
     mock_run = mocker.patch("ml_playground.cli._run_train")
     shared = SharedConfig(
         experiment="shakespeare",
@@ -195,7 +195,7 @@ def test_main_train_no_train_block_fails(
 def test_main_sample_success(tmp_path: Path, mocker: MockerFixture) -> None:
     """Test sample command auto-resolves config and calls sample function (strict loader)."""
     # E1.2: mock meta discovery success
-    mocker.patch("ml_playground.config_loader.fs_path_exists", return_value=True)
+    mocker.patch("pathlib.Path.exists", return_value=True)
     mock_sample_cfg = SamplerConfig(
         runtime=RuntimeConfig(out_dir=Path("out")),
         sample=SampleConfig(start="x"),
@@ -849,7 +849,7 @@ def test_sample_routes_to_injected_sampler(
     # Patch the unified run path; we don't want to import heavy experiment deps
     run_sample = mocker.patch("ml_playground.cli._run_sample")
     # E1.2: mock meta discovery to avoid filesystem dependency
-    mocker.patch("ml_playground.config_loader.fs_path_exists", return_value=True)
+    mocker.patch("pathlib.Path.exists", return_value=True)
 
     # Also ensure legacy entrypoint is NOT consulted anymore
     called = {"count": 0}
