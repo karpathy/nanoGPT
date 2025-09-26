@@ -84,7 +84,8 @@ def run_or_exit(
         raise typer.Exit(exception_exit_code)
     except KeyboardInterrupt:
         if keyboard_interrupt_msg:
-            print(keyboard_interrupt_msg)
+            logger = logging.getLogger(__name__)
+            logger.info(keyboard_interrupt_msg)
         # Do not exit on KeyboardInterrupt in this helper
         return
     except (RuntimeError, OSError, ImportError, SystemError, ConnectionError) as e:

@@ -587,16 +587,17 @@ def test_extract_exp_config_edge_cases():
 
 
 # Removed legacy cache/loader tests tied to ensure_loaded() (no longer present)
-def test_run_or_exit_keyboard_interrupt_with_message(capsys):
+def test_run_or_exit_keyboard_interrupt_with_message(caplog: pytest.LogCaptureFixture):
+    caplog.set_level(logging.INFO, logger="ml_playground.cli")
+
     def boom():  # noqa: D401
         raise KeyboardInterrupt()
 
-    # Should print provided message and not re-raise as typer.Exit
+    # Should log provided message and not re-raise as typer.Exit
     cli.run_or_exit(
         boom, keyboard_interrupt_msg="\nInterrupted!", exception_exit_code=9
     )
-    out = capsys.readouterr().out
-    assert "Interrupted!" in out
+    assert "Interrupted!" in caplog.messages[-1]
 
 
 def test_run_or_exit_keyboard_interrupt_no_message(capsys):

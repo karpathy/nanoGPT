@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import logging
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping
 import importlib
@@ -148,9 +149,10 @@ def run_server_bundestag_char(
         raise RuntimeError(f"Failed to build LIT app: {e}") from e
 
     url = f"http://{host}:{port if port else '<auto>'}"
-    print("[LIT] Registered models:", ", ".join(models.keys()))
-    print("[LIT] Registered datasets:", ", ".join(datasets.keys()))
-    print(f"[LIT] Starting server at {url}")
+    logger = logging.getLogger(__name__)
+    logger.info(f"Registered models: {', '.join(models.keys())}")
+    logger.info(f"Registered datasets: {', '.join(datasets.keys())}")
+    logger.info(f"Starting server at {url}")
     sys.stdout.flush()
 
     # Start server with maximum compatibility across LIT versions
@@ -164,26 +166,26 @@ def run_server_bundestag_char(
         tried_calls.append(f"{target.__class__.__name__}.{name}")
         try:
             fn(app, port=port, host=host, open_browser=open_browser)
-            print(
-                f"[LIT] Started via {name}(app, port=..., host=..., open_browser=...)"
+            logger.info(
+                f"Started via {name}(app, port=..., host=..., open_browser=...)"
             )
             return True
         except TypeError:
             try:
                 fn(app, port, host)
-                print(f"[LIT] Started via {name}(app, port, host)")
+                logger.info(f"Started via {name}(app, port, host)")
                 return True
             except TypeError:
                 try:
                     fn(port=port, host=host, open_browser=open_browser)
-                    print(
-                        f"[LIT] Started via {name}(port=..., host=..., open_browser=...)"
+                    logger.info(
+                        f"Started via {name}(port=..., host=..., open_browser=...)"
                     )
                     return True
                 except TypeError:
                     try:
                         fn(port, host)
-                        print(f"[LIT] Started via {name}(port, host)")
+                        logger.info(f"Started via {name}(port, host)")
                         return True
                     except Exception:
                         return False
@@ -203,15 +205,15 @@ def run_server_bundestag_char(
             tried_calls.append(f"app.{fname}")
             try:
                 fn(port=port, host=host, open_browser=open_browser)  # type: ignore[misc]
-                print(
-                    f"[LIT] Started via app.{fname}(port=..., host=..., open_browser=...)"
+                logger.info(
+                    f"Started via app.{fname}(port=..., host=..., open_browser=...)"
                 )
                 started = True
                 break
             except TypeError:
                 try:
                     fn(port, host)  # type: ignore[misc]
-                    print(f"[LIT] Started via app.{fname}(port, host)")
+                    logger.info(f"Started via app.{fname}(port, host)")
                     started = True
                     break
                 except Exception:
@@ -224,8 +226,8 @@ def run_server_bundestag_char(
 
             # 3a) Try the object itself as a WSGI application
             try:
-                print(
-                    "[LIT] Fallback: starting via werkzeug.run_simple(...) using app as WSGI application"
+                logger.info(
+                    "Fallback: starting via werkzeug.run_simple(...) using app as WSGI application"
                 )
                 run_simple(hostname=host, port=port or 5432, application=app)  # blocks
                 started = True
@@ -233,8 +235,8 @@ def run_server_bundestag_char(
                 # 3b) Try a nested .app attribute (common Flask pattern)
                 if hasattr(app, "app"):
                     wsgi_app = getattr(app, "app")
-                    print(
-                        "[LIT] Fallback: starting via werkzeug.run_simple(...) using app.app as WSGI application"
+                    logger.info(
+                        "Fallback: starting via werkzeug.run_simple(...) using app.app as WSGI application"
                     )
                     run_simple(
                         hostname=host, port=port or 5432, application=wsgi_app
