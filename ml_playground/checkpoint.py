@@ -174,13 +174,13 @@ class CheckpointManager:
             iter_str = parts[-1]
             try:
                 it = int(iter_str)
-            except Exception as e:
+            except ValueError as e:
                 raise CheckpointError(
                     f"Could not parse iteration from last-checkpoint filename {p.name}: {e}"
                 ) from e
             try:
                 created = p.stat().st_mtime
-            except Exception as e:
+            except OSError as e:
                 raise CheckpointError(f"Failed to stat checkpoint file {p}: {e}") from e
             self.last_checkpoints.append(_CkptInfo(p, float("inf"), it, created))
         for p in sorted(self.out_dir.glob("ckpt_best_*.pt")):
@@ -190,7 +190,7 @@ class CheckpointManager:
                 raise CheckpointError(f"Malformed best-checkpoint filename: {p.name}")
             try:
                 it = int(parts[2])
-            except Exception as e:
+            except ValueError as e:
                 raise CheckpointError(
                     f"Could not parse iteration from best-checkpoint filename {p.name}: {e}"
                 ) from e
@@ -198,13 +198,13 @@ class CheckpointManager:
             if len(parts) >= 4:
                 try:
                     metric = float(parts[3])
-                except Exception as e:
+                except ValueError as e:
                     raise CheckpointError(
                         f"Could not parse metric from best-checkpoint filename {p.name}: {e}"
                     ) from e
             try:
                 created = p.stat().st_mtime
-            except Exception as e:
+            except OSError as e:
                 raise CheckpointError(f"Failed to stat checkpoint file {p}: {e}") from e
             self.best_checkpoints.append(_CkptInfo(p, metric, it, created))
 
@@ -244,7 +244,7 @@ class CheckpointManager:
                 try:
                     old.path.unlink()
                     logger.info(f"Removed old last checkpoint: {old.path}")
-                except Exception as e:
+                except OSError as e:
                     raise CheckpointError(
                         f"Failed to remove old last checkpoint {old.path}: {e}"
                     ) from e
@@ -274,7 +274,7 @@ class CheckpointManager:
                         if sidecar.exists():
                             sidecar.unlink()
                         logger.info(f"Removed old best checkpoint: {ckpt.path}")
-                    except Exception as e:
+                    except OSError as e:
                         raise CheckpointError(
                             f"Failed to remove old best checkpoint {ckpt.path}: {e}"
                         ) from e

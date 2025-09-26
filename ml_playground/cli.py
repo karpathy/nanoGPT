@@ -85,7 +85,7 @@ def run_or_exit(
             print(keyboard_interrupt_msg)
         # Do not exit on KeyboardInterrupt in this helper
         return
-    except Exception as e:
+    except (RuntimeError, OSError, ImportError, SystemError, ConnectionError) as e:
         # Generic mapping for unexpected exceptions: echo and exit with provided code
         print(f"[error] {e}")
         raise typer.Exit(exception_exit_code)
