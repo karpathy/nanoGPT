@@ -117,20 +117,13 @@ class Sampler:
         return model
 
     def _setup_tokenizer(self):
-        """Load tokenizer metadata from the sampling or dataset directories."""
-        # Try the sampling out_dir first (preferred location for propagated metadata)
+        """Load tokenizer metadata from the sampling output directory."""
         tokenizer = setup_tokenizer(self.out_dir)
         if tokenizer:
             return tokenizer
-        # Fallback: try dataset_dir to find meta if not propagated yet
-        tokenizer = setup_tokenizer(self.shared.dataset_dir)
-        if tokenizer:
-            return tokenizer
         raise DataError(
-            f"Tokenizer metadata not found. Expected 'meta.pkl' in one of these locations:\n"
-            f"  - {self.out_dir} (sampling output directory)\n"
-            f"  - {self.shared.dataset_dir} (dataset directory)\n"
-            f"Run 'prepare' first to create the required metadata file, or ensure meta.pkl exists in one of the expected locations."
+            f"Tokenizer metadata not found in sampling output directory: {self.out_dir}.\n"
+            "Expected 'meta.pkl' to exist. Run 'train' first to propagate metadata to the sampling directory."
         )
 
     def _get_start_ids(self) -> list[int]:

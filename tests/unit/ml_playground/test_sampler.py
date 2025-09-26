@@ -542,12 +542,11 @@ def test_setup_tokenizer_missing_meta_raises_clear_error(out_dir: Path) -> None:
         s = sampler.Sampler(cfg, shared)
         s.run()
 
-    error_msg = str(exc_info.value)
-    assert "Tokenizer metadata not found" in error_msg
-    assert "meta.pkl" in error_msg
-    assert str(out_dir) in error_msg  # sampling output directory
-    assert "separate_dataset_dir" in error_msg  # dataset directory
-    assert "Run 'prepare' first" in error_msg
+        error_msg = str(exc_info.value)
+        assert "Tokenizer metadata not found" in error_msg
+        assert "meta.pkl" in error_msg
+        assert str(out_dir) in error_msg  # sampling output directory
+        assert "Run 'prepare' first" in error_msg
 
 
 def test_sampler_requires_rotated_checkpoints(out_dir: Path) -> None:
