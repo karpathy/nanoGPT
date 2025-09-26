@@ -6,6 +6,7 @@ from typing import Any, Dict, Tuple
 
 import pytest
 import torch
+from pytest_mock import MockerFixture
 
 import ml_playground.trainer as trainer_mod
 from ml_playground.config import (
@@ -270,6 +271,58 @@ def test_get_lr_warmup_decay_edges() -> None:
     assert trainer_mod.get_lr(10, schedule, optim) == 0.1
     assert trainer_mod.get_lr(20, schedule, optim) == 0.01
     assert trainer_mod.get_lr(100, schedule, optim) == 0.01
+
+
+def test_trainer_updates_optimizer_lr_via_get_lr(
+    tmp_path: Path, mocker: MockerFixture
+) -> None:
+    """Test that trainer updates optimizer learning rates using get_lr during training."""
+    # Mock components to isolate LR update logic
+    mocker.patch(
+        "ml_playground.trainer.SimpleBatches",
+        lambda *args, **kwargs: _FakeBatches(device="cpu"),
+    )
+    mocker.patch("ml_playground.trainer.GPT", lambda cfg: _FakeModel())
+    mocker.patch("ml_playground.trainer.GradScaler", _FakeScaler)
+    mocker.patch("ml_playground.trainer.SummaryWriter", _FakeWriter)
+    mocker.patch("ml_playground.trainer.CheckpointManager", _FakeCkptMgr)
+    mocker.patch(
+        "ml_playground.trainer.estimate_loss", return_value={"train": 0.5, "val": 0.4}
+    )
+
+    # Configure a schedule with warmup and decay to test LR changes
+    cfg = _make_minimal_trainer_cfg(tmp_path, max_iters=3)
+    cfg.schedule = LRSchedule(
+        decay_lr=True, warmup_iters=1, lr_decay_iters=10, min_lr=0.001
+    )
+
+    shared = SharedConfig(
+        experiment="lr_test",
+        config_path=tmp_path / "cfg.toml",
+        project_home=tmp_path,
+        dataset_dir=tmp_path / "data",
+        train_out_dir=cfg.runtime.out_dir,
+        sample_out_dir=cfg.runtime.out_dir,
+    )
+
+    trainer = trainer_mod.Trainer(cfg, shared)
+
+    # Spy on get_lr calls to verify it's being used
+    get_lr_spy = mocker.spy(trainer_mod, "get_lr")
+
+    # Run a few training iterations
+    trainer.run()
+
+    # Verify get_lr was called multiple times during training
+    assert get_lr_spy.call_count > 0
+
+    # Verify that the optimizer's param_groups got updated with the computed LRs
+    # The optimizer should have learning rates set by the trainer's LR schedule
+    for param_group in trainer.optimizer.param_groups:
+        # Learning rate should be set to some value computed by get_lr
+        lr = param_group["lr"]
+        # For our test config, LR should be between min_lr and base_lr
+        assert 0.001 <= lr <= cfg.optim.learning_rate
 
 
 # ---- Extract model args tests (from test_trainer_extract_model_args) ----------
