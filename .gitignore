@@ -24,23 +24,23 @@ __pycache__/
 *.gguf
 *.ggml
 *.weights
-*.pyc
-env/
 **/.venv*/
 
 # Project artifacts and caches
 out/
 .pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
 .hypothesis/
+.hypothesis_cache/
+.coverage
+htmlcov/
 
+# Mutation testing
+mutants/
+{{ ... }}
 
 logs/
 **/logs/
 tb_logs/
-tensorboard/
 **/tensorboard/
 events.out.tfevents.*
 
