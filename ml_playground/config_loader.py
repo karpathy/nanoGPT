@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, Mapping, TypedDict, cast
 
 import tomllib
 
@@ -60,7 +60,23 @@ def list_experiments_with_config(prefix: str = "") -> list[str]:
         return []
 
 
-def read_toml_dict(path: Path) -> dict[str, Any]:
+TomlMapping = Dict[str, Any]
+
+
+class ExperimentPayload(TypedDict, total=False):
+    shared: TomlMapping
+    prepare: TomlMapping
+    train: TomlMapping
+    sample: TomlMapping
+
+
+def _ensure_mapping(value: Any, context: str) -> TomlMapping:
+    if not isinstance(value, Mapping):
+        raise TypeError(f"Expected mapping for {context}")
+    return dict(value)
+
+
+def read_toml_dict(path: Path) -> TomlMapping:
     """Read a TOML document from disk into a dictionary.
 
     Args:
@@ -77,11 +93,14 @@ def read_toml_dict(path: Path) -> dict[str, Any]:
         raise FileNotFoundError(f"Config file not found: {path}")
     text = path.read_text(encoding="utf-8")
     try:
-        return tomllib.loads(text)
+        data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as e:
         # Include the filename in the error message for clearer diagnostics
         # and to satisfy tests that assert the offending filename is present.
         raise Exception(f"{path.name}: {e}")
+    if not isinstance(data, dict):
+        raise TypeError(f"TOML root in {path} must be a mapping")
+    return cast(TomlMapping, data)
 
 
 def _default_config_path_from_root(project_root: Path) -> Path:
@@ -89,21 +108,21 @@ def _default_config_path_from_root(project_root: Path) -> Path:
     return project_root / "ml_playground" / "experiments" / "default_config.toml"
 
 
-def deep_merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+def deep_merge_dicts(base: TomlMapping, override: TomlMapping) -> TomlMapping:
     """Recursively merge two dictionaries preferring values from ``override``."""
-    out: dict[str, Any] = dict(base)
+    out: TomlMapping = dict(base)
     for k, v in override.items():
         existing = out.get(k)
         if isinstance(existing, dict) and isinstance(v, dict):
             out[k] = deep_merge_dicts(existing, v)
         else:
-            out[k] = v
+            out[k] = deepcopy(v)
     return out
 
 
 def _load_and_merge_configs(
     config_path: Path, project_home: Path, experiment_name: str
-) -> dict[str, Any]:
+) -> ExperimentPayload:
     """Load and merge configurations from default, experiment, and .ldres files."""
     if not config_path.exists():
         raise FileNotFoundError(f"Config file not found: {config_path}")
@@ -128,45 +147,51 @@ def _load_and_merge_configs(
     # - Only merge defaults into sections that are explicitly present in the experiment config
     # - Within a present section, only merge keys that are also present in the experiment section
     #   (do not introduce missing subsections from defaults).
-    def _merge_present(dflt: dict[str, Any], exp: dict[str, Any]) -> dict[str, Any]:
-        out: dict[str, Any] = {}
-        for key, exp_val in exp.items():
-            if (
-                key in dflt
-                and isinstance(dflt[key], dict)
-                and isinstance(exp_val, dict)
-            ):
-                out[key] = _merge_present(deepcopy(dflt[key]), deepcopy(exp_val))
+    def _merge_present(
+        dflt: Mapping[str, Any], exp: Mapping[str, Any], ctx: str
+    ) -> TomlMapping:
+        defaults_map = _ensure_mapping(dflt, f"defaults for {ctx}")
+        exp_map = _ensure_mapping(exp, ctx)
+        out: TomlMapping = {}
+        for key, exp_val in exp_map.items():
+            default_val = defaults_map.get(key)
+            if isinstance(default_val, Mapping) and isinstance(exp_val, Mapping):
+                out[key] = _merge_present(
+                    default_val,
+                    exp_val,
+                    f"{ctx}.{key}" if ctx else key,
+                )
             else:
-                # Prefer experiment value; do not add defaults-only keys
                 out[key] = deepcopy(exp_val)
         return out
 
-    merged: dict[str, Any] = {}
+    merged: TomlMapping = {}
     for k, v in raw_exp.items():
         dv = defaults_raw.get(k)
-        if isinstance(v, dict) and isinstance(dv, dict):
-            merged[k] = _merge_present(dv, v)
+        if isinstance(v, Mapping) and isinstance(dv, Mapping):
+            merged[k] = _merge_present(dv, v, f"experiment[{k}]")
         else:
             merged[k] = deepcopy(v)
 
     # Apply .ldres overrides last. This may add keys, but typical test scenarios do not rely on .ldres.
-    return deep_merge_dicts(merged, deepcopy(ldres_raw))
+    merged_payload = deep_merge_dicts(merged, ldres_raw)
+    return cast(ExperimentPayload, merged_payload)
 
 
 def load_full_experiment_config(
     config_path: Path, project_home: Path, experiment_name: str
 ) -> ExperimentConfig:
-    """Load and validate the full experiment configuration object."""
+    """Load and validate the fully merged experiment configuration."""
+
     effective_config = _load_and_merge_configs(
         config_path, project_home, experiment_name
     )
 
-    # Populated by the model validator
-    effective_config.setdefault("shared", {})
-    effective_config["shared"]["config_path"] = config_path
-    effective_config["shared"]["project_home"] = project_home
-    effective_config["shared"]["experiment"] = experiment_name
+    shared = _ensure_mapping(effective_config.setdefault("shared", {}), "[shared]")
+    shared["config_path"] = config_path
+    shared["project_home"] = project_home
+    shared["experiment"] = experiment_name
+    effective_config["shared"] = shared
 
     return ExperimentConfig.model_validate(effective_config)
 
@@ -181,7 +206,10 @@ def load_train_config(config_path: Path) -> TrainerConfig:
     raw_merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
 
     # The train config expects a 'train' section.
-    train_data = raw_merged.get("train", {})
+    train_data = _ensure_mapping(
+        raw_merged.get("train", {}),
+        "[train] section",
+    )
 
     # Pass config_path in context for path resolution
     context = {"config_path": config_path}
@@ -214,7 +242,10 @@ def load_sample_config(config_path: Path) -> SamplerConfig:
     if "sample" not in raw_exp:
         raise ValueError("Config must contain a [sample] section")
 
-    sample_data = raw_merged.get("sample", {})
+    sample_data = _ensure_mapping(
+        raw_merged.get("sample", {}),
+        "[sample] section",
+    )
 
     context = {"config_path": config_path}
     cfg = SamplerConfig.model_validate(sample_data, context=context)
@@ -236,7 +267,10 @@ def load_prepare_config(path: Path) -> PreparerConfig:
     if "prepare" not in raw_merged:
         raise ValueError("Config must contain a [prepare] section")
 
-    prepare_data = raw_merged.get("prepare", {})
+    prepare_data = _ensure_mapping(
+        raw_merged.get("prepare", {}),
+        "[prepare] section",
+    )
 
     context = {"config_path": path}
     cfg = PreparerConfig.model_validate(prepare_data, context=context)
