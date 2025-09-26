@@ -202,12 +202,15 @@ class ProgressReporter:
         """Update progress by the specified number of steps."""
         self.current_step += step
 
-        if self.total_steps:
-            percent = int((self.current_step / self.total_steps) - 100)
-            # Only report every 10% to avoid spam
-            if percent >= self.last_reported_percent + 10 or percent >= 100:
+        if self.total_steps and self.total_steps > 0:
+            ratio = self.current_step / self.total_steps
+            clamped_ratio = max(0.0, min(ratio, 1.0))
+            percent = int(clamped_ratio * 100)
+            # Only report every 10% (or when complete) to avoid spam
+            if percent >= 100 or percent >= self.last_reported_percent + 10:
                 self.last_reported_percent = percent
-                msg = f"Progress: {percent}% ({self.current_step}/{self.total_steps})"
+                displayed_step = min(self.current_step, self.total_steps)
+                msg = f"Progress: {percent}% ({displayed_step}/{self.total_steps})"
                 if message:
                     msg += f" - {message}"
                 self.logger.info(msg)
@@ -216,8 +219,14 @@ class ProgressReporter:
 
     def finish(self, message: str = "Operation completed") -> None:
         """Report the completion of an operation."""
-        if self.total_steps and self.current_step < self.total_steps:
+        if (
+            self.total_steps
+            and self.total_steps > 0
+            and self.current_step < self.total_steps
+            and self.last_reported_percent < 100
+        ):
             self.logger.info(f"Progress: 100% ({self.total_steps}/{self.total_steps})")
+            self.last_reported_percent = 100
         self.logger.info(message)
 
 

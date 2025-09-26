@@ -116,19 +116,44 @@ def test_format_error_message():
     assert "ctx" in msg2 and "nope" in msg2
 
 
-def test_progress_reporter_and_log_helpers(caplog: pytest.LogCaptureFixture):
+def test_progress_reporter_percentages(caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.INFO)
-    logger = logging.getLogger("ml_pg_progress")
+    logger = logging.getLogger("ml_pg_progress_percent")
     pr = ProgressReporter(logger=logger, total_steps=5)
+
     pr.start("Start")
-    pr.update(step=2, message="doing")
-    pr.update(step=3)
-    pr.finish("Done")
+    pr.update(step=1, message="warming up")  # 20%
+    pr.update(step=1)  # 40%
+    pr.update(step=2, message="main work")  # 80%
+    pr.finish("Done")  # should emit 100% because we are short of total
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert "Start..." in messages[0]
+    assert "Progress: 20% (1/5) - warming up" in messages
+    assert "Progress: 40% (2/5)" in messages
+    assert "Progress: 80% (4/5) - main work" in messages
+    assert "Progress: 100% (5/5)" in messages
+    assert messages[-1] == "Done"
+
+
+def test_progress_reporter_clamps_and_log_helpers(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO)
+    logger = logging.getLogger("ml_pg_progress_clamp")
+    pr = ProgressReporter(logger=logger, total_steps=4)
+
+    pr.start()
+    pr.update(step=6)  # exceeds total -> clamp at 100%
+    pr.finish("Finished")  # Should not duplicate 100% log
+
+    messages = [record.getMessage() for record in caplog.records]
+    progress_msgs = [m for m in messages if "Progress" in m]
+    assert progress_msgs.count("Progress: 100% (4/4)") == 1
 
     log_operation_start(logger, "op", details="d")
     log_operation_progress(logger, "op", progress="50%")
     log_operation_complete(logger, "op", result="ok")
     log_operation_error(logger, "op", error=RuntimeError("x"))
 
-    # ensure messages appeared; not asserting exact text to keep stable
-    assert caplog.records
+    assert "Starting op: d" in messages or any("Starting op" in m for m in messages)
