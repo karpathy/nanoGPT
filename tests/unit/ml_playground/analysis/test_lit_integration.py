@@ -4,7 +4,7 @@ import pytest
 from types import ModuleType
 from unittest.mock import patch
 
-from ml_playground.analysis import run_server_bundestag_char
+from ml_playground.analysis.lit.integration import run_server_bundestag_char
 
 
 @pytest.mark.integration
