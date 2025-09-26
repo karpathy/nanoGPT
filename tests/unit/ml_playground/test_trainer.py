@@ -163,7 +163,7 @@ def test_train_eval_only_breaks_early_and_returns(
     monkeypatch.setattr(
         trainer_mod, "SimpleBatches", lambda *args, **kwargs: _FakeBatches(device="cpu")
     )
-    monkeypatch.setattr(trainer_mod, "GPT", lambda cfg: _FakeModel())
+    monkeypatch.setattr(trainer_mod, "GPT", lambda cfg, logger=None: _FakeModel())
     monkeypatch.setattr(trainer_mod, "GradScaler", _FakeScaler)
     monkeypatch.setattr(trainer_mod, "SummaryWriter", _FakeWriter)
     monkeypatch.setattr(trainer_mod, "CheckpointManager", _FakeCkptMgr)
@@ -191,7 +191,7 @@ def test_train_writes_best_checkpoint_on_improvement_after_first_iter(
     monkeypatch.setattr(
         trainer_mod, "SimpleBatches", lambda *args, **kwargs: _FakeBatches(device="cpu")
     )
-    monkeypatch.setattr(trainer_mod, "GPT", lambda cfg: _FakeModel())
+    monkeypatch.setattr(trainer_mod, "GPT", lambda cfg, logger=None: _FakeModel())
     monkeypatch.setattr(trainer_mod, "GradScaler", _FakeScaler)
     monkeypatch.setattr(trainer_mod, "SummaryWriter", _FakeWriter)
     fake_mgr = _FakeCkptMgr()
@@ -281,7 +281,7 @@ def test_trainer_updates_optimizer_lr_via_get_lr(
         "ml_playground.trainer.SimpleBatches",
         lambda *args, **kwargs: _FakeBatches(device="cpu"),
     )
-    mocker.patch("ml_playground.trainer.GPT", lambda cfg: _FakeModel())
+    mocker.patch("ml_playground.trainer.GPT", lambda cfg, logger=None: _FakeModel())
     mocker.patch("ml_playground.trainer.GradScaler", _FakeScaler)
     mocker.patch("ml_playground.trainer.SummaryWriter", _FakeWriter)
     mocker.patch("ml_playground.trainer.CheckpointManager", _FakeCkptMgr)

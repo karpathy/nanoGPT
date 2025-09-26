@@ -107,7 +107,7 @@ class Sampler:
     def _init_model_from_checkpoint(self, checkpoint: Checkpoint) -> GPT:
         """Rebuild a `GPT` instance from checkpointed weights and metadata."""
         model_cfg = ModelConfig(**checkpoint.model_args)
-        model = GPT(model_cfg)
+        model = GPT(model_cfg, self.logger)
         model.load_state_dict(checkpoint.model, strict=False)
         model.eval()
         model.to(self.runtime_cfg.device)

@@ -113,7 +113,7 @@ class Trainer:
     def _setup_model(self) -> tuple[GPT, torch.optim.Optimizer]:
         """Materialize the GPT model and its optimizer with configured hyperparameters."""
         self.logger.info("Initializing model and optimizer")
-        model = GPT(self.cfg.model)
+        model = GPT(self.cfg.model, logger=self.logger)
         model.to(self.cfg.runtime.device)
         optimizer = model.configure_optimizers(
             self.cfg.optim.weight_decay,

@@ -65,7 +65,9 @@ def test_main_prepare_shakespeare_success(mocker: MockerFixture) -> None:
     mock_run.assert_called_once()
 
 
-def test_main_sample_missing_meta_fails(tmp_path: Path, mocker: MockerFixture) -> None:
+def test_main_sample_missing_meta_fails(
+    tmp_path: Path, mocker: MockerFixture, caplog: pytest.LogCaptureFixture
+) -> None:
     """Sample should fail fast when neither train meta nor runtime meta exist."""
     mocker.patch("pathlib.Path.exists", return_value=False)
     shared = SharedConfig(
@@ -95,7 +97,7 @@ def test_main_sample_missing_meta_fails(tmp_path: Path, mocker: MockerFixture) -
     )
     result = runner.invoke(app, ["sample", "shakespeare"])
     assert result.exit_code == 1
-    assert "Missing required meta file for sampling" in result.stdout
+    assert "Missing required meta file for sampling" in caplog.messages[-1]
 
 
 def test_main_prepare_bundestag_char_success(mocker: MockerFixture) -> None:
@@ -132,7 +134,7 @@ def test_main_prepare_bundestag_char_success(mocker: MockerFixture) -> None:
 
 
 def test_main_prepare_unknown_dataset_fails(
-    mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
+    mocker: MockerFixture, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Unknown experiment should surface as a CLI error exit."""
     mocker.patch(
@@ -141,7 +143,7 @@ def test_main_prepare_unknown_dataset_fails(
     )
     result = runner.invoke(app, ["prepare", "unknown"])
     assert result.exit_code == 1
-    assert "Config not found" in result.stdout
+    assert "Config not found" in caplog.messages[-1]
 
 
 def test_main_train_success(tmp_path: Path, mocker: MockerFixture) -> None:
@@ -180,7 +182,7 @@ def test_main_train_success(tmp_path: Path, mocker: MockerFixture) -> None:
 
 
 def test_main_train_no_train_block_fails(
-    tmp_path: Path, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, mocker: MockerFixture, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Test train command fails when strict loader raises."""
     mocker.patch(
@@ -189,7 +191,7 @@ def test_main_train_no_train_block_fails(
     )
     result = runner.invoke(app, ["train", "shakespeare"])
     assert result.exit_code == 1
-    assert "Missing train config" in result.stdout
+    assert "Missing train config" in caplog.messages[-1]
 
 
 def test_main_sample_success(tmp_path: Path, mocker: MockerFixture) -> None:
@@ -230,7 +232,7 @@ def test_main_sample_success(tmp_path: Path, mocker: MockerFixture) -> None:
 
 
 def test_main_sample_no_sample_block_fails(
-    tmp_path: Path, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, mocker: MockerFixture, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Test sample command fails when strict loader raises."""
     mocker.patch(
@@ -239,7 +241,7 @@ def test_main_sample_no_sample_block_fails(
     )
     result = runner.invoke(app, ["sample", "shakespeare"])
     assert result.exit_code == 1
-    assert "Missing sample config" in result.stdout
+    assert "Missing sample config" in caplog.messages[-1]
 
 
 def test_main_loop_success(tmp_path: Path, mocker: MockerFixture) -> None:
@@ -284,7 +286,9 @@ def test_main_loop_success(tmp_path: Path, mocker: MockerFixture) -> None:
     mock_run.assert_called_once()
 
 
-def test_main_loop_unknown_dataset_fails(tmp_path: Path, mocker: MockerFixture) -> None:
+def test_main_loop_unknown_dataset_fails(
+    tmp_path: Path, mocker: MockerFixture, caplog: pytest.LogCaptureFixture
+) -> None:
     """Unknown experiment should bubble up as CLI error exit."""
     mocker.patch(
         "ml_playground.config_loader.load_full_experiment_config",
@@ -292,11 +296,11 @@ def test_main_loop_unknown_dataset_fails(tmp_path: Path, mocker: MockerFixture) 
     )
     result = runner.invoke(app, ["loop", "shakespeare"])
     assert result.exit_code == 1
-    assert "Config not found" in result.stdout
+    assert "Config not found" in caplog.messages[-1]
 
 
 def test_main_loop_missing_train_block_fails(
-    tmp_path: Path, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, mocker: MockerFixture, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Test loop command fails when strict train loader raises."""
     mocker.patch(
@@ -305,11 +309,11 @@ def test_main_loop_missing_train_block_fails(
     )
     result = runner.invoke(app, ["loop", "shakespeare"])
     assert result.exit_code == 1
-    assert "Missing train config" in result.stdout
+    assert "Missing train config" in caplog.messages[-1]
 
 
 def test_main_loop_missing_sample_block_fails(
-    tmp_path: Path, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, mocker: MockerFixture, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Test loop command fails when strict sample loader raises."""
     mocker.patch(
@@ -318,7 +322,7 @@ def test_main_loop_missing_sample_block_fails(
     )
     result = runner.invoke(app, ["loop", "shakespeare"])
     assert result.exit_code == 1
-    assert "Missing sample config" in result.stdout
+    assert "Missing sample config" in caplog.messages[-1]
 
 
 # Tests for removed functionality (legacy registry usage, direct train/sample calls)
@@ -528,7 +532,7 @@ def test_log_command_status_covers_paths(tmp_path: Path):
         sample_out_dir=out,
     )
     # Should not raise
-    cli._log_command_status("train", shared, out)
+    cli._log_command_status("train", shared, out, logging.getLogger(__name__))
 
     # Sampler with runtime
     shared = SharedConfig(
@@ -539,7 +543,7 @@ def test_log_command_status_covers_paths(tmp_path: Path):
         train_out_dir=out,
         sample_out_dir=out,
     )
-    cli._log_command_status("sample", shared, out)
+    cli._log_command_status("sample", shared, out, logging.getLogger(__name__))
 
 
 def test_log_command_status_missing_paths(tmp_path: Path):
@@ -554,7 +558,7 @@ def test_log_command_status_missing_paths(tmp_path: Path):
         sample_out_dir=out,
     )
     # Should not raise
-    cli._log_command_status("train", shared, out)
+    cli._log_command_status("train", shared, out, logging.getLogger(__name__))
 
 
 def test_extract_exp_config_edge_cases():

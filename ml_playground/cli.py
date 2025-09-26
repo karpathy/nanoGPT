@@ -75,10 +75,12 @@ def run_or_exit(
     try:
         func()
     except FileNotFoundError as e:
-        print(f"[error] {e}")
+        logger = logging.getLogger(__name__)
+        logger.error(f"{e}")
         raise typer.Exit(exception_exit_code)
     except (ValueError, TypeError) as e:
-        print(f"[error] {e}")
+        logger = logging.getLogger(__name__)
+        logger.error(f"{e}")
         raise typer.Exit(exception_exit_code)
     except KeyboardInterrupt:
         if keyboard_interrupt_msg:
@@ -87,7 +89,8 @@ def run_or_exit(
         return
     except (RuntimeError, OSError, ImportError, SystemError, ConnectionError) as e:
         # Generic mapping for unexpected exceptions: echo and exit with provided code
-        print(f"[error] {e}")
+        logger = logging.getLogger(__name__)
+        logger.error(f"{e}")
         raise typer.Exit(exception_exit_code)
 
 
@@ -127,9 +130,10 @@ def _log_dir(tag: str, dir_name: str, dir_path: Path | None, logger) -> None:
 # --- Command runners -------------------------------------------------------
 
 
-def _log_command_status(tag: str, shared: "SharedConfig", out_dir: Path) -> None:
+def _log_command_status(
+    tag: str, shared: "SharedConfig", out_dir: Path, logger
+) -> None:
     """Log known file-based artifacts for the given config."""
-    logger = logging.getLogger(__name__)
     try:
         _log_dir(tag, "out_dir", out_dir, logger)
         _log_dir(tag, "dataset_dir", shared.dataset_dir, logger)
@@ -145,10 +149,10 @@ def _run_prepare(
     shared: Any,
 ) -> None:
     """Run the full prepare flow for an experiment."""
-    print(f"---\nRunning pipeline for experiment: {experiment}")
+    prepare_cfg.logger.info(f"Running pipeline for experiment: {experiment}")
     pipeline = prepare_mod.create_pipeline(prepare_cfg, shared)
     pipeline.run()
-    print(f"Pipeline for {experiment} finished.\n---")
+    prepare_cfg.logger.info(f"Pipeline for {experiment} finished.")
 
 
 def _run_train(
@@ -159,7 +163,7 @@ def _run_train(
 ) -> None:
     """Run the full training flow for an experiment."""
     if not train_cfg.runtime:
-        print("[error] Runtime configuration is missing for training.")
+        train_cfg.logger.error("Runtime configuration is missing for training.")
         raise typer.Exit(1)
 
     _global_device_setup(
@@ -168,15 +172,14 @@ def _run_train(
         train_cfg.runtime.seed,
     )
 
-    print(f"---\nRunning trainer for experiment: {experiment}")
-    _log_command_status("pre-train", shared, shared.train_out_dir)
+    train_cfg.logger.info(f"Running trainer for experiment: {experiment}")
+    _log_command_status("pre-train", shared, shared.train_out_dir, train_cfg.logger)
 
     trainer = trainer_mod.Trainer(train_cfg, shared)
     trainer.run()
 
-    print(f"Trainer for {experiment} finished.")
-    _log_command_status("post-train", shared, shared.train_out_dir)
-    print("---")
+    train_cfg.logger.info(f"Trainer for {experiment} finished.")
+    _log_command_status("post-train", shared, shared.train_out_dir, train_cfg.logger)
 
 
 def _run_sample(
@@ -187,7 +190,7 @@ def _run_sample(
 ) -> None:
     """Run the full sampling flow for an experiment."""
     if not sample_cfg.runtime:
-        print("[error] Runtime configuration is missing for sampling.")
+        sample_cfg.logger.error("Runtime configuration is missing for sampling.")
         raise typer.Exit(1)
 
     # Global setup is now handled inside the Sampler class
@@ -197,13 +200,12 @@ def _run_sample(
         sample_cfg.runtime.seed,
     )
 
-    print(f"---\nRunning sampler for experiment: {experiment}")
-    _log_command_status("pre-sample", shared, shared.sample_out_dir)
+    sample_cfg.logger.info(f"Running sampler for experiment: {experiment}")
+    _log_command_status("pre-sample", shared, shared.sample_out_dir, sample_cfg.logger)
     sampler = sampler_mod.Sampler(sample_cfg, shared)
     sampler.run()
-    print(f"Sampler for {experiment} finished.")
-    _log_command_status("post-sample", shared, shared.sample_out_dir)
-    print("---")
+    sample_cfg.logger.info(f"Sampler for {experiment} finished.")
+    _log_command_status("post-sample", shared, shared.sample_out_dir, sample_cfg.logger)
 
 
 def _run_analyze(experiment: str, host: str, port: int, open_browser: bool) -> None:
@@ -215,8 +217,9 @@ def _run_analyze(experiment: str, host: str, port: int, open_browser: bool) -> N
     if experiment != "bundestag_char":
         raise RuntimeError("analyze currently supports only 'bundestag_char'")
     # Placeholder for actual analysis logic for bundestag_char
-    print(
-        f"[analyze] Analysis for '{experiment}' not implemented. Host={host}, Port={port}, Open={open_browser}"
+    logger = logging.getLogger(__name__)
+    logger.info(
+        f"Analysis for '{experiment}' not implemented. Host={host}, Port={port}, Open={open_browser}"
     )
 
 
@@ -286,7 +289,8 @@ def global_options(
     """Global options applied to all subcommands."""
     # Validate --exp-config immediately if provided
     if exp_config is not None and not exp_config.exists():
-        print(f"Config file not found: {exp_config}")
+        logger = logging.getLogger(__name__)
+        logger.error(f"Config file not found: {exp_config}")
         raise typer.Exit(2)
 
     try:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 from pathlib import Path
 import torch
+import logging
 from ml_playground.model import GPTConfig, GPT
 from ml_playground.sampler import Sampler
 from ml_playground.config import (
@@ -24,7 +25,7 @@ def test_sample_smoke(tmp_path: Path) -> None:
         vocab_size=256,
         dropout=0.0,
     )
-    model = GPT(conf)
+    model = GPT(conf, logging.getLogger(__name__))
     out_dir = tmp_path / "out"
     out_dir.mkdir()
 

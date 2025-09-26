@@ -314,7 +314,7 @@ def test_sample_happy_path_with_file_prompt_and_char_meta(
         def load_state_dict(self, sd: dict[str, Any], strict: bool = False) -> None:  # type: ignore[override]
             super().load_state_dict(sd)
 
-    monkeypatch.setattr(sampler, "GPT", lambda cfg: _DummyModelWithLoad())
+    monkeypatch.setattr(sampler, "GPT", lambda cfg, logger=None: _DummyModelWithLoad())
 
     class _MiniCkpt:
         def __init__(self) -> None:
@@ -387,7 +387,7 @@ def test_sample_with_compile_flag_uses_compiled_model(
         def load_state_dict(self, sd: dict[str, Any], strict: bool = False) -> None:  # type: ignore[override]
             super().load_state_dict(sd)
 
-    monkeypatch.setattr(sampler, "GPT", lambda cfg: _DummyModelWithLoad2())
+    monkeypatch.setattr(sampler, "GPT", lambda cfg, logger=None: _DummyModelWithLoad2())
 
     class _MiniCkpt2:
         def __init__(self) -> None:
@@ -431,6 +431,8 @@ def test_sample_with_compile_flag_uses_compiled_model(
 
 
 def _make_minimal_model() -> GPT:
+    import logging
+
     conf = GPTConfig(
         n_layer=1,
         n_head=1,
@@ -440,7 +442,7 @@ def _make_minimal_model() -> GPT:
         vocab_size=256,
         dropout=0.0,
     )
-    return GPT(conf)
+    return GPT(conf, logging.getLogger(__name__))
 
 
 def _rotated_best(out_dir: Path, model: GPT) -> Path:

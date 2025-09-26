@@ -90,7 +90,7 @@ def _analyze_text(text: str) -> dict[str, Any]:
     return {"header": header, "lines": lines, "ngrams": ngrams, "anomalies": anomalies}
 
 
-def _run_sampling(out_dir: Path, model_name: str, prompt: str) -> tuple[Path, Path]:
+def _run_sampling(out_dir: Path, model_name: str, prompt: str, logger):
     samples_dir = out_dir / "samples"
     samples_dir.mkdir(parents=True, exist_ok=True)
 
@@ -133,8 +133,8 @@ def _run_sampling(out_dir: Path, model_name: str, prompt: str) -> tuple[Path, Pa
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
-    print("[speakger] Sample analysis:")
-    print("== Lines ==", len(analysis["lines"]))
+    logger.info("[speakger] Sample analysis:")
+    logger.info(f"== Lines == {len(analysis['lines'])}")
     return txt_path, json_path
 
 
@@ -149,7 +149,7 @@ class SpeakGerSampler(_SamplerProto):
         # Model name is expected to be provided via extras for this experiment
         model_name = str(cfg.extras.get("hf_model_name", "dummy"))
         prompt = cfg.sample.start
-        txt_path, json_path = _run_sampling(out_dir, model_name, prompt)
+        txt_path, json_path = _run_sampling(out_dir, model_name, prompt, cfg.logger)
         return SampleReport(
             created_files=(txt_path, json_path),
             updated_files=(),

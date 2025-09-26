@@ -111,10 +111,11 @@ class GPTConfig:
 
 
 class GPT(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, logger):
         super().__init__()
         assert config.vocab_size is not None
         self.config = config
+        self.logger = logger
 
         self.transformer = nn.ModuleDict(
             dict(
@@ -140,7 +141,10 @@ class GPT(nn.Module):
                 )
 
         # report number of parameters (in millions)
-        print("number of parameters: %.2fM" % (self.get_num_params() / 1e6,))
+        if self.logger:
+            self.logger.info(
+                "number of parameters: %.2fM" % (self.get_num_params() / 1e6,)
+            )
 
     def get_num_params(self, non_embedding=True):
         n_params = sum(p.numel() for p in self.parameters())
@@ -211,12 +215,13 @@ class GPT(nn.Module):
         ]
         num_decay_params = sum(p.numel() for p in decay_params)
         num_nodecay_params = sum(p.numel() for p in nodecay_params)
-        print(
-            f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters"
-        )
-        print(
-            f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters"
-        )
+        if self.logger:
+            self.logger.info(
+                f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters"
+            )
+            self.logger.info(
+                f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters"
+            )
 
         def _create_adamw(
             factory: _AdamWFactory, groups, lr, betas, device_type: str

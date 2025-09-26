@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional, NoReturn, cast, Literal
-from ml_playground.config import READ_POLICY_BEST, READ_POLICY_LATEST
+from ml_playground.config import READ_POLICY_BEST
 
 
 @dataclass(frozen=True)
@@ -75,41 +76,49 @@ def _same_stamp(a: dict[str, Any], b: dict[str, Any]) -> bool:
     return a == b
 
 
-def _fail(msg: str, code: int = 2) -> NoReturn:
-    print(msg)
+def _fail(msg: str, code: int = 2, logger=None) -> NoReturn:
+    if logger is None:
+        logger = logging.getLogger(__name__)
+    logger.error(msg)
     raise SystemExit(code)
 
 
 def convert(
     export_cfg: OllamaExportConfig,
     out_dir: Path,
-    read_policy: Literal["latest", "best"] = READ_POLICY_LATEST,
+    read_policy: Literal["latest", "best"],
+    logger,
 ) -> None:
     """Convert and quantize using injected config and resolved runtime paths.
 
     Experiments must not read config files; callers (CLI) inject a fully-validated
     export config and runtime out_dir/filenames here.
     """
-    print(f"[export] start (injected): out_dir={out_dir} cwd={os.getcwd()}")
-    print(
-        f"[export] enabled={export_cfg.enabled} export_dir={export_cfg.export_dir} model_name={export_cfg.model_name} quant={export_cfg.quant}"
+    logger.info(f"start (injected): out_dir={out_dir} cwd={os.getcwd()}")
+    logger.info(
+        f"enabled={export_cfg.enabled} export_dir={export_cfg.export_dir} model_name={export_cfg.model_name} quant={export_cfg.quant}"
     )
 
     if not export_cfg.enabled:
         _fail(
             "export.ollama is disabled. Enable it by injecting an enabled OllamaExportConfig.",
             code=2,
+            logger=logger,
         )
 
     # Ensure export dir writable (also creates it)
     try:
         if not _is_writable_directory(export_cfg.export_dir):
-            _fail(f"export: directory not writable: {export_cfg.export_dir}")
+            _fail(
+                f"export: directory not writable: {export_cfg.export_dir}",
+                logger=logger,
+            )
     except OSError as e:
         _fail(
-            f"export: failed to prepare export directory {export_cfg.export_dir}: {e}"
+            f"export: failed to prepare export directory {export_cfg.export_dir}: {e}",
+            logger=logger,
         )
-    print(f"[export] export_dir ready: {export_cfg.export_dir}")
+    logger.info(f"export_dir ready: {export_cfg.export_dir}")
 
     # Resolve checkpoint from injected runtime using rotated-only policy
     def _resolve_rotated_ckpt(
@@ -150,9 +159,10 @@ def convert(
             else "ckpt_last_XXXXXXXX.pt"
         )
         _fail(
-            f"export: no rotated checkpoint found in {out_dir}. Expected pattern: {wanted}"
+            f"export: no rotated checkpoint found in {out_dir}. Expected pattern: {wanted}",
+            logger=logger,
         )
-    print(f"[export] checkpoint={ckpt_path}")
+    logger.info(f"checkpoint={ckpt_path}")
 
     # Paths
     export_dir = export_cfg.export_dir
@@ -173,24 +183,26 @@ def convert(
         and prev
         and _same_stamp(prev, inputs_now)
     ):
-        print("[export] outputs up-to-date; nothing to do (idempotent).")
-        print(f"[export] existing: {model_path}, {modelfile_path}")
+        logger.info("outputs up-to-date; nothing to do (idempotent).")
+        logger.info(f"existing: {model_path}, {modelfile_path}")
         return
 
     # Tool resolution
     convert_bin = export_cfg.convert_bin or _which("convert-hf-to-gguf.py")
     quant_bin = export_cfg.quant_bin or _which("quantize")
-    print(f"[export] tools: convert_bin={convert_bin} quant_bin={quant_bin}")
+    logger.info(f"tools: convert_bin={convert_bin} quant_bin={quant_bin}")
 
     if not convert_bin:
         _fail(
             "export: conversion tool not found. Configure convert_bin or ensure it is on PATH.",
             code=2,
+            logger=logger,
         )
     if not quant_bin:
         _fail(
             "export: quantization tool not found. Configure quant_bin or ensure it is on PATH.",
             code=2,
+            logger=logger,
         )
     conv_bin: str = cast(str, convert_bin)
     q_bin: str = cast(str, quant_bin)
@@ -200,21 +212,22 @@ def convert(
         if fp16_path.exists():
             fp16_path.unlink()
         cmd_convert: list[str] = [conv_bin, str(ckpt_path), str(fp16_path)]
-        print(f"[export] running: {' '.join(cmd_convert)}")
+        logger.info(f"running: {' '.join(cmd_convert)}")
         subprocess.run(cmd_convert, check=True)
     except FileNotFoundError:
-        _fail(f"export: conversion tool not executable: {conv_bin}")
+        _fail(f"export: conversion tool not executable: {conv_bin}", logger=logger)
     except subprocess.CalledProcessError as e:
-        _fail(f"export: conversion failed with exit code {e.returncode}")
+        _fail(f"export: conversion failed with exit code {e.returncode}", logger=logger)
     except (OSError, PermissionError) as e:
-        _fail(f"export: conversion failed: {e}")
+        _fail(f"export: conversion failed: {e}", logger=logger)
 
     if not fp16_path.exists():
         _fail(
-            "export: FP16 GGUF conversion did not produce expected file: model-fp16.gguf"
+            "export: FP16 GGUF conversion did not produce expected file: model-fp16.gguf",
+            logger=logger,
         )
     else:
-        print(f"[export] created {fp16_path}")
+        logger.info(f"created {fp16_path}")
 
     # Run quantization
     try:
@@ -226,26 +239,31 @@ def convert(
             str(model_path),
             str(export_cfg.quant),
         ]
-        print(f"[export] running: {' '.join(cmd_quant)}")
+        logger.info(f"running: {' '.join(cmd_quant)}")
         subprocess.run(cmd_quant, check=True)
     except FileNotFoundError:
-        _fail(f"export: quantization tool not executable: {q_bin}")
+        _fail(f"export: quantization tool not executable: {q_bin}", logger=logger)
     except subprocess.CalledProcessError as e:
-        _fail(f"export: quantization failed with exit code {e.returncode}")
+        _fail(
+            f"export: quantization failed with exit code {e.returncode}", logger=logger
+        )
     except (OSError, PermissionError) as e:
-        _fail(f"export: quantization failed: {e}")
+        _fail(f"export: quantization failed: {e}", logger=logger)
 
     if not model_path.exists():
-        _fail("export: quantization did not produce expected file: model.gguf")
+        _fail(
+            "export: quantization did not produce expected file: model.gguf",
+            logger=logger,
+        )
     else:
-        print(f"[export] created {model_path}")
+        logger.info(f"created {model_path}")
 
     # Write Modelfile
     lines = ["FROM ./model.gguf"]
     if export_cfg.template and export_cfg.template.exists():
         shutil.copyfile(export_cfg.template, template_dst)
         lines.append("TEMPLATE file ./template.txt")
-        print(f"[export] copied template to {template_dst}")
+        logger.info(f"copied template to {template_dst}")
     _write_text(modelfile_path, "\n".join(lines) + "\n")
 
     # Write README
@@ -267,9 +285,9 @@ def convert(
 
     # Persist stamp for idempotency
     stamp_path.write_text(json.dumps(inputs_now, indent=2), encoding="utf-8")
-    print(f"[export] wrote stamp {stamp_path}")
+    logger.info(f"wrote stamp {stamp_path}")
 
-    print(f"export: wrote {model_path}")
-    print(f"export: wrote {modelfile_path}")
-    print(f"[export] wrote: {sums_path}")
-    print("[export] done")
+    logger.info(f"wrote {model_path}")
+    logger.info(f"wrote {modelfile_path}")
+    logger.info(f"wrote: {sums_path}")
+    logger.info("done")
