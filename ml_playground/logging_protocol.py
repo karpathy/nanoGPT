@@ -3,6 +3,9 @@ from __future__ import annotations
 from typing import Protocol, Any, runtime_checkable
 
 
+__all__ = ["LoggerLike"]
+
+
 @runtime_checkable
 class LoggerLike(Protocol):
     """Structural protocol for loggers used in this project.
