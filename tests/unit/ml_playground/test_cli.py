@@ -244,87 +244,6 @@ def test_main_sample_no_sample_block_fails(
     assert "Missing sample config" in caplog.messages[-1]
 
 
-def test_main_loop_success(tmp_path: Path, mocker: MockerFixture) -> None:
-    """Test loop command executes via _run_loop with loaded configs."""
-    trainer_cfg = TrainerConfig(
-        model=ModelConfig(block_size=20),
-        data=DataConfig(block_size=10),
-        optim=OptimConfig(learning_rate=0.001),
-        schedule=LRSchedule(
-            decay_lr=False,
-            warmup_iters=0,
-            lr_decay_iters=600_000,
-            min_lr=6e-5,
-        ),
-        runtime=RuntimeConfig(out_dir=tmp_path / "train-out"),
-    )
-    mock_sample_config = SamplerConfig(
-        runtime=RuntimeConfig(out_dir=tmp_path / "sample-out"),
-        sample=SampleConfig(start="x"),
-    )
-    mock_run = mocker.patch("ml_playground.cli._run_loop")
-    shared = SharedConfig(
-        experiment="shakespeare",
-        config_path=Path("config.toml"),
-        project_home=Path("."),
-        dataset_dir=Path("."),
-        train_out_dir=Path("."),
-        sample_out_dir=Path("."),
-    )
-    mocker.patch(
-        "ml_playground.config_loader.load_full_experiment_config",
-        return_value=ExperimentConfig(
-            prepare=PreparerConfig(),
-            train=trainer_cfg,
-            sample=mock_sample_config,
-            shared=shared,
-        ),
-    )
-
-    result = runner.invoke(app, ["loop", "shakespeare"])
-    assert result.exit_code == 0
-    mock_run.assert_called_once()
-
-
-def test_main_loop_unknown_dataset_fails(
-    tmp_path: Path, mocker: MockerFixture, caplog: pytest.LogCaptureFixture
-) -> None:
-    """Unknown experiment should bubble up as CLI error exit."""
-    mocker.patch(
-        "ml_playground.config_loader.load_full_experiment_config",
-        side_effect=FileNotFoundError("Config not found"),
-    )
-    result = runner.invoke(app, ["loop", "shakespeare"])
-    assert result.exit_code == 1
-    assert "Config not found" in caplog.messages[-1]
-
-
-def test_main_loop_missing_train_block_fails(
-    tmp_path: Path, mocker: MockerFixture, caplog: pytest.LogCaptureFixture
-) -> None:
-    """Test loop command fails when strict train loader raises."""
-    mocker.patch(
-        "ml_playground.config_loader.load_full_experiment_config",
-        side_effect=ValueError("Missing train config"),
-    )
-    result = runner.invoke(app, ["loop", "shakespeare"])
-    assert result.exit_code == 1
-    assert "Missing train config" in caplog.messages[-1]
-
-
-def test_main_loop_missing_sample_block_fails(
-    tmp_path: Path, mocker: MockerFixture, caplog: pytest.LogCaptureFixture
-) -> None:
-    """Test loop command fails when strict sample loader raises."""
-    mocker.patch(
-        "ml_playground.config_loader.load_full_experiment_config",
-        side_effect=ValueError("Missing sample config"),
-    )
-    result = runner.invoke(app, ["loop", "shakespeare"])
-    assert result.exit_code == 1
-    assert "Missing sample config" in caplog.messages[-1]
-
-
 # Tests for removed functionality (legacy registry usage, direct train/sample calls)
 # have been updated to reflect the new CLI architecture.
 
@@ -730,7 +649,6 @@ def test_load_config_error_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         (["prepare", "--help"], "prepare"),
         (["train", "--help"], "train"),
         (["sample", "--help"], "sample"),
-        (["loop", "--help"], "loop"),
         (["analyze", "--help"], "analyze"),
     ],
 )
@@ -738,7 +656,10 @@ def test_cli_help_and_version(args, expect):
     # Run via python -m to exercise entry-point wiring without performing heavy work
     cmd = [sys.executable, "-m", "ml_playground.cli"] + args
     cp = subprocess.run(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
     )
     out = cp.stdout
     if args == ["--help"]:
@@ -767,57 +688,6 @@ def test_cli_global_exp_config_missing_exits(tmp_path):
     # Typer exits with code 2 for callback-triggered validation failures
     assert cp.returncode == 2
     assert "config file not found" in cp.stdout.lower()
-
-
-# ---------------------------------------------------------------------------
-# Consolidated from test_cli_run_train_and_loop.py
-# ---------------------------------------------------------------------------
-
-
-def test_run_loop_calls_in_order_and_handles_print_errors(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-):
-    calls: list[str] = []
-
-    # Monkeypatch public module entrypoints called by CLI runners
-    import ml_playground.prepare as prepare_mod
-    import ml_playground.trainer as trainer_mod
-    import ml_playground.sampler as sampler_mod
-
-    class FakePipeline:
-        def run(self):
-            calls.append("prepare")
-
-    monkeypatch.setattr(
-        prepare_mod, "create_pipeline", lambda cfg, shared: FakePipeline()
-    )
-
-    class FakeTrainer:
-        def __init__(self, cfg, shared):
-            pass
-
-        def run(self):
-            calls.append("train")
-
-    class FakeSampler:
-        def __init__(self, cfg, shared):
-            pass
-
-        def run(self):
-            calls.append("sample")
-
-    monkeypatch.setattr(trainer_mod, "Trainer", FakeTrainer)
-    monkeypatch.setattr(sampler_mod, "Sampler", FakeSampler)
-
-    # Configs
-    from tests.support import create_basic_configs
-
-    prep_cfg, tcfg, scfg, shared = create_basic_configs(tmp_path)
-
-    # Should not raise; ensure order prepare -> train -> sample
-    cli._run_loop("exp", tmp_path / "cfg.toml", prep_cfg, tcfg, scfg, shared)
-
-    assert calls == ["prepare", "train", "sample"]
 
 
 # ---------------------------------------------------------------------------

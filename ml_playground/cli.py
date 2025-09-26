@@ -225,29 +225,6 @@ def _run_analyze(experiment: str, host: str, port: int, open_browser: bool) -> N
     )
 
 
-def _run_loop(
-    experiment: str,
-    config_path: Path,
-    prepare_cfg: PreparerConfig,
-    train_cfg: TrainerConfig,
-    sample_cfg: SamplerConfig,
-    shared: Any,
-) -> None:
-    """Run the full prepare->train->sample loop for an experiment."""
-    # Determine if prepare can be skipped by checking data artifacts via SharedConfig
-    skip_prepare = False
-    try:
-        ds_dir = shared.dataset_dir
-        req_paths = [ds_dir / "train.bin", ds_dir / "val.bin", ds_dir / "meta.pkl"]
-        skip_prepare = all(p.exists() for p in req_paths)
-    except (OSError, AttributeError):
-        skip_prepare = False
-    if not skip_prepare:
-        _run_prepare(experiment, prepare_cfg, config_path, shared)
-    _run_train(experiment, train_cfg, config_path, shared)
-    _run_sample(experiment, sample_cfg, config_path, shared)
-
-
 # --- CLI definition --------------------------------------------------------
 
 
@@ -364,19 +341,6 @@ def analyze(
     _run_analyze(experiment, host, port, open_browser)
 
 
-@app.command()
-def loop(
-    ctx: typer.Context,
-    experiment: ExperimentArg,
-) -> None:
-    """Run the full prepare, train, and sample loop for an experiment."""
-    exp_config_path = _extract_exp_config(ctx)
-    run_or_exit(
-        lambda: _run_loop_cmd(experiment, exp_config_path),
-        keyboard_interrupt_msg="\nLoop cancelled.",
-    )
-
-
 # (convert command removed as part of refactor; exporting handled by experiment-specific tooling)
 
 
@@ -431,19 +395,6 @@ def _run_sample_cmd(experiment: str, exp_config_path: Path | None) -> None:
             "Run 'prepare' and 'train' first or place meta.pkl in one of the expected locations."
         )
     _run_sample(experiment, exp.sample, exp.shared.config_path, exp.shared)
-
-
-def _run_loop_cmd(experiment: str, exp_config_path: Path | None) -> None:
-    """Run loop command: load full ExperimentConfig once and pass sections."""
-    exp = _load_experiment(experiment, exp_config_path)
-    _run_loop(
-        experiment,
-        exp.shared.config_path,
-        exp.prepare,
-        exp.train,
-        exp.sample,
-        exp.shared,
-    )
 
 
 if __name__ == "__main__":

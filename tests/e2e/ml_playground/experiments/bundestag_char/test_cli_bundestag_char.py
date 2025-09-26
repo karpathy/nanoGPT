@@ -149,11 +149,3 @@ def test_sample_bundestag_char_quick(tmp_path: Path, tmp_dataset: Path) -> None:
     # Sample with minimal config pointing to same out_dir
     sample_cfg = _write_sample_only_config(tmp_path, out_dir)
     main(["--exp-config", str(sample_cfg), "sample", "bundestag_char"])
-
-
-def test_loop_bundestag_char_quick(tmp_path: Path, tmp_dataset: Path) -> None:
-    out_dir = tmp_path / "out_loop"
-    cfg = _write_exp_config(tmp_path, out_dir, tmp_dataset)
-    main(["--exp-config", str(cfg), "loop", "bundestag_char"])  # end-to-end
-    # Check that training produced rotated checkpoints in the designated directory
-    assert any(out_dir.glob("ckpt_last_*.pt")), "no rotated last checkpoint found"
