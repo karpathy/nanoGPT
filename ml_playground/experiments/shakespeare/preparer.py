@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import numpy as np
 import requests
+import requests.exceptions
 from ml_playground.prepare import (
     PreparerConfig,
     split_train_val,
@@ -40,7 +41,7 @@ class ShakespearePreparer(_PreparerProto):
                 resp = requests.get(DATA_URL, timeout=30)
                 resp.raise_for_status()
                 f_input.write_text(resp.text, encoding="utf-8")
-            except Exception as e:
+            except requests.exceptions.RequestException as e:
                 raise DataError(f"Failed to download Shakespeare dataset: {e}") from e
 
         validate_file_exists(f_input, "Shakespeare input file")
