@@ -520,6 +520,34 @@ def test_setup_tokenizer_requires_tokenizer_type(out_dir: Path) -> None:
         s.run()
 
 
+def test_setup_tokenizer_missing_meta_raises_clear_error(out_dir: Path) -> None:
+    """Test that missing meta.pkl files produce clear, actionable error messages."""
+    # Valid rotated checkpoint so we reach tokenizer stage
+    model = _make_minimal_model()
+    _rotated_best(out_dir, model)
+    # No meta.pkl files created - should raise DataError with helpful message
+
+    cfg = _sampler_cfg(out_dir)
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=out_dir / "cfg.toml",
+        project_home=out_dir,
+        dataset_dir=out_dir / "separate_dataset_dir",  # Different from out_dir
+        train_out_dir=out_dir,
+        sample_out_dir=out_dir,
+    )
+    with pytest.raises(DataError) as exc_info:
+        s = sampler.Sampler(cfg, shared)
+        s.run()
+
+    error_msg = str(exc_info.value)
+    assert "Tokenizer metadata not found" in error_msg
+    assert "meta.pkl" in error_msg
+    assert str(out_dir) in error_msg  # sampling output directory
+    assert "separate_dataset_dir" in error_msg  # dataset directory
+    assert "Run 'prepare' first" in error_msg
+
+
 def test_sampler_requires_rotated_checkpoints(out_dir: Path) -> None:
     # Provide strict meta so tokenizer would succeed, but omit rotated checkpoints
     meta = {
