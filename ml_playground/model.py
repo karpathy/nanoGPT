@@ -227,11 +227,7 @@ class GPT(nn.Module):
             factory: _AdamWFactory, groups, lr, betas, device_type: str
         ) -> torch.optim.Optimizer:
             if device_type == "cuda":
-                try:
-                    return factory(groups, lr=lr, betas=betas, fused=True)
-                except TypeError:
-                    # Fallback if the installed AdamW doesn't support 'fused'
-                    pass
+                return factory(groups, lr=lr, betas=betas, fused=True)
             return factory(groups, lr=lr, betas=betas)
 
         factory = cast(_AdamWFactory, torch.optim.AdamW)
