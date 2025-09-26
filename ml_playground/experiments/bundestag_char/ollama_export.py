@@ -105,7 +105,7 @@ def convert(
     try:
         if not _is_writable_directory(export_cfg.export_dir):
             _fail(f"export: directory not writable: {export_cfg.export_dir}")
-    except Exception as e:
+    except OSError as e:
         _fail(
             f"export: failed to prepare export directory {export_cfg.export_dir}: {e}"
         )
@@ -125,11 +125,11 @@ def convert(
                 try:
                     parts = p.stem.split("_")
                     metric = float(parts[3]) if not len(parts) > 4 else float("inf")
-                except Exception:
+                except (ValueError, IndexError):
                     metric = float("inf")
                 try:
                     return (metric, p.stat().st_mtime)
-                except Exception:
+                except OSError:
                     return (metric, 0.0)
 
             return sorted(best_files, key=_best_key)[0]
@@ -139,7 +139,7 @@ def convert(
             return None
         try:
             return max(last_files, key=lambda p: p.stat().st_mtime)
-        except Exception:
+        except OSError:
             return sorted(last_files)[-1]
 
     ckpt_path: Optional[Path] = _resolve_rotated_ckpt(out_dir, read_policy)
@@ -206,7 +206,7 @@ def convert(
         _fail(f"export: conversion tool not executable: {conv_bin}")
     except subprocess.CalledProcessError as e:
         _fail(f"export: conversion failed with exit code {e.returncode}")
-    except Exception as e:
+    except (OSError, PermissionError) as e:
         _fail(f"export: conversion failed: {e}")
 
     if not fp16_path.exists():
@@ -232,7 +232,7 @@ def convert(
         _fail(f"export: quantization tool not executable: {q_bin}")
     except subprocess.CalledProcessError as e:
         _fail(f"export: quantization failed with exit code {e.returncode}")
-    except Exception as e:
+    except (OSError, PermissionError) as e:
         _fail(f"export: quantization failed: {e}")
 
     if not model_path.exists():
