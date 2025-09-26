@@ -3,10 +3,9 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional, Tuple, TypedDict, Union, cast
 
 import torch
-
 from ml_playground.error_handling import CheckpointError
 from ml_playground.logging_protocol import LoggerLike
 
@@ -25,31 +24,114 @@ def _atomic_save(obj: Any, path: Path, atomic: bool) -> None:
         torch.save(obj, path)
 
 
-@dataclass  # type: ignore
+StateDict = Dict[str, Any]
+OptimizerState = Dict[str, Any]
+ConfigDict = Dict[str, Any]
+ExtrasDict = Dict[str, Any]
+
+
+class CheckpointPayload(TypedDict, total=False):
+    model: StateDict
+    optimizer: OptimizerState
+    model_args: ConfigDict
+    iter_num: int
+    best_val_loss: float
+    config: ConfigDict
+    ema: ExtrasDict
+
+
+_PayloadMapping = Mapping[str, Any]
+ExpectedTypes = Union[type, Tuple[type, ...]]
+
+
+def _expect_mapping(value: Any, field: str) -> Dict[str, Any]:
+    if not isinstance(value, Mapping):
+        raise CheckpointError(f"Checkpoint field '{field}' must be a mapping")
+    return dict(value)
+
+
+def _expect_type(value: Any, field: str, expected_type: ExpectedTypes) -> Any:
+    if not isinstance(value, expected_type):
+        if isinstance(expected_type, tuple):
+            expected_names = ", ".join(t.__name__ for t in expected_type)
+        else:
+            expected_names = expected_type.__name__
+        raise CheckpointError(
+            f"Checkpoint field '{field}' expected {expected_names}, got {type(value).__name__}"
+        )
+    return value
+
+
+@dataclass
 class Checkpoint:
     """A strongly-typed checkpoint object."""
 
-    model: Dict[str, Any]
-    optimizer: Dict[str, Any]
-    model_args: Dict[str, Any]
+    model: StateDict
+    optimizer: OptimizerState
+    model_args: ConfigDict
     iter_num: int
     best_val_loss: float
-    config: Dict[str, Any]
-    ema: Optional[Dict[str, Any]] = None
+    config: ConfigDict
+    ema: Optional[ExtrasDict] = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> CheckpointPayload:
         """Convert checkpoint to a serialization-friendly dictionary."""
-        result = {
-            "model": self.model,
-            "optimizer": self.optimizer,
-            "model_args": self.model_args,
+        result: CheckpointPayload = {
+            "model": dict(self.model),
+            "optimizer": dict(self.optimizer),
+            "model_args": dict(self.model_args),
             "iter_num": self.iter_num,
-            "best_val_loss": self.best_val_loss,
-            "config": self.config,
+            "best_val_loss": float(self.best_val_loss),
+            "config": dict(self.config),
         }
         if self.ema is not None:
-            result["ema"] = self.ema
+            result["ema"] = dict(self.ema)
         return result
+
+    @classmethod
+    def from_payload(cls, payload: _PayloadMapping) -> "Checkpoint":
+        """Construct a checkpoint from a serialized payload with validation."""
+
+        required_fields = {
+            "model",
+            "optimizer",
+            "model_args",
+            "iter_num",
+            "best_val_loss",
+            "config",
+        }
+        missing = required_fields.difference(payload.keys())
+        if missing:
+            raise CheckpointError(
+                f"Checkpoint payload missing required fields: {', '.join(sorted(missing))}"
+            )
+
+        model = _expect_mapping(payload["model"], "model")
+        optimizer = _expect_mapping(payload["optimizer"], "optimizer")
+        model_args = _expect_mapping(payload["model_args"], "model_args")
+        config = _expect_mapping(payload["config"], "config")
+
+        iter_num = cast(int, _expect_type(payload["iter_num"], "iter_num", int))
+        best_val_loss = cast(
+            float, _expect_type(payload["best_val_loss"], "best_val_loss", (int, float))
+        )
+
+        ema_raw = payload.get("ema")
+        ema: Optional[ExtrasDict]
+        if ema_raw is not None:
+            ema = _expect_mapping(ema_raw, "ema")
+        else:
+            ema = None
+
+        return cls(
+            model=model,
+            optimizer=optimizer,
+            model_args=model_args,
+            iter_num=iter_num,
+            best_val_loss=float(best_val_loss),
+            config=config,
+            ema=ema,
+        )
 
 
 @dataclass
@@ -234,32 +316,10 @@ class CheckpointManager:
                 f"Failed to load checkpoint from {latest_ckpt.path}: {e}"
             ) from e
 
-        if not isinstance(checkpoint_dict, dict):
-            raise CheckpointError("Checkpoint file does not contain a dictionary")
+        if not isinstance(checkpoint_dict, Mapping):
+            raise CheckpointError("Checkpoint file does not contain a mapping payload")
 
-        # Validate required keys
-        required_keys = [
-            "model",
-            "optimizer",
-            "model_args",
-            "iter_num",
-            "best_val_loss",
-            "config",
-        ]
-        for key in required_keys:
-            if key not in checkpoint_dict:
-                raise CheckpointError(f"Checkpoint missing required key: {key}")
-
-        # Create Checkpoint object
-        checkpoint = Checkpoint(
-            model=checkpoint_dict["model"],
-            optimizer=checkpoint_dict["optimizer"],
-            model_args=checkpoint_dict["model_args"],
-            iter_num=checkpoint_dict["iter_num"],
-            best_val_loss=checkpoint_dict["best_val_loss"],
-            config=checkpoint_dict["config"],
-            ema=checkpoint_dict.get("ema"),
-        )
+        checkpoint = Checkpoint.from_payload(cast(Mapping[str, Any], checkpoint_dict))
 
         logger.info(f"Loaded checkpoint from {latest_ckpt.path}")
         return checkpoint
@@ -293,32 +353,10 @@ class CheckpointManager:
                 f"Failed to load best checkpoint from {best_ckpt.path}: {e}"
             ) from e
 
-        if not isinstance(checkpoint_dict, dict):
-            raise CheckpointError("Checkpoint file does not contain a dictionary")
+        if not isinstance(checkpoint_dict, Mapping):
+            raise CheckpointError("Checkpoint file does not contain a mapping payload")
 
-        # Validate required keys
-        required_keys = [
-            "model",
-            "optimizer",
-            "model_args",
-            "iter_num",
-            "best_val_loss",
-            "config",
-        ]
-        for key in required_keys:
-            if key not in checkpoint_dict:
-                raise CheckpointError(f"Checkpoint missing required key: {key}")
-
-        # Create Checkpoint object
-        checkpoint = Checkpoint(
-            model=checkpoint_dict["model"],
-            optimizer=checkpoint_dict["optimizer"],
-            model_args=checkpoint_dict["model_args"],
-            iter_num=checkpoint_dict["iter_num"],
-            best_val_loss=checkpoint_dict["best_val_loss"],
-            config=checkpoint_dict["config"],
-            ema=checkpoint_dict.get("ema"),
-        )
+        checkpoint = Checkpoint.from_payload(cast(Mapping[str, Any], checkpoint_dict))
 
         logger.info(f"Loaded checkpoint from {best_ckpt.path}")
         return checkpoint

@@ -197,7 +197,7 @@ def test_load_checkpoint_non_dict_raises(
         mgr.load_latest_checkpoint(
             device="cpu", logger=__import__("logging").getLogger("test")
         )
-    assert "does not contain a dictionary" in str(e.value)
+    assert "mapping payload" in str(e.value)
 
 
 def test_load_checkpoint_missing_keys_raises(

@@ -125,7 +125,7 @@ def test_load_latest_errors_and_type_validation(tmp_path: Path) -> None:
     torch.save("not-a-dict", p)
     # Clear any cached state to force discovery
     mgr.last_checkpoints.clear()
-    with pytest.raises(CheckpointError, match="does not contain a dictionary"):
+    with pytest.raises(CheckpointError, match="mapping payload"):
         mgr.load_latest_checkpoint(device="cpu", logger=logging.getLogger("test"))
 
 
@@ -134,6 +134,33 @@ def test_keep_policy_validation() -> None:
         _ = CheckpointManager(Path("/tmp/does-not-matter"), keep_last=-1)
     with pytest.raises(CheckpointError):
         _ = CheckpointManager(Path("/tmp/does-not-matter"), keep_best=-2)
+
+
+# -----------------------------------------------------------------------------
+# Checkpoint payload validation
+# -----------------------------------------------------------------------------
+
+
+def test_checkpoint_from_payload_success(ckpt_obj: Checkpoint) -> None:
+    payload = ckpt_obj.to_dict()
+    restored = Checkpoint.from_payload(payload)
+    assert restored.iter_num == ckpt_obj.iter_num
+    assert restored.best_val_loss == ckpt_obj.best_val_loss
+    assert restored.model["w"] == [1, 2, 3]
+
+
+def test_checkpoint_from_payload_missing_key(ckpt_obj: Checkpoint) -> None:
+    payload = ckpt_obj.to_dict()
+    payload.pop("model")  # type: ignore[arg-type]
+    with pytest.raises(CheckpointError, match="missing required fields: model"):
+        Checkpoint.from_payload(payload)
+
+
+def test_checkpoint_from_payload_wrong_type(ckpt_obj: Checkpoint) -> None:
+    payload = ckpt_obj.to_dict()
+    payload["iter_num"] = "oops"  # type: ignore[assignment]
+    with pytest.raises(CheckpointError, match="iter_num"):
+        Checkpoint.from_payload(payload)
 
 
 # -----------------------------------------------------------------------------
