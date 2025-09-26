@@ -126,8 +126,7 @@ class _FakeWriter:
 def _make_minimal_trainer_cfg(
     tmp_path: Path, eval_only: bool = False, max_iters: int = 2
 ) -> TrainerConfig:
-    data_root = tmp_path / "data"
-    data_root.mkdir(parents=True)
+    # Configure a schedule with warmup and decay to test LR changes
     cfg = TrainerConfig(
         model=ModelConfig(n_layer=1, n_head=1, n_embd=8, block_size=4, dropout=0.0),
         data=DataConfig(batch_size=2, block_size=4, grad_accum_steps=1),
@@ -135,7 +134,7 @@ def _make_minimal_trainer_cfg(
             learning_rate=0.01, weight_decay=0.0, beta1=0.9, beta2=0.95, grad_clip=0.0
         ),
         schedule=LRSchedule(
-            decay_lr=False, warmup_iters=0, lr_decay_iters=10, min_lr=1e-5
+            decay_lr=True, warmup_iters=1, lr_decay_iters=10, min_lr=0.001
         ),
         runtime=RuntimeConfig(
             out_dir=tmp_path / "out",
@@ -291,9 +290,29 @@ def test_trainer_updates_optimizer_lr_via_get_lr(
     )
 
     # Configure a schedule with warmup and decay to test LR changes
-    cfg = _make_minimal_trainer_cfg(tmp_path, max_iters=3)
-    cfg.schedule = LRSchedule(
-        decay_lr=True, warmup_iters=1, lr_decay_iters=10, min_lr=0.001
+    cfg = TrainerConfig(
+        model=ModelConfig(n_layer=1, n_head=1, n_embd=8, block_size=4, dropout=0.0),
+        data=DataConfig(batch_size=2, block_size=4, grad_accum_steps=1),
+        optim=OptimConfig(
+            learning_rate=0.01, weight_decay=0.0, beta1=0.9, beta2=0.95, grad_clip=0.0
+        ),
+        schedule=LRSchedule(
+            decay_lr=True, warmup_iters=1, lr_decay_iters=10, min_lr=0.001
+        ),
+        runtime=RuntimeConfig(
+            out_dir=tmp_path / "out",
+            max_iters=3,
+            eval_interval=1,
+            eval_iters=1,
+            log_interval=1,
+            eval_only=False,
+            seed=42,
+            device="cpu",
+            dtype="float32",
+            compile=False,
+            tensorboard_enabled=True,
+            ema_decay=0.0,
+        ),
     )
 
     shared = SharedConfig(
