@@ -55,7 +55,7 @@ def _snapshot(paths: Iterable[Path]) -> dict[Path, tuple[bool, float, int]]:
                 m[p] = (True, st.st_mtime, st.st_size)
             else:
                 m[p] = (False, 0.0, 0)
-        except Exception:
+        except OSError:
             m[p] = (False, 0.0, 0)
     return m
 
@@ -75,7 +75,7 @@ def _diff(paths: Iterable[Path], before: dict[Path, tuple[bool, float, int]]):
                     updated.append(p)
                 else:
                     skipped.append(p)
-        except Exception:
+        except OSError:
             if p.exists() and not existed:
                 created.append(p)
     return created, updated, skipped
