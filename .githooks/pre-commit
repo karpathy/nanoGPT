@@ -2,7 +2,7 @@
 # Pre-commit hook using pre-commit framework with uv
 
 set -euo pipefail
-echo "[pre-commit] Core quality gates (ruff, format, pyright, mypy, pytest)"
+echo "[pre-commit] Core quality gates (ruff, format, pyright, mypy, pytest via uv)"
 uv run pre-commit run --config .githooks/.pre-commit-config.yaml
 
 # Note: Mutation testing is excluded from pre-commit. Run manually via `make quality-ext` when needed.

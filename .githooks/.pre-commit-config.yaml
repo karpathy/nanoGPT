@@ -30,6 +30,6 @@ repos:
     pass_filenames: false
   - id: pytest
     name: pytest
-    entry: uv run pytest -q -n auto -W error --strict-markers --strict-config
+    entry: uv run python -m pytest -q -n auto -W error --strict-markers --strict-config
     language: system
     pass_filenames: false
