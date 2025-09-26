@@ -338,7 +338,7 @@ def write_bin_and_meta(
             try:
                 logger.info(f"[prepare] Created: {list(created) if created else '[]'}")
                 logger.info(f"[prepare] Skipped: {list(skipped) if skipped else '[]'}")
-            except Exception:
+            except (OSError, ValueError, TypeError):
                 pass  # Logging should not fail the operation
             return
         raise DataError(
@@ -371,7 +371,7 @@ def write_bin_and_meta(
     try:
         logger.info(f"[prepare] Created: {list(created) if created else '[]'}")
         logger.info(f"[prepare] Skipped: {list(skipped) if skipped else '[]'}")
-    except Exception:
+    except (OSError, ValueError, TypeError):
         pass
 
 

@@ -36,10 +36,9 @@ def _global_device_setup(device: str, dtype: str, seed: int) -> None:
         torch.manual_seed(seed)
         if torch.cuda.is_available():
             torch.cuda.manual_seed(seed)
-            # Enable TF32 for better perf on Ampere+ when using CUDA
             torch.backends.cuda.matmul.allow_tf32 = True
             torch.backends.cudnn.allow_tf32 = True
-    except Exception:
+    except (RuntimeError, AttributeError, OSError):
         # Never fail CLI due to environment-specific torch issues
         pass
 
@@ -118,7 +117,7 @@ def _log_dir(tag: str, dir_name: str, dir_path: Path | None, logger) -> None:
                 contents = sorted([p.name for p in dir_path.iterdir()])
                 logger.info(f"[{tag}] {dir_name} (exists): {dir_path}")
                 logger.info(f"[{tag}]   Contents: {contents}")
-            except Exception:
+            except (OSError, PermissionError):
                 # If listing fails, still indicate existence
                 logger.info(f"[{tag}] {dir_name} (exists): {dir_path}")
         else:
@@ -134,7 +133,7 @@ def _log_command_status(tag: str, shared: "SharedConfig", out_dir: Path) -> None
     try:
         _log_dir(tag, "out_dir", out_dir, logger)
         _log_dir(tag, "dataset_dir", shared.dataset_dir, logger)
-    except Exception:
+    except (OSError, ValueError, TypeError):
         # Never fail due to logging
         pass
 
@@ -236,7 +235,7 @@ def _run_loop(
         ds_dir = shared.dataset_dir
         req_paths = [ds_dir / "train.bin", ds_dir / "val.bin", ds_dir / "meta.pkl"]
         skip_prepare = all(p.exists() for p in req_paths)
-    except Exception:
+    except (OSError, AttributeError):
         skip_prepare = False
     if not skip_prepare:
         _run_prepare(experiment, prepare_cfg, config_path, shared)
@@ -296,7 +295,7 @@ def global_options(
         if not root_logger.handlers:
             logging.basicConfig(level=logging.INFO, format="%(message)s")
         ctx.ensure_object(dict)
-    except Exception:
+    except (AttributeError, TypeError):
         # Fallback: if ensure_object fails, safely ignore and avoid crashing
         return
     ctx.obj = {"exp_config": exp_config}

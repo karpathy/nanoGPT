@@ -572,7 +572,7 @@ class SharedConfig(_FrozenStrictModel):
         cfg_path = data.get("config_path")
         try:
             base_dir = Path(cfg_path).parent if cfg_path is not None else None
-        except Exception:
+        except (TypeError, ValueError, OSError):
             base_dir = None
         if base_dir is None:
             return data
