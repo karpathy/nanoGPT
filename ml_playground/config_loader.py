@@ -101,30 +101,6 @@ def deep_merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str
     return out
 
 
-def _coerce_path(path: Path | str) -> Path:
-    if isinstance(path, Path):
-        return path
-    return Path(path)
-
-
-def fs_path_exists(path: Path | str) -> bool:
-    """Return ``True`` if ``path`` exists on disk."""
-
-    return _coerce_path(path).exists()
-
-
-def fs_is_file(path: Path | str) -> bool:
-    """Return ``True`` if ``path`` is an existing file."""
-
-    return _coerce_path(path).is_file()
-
-
-def fs_is_dir(path: Path | str) -> bool:
-    """Return ``True`` if ``path`` is an existing directory."""
-
-    return _coerce_path(path).is_dir()
-
-
 def _load_and_merge_configs(
     config_path: Path, project_home: Path, experiment_name: str
 ) -> dict[str, Any]:
@@ -217,9 +193,6 @@ def load_train_config(config_path: Path) -> TrainerConfig:
 
 
 __all__ = [
-    "fs_path_exists",
-    "fs_is_file",
-    "fs_is_dir",
     "get_cfg_path",
     "get_default_config_path",
     "load_full_experiment_config",

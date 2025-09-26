@@ -16,6 +16,7 @@ from ml_playground.config import (
 from ml_playground.config_loader import (
     load_full_experiment_config,
     deep_merge_dicts,
+    read_toml_dict,
 )
 from tests.conftest import minimal_full_experiment_toml
 from ml_playground.prepare import PreparerConfig
@@ -41,6 +42,19 @@ def test_full_loader_roundtrip(tmp_path: Path) -> None:
     assert exp.sample is not None
     assert isinstance(exp.train.runtime.out_dir, Path)
     assert isinstance(exp.shared.dataset_dir, Path)
+
+
+def test_read_toml_dict_missing_file_raises(tmp_path: Path) -> None:
+    missing_path = tmp_path / "missing.toml"
+    with pytest.raises(FileNotFoundError):
+        read_toml_dict(missing_path)
+
+
+def test_read_toml_dict_reads_existing_file(tmp_path: Path) -> None:
+    cfg_path = tmp_path / "cfg.toml"
+    cfg_path.write_text("key = 'value'", encoding="utf-8")
+    data = read_toml_dict(cfg_path)
+    assert data == {"key": "value"}
 
 
 def test_full_loader_empty_config_raises(tmp_path: Path) -> None:
