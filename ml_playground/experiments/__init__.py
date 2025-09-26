@@ -21,7 +21,7 @@ def load_preparers() -> None:
     pkg = "ml_playground.experiments"
     try:
         root = resources.files(pkg)
-    except Exception:
+    except (ImportError, FileNotFoundError, OSError, RuntimeError):
         # If discovery fails (e.g., frozen environments), do nothing; callers may
         # have injected PREPARERS via tests or alternative mechanisms.
         return
@@ -58,8 +58,8 @@ def load_preparers() -> None:
                         inst.prepare()  # type: ignore[call-arg, attr-defined]
 
                 PREPARERS.setdefault(exp_name, _make_fn)
-            except Exception as e:
+            except (ImportError, AttributeError, RuntimeError) as e:
                 raise SystemExit(f"Failed to load experiment '{exp_name}': {e}")
-        except Exception:
+        except (OSError, RuntimeError):
             # Defensive: ignore any unexpected filesystem/resource issues per entry
             continue
