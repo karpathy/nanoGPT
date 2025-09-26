@@ -7,10 +7,9 @@ from ml_playground.prepare import (
     PreparerConfig,
     split_train_val,
     write_bin_and_meta,
-    snapshot_files,
-    diff_files,
     create_standardized_metadata,
 )
+from ml_playground._file_state import snapshot_file_states, diff_file_states
 from ml_playground.tokenizer import create_tokenizer
 from ml_playground.experiments.protocol import (
     Preparer as _PreparerProto,
@@ -32,7 +31,7 @@ class ShakespearePreparer(_PreparerProto):
         ds_dir.mkdir(parents=True, exist_ok=True)
         outputs = [ds_dir / "train.bin", ds_dir / "val.bin", ds_dir / "meta.pkl"]
 
-        pre = snapshot_files(outputs)
+        pre = snapshot_file_states(outputs)
 
         f_input = ds_dir / "input.txt"
 
@@ -73,7 +72,7 @@ class ShakespearePreparer(_PreparerProto):
 
         progress.finish("Shakespeare dataset preparation completed")
 
-        created, updated, skipped = diff_files(outputs, pre)
+        created, updated, skipped = diff_file_states(outputs, pre)
 
         msgs = (
             f"[shakespeare] prepared dataset at {ds_dir}",

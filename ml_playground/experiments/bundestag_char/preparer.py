@@ -7,9 +7,9 @@ from ml_playground.prepare import (
     PreparerConfig,
     seed_text_file,
     prepare_with_tokenizer,
-    snapshot_files,
-    diff_files,
     write_bin_and_meta,
+    snapshot_file_states,
+    diff_file_states,
 )
 from ml_playground.tokenizer import CharTokenizer
 from ml_playground.experiments.protocol import (
@@ -63,7 +63,7 @@ class BundestagCharPreparer(_PreparerProto):
                 messages=msgs,
             )
 
-        pre = snapshot_files(outputs)
+        pre = snapshot_file_states(outputs)
 
         input_file_path = ds_dir / "input.txt"
         bundled = Path(__file__).parent / "input.txt"
@@ -85,7 +85,7 @@ class BundestagCharPreparer(_PreparerProto):
 
         write_bin_and_meta(ds_dir, train_arr, val_arr, meta, logger=cfg.logger)
 
-        created, updated, skipped = diff_files(outputs, pre)
+        created, updated, skipped = diff_file_states(outputs, pre)
 
         msgs = (
             f"[bundestag_char] prepared dataset at {ds_dir}",

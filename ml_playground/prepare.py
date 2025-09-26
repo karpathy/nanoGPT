@@ -6,13 +6,12 @@ import pickle
 from typing import Any, Iterable, Literal, cast
 
 import numpy as np
-
+from ml_playground._file_state import diff_file_states, snapshot_file_states
 from ml_playground.config import DataConfig, PreparerConfig, SharedConfig
 from ml_playground.error_handling import DataError
 from ml_playground.logging_protocol import LoggerLike
 from ml_playground.tokenizer import CharTokenizer, WordTokenizer, create_tokenizer
 from ml_playground.tokenizer_protocol import Tokenizer
-from ml_playground._file_state import FileState, diff_file_states, snapshot_file_states
 
 
 """Core data preparation utilities shared across experiments."""
@@ -22,7 +21,6 @@ TokenizerKind = Literal["char", "word", "tiktoken"]
 
 def _coerce_tokenizer_type(value: str) -> TokenizerKind:
     """Validate and cast raw configuration values to ``TokenizerKind``."""
-
     if value not in {"char", "word", "tiktoken"}:
         raise DataError(
             "Unsupported tokenizer type. Expected one of {'char', 'word', 'tiktoken'}"
@@ -206,25 +204,6 @@ class _PreparationPipeline:
 
 def create_pipeline(cfg: PreparerConfig, shared: SharedConfig) -> _PreparationPipeline:
     return _PreparationPipeline(cfg, shared)
-
-
-def snapshot_files(paths: Iterable[Path]) -> dict[Path, FileState]:
-    """Backward-compatible wrapper for ``snapshot_file_states``."""
-
-    return snapshot_file_states(paths)
-
-
-def diff_files(
-    paths: Iterable[Path], before: dict[Path, FileState]
-) -> tuple[
-    set[Path],
-    set[Path],
-    set[Path],
-]:
-    """Backward-compatible wrapper for ``diff_file_states``."""
-
-    created, updated, skipped = diff_file_states(paths, before)
-    return created, updated, skipped
 
 
 class Preparer:
@@ -431,6 +410,6 @@ __all__ = [
     "write_bin_and_meta",
     "seed_text_file",
     "setup_tokenizer",
-    "snapshot_files",
-    "diff_files",
+    "snapshot_file_states",
+    "diff_file_states",
 ]

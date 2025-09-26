@@ -13,6 +13,8 @@ from ml_playground.prepare import (
     write_bin_and_meta,
     create_standardized_metadata,
     prepare_with_tokenizer,
+    snapshot_file_states,
+    diff_file_states,
 )
 from ml_playground.tokenizer import CharTokenizer
 from ml_playground.error_handling import DataError
@@ -217,18 +219,18 @@ def test_snapshot_and_diff_helpers(tmp_path: Path) -> None:
     a = tmp_path / "a.txt"
     b = tmp_path / "b.txt"
     paths = [a, b]
-    before = prep.snapshot_files(paths)
+    before = snapshot_file_states(paths)
     # create one file
     a.write_text("x", encoding="utf-8")
-    created, updated, skipped = prep.diff_files(paths, before)
+    created, updated, skipped = diff_file_states(paths, before)
     assert a in created
     # If b was absent before and remains absent after, implementation may omit it from all sets.
     assert b not in created and b not in updated
 
     # touch a to update
-    before2 = prep.snapshot_files(paths)
+    before2 = snapshot_file_states(paths)
     a.write_text("xy", encoding="utf-8")
-    c2, u2, s2 = prep.diff_files(paths, before2)
+    c2, u2, s2 = diff_file_states(paths, before2)
     assert a in u2
 
 
@@ -239,12 +241,12 @@ def test_diff_files_updated_and_skipped(tmp_path: Path) -> None:
     a.write_text("one", encoding="utf-8")
     b.write_text("keep", encoding="utf-8")
 
-    before = prep.snapshot_files([a, b])
+    before = snapshot_file_states([a, b])
 
     # update a, leave b unchanged
     a.write_text("two", encoding="utf-8")
 
-    created, updated, skipped = prep.diff_files([a, b], before)
+    created, updated, skipped = diff_file_states([a, b], before)
     assert a in updated
     assert b in skipped
 

@@ -6,10 +6,10 @@ from ml_playground.prepare import (
     PreparerConfig,
     split_train_val,
     write_bin_and_meta,
-    snapshot_files,
-    diff_files,
     create_standardized_metadata,
     seed_text_file,
+    snapshot_file_states,
+    diff_file_states,
 )
 from ml_playground.tokenizer import TiktokenTokenizer
 from ml_playground.experiments.protocol import (
@@ -26,7 +26,7 @@ class BundestagTiktokenPreparer(_PreparerProto):
         ds_dir.mkdir(parents=True, exist_ok=True)
         outputs = [ds_dir / "train.bin", ds_dir / "val.bin", ds_dir / "meta.pkl"]
 
-        pre = snapshot_files(outputs)
+        pre = snapshot_file_states(outputs)
 
         input_file_path = ds_dir / "input.txt"
         bundled = Path(__file__).parent / "input.txt"
@@ -67,7 +67,7 @@ class BundestagTiktokenPreparer(_PreparerProto):
 
         progress.finish("Bundestag tiktoken preparation completed")
 
-        created, updated, skipped = diff_files(outputs, pre)
+        created, updated, skipped = diff_file_states(outputs, pre)
 
         msgs = (
             f"[bundestag_tiktoken] prepared dataset at {ds_dir}",
