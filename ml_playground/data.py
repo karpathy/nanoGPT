@@ -193,10 +193,18 @@ class SimpleBatches:
                 si = int(s)
                 if si + T <= L:
                     x_seq = base[si : si + T].astype(np.int64, copy=False)
-                    y_seq = base[si + 1 : si + 1 + T].astype(np.int64, copy=False)
-                    cur = si + T
-                    if cur >= L - T:
-                        cur = (cur + 1) % L
+                    if si + 1 + T <= L:
+                        y_seq = base[si + 1 : si + 1 + T].astype(np.int64, copy=False)
+                    else:
+                        y_first = base[si + 1 : L].astype(np.int64, copy=False)
+                        y_rem = T - int(y_first.shape[0])
+                        y_wrap = (
+                            base[:y_rem].astype(np.int64, copy=False)
+                            if y_rem > 0
+                            else np.empty((0,), dtype=np.int64)
+                        )
+                        y_seq = np.concatenate([y_first, y_wrap], axis=0)
+                    cur = (si + T) % L
                 else:
                     x_first = base[si:L].astype(np.int64, copy=False)
                     x_rem = T - int(x_first.shape[0])

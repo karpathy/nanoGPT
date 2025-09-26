@@ -34,11 +34,9 @@ class CharTokenizer:
         return MappingProxyType(self.stoi)
 
     def encode(self, text: str) -> list[int]:
-        """Encode `text` character-by-character returning integer token ids."""
         return [self.stoi.get(ch, 0) for ch in text]
 
     def decode(self, token_ids: Sequence[int]) -> str:
-        """Decode a sequence of ids back into a character string."""
         return "".join(self.itos.get(int(i), "") for i in token_ids)
 
 

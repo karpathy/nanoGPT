@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Iterable
 
 from ml_playground.prepare import (
     PreparerConfig,
@@ -16,38 +16,20 @@ from ml_playground.experiments.protocol import (
     Preparer as _PreparerProto,
     PrepareReport,
 )
-from ml_playground.error_handling import DataError, validate_file_exists
-
-
-def ensure_modern_ngram(extras: Mapping[str, Any]) -> None:
-    """Validate that no legacy n-gram overrides are provided via preparer extras."""
-
-    raw_n = extras.get("ngram_size")
-    if raw_n is None:
-        return
-    try:
-        legacy_value = int(raw_n)
-    except (TypeError, ValueError) as exc:
-        raise DataError(
-            "Legacy n-gram preparation has been removed. Remove the 'ngram_size' extra "
-            "and configure tokenizers via experiment config."
-        ) from exc
-    if legacy_value != 1:
-        raise DataError(
-            "Legacy n-gram preparation has been removed. Configure tokenizer choices "
-            "via experiment config (for example, train.data.tokenizer) and keep "
-            "'ngram_size' fixed at 1."
-        )
+from ml_playground.error_handling import validate_file_exists
 
 
 class BundestagCharPreparer(_PreparerProto):
     def prepare(self, cfg: PreparerConfig) -> PrepareReport:  # type: ignore[override]
-        exp_dir = Path(__file__).resolve().parent
+        extras = getattr(cfg, "extras", {}) or {}
+        base_dir_override = extras.get("dataset_dir_override")
+        if base_dir_override is not None:
+            exp_dir = Path(base_dir_override)
+        else:
+            exp_dir = Path(__file__).resolve().parent
         ds_dir = exp_dir / "datasets"
         ds_dir.mkdir(parents=True, exist_ok=True)
         outputs = [ds_dir / "train.bin", ds_dir / "val.bin", ds_dir / "meta.pkl"]
-
-        ensure_modern_ngram(cfg.extras)
 
         if _artifacts_look_valid(outputs):
             msgs = (

@@ -4,7 +4,6 @@ import sys
 import logging
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping
-import importlib
 
 
 def run_server_bundestag_char(host: str, port: int, open_browser: bool, logger) -> None:
@@ -15,57 +14,26 @@ def run_server_bundestag_char(host: str, port: int, open_browser: bool, logger) 
     """
 
     def _import_lit_server():
-        paths = [
-            "lit_nlp.server",
-            "lit_nlp.dev_server",
-            "lit_nlp.runtime.server",
-            "lit_nlp.lib.server",
-        ]
-        last_err: Exception | None = None
-        for p in paths:
-            try:
-                return importlib.import_module(p)
-            except ImportError as err:  # pragma: no cover - best-effort compatibility
-                last_err = err
-        # If all imports failed, raise with context
         try:
-            import lit_nlp  # type: ignore
+            from lit_nlp import server  # type: ignore[import]
 
-            lit_ver = getattr(lit_nlp, "__version__", "<unknown>")
-            ver_msg = f"(detected lit-nlp version: {lit_ver})"
-        except ImportError:
-            ver_msg = "(lit-nlp not importable)"
-        raise RuntimeError(
-            "Unable to import LIT server module. Tried: lit_nlp.server, "
-            "lit_nlp.dev_server, lit_nlp.runtime.server, lit_nlp.lib.server.\n"
-            f"{ver_msg}. Last error: {last_err}"
-        )
+            return server
+        except ImportError as err:
+            raise RuntimeError(
+                "LIT server import failed. Ensure lit-nlp is installed and compatible. "
+                f"Error: {err}"
+            ) from err
 
     try:
         # Lazy imports to avoid hard-dependency unless the command is used.
-        from lit_nlp.api import dataset as lit_dataset  # type: ignore
-        from lit_nlp.api import model as lit_model  # type: ignore
-        from lit_nlp.api import types as lit_types  # type: ignore
+        from lit_nlp.api import dataset as lit_dataset  # type: ignore[import]
+        from lit_nlp.api import model as lit_model  # type: ignore[import]
+        from lit_nlp.api import types as lit_types  # type: ignore[import]
 
         lit_server = _import_lit_server()
     except ImportError as e:  # pragma: no cover - import-guard path
-        # Try to include lit-nlp version info to aid debugging
-        try:
-            import lit_nlp  # type: ignore
-
-            lit_ver = getattr(lit_nlp, "__version__", "<unknown>")
-            ver_msg = f"(detected lit-nlp version: {lit_ver})"
-        except ImportError:
-            ver_msg = "(lit-nlp not importable)"
         raise RuntimeError(
-            "LIT is not available or incompatible. "
-            f"{ver_msg}\n"
-            "Install an appropriate version in an isolated Python 3.12 env, e.g.:\n"
-            "  uv run --no-project --python 3.12 --with 'lit-nlp>=1.3.1' --with 'numpy<2' -- python -m ml_playground.analysis.lit_integration\n"
-            "Alternatively, add the extra directly to your project with:\n"
-            "  uv add lit-nlp\n"
-            "Or use the Make targets: 'make lit-ephemeral-312' or 'make lit-venv-312-setup && make lit-venv-312'.\n"
-            "See docs/LIT.md for details."
+            f"LIT dependencies not available: {e}. Install lit-nlp with: uv add lit-nlp"
         ) from e
 
     # --- Tiny sample dataset ---

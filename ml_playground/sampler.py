@@ -91,7 +91,13 @@ class Sampler:
     def _load_checkpoint_and_model(self) -> GPT:
         """Load the configured checkpoint and materialize a `GPT` model."""
         checkpoint = self._load_checkpoint()
-        return self._init_model_from_checkpoint(checkpoint)
+        model = self._init_model_from_checkpoint(checkpoint)
+        if getattr(self.runtime_cfg, "compile", False):
+            try:
+                model = cast(GPT, torch.compile(model))  # type: ignore[attr-defined]
+            except AttributeError:
+                pass
+        return model
 
     def _load_checkpoint(self) -> Checkpoint:
         """Load a checkpoint according to the configured read policy."""
@@ -105,15 +111,11 @@ class Sampler:
         )
 
     def _init_model_from_checkpoint(self, checkpoint: Checkpoint) -> GPT:
-        """Rebuild a `GPT` instance from checkpointed weights and metadata."""
         model_cfg = ModelConfig(**checkpoint.model_args)
         model = GPT(model_cfg, self.logger)
         model.load_state_dict(checkpoint.model, strict=False)
         model.eval()
         model.to(self.runtime_cfg.device)
-        if self.runtime_cfg.compile:
-            # torch.compile returns Any; cast to GPT for static typing
-            model = cast(GPT, torch.compile(model))
         return model
 
     def _setup_tokenizer(self):

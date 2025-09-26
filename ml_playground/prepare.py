@@ -39,50 +39,35 @@ class PreparationOutcome:
 def create_standardized_metadata(
     tokenizer: Tokenizer, train_tokens: int, val_tokens: int, extras: dict | None = None
 ) -> dict:
-    """Create standardized metadata for dataset preparation.
+    """Create standardized metadata for dataset preparation."""
 
-    Args:
-        tokenizer: The tokenizer used for encoding
-        train_tokens: Number of tokens in training set
-        val_tokens: Number of tokens in validation set
-        extras: Additional metadata to include
-
-    Returns:
-        Standardized metadata dictionary
-    """
     meta: dict[str, Any] = {
         "meta_version": 1,
+        "tokenizer_type": getattr(tokenizer, "name", None) or "unknown",
         "vocab_size": tokenizer.vocab_size,
         "train_tokens": train_tokens,
         "val_tokens": val_tokens,
+        "has_encode": hasattr(tokenizer, "encode"),
+        "has_decode": hasattr(tokenizer, "decode"),
     }
 
-    # Add tokenizer-specific information (mandatory type/name)
-    meta["tokenizer_type"] = getattr(tokenizer, "name", None) or "unknown"
-    # Backward-compat key for any existing code that looked for 'tokenizer'
+    # Backward compatibility key kept for older consumers
     meta["tokenizer"] = meta["tokenizer_type"]
-
-    # Add encoding information if available
-    if hasattr(tokenizer, "encode") and hasattr(tokenizer, "decode"):
-        meta["has_encode"] = True
-        meta["has_decode"] = True
 
     # Include tokenizer details to support reconstruction during sampling
     try:
         if meta["tokenizer_type"] in ("char", "word"):
-            # Capture vocab if present
             vocab = getattr(tokenizer, "stoi", None)
             if isinstance(vocab, dict) and vocab:
                 meta["stoi"] = vocab
         elif meta["tokenizer_type"] == "tiktoken":
-            enc_name = getattr(tokenizer, "encoding_name", None)
-            if isinstance(enc_name, str):
-                meta["encoding_name"] = enc_name
+            encoding_name = getattr(tokenizer, "encoding_name", None)
+            if isinstance(encoding_name, str):
+                meta["encoding_name"] = encoding_name
     except (AttributeError, TypeError, ValueError):
         # Metadata enrichment is best-effort; never fail preparation
         pass
 
-    # Include extras if provided
     if extras:
         meta.update(extras)
 
@@ -204,17 +189,6 @@ class _PreparationPipeline:
 
 def create_pipeline(cfg: PreparerConfig, shared: SharedConfig) -> _PreparationPipeline:
     return _PreparationPipeline(cfg, shared)
-
-
-class Preparer:
-    """Legacy callable wrapper retained for backwards compatibility."""
-
-    def __init__(self, cfg: PreparerConfig) -> None:
-        self.cfg = cfg
-
-    def __call__(self, shared: SharedConfig) -> None:
-        pipeline = create_pipeline(self.cfg, shared)
-        pipeline.run()
 
 
 def split_train_val(text: str, split: float = 0.9) -> tuple[str, str]:
@@ -403,7 +377,6 @@ def setup_tokenizer(
 __all__ = [
     "PreparationOutcome",
     "create_pipeline",
-    "Preparer",
     "create_standardized_metadata",
     "split_train_val",
     "prepare_with_tokenizer",

@@ -104,8 +104,10 @@ def test_sequential_progression_basic(tmp_path: Path) -> None:
 
     # Second call: cursor logic advances; first sample at 10..14, second wraps
     x2, y2 = batches.get_batch("train")
-    exp_x1 = torch.tensor([[10, 11, 12, 13, 14], [16, 17, 18, 19, 0]], dtype=torch.long)
-    exp_y1 = torch.tensor([[11, 12, 13, 14, 15], [17, 18, 19, 0, 1]], dtype=torch.long)
+    exp_x1 = torch.tensor(
+        [[10, 11, 12, 13, 14], [15, 16, 17, 18, 19]], dtype=torch.long
+    )
+    exp_y1 = torch.tensor([[11, 12, 13, 14, 15], [16, 17, 18, 19, 0]], dtype=torch.long)
     assert torch.equal(x2.cpu(), exp_x1)
     assert torch.equal(y2.cpu(), exp_y1)
 
@@ -542,15 +544,14 @@ def test_setup_tokenizer_missing_meta_raises_clear_error(out_dir: Path) -> None:
         s = sampler.Sampler(cfg, shared)
         s.run()
 
-        error_msg = str(exc_info.value)
-        assert "Tokenizer metadata not found" in error_msg
-        assert "meta.pkl" in error_msg
-        assert str(out_dir) in error_msg  # sampling output directory
-        assert "Run 'prepare' first" in error_msg
+    error_msg = str(exc_info.value)
+    assert "Tokenizer metadata not found" in error_msg
+    assert "meta.pkl" in error_msg
+    assert str(out_dir) in error_msg  # sampling output directory
+    assert "Run 'train' first" in error_msg
 
 
 def test_sampler_requires_rotated_checkpoints(out_dir: Path) -> None:
-    # Provide strict meta so tokenizer would succeed, but omit rotated checkpoints
     meta = {
         "meta_version": 1,
         "kind": "char",
@@ -561,7 +562,7 @@ def test_sampler_requires_rotated_checkpoints(out_dir: Path) -> None:
     }
     with (out_dir / "meta.pkl").open("wb") as f:
         pickle.dump(meta, f)
-    # Write only stable file (should be ignored) to prove strictness
+
     torch.save({"model": {}}, out_dir / "ckpt_best.pt")
 
     cfg = _sampler_cfg(out_dir)

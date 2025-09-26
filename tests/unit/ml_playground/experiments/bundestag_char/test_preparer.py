@@ -1,33 +1,45 @@
 from __future__ import annotations
 
-import pytest
+from pathlib import Path
 
-from ml_playground.error_handling import DataError
-from ml_playground.experiments.bundestag_char.preparer import (
-    BundestagCharPreparer,
-    ensure_modern_ngram,
-)
+
+from ml_playground.experiments.bundestag_char.preparer import BundestagCharPreparer
 from ml_playground.prepare import PreparerConfig
 
 
-def test_preparer_rejects_legacy_ngram_size() -> None:
-    """ngram_size extras greater than 1 must raise a DataError."""
+def test_preparer_allows_legacy_ngram_extra(tmp_path: Path) -> None:
+    """Legacy ngram extras are now ignored, so preparation proceeds."""
+    (tmp_path / "page1.txt").write_text("Hallo Bundestag", encoding="utf-8")
+    cfg = PreparerConfig(
+        extras={
+            "ngram_size": 3,
+            "dataset_dir_override": str(tmp_path),
+        }
+    )
+
     preparer = BundestagCharPreparer()
-    cfg = PreparerConfig(extras={"ngram_size": 3})
+    report = preparer.prepare(cfg)
 
-    with pytest.raises(DataError, match="Legacy n-gram preparation has been removed"):
-        preparer.prepare(cfg)
+    ds_dir = tmp_path / "datasets"
+    assert (ds_dir / "train.bin").exists()
+    assert (ds_dir / "val.bin").exists()
+    assert (ds_dir / "meta.pkl").exists()
+    assert any("prepared dataset" in msg for msg in report.messages)
 
 
-def test_preparer_rejects_non_numeric_ngram(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Non-numeric ngram_size extras are refused before any filesystem work."""
+def test_preparer_dataset_override_uses_custom_base(tmp_path: Path) -> None:
+    """Dataset artifacts are written under the provided dataset_dir_override."""
+    base_dir = tmp_path / "custom"
+    base_dir.mkdir()
+    (base_dir / "page1.txt").write_text("Bundestag override", encoding="utf-8")
+
+    cfg = PreparerConfig(extras={"dataset_dir_override": str(base_dir)})
+
     preparer = BundestagCharPreparer()
-    cfg = PreparerConfig(extras={"ngram_size": "three"})
+    report = preparer.prepare(cfg)
 
-    with pytest.raises(DataError, match="Remove the 'ngram_size' extra"):
-        preparer.prepare(cfg)
-
-
-def test_ensure_modern_ngram_accepts_one() -> None:
-    """Passing an explicit legacy value of 1 is treated as modern and allowed."""
-    ensure_modern_ngram({"ngram_size": 1})
+    ds_dir = base_dir / "datasets"
+    assert (ds_dir / "train.bin").exists()
+    assert (ds_dir / "val.bin").exists()
+    assert (ds_dir / "meta.pkl").exists()
+    assert report.created_files
