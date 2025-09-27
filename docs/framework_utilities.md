@@ -275,6 +275,22 @@ train_arr, val_arr, meta = prepare_with_tokenizer(data, tokenizer)
 write_bin_and_meta(ds_dir, train_arr, val_arr, meta)
 ```
 
+### Model Construction
+
+```python
+from ml_playground.models.core.config import GPTConfig
+from ml_playground.models.core.model import GPT
+
+gpt_cfg = GPTConfig(
+    block_size=1024,
+    vocab_size=50304,
+    n_layer=12,
+    n_head=12,
+    n_embd=768,
+)
+model = GPT(gpt_cfg, logger=exp.logger)
+```
+
 ## Benefits
 
 1. __Reduced Code Duplication__ - Common functionality is now centralized
