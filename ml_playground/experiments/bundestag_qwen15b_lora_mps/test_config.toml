@@ -7,12 +7,12 @@ dataset_dir = "./experiments/bundestag_qwen15b_lora_mps/datasets"
 add_structure_tokens = false
 doc_separator = "<DOC_SEP>"
 
-[train.extras.hf_model]
+[train.hf_model]
 model_name = "Qwen/Qwen2.5-1.5B"
 gradient_checkpointing = false
 block_size = 32
 
-[train.extras.peft]
+[train.peft]
 enabled = true
 r = 8
 lora_alpha = 16

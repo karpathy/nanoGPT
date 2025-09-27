@@ -20,7 +20,7 @@ add_structure_tokens = true
 # Token string used to separate concatenated documents during packing; ensure it’s present if you depend on it.
 doc_separator = "<DOC_SEP>"
 
-[train.extras.hf_model]
+[train.hf_model]
 # Hugging Face base model to fine-tune with LoRA.
 model_name = "Qwen/Qwen2.5-1.5B"
 # Enable gradient checkpointing to reduce memory at the cost of additional compute.
@@ -28,7 +28,7 @@ gradient_checkpointing = true
 # Logical sequence length for data packing/truncation during training (tokens per training block).
 block_size = 256
 
-[train.extras.peft]
+[train.peft]
 # Toggle LoRA training. If false, trains full model (not recommended on consumer hardware).
 enabled = true
 # Intrinsic rank of LoRA matrices (capacity of the adapter).
