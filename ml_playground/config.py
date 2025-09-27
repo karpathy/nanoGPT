@@ -167,6 +167,8 @@ class PreparerConfig(_FrozenStrictModel):
     """Strict config for data preparation (owner-local)."""
 
     raw_dir: Path = Path("./raw")
+    raw_text_path: Path | None = None
+    tokenizer_type: Literal["char", "word", "tiktoken"] = "char"
     add_structure_tokens: bool = False
     doc_separator: str = ""
     extras: dict[str, Any] = Field(default_factory=dict)
@@ -180,14 +182,7 @@ class PreparerConfig(_FrozenStrictModel):
         if not config_path or not isinstance(config_path, Path):
             return data
         base_dir = config_path.parent
-        _resolve_fields_relative(data, ["raw_dir"], base_dir)
-        # Resolve known extras paths relative to the experiment config directory
-        extras = data.get("extras")
-        if isinstance(extras, dict):
-            if "raw_text_path" in extras:
-                extras["raw_text_path"] = _resolve_if_relative(
-                    extras["raw_text_path"], base_dir
-                )
+        _resolve_fields_relative(data, ["raw_dir", "raw_text_path"], base_dir)
         return data
 
 
@@ -285,17 +280,45 @@ class TrainerConfig(_FrozenStrictModel):
 
         return data
 
+    class HFModelConfig(_FrozenStrictModel):
+        model_name: str
+        gradient_checkpointing: bool = False
+        block_size: AtLeastOneInt = 1024
+
+    class PeftConfig(_FrozenStrictModel):
+        enabled: bool = False
+        r: PositiveStrictInt = 8
+        lora_alpha: PositiveStrictFloat = 16.0
+        lora_dropout: UnitIntervalStrictFloat = 0.0
+        bias: Literal["none", "all", "lora_only"] = "none"
+        target_modules: tuple[str, ...] = ()
+        extend_mlp_targets: bool = False
+
+        @model_validator(mode="before")
+        @classmethod
+        def _coerce_target_modules(cls, data: Any) -> Any:
+            if isinstance(data, dict) and "target_modules" in data:
+                modules = data["target_modules"]
+                if isinstance(modules, list):
+                    data["target_modules"] = tuple(str(m) for m in modules)
+            return data
+
     model: ModelConfig
     data: DataConfig
     optim: OptimConfig
     schedule: LRSchedule
     runtime: RuntimeConfig
     extras: dict[str, Any] = Field(default_factory=dict)
+    hf_model: HFModelConfig | None = None
+    peft: PeftConfig | None = None
     checkpointing: RuntimeConfig.Checkpointing = RuntimeConfig.Checkpointing()
 
     @model_validator(mode="after")
     def _cross_field_checks(self) -> "TrainerConfig":
         _ConfigCrossFieldValidator.trainer(self)
+        # hf_model and peft are optional to preserve backward compatibility in
+        # existing experiments and tests. When provided, they are validated by
+        # their own schemas.
         return self
 
 
@@ -476,12 +499,6 @@ class ExperimentConfig(_FrozenStrictModel):
             if "raw_dir" in prepare_data:
                 prepare_data["raw_dir"] = _resolve_if_relative(
                     prepare_data["raw_dir"], base_dir
-                )
-            # Resolve known extras paths relative to the experiment config directory
-            extras = prepare_data.get("extras")
-            if isinstance(extras, dict) and "raw_text_path" in extras:
-                extras["raw_text_path"] = _resolve_if_relative(
-                    extras["raw_text_path"], base_dir
                 )
 
         # Populate shared paths and ensure they are Path-typed (preserve relative semantics)
