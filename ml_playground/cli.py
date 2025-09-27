@@ -291,8 +291,13 @@ def prepare(
 ) -> None:
     """Prepare data for an experiment."""
     exp_config_path = _extract_exp_config(ctx)
+
+    def _do_prepare() -> None:
+        exp = _load_experiment(experiment, exp_config_path)
+        _run_prepare(experiment, exp.prepare, exp.shared.config_path, exp.shared)
+
     run_or_exit(
-        lambda: _run_prepare_cmd(experiment, exp_config_path),
+        _do_prepare,
         keyboard_interrupt_msg="\nData preparation cancelled.",
     )
 
@@ -341,12 +346,6 @@ def analyze(
     _run_analyze(experiment, host, port, open_browser)
 
 
-# (convert command removed as part of refactor; exporting handled by experiment-specific tooling)
-
-
-# --- Main entrypoint ---------------------------------------------------------
-
-
 def main(argv: list[str] | None = None) -> int | None:
     """Programmatic entry point used by tests; does not sys.exit.
 
@@ -362,12 +361,6 @@ def main(argv: list[str] | None = None) -> int | None:
 # ---------------------------------------------------------------------------
 # Simplified command implementations
 # ---------------------------------------------------------------------------
-
-
-def _run_prepare_cmd(experiment: str, exp_config_path: Path | None) -> None:
-    """Run prepare command: load full ExperimentConfig once and pass section."""
-    exp = _load_experiment(experiment, exp_config_path)
-    _run_prepare(experiment, exp.prepare, exp.shared.config_path, exp.shared)
 
 
 def _run_train_cmd(experiment: str, exp_config_path: Path | None) -> None:
