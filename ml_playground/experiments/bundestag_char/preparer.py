@@ -59,8 +59,16 @@ class BundestagCharPreparer(_PreparerProto):
 
         validate_file_exists(input_file_path, "Input text file")
 
-        data = input_file_path.read_text(encoding="utf-8")
+        raw_path = cfg.raw_text_path or input_file_path
+        data = Path(raw_path).read_text(encoding="utf-8")
 
+        tokenizer_type = (
+            cfg.tokenizer_type if hasattr(cfg, "tokenizer_type") else "char"
+        )
+        if tokenizer_type != "char":
+            raise ValueError(
+                "BundestagCharPreparer only supports char tokenizer configured via prepare.tokenizer_type"
+            )
         tokenizer = CharTokenizer()  # Let prepare_with_tokenizer build the vocab
 
         train_arr, val_arr, meta, tokenizer = prepare_with_tokenizer(data, tokenizer)
