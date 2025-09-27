@@ -5,7 +5,7 @@ from typing import Any, Dict, Literal, Tuple, cast
 import torch
 
 from ml_playground.data import SimpleBatches
-from ml_playground.model import GPT
+from ml_playground.models.core.model import GPT
 
 
 __all__ = ["estimate_loss"]

@@ -22,7 +22,7 @@ from ml_playground.ema import EMA
 from ml_playground.error_handling import CheckpointError
 from ml_playground.estimator import estimate_loss
 from ml_playground import lr_scheduler
-from ml_playground.model import GPT
+from ml_playground.models.core.model import GPT
 
 
 def get_lr(it: int, schedule: LRSchedule, optim: OptimConfig) -> float:

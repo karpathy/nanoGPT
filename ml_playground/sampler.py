@@ -20,7 +20,7 @@ from ml_playground.config import (
     SharedConfig,
 )
 from ml_playground.error_handling import DataError, FileOperationError
-from ml_playground.model import GPT
+from ml_playground.models.core.model import GPT
 from ml_playground.prepare import setup_tokenizer
 
 

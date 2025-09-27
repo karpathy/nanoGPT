@@ -2,7 +2,8 @@ from __future__ import annotations
 from pathlib import Path
 import torch
 import logging
-from ml_playground.model import GPTConfig, GPT
+from ml_playground.models.core.config import GPTConfig
+from ml_playground.models.core.model import GPT
 from ml_playground.sampler import Sampler
 from ml_playground.config import (
     SamplerConfig,

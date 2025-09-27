@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 from ml_playground.config import DeviceKind
-from ml_playground.model import GPT
+from ml_playground.models.core.model import GPT
 
 
 __all__ = ["EMA"]
