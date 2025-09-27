@@ -12,6 +12,7 @@ from ml_playground.config import (
     OptimConfig,
     ModelConfig,
     RuntimeConfig,
+    TrainerConfig,
 )
 from ml_playground.config_loader import (
     load_full_experiment_config,
@@ -393,6 +394,86 @@ def test_deep_merge_type_replacement() -> None:
     out = deep_merge_dicts(base, override)
     assert out["a"] == {"x": 1}
     assert out["b"] == 7
+
+
+def test_trainer_resolves_relative_runtime_out_dir(tmp_path: Path) -> None:
+    cfg_text = minimal_full_experiment_toml(
+        dataset_dir=Path("./data"),
+        out_dir=Path("out/rel_train"),
+        include_sample=True,
+    )
+    cfg_path = tmp_path / "cfg.toml"
+    cfg_path.write_text(cfg_text, encoding="utf-8")
+    exp = load_full_experiment_config(cfg_path, tmp_path, "exp")
+    # Trainer runtime out_dir should be a Path and kept relative (coercion only)
+    assert isinstance(exp.train.runtime.out_dir, Path)
+    assert str(exp.train.runtime.out_dir) == "out/rel_train"
+
+
+def test_sampler_resolves_relative_runtime_out_dir(tmp_path: Path) -> None:
+    cfg_text = minimal_full_experiment_toml(
+        dataset_dir=Path("./data"),
+        out_dir=Path("out/rel_sample"),
+        include_sample=True,
+    )
+    cfg_path = tmp_path / "cfg.toml"
+    cfg_path.write_text(cfg_text, encoding="utf-8")
+    exp = load_full_experiment_config(cfg_path, tmp_path, "exp")
+    assert isinstance(exp.sample.runtime.out_dir, Path)
+    assert str(exp.sample.runtime.out_dir) == "out/rel_sample"
+
+
+def test_experiment_config_shared_path_coercions(tmp_path: Path) -> None:
+    ds_dir = Path("./data/shared")
+    out_dir = Path("out/shared")
+    cfg_text = minimal_full_experiment_toml(dataset_dir=ds_dir, out_dir=out_dir)
+    cfg_path = tmp_path / "cfg.toml"
+    cfg_path.write_text(cfg_text, encoding="utf-8")
+
+    exp: ExperimentConfig = load_full_experiment_config(cfg_path, tmp_path, "exp")
+    # Shared paths are coerced to Path and resolved relative to config_path directory
+    assert isinstance(exp.shared.dataset_dir, Path)
+    assert isinstance(exp.shared.train_out_dir, Path)
+    assert isinstance(exp.shared.sample_out_dir, Path)
+    assert exp.shared.train_out_dir.is_absolute()
+    assert exp.shared.sample_out_dir.is_absolute()
+    # The absolute paths should end with the provided relative out_dir string
+    assert str(exp.shared.train_out_dir).endswith(str(out_dir))
+    assert str(exp.shared.sample_out_dir).endswith(str(out_dir))
+
+
+def test_cross_field_validations(tmp_path: Path) -> None:
+    # data.block_size must be <= model.block_size
+    with pytest.raises(ValueError):
+        TrainerConfig(
+            model=ModelConfig(block_size=4),
+            data=DataConfig(block_size=8, batch_size=1, grad_accum_steps=1),
+            optim=OptimConfig(),
+            schedule=LRSchedule(
+                decay_lr=True, warmup_iters=1, lr_decay_iters=2, min_lr=0
+            ),
+            runtime=RuntimeConfig(out_dir=tmp_path),
+        )
+
+    # schedule.warmup_iters <= lr_decay_iters enforced
+    with pytest.raises(ValueError):
+        LRSchedule(decay_lr=True, warmup_iters=10, lr_decay_iters=5, min_lr=0)
+
+    # schedule.min_lr <= optim.learning_rate when decay enabled
+    with pytest.raises(ValueError):
+        TrainerConfig(
+            model=ModelConfig(block_size=4),
+            data=DataConfig(block_size=4, batch_size=1, grad_accum_steps=1),
+            optim=OptimConfig(learning_rate=1e-3),
+            schedule=LRSchedule(
+                decay_lr=True, warmup_iters=0, lr_decay_iters=2, min_lr=2e-3
+            ),
+            runtime=RuntimeConfig(out_dir=tmp_path),
+        )
+
+    # runtime.log_interval <= eval_interval enforced
+    with pytest.raises(ValueError):
+        RuntimeConfig(out_dir=tmp_path, log_interval=10, eval_interval=1)
 
 
 def test_dataconfig_paths_and_defaults(tmp_path: Path) -> None:
