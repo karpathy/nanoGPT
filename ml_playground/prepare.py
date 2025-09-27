@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import pickle
 from typing import Any, Iterable, Literal, cast
+import re
 
 import numpy as np
 from ml_playground._file_state import diff_file_states, snapshot_file_states
@@ -134,8 +135,7 @@ class _PreparationPipeline:
         )
 
     def _resolve_tokenizer_type(self) -> TokenizerKind:
-        raw_value = self._cfg.extras.get("tokenizer_type", "char")
-        return _coerce_tokenizer_type(str(raw_value))
+        return _coerce_tokenizer_type(self._cfg.tokenizer_type)
 
     def _resolve_data_config(self) -> DataConfig | None:
         data_cfg = self._cfg.extras.get("data_config")
@@ -160,15 +160,11 @@ class _PreparationPipeline:
         return ratio
 
     def _load_raw_text(self) -> str:
-        text = self._cfg.extras.get("raw_text")
-        if text is not None:
-            return str(text)
-
-        raw_text_path = self._cfg.extras.get("raw_text_path")
+        raw_text_path = self._cfg.raw_text_path
         if raw_text_path is not None:
             return Path(raw_text_path).read_text(encoding="utf-8")
 
-        raise DataError("No raw text or path provided in preparer extras")
+        raise DataError("No raw text path provided in preparer config")
 
     def _output_paths(self, data_cfg: DataConfig | None) -> list[Path]:
         if data_cfg is not None:
@@ -226,8 +222,6 @@ def prepare_with_tokenizer(
             tokenizer = create_tokenizer("char", vocab=vocab)
         elif isinstance(tokenizer, WordTokenizer):
             # For word tokenizer, split into words and build vocab
-            import re
-
             words = re.findall(r"\w+|[^\w\s]", all_text)
             unique_words = sorted(set(words))
             vocab = {word: i for i, word in enumerate(unique_words)}
