@@ -126,6 +126,9 @@ class _FakeWriter:
 def _make_minimal_trainer_cfg(
     tmp_path: Path, eval_only: bool = False, max_iters: int = 2
 ) -> TrainerConfig:
+    out_dir = tmp_path / "out"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
     # Configure a schedule with warmup and decay to test LR changes
     cfg = TrainerConfig(
         model=ModelConfig(n_layer=1, n_head=1, n_embd=8, block_size=4, dropout=0.0),
@@ -137,7 +140,7 @@ def _make_minimal_trainer_cfg(
             decay_lr=True, warmup_iters=1, lr_decay_iters=10, min_lr=0.001
         ),
         runtime=RuntimeConfig(
-            out_dir=tmp_path / "out",
+            out_dir=out_dir,
             max_iters=max_iters,
             eval_interval=1,
             eval_iters=1,
@@ -150,6 +153,12 @@ def _make_minimal_trainer_cfg(
             tensorboard_enabled=True,
             ema_decay=0.0,
         ),
+        hf_model=TrainerConfig.HFModelConfig(
+            model_name="hf/model",
+            gradient_checkpointing=False,
+            block_size=128,
+        ),
+        peft=TrainerConfig.PeftConfig(enabled=False),
     )
     return cfg
 
