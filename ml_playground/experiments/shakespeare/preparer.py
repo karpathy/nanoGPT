@@ -9,8 +9,9 @@ from ml_playground.prepare import (
     split_train_val,
     write_bin_and_meta,
     create_standardized_metadata,
+    snapshot_file_states,
+    diff_file_states,
 )
-from ml_playground._file_state import snapshot_file_states, diff_file_states
 from ml_playground.tokenizer import create_tokenizer
 from ml_playground.experiments.protocol import (
     Preparer as _PreparerProto,
