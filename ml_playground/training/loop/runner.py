@@ -162,6 +162,23 @@ class Trainer:
                         batch_size=self.cfg.data.batch_size,
                         grad_accum_steps=self.cfg.data.grad_accum_steps,
                     )
+                    # TensorBoard logging if update mode is 'log'
+                    try:
+                        if (
+                            self.writer
+                            and getattr(
+                                self.cfg.runtime, "tensorboard_update_mode", "eval"
+                            )
+                            == "log"
+                        ):
+                            scaled_loss = loss.item() * self.cfg.data.grad_accum_steps
+                            self.writer.add_scalar(
+                                "Loss/train", scaled_loss, self.iter_num
+                            )
+                            self.writer.add_scalar("LR", lr, self.iter_num)
+                    except Exception:
+                        # Never fail training loop due to TB writer issues
+                        pass
 
                 self.iter_num += 1
                 local_iter_num += 1

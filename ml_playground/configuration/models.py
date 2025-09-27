@@ -178,6 +178,7 @@ class RuntimeConfig(_FrozenStrictModel):
     dtype: DTypeKind = "float32"
     compile: bool = False
     tensorboard_enabled: bool = True
+    tensorboard_update_mode: Literal["eval", "log"] = "eval"
     always_save_checkpoint: bool = False
     iters_per_epoch: Optional[EpochCount] = None
     max_epochs: Optional[EpochCount] = None
