@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import pickle
 from typing import List, Mapping
 
 import numpy as np
@@ -13,7 +14,7 @@ from ml_playground.prepare import (
     create_standardized_metadata,
     prepare_with_tokenizer,
 )
-from ml_playground.tokenizer import CharTokenizer
+from ml_playground.tokenizer import CharTokenizer, WordTokenizer
 
 
 """Logging helpers are provided via fixtures in conftest.py (list_logger, list_logger_factory)."""
@@ -54,6 +55,24 @@ def _mk_arrays(n: int) -> tuple[np.ndarray, np.ndarray, dict]:
     val = np.arange(n, dtype=np.uint16)
     meta = {"meta_version": 1}
     return train, val, meta
+
+
+# Additional fake tokenizer for tiktoken-like metadata enrichment tests
+class _FakeTiktoken:
+    def __init__(self) -> None:
+        self.name = "tiktoken"
+        self.encoding_name = "gpt2"
+        self._vocab_size = 1000
+
+    @property
+    def vocab_size(self) -> int:
+        return self._vocab_size
+
+    def encode(self, s: str) -> list[int]:
+        return list(range(len(s)))
+
+    def decode(self, ids: list[int]) -> str:
+        return "".join("x" for _ in ids)
 
 
 # ---- split helpers ----
@@ -104,6 +123,15 @@ def test_create_standardized_metadata_sets_flags_and_extras() -> None:
     assert meta["x"] == 1
 
 
+def test_create_standardized_metadata_tiktoken_enrichment() -> None:
+    tok = _FakeTiktoken()
+    meta = create_standardized_metadata(tok, train_tokens=3, val_tokens=2)
+    assert meta["tokenizer_type"] == "tiktoken"
+    assert meta["encoding_name"] == "gpt2"
+    assert meta["vocab_size"] == 1000
+    assert meta["has_encode"] is True and meta["has_decode"] is True
+
+
 # ---- prepare_with_tokenizer ----
 
 
@@ -133,6 +161,17 @@ def test_prepare_with_tokenizer_splits_and_encodes() -> None:
     # Additional logging assertions can be added here if a logger fixture is introduced.
 
 
+def test_prepare_with_tokenizer_word_vocab_rebuild() -> None:
+    # Include punctuation to exercise regex tokenization path
+    text = "Hello, world! Hello"
+    tok = WordTokenizer()
+    train_arr, val_arr, meta, rebuilt = prepare_with_tokenizer(text, tok, split=0.5)
+    assert meta["tokenizer_type"] == "word"
+    # Rebuilt tokenizer should produce uint16 arrays
+    assert train_arr.dtype == np.uint16 and val_arr.dtype == np.uint16
+    assert hasattr(rebuilt, "encode") and hasattr(rebuilt, "decode")
+
+
 def test_write_bin_and_meta_logging_exception_is_ignored(tmp_path: Path) -> None:
     class RaisingLogger:
         def info(self, _message: str) -> None:
@@ -140,6 +179,34 @@ def test_write_bin_and_meta_logging_exception_is_ignored(tmp_path: Path) -> None
 
     train, val, meta = _mk_arrays(3)
     write_bin_and_meta(tmp_path, train, val, meta, logger=RaisingLogger())
+
+
+def test_write_bin_and_meta_already_exists_logs(tmp_path: Path) -> None:
+    ds = tmp_path / "ds"
+    ds.mkdir(parents=True, exist_ok=True)
+    # Pre-create valid artifacts to trigger early-return logging path
+    (ds / "train.bin").write_bytes(np.arange(4, dtype=np.uint16).tobytes())
+    (ds / "val.bin").write_bytes(np.arange(4, dtype=np.uint16).tobytes())
+    with (ds / "meta.pkl").open("wb") as f:
+        pickle.dump({"meta_version": 1}, f)
+
+    class ListLogger:
+        def __init__(self) -> None:
+            self.infos: list[str] = []
+
+        def info(self, msg: str) -> None:
+            self.infos.append(str(msg))
+
+    logger = ListLogger()
+    train = np.arange(2, dtype=np.uint16)
+    val = np.arange(2, dtype=np.uint16)
+    meta = {"meta_version": 1}
+
+    write_bin_and_meta(ds, train, val, meta, logger=logger, data_cfg=None)
+
+    # Ensure the logging branch executed (we do not assert exact content to avoid brittleness)
+    assert any("[prepare] Created" in m for m in logger.infos)
+    assert any("[prepare] Skipped" in m for m in logger.infos)
 
 
 # ---- seed file helpers ----
