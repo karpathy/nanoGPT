@@ -32,6 +32,9 @@ out/
 .hypothesis/
 .hypothesis_cache/
 .coverage
+.coverage.*
+coverage.xml
+coverage/
 htmlcov/
 
 # Mutation testing

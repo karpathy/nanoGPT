@@ -176,6 +176,7 @@ bdd_features_base_dir = "tests/acceptance/features/"
 source = ["ml_playground"]
 branch = true
 parallel = true
+data_file = ".cache/coverage/coverage.sqlite"
 omit = [
     "tests/*",
     "*/conftest.py",
