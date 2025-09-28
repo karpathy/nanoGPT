@@ -18,7 +18,7 @@ from ml_playground.config import (
 import ml_playground.config_loader as config_loader
 import ml_playground.prepare as prepare_mod
 import ml_playground.sampler as sampler_mod
-import ml_playground.trainer as trainer_mod
+from ml_playground.training import Trainer as CoreTrainer
 from ml_playground.experiments import registry
 
 # (Removed unused type aliases)
@@ -177,7 +177,7 @@ def _run_train(
     train_cfg.logger.info(f"Running trainer for experiment: {experiment}")
     _log_command_status("pre-train", shared, shared.train_out_dir, train_cfg.logger)
 
-    trainer = trainer_mod.Trainer(train_cfg, shared)
+    trainer = CoreTrainer(train_cfg, shared)
     trainer.run()
 
     train_cfg.logger.info(f"Trainer for {experiment} finished.")

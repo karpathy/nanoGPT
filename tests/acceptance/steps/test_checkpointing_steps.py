@@ -5,7 +5,7 @@ import time
 import pytest
 from pytest_bdd import scenarios, given, when, then, parsers
 
-from ml_playground.trainer import Checkpoint, CheckpointManager
+from ml_playground.checkpoint import Checkpoint, CheckpointManager
 
 
 scenarios("../features/checkpointing.feature")

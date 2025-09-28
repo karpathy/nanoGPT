@@ -6,7 +6,7 @@ from ml_playground.experiments.protocol import (
     Trainer as _TrainerProto,
     TrainReport,
 )
-from ml_playground.trainer import Trainer as _CoreTrainer
+from ml_playground.training import Trainer as _CoreTrainer
 
 
 class BundestagCharTrainer(_TrainerProto):

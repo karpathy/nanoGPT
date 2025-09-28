@@ -216,7 +216,7 @@ The framework is designed to be modular and extensible. The core components are:
 - __CLI__ - Entry point for all operations
 - __Configuration__ - Manages experiment configuration
 - __Data Preparation__ - Handles dataset preparation and tokenization
-- __Trainer__ - Manages the model training loop
+- __Training Package__ - `ml_playground.training` orchestrates the training loop via `loop/`, `hooks/`, and `checkpointing/` modules
 - __Sampler__ - Handles sampling from a trained model
 
 ## Experiment Utilities
