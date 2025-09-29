@@ -8,14 +8,15 @@ import torch
 import typer
 from typer.main import get_command
 
-from ml_playground.config import (
-    TrainerConfig,
-    SamplerConfig,
-    PreparerConfig,
+from ml_playground.configuration import (
     ExperimentConfig,
+    PreparerConfig,
+    SamplerConfig,
     SharedConfig,
+    TrainerConfig,
 )
-import ml_playground.config_loader as config_loader
+from ml_playground.configuration import loading as config_loading
+from ml_playground.configuration import cli as config_cli
 import ml_playground.prepare as prepare_mod
 import ml_playground.sampler as sampler_mod
 from ml_playground.training import Trainer as CoreTrainer
@@ -48,7 +49,7 @@ def _global_device_setup(device: str, dtype: str, seed: int) -> None:
 def _complete_experiments(ctx: typer.Context, incomplete: str) -> list[str]:
     """Auto-complete experiment names based on directories with a config.toml."""
     # Delegate to loader to keep FS access centralized for configuration
-    return config_loader.list_experiments_with_config(incomplete)
+    return config_loading.list_experiments_with_config(incomplete)
 
 
 # --- CLI plumbing ----------------------------------------------------------
@@ -96,20 +97,9 @@ def run_or_exit(
         raise typer.Exit(exception_exit_code)
 
 
-def _cfg_path_for(experiment: str, exp_config: Path | None) -> Path:
-    """Resolve the path to the experiment config TOML strictly.
-
-    - If exp_config is provided, use it.
-    - Else, use experiments/<experiment>/config.toml under this package's experiments dir.
-    """
-    return config_loader.get_cfg_path(experiment, exp_config)
-
-
 def _load_experiment(experiment: str, exp_config_path: Path | None) -> ExperimentConfig:
     """Load the full experiment configuration."""
-    cfg_path = _cfg_path_for(experiment, exp_config_path)
-    project_home = Path(__file__).resolve().parent.parent
-    return config_loader.load_full_experiment_config(cfg_path, project_home, experiment)
+    return config_cli.load_experiment(experiment, exp_config_path)
 
 
 def _log_dir(tag: str, dir_name: str, dir_path: Path | None, logger) -> None:
@@ -366,27 +356,14 @@ def main(argv: list[str] | None = None) -> int | None:
 def _run_train_cmd(experiment: str, exp_config_path: Path | None) -> None:
     """Run train command: load full ExperimentConfig once and pass section."""
     exp = _load_experiment(experiment, exp_config_path)
-    train_meta = exp.shared.dataset_dir / "meta.pkl"
-    if not train_meta.exists():
-        raise ValueError(
-            f"Missing required meta file for training: {train_meta}.\n"
-            "Run 'prepare' first or ensure your preparer writes meta.pkl."
-        )
+    config_cli.ensure_train_prerequisites(exp)
     _run_train(experiment, exp.train, exp.shared.config_path, exp.shared)
 
 
 def _run_sample_cmd(experiment: str, exp_config_path: Path | None) -> None:
     """Run sample command: load full ExperimentConfig once and pass section."""
     exp = _load_experiment(experiment, exp_config_path)
-    # E1.2/E5: Validate meta existence for sample using SharedConfig only
-    train_meta = exp.shared.dataset_dir / "meta.pkl"
-    runtime_meta = exp.shared.sample_out_dir / experiment / "meta.pkl"
-    if not (train_meta.exists() or runtime_meta.exists()):
-        raise ValueError(
-            "Missing required meta file for sampling. Checked: "
-            f"train.meta={train_meta}, runtime.meta={runtime_meta}.\n"
-            "Run 'prepare' and 'train' first or place meta.pkl in one of the expected locations."
-        )
+    config_cli.ensure_sample_prerequisites(exp)
     _run_sample(experiment, exp.sample, exp.shared.config_path, exp.shared)
 
 

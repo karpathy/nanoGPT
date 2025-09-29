@@ -8,7 +8,7 @@ import re
 
 import numpy as np
 from ml_playground._file_state import diff_file_states, snapshot_file_states
-from ml_playground.config import DataConfig, PreparerConfig, SharedConfig
+from ml_playground.configuration import DataConfig, PreparerConfig, SharedConfig
 from ml_playground.error_handling import DataError
 from ml_playground.logging_protocol import LoggerLike
 from ml_playground.tokenizer import CharTokenizer, WordTokenizer, create_tokenizer

@@ -10,7 +10,7 @@ import torch
 from torch.amp.grad_scaler import GradScaler
 from torch.utils.tensorboard import SummaryWriter
 
-from ml_playground.config import TrainerConfig, SharedConfig
+from ml_playground.configuration import TrainerConfig, SharedConfig
 from ml_playground.ema import EMA
 from ml_playground.models.core.model import GPT
 

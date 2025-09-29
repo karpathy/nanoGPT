@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 import torch
 
-from ml_playground.config import (
+from ml_playground.configuration import (
     DataConfig,
     LRSchedule,
     ModelConfig,

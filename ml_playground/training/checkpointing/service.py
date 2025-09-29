@@ -6,7 +6,7 @@ import shutil
 from typing import Optional
 
 from ml_playground.checkpoint import Checkpoint, CheckpointManager
-from ml_playground.config import TrainerConfig, SharedConfig, READ_POLICY_BEST
+from ml_playground.configuration import TrainerConfig, SharedConfig, READ_POLICY_BEST
 from ml_playground.error_handling import CheckpointError
 from ml_playground.models.core.model import GPT
 

@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from ml_playground.data import SimpleBatches
-from ml_playground.config import DataConfig
+from ml_playground.configuration import DataConfig
 
 pytestmark = pytest.mark.skip(
     reason="Consolidated into tests/unit/ml_playground/test_sampler.py (SimpleBatches tests)"

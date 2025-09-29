@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from ml_playground.config import TrainerConfig, SharedConfig
+from ml_playground.configuration import TrainerConfig, SharedConfig
 from ml_playground.experiments.protocol import (
     Trainer as _TrainerProto,
     TrainReport,

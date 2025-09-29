@@ -5,7 +5,7 @@ import logging
 from ml_playground.models.core.config import GPTConfig
 from ml_playground.models.core.model import GPT
 from ml_playground.sampler import Sampler
-from ml_playground.config import (
+from ml_playground.configuration import (
     SamplerConfig,
     SampleConfig,
     RuntimeConfig,

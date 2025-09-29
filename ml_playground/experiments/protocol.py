@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Protocol
 
 from ml_playground.prepare import PreparerConfig
-from ml_playground.config import TrainerConfig, SamplerConfig
+from ml_playground.configuration import TrainerConfig, SamplerConfig
 
 
 @dataclass(frozen=True)

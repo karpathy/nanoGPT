@@ -8,7 +8,7 @@ import pytest
 import torch
 
 import ml_playground.training.loop.runner as runner_mod
-from ml_playground.config import (
+from ml_playground.configuration import (
     DataConfig,
     LRSchedule,
     ModelConfig,

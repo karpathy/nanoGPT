@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from torch.utils.tensorboard import SummaryWriter
 
-from ml_playground.config import TrainerConfig
+from ml_playground.configuration import TrainerConfig
 from ml_playground.data import SimpleBatches
 from ml_playground.estimator import estimate_loss
 from ml_playground.models.core.model import GPT

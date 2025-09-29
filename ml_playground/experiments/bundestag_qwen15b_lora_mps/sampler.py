@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from ml_playground.config import SamplerConfig
+from ml_playground.configuration import SamplerConfig
 from ml_playground.experiments.protocol import (
     Sampler as _SamplerProto,
     SampleReport,

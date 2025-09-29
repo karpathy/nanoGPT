@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ml_playground import lr_scheduler
-from ml_playground.config import LRSchedule, OptimConfig
+from ml_playground.configuration import LRSchedule, OptimConfig
 
 
 __all__ = ["get_lr"]

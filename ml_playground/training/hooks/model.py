@@ -6,7 +6,7 @@ from typing import Tuple
 
 import torch
 
-from ml_playground.config import TrainerConfig
+from ml_playground.configuration import TrainerConfig
 from ml_playground.models.core.model import GPT
 
 

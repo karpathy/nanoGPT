@@ -10,7 +10,7 @@ import pytest
 
 # Import the module under test
 from ml_playground.experiments.speakger import sampler as gm
-from ml_playground.config import SamplerConfig, RuntimeConfig, SampleConfig
+from ml_playground.configuration import SamplerConfig, RuntimeConfig, SampleConfig
 
 
 class DummyTokenizer:

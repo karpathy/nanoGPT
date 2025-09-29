@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ml_playground.config import ModelConfig
+from ml_playground.configuration import ModelConfig
 
 
 class GPTConfig:

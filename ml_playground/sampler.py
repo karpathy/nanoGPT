@@ -13,7 +13,7 @@ import torch
 from torch import autocast
 
 from ml_playground.checkpoint import Checkpoint, CheckpointManager
-from ml_playground.config import (
+from ml_playground.configuration import (
     ModelConfig,
     SamplerConfig,
     READ_POLICY_BEST,

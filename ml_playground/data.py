@@ -9,7 +9,7 @@ import numpy as np
 import numpy.typing as npt
 import torch
 
-from ml_playground.config import DataConfig, DeviceKind
+from ml_playground.configuration import DataConfig, DeviceKind
 
 
 __all__ = ["SimpleBatches"]

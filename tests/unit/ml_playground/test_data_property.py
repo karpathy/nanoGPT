@@ -12,7 +12,7 @@ import pytest
 import torch
 
 from ml_playground.data import _MemmapReader, _sample_batch, SimpleBatches
-from ml_playground.config import DataConfig
+from ml_playground.configuration import DataConfig
 
 
 # Strategies for generating test data

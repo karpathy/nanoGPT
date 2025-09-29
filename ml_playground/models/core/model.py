@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from ml_playground.config import ModelConfig
+from ml_playground.configuration import ModelConfig
 from ml_playground.models.core.config import GPTConfig, build_gpt_config
 from ml_playground.models.core.inference import estimate_model_mfu, generate_tokens
 from ml_playground.models.core.optimization import (

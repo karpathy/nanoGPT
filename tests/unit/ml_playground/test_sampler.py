@@ -9,7 +9,7 @@ import torch
 import numpy as np
 from numpy.typing import NDArray
 
-from ml_playground.config import (
+from ml_playground.configuration import (
     RuntimeConfig,
     SampleConfig,
     SamplerConfig,
