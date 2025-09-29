@@ -9,7 +9,7 @@ The ml_playground now includes several centralized utility modules that provide 
 1. `error_handling.py` - Centralized exception classes and error handling utilities
 2. `tokenizer.py` - Unified tokenizer protocol and implementations
 3. `prepare.py` - Standardized data preparation utilities
-4. Updated `config.py`, `trainer.py`, and `sampler.py` with enhanced functionality
+4. Updated `configuration/` package, `trainer.py`, and `sampler.py` with enhanced functionality
 
 ## Error Handling Utilities
 
@@ -113,7 +113,13 @@ Output is quieter by default due to a global `.SILENT:` in the Makefile; only ex
 
 ## Configuration System
 
-The framework uses a TOML-based configuration system with strict Pydantic models for validation and type safety. The core configuration is defined in `ml_playground/config.py`.
+The framework uses a TOML-based configuration system with strict Pydantic models for validation and type safety. The configuration stack now lives under `ml_playground/configuration/`, which is split into three focused modules:
+
+- `ml_playground/configuration/models.py` — all Pydantic schemas (`ExperimentConfig`, `TrainerConfig`, etc.).
+- `ml_playground/configuration/loading.py` — TOML IO helpers (`read_toml_dict`, `load_full_experiment_config`, section loaders) plus deep-merge utilities.
+- `ml_playground/configuration/cli.py` — adapters used by the Typer CLI (`load_experiment`, prerequisite checks, config path helpers).
+
+Legacy modules `ml_playground/config.py` and `ml_playground/config_loader.py` remain as thin re-export shims for compatibility but should not receive new logic.
 
 ### Config Models
 
@@ -156,6 +162,12 @@ Examples:
 - Path fields (e.g., `dataset_dir`, `raw_dir`, `out_dir`) are `pathlib.Path` in models.
 - `SharedConfig` is the single authority for resolving project-scoped paths. A `@model_validator(before=True)` resolves `project_home`, `dataset_dir`, `train_out_dir`, and `sample_out_dir` relative to `config_path` when provided as strings or relative Paths.
 - Section models (`PreparerConfig`, `TrainerConfig`, `SamplerConfig`) no longer carry ad-hoc path resolution; they accept already-normalized values. Minimal relative resolution remains for section-local fields when explicitly needed and context is available.
+
+### Loader & CLI Adapters
+
+- Use `ml_playground/configuration/loading.load_full_experiment_config()` for end-to-end resolution (defaults + experiment TOML + `.ldres` overrides).
+- Section helpers `load_train_config`, `load_sample_config`, and `load_prepare_config` live alongside the full loader and apply consistent provenance metadata.
+- CLI code should call `ml_playground/configuration/cli.load_experiment()` and related helpers (`cfg_path_for`, `ensure_*_prerequisites`). Avoid re-implementing filesystem logic inside command handlers.
 
 ### Logger Behavior
 

@@ -73,21 +73,18 @@ make loop bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
 
 Make output is intentionally quieter by default via a global `.SILENT:` directive; only explicit messages are printed.
 
-Notes:
-
 - The loop will only skip the prepare step if `train.bin`, `val.bin`, and `meta.pkl` are present in the dataset directory.
 
 ## Configuration System
 
-- All configuration via TOML files mapped to dataclasses in `ml_playground/config.py`
-- No ad-hoc CLI parameter overrides — TOML remains the source of truth.
-- Allowed exceptions (as implemented):
+- All configuration via TOML- __Single Source of Truth for Configuration__
+  - Use the `ml_playground/configuration/` package as the only configuration authority (`models`, `loading`, `cli`).
+  - Prefer `configuration.loading.load_experiment_toml()` (or `load_full_experiment_config`) and strongly typed models: `ExperimentConfig`, `TrainerConfig`, `SamplerConfig`, `RuntimeConfig`.
   - Global CLI option `--exp-config PATH` selects an alternative experiment TOML file (replaces the experiment’s `config.toml`). The global `experiments/default_config.toml` is still merged first under the experiment config.
   - Environment JSON overrides are supported, deep-merged, and strictly re-validated; invalid overrides are ignored to avoid breaking flows:
     - `ML_PLAYGROUND_TRAIN_OVERRIDES`
     - `ML_PLAYGROUND_SAMPLE_OVERRIDES`
 - Paths automatically converted to `pathlib.Path` objects
-- Device defaults to CPU-first; MPS/CUDA supported when explicitly configured
 
 ## Testing
 
@@ -123,10 +120,10 @@ Recommended commit sequence per behavior:
 
 ## Quick Troubleshooting
 
-**Tests cannot import `ml_playground`**: You're not in the project venv - run `uv venv` then `uv sync --all-groups`
+__Tests cannot import `ml_playground`__: You're not in the project venv - run `uv venv` then `uv sync --all-groups`
 
-**Missing pytest**: Run `uv sync --all-groups` to install dev dependencies
+__Missing pytest__: Run `uv sync --all-groups` to install dev dependencies
 
-**UV hangs during venv creation**: Exit any active virtual environment first, then retry
+__UV hangs during venv creation__: Exit any active virtual environment first, then retry
 
 For detailed troubleshooting, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
