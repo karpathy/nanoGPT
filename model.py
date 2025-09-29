@@ -322,6 +322,12 @@ class GPT(nn.Module):
                 logits[logits < v[:, [-1]]] = -float('Inf')
             # apply softmax to convert logits to (normalized) probabilities
             probs = F.softmax(logits, dim=-1)
+            # --- print top 10 most likely tokens ---
+            top_probs, top_indices = torch.topk(probs, k=10, dim=-1)
+            for b in range(probs.size(0)):  # loop over batch if > 1
+                print(f"\nBatch {b} - Top 10 tokens:")
+                for rank, (token_id, prob) in enumerate(zip(top_indices[b].tolist(), top_probs[b].tolist            ()), start=1):
+                    print(f"{rank}. Token {token_id} (prob={prob:.4f})")
             # sample from the distribution
             idx_next = torch.multinomial(probs, num_samples=1)
             # append sampled index to the running sequence and continue
