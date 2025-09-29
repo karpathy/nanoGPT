@@ -104,83 +104,104 @@ class Trainer:
         raw_model = cast(GPT, getattr(self.model, "_orig_mod", self.model))
         running_mfu = -1.0
 
-        while True:
-            lr = get_lr(self.iter_num, self.cfg.schedule, self.cfg.optim)
-            for param_group in self.optimizer.param_groups:
-                param_group["lr"] = lr
+        should_save_checkpoint = True
 
-            if (
-                self.iter_num % self.cfg.runtime.eval_interval == 0
-                and self.cfg.runtime.eval_iters > 0
-            ):
-                losses = run_evaluation(
-                    self.cfg,
-                    logger=self.logger,
-                    iter_num=self.iter_num,
-                    lr=lr,
-                    raw_model=raw_model,
-                    batches=self.batches,
-                    ctx=self.ctx,
-                    writer=self.writer,
-                )
-                if losses["val"] < self.best_val_loss:
-                    self.best_val_loss = losses["val"]
-                    if self.iter_num > 0:
-                        save_checkpoint(
-                            self.ckpt_mgr,
-                            self.cfg,
-                            model=raw_model,
-                            optimizer=self.optimizer,
-                            ema=self.ema,
-                            iter_num=self.iter_num,
-                            best_val_loss=self.best_val_loss,
-                            logger=self.logger,
-                            is_best=True,
-                        )
+        try:
+            while True:
+                lr = get_lr(self.iter_num, self.cfg.schedule, self.cfg.optim)
+                for param_group in self.optimizer.param_groups:
+                    param_group["lr"] = lr
 
-                if self.iter_num == 0 and self.cfg.runtime.eval_only:
+                if (
+                    self.iter_num % self.cfg.runtime.eval_interval == 0
+                    and self.cfg.runtime.eval_iters > 0
+                ):
+                    losses = run_evaluation(
+                        self.cfg,
+                        logger=self.logger,
+                        iter_num=self.iter_num,
+                        lr=lr,
+                        raw_model=raw_model,
+                        batches=self.batches,
+                        ctx=self.ctx,
+                        writer=self.writer,
+                    )
+                    if losses["val"] < self.best_val_loss:
+                        self.best_val_loss = losses["val"]
+                        if self.iter_num > 0:
+                            save_checkpoint(
+                                self.ckpt_mgr,
+                                self.cfg,
+                                model=raw_model,
+                                optimizer=self.optimizer,
+                                ema=self.ema,
+                                iter_num=self.iter_num,
+                                best_val_loss=self.best_val_loss,
+                                logger=self.logger,
+                                is_best=True,
+                            )
+
+                    if self.iter_num == 0 and self.cfg.runtime.eval_only:
+                        break
+
+                loss = self._train_step(X, Y)
+                X, Y = self.batches.get_batch("train")
+
+                t1 = time.time()
+                dt = t1 - t0
+                t0 = t1
+                if self.iter_num % self.cfg.runtime.log_interval == 0:
+                    running_mfu = log_training_step(
+                        self.logger,
+                        iter_num=self.iter_num,
+                        loss_value=loss.item(),
+                        dt=dt,
+                        local_iter_num=local_iter_num,
+                        raw_model=raw_model,
+                        running_mfu=running_mfu,
+                        batch_size=self.cfg.data.batch_size,
+                        grad_accum_steps=self.cfg.data.grad_accum_steps,
+                    )
+
+                self.iter_num += 1
+                local_iter_num += 1
+
+                if self.iter_num > self.cfg.runtime.max_iters:
                     break
 
-            loss = self._train_step(X, Y)
-            X, Y = self.batches.get_batch("train")
+        except KeyboardInterrupt:
+            should_save_checkpoint = False
+            self.logger.info(
+                "Training loop interrupted; skipping final checkpoint save"
+            )
+            raise
+        except BaseException:
+            should_save_checkpoint = False
+            raise
+        finally:
+            try:
+                if should_save_checkpoint:
+                    save_checkpoint(
+                        self.ckpt_mgr,
+                        self.cfg,
+                        model=raw_model,
+                        optimizer=self.optimizer,
+                        ema=self.ema,
+                        iter_num=self.iter_num,
+                        best_val_loss=self.best_val_loss,
+                        logger=self.logger,
+                        is_best=False,
+                    )
+            except Exception as exc:
+                self.logger.warning(f"Failed to save final checkpoint: {exc}")
 
-            t1 = time.time()
-            dt = t1 - t0
-            t0 = t1
-            if self.iter_num % self.cfg.runtime.log_interval == 0:
-                running_mfu = log_training_step(
-                    self.logger,
-                    iter_num=self.iter_num,
-                    loss_value=loss.item(),
-                    dt=dt,
-                    local_iter_num=local_iter_num,
-                    raw_model=raw_model,
-                    running_mfu=running_mfu,
-                    batch_size=self.cfg.data.batch_size,
-                    grad_accum_steps=self.cfg.data.grad_accum_steps,
-                )
+            try:
+                propagate_metadata(self.cfg, self.shared, logger=self.logger)
+            except Exception as exc:
+                self.logger.warning(f"Failed to propagate meta file: {exc}")
 
-            self.iter_num += 1
-            local_iter_num += 1
-
-            if self.iter_num > self.cfg.runtime.max_iters:
-                break
-
-        save_checkpoint(
-            self.ckpt_mgr,
-            self.cfg,
-            model=raw_model,
-            optimizer=self.optimizer,
-            ema=self.ema,
-            iter_num=self.iter_num,
-            best_val_loss=self.best_val_loss,
-            logger=self.logger,
-            is_best=False,
-        )
-        propagate_metadata(self.cfg, self.shared, logger=self.logger)
-
-        if self.writer:
-            self.writer.close()
+            if self.writer:
+                self.writer.close()
 
         return self.iter_num, self.best_val_loss
 

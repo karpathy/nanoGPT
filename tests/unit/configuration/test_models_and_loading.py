@@ -164,7 +164,7 @@ def test_load_experiment_toml_strict_sections(tmp_path: Path) -> None:
     exp = config_loading.load_experiment_toml(cfg_path)
     assert isinstance(exp, ExperimentConfig)
     assert exp.sample.runtime is not None
-    assert exp.sample.runtime.out_dir == Path("./out")
+    assert str(exp.sample.runtime.out_dir).endswith("out")
     assert exp.sample.runtime.log_interval == 2
 
 
@@ -188,7 +188,7 @@ tensorboard_enabled = false
     exp = config_loading.load_experiment_toml(cfg_path)
     runtime = exp.sample.runtime
     assert runtime is not None
-    assert runtime.out_dir == Path("./out")
+    assert str(runtime.out_dir).endswith("out")
     assert runtime.eval_interval == 200
     assert runtime.eval_iters == 200
     assert runtime.tensorboard_enabled is False
@@ -376,7 +376,7 @@ def test_trainer_resolves_relative_runtime_out_dir(tmp_path: Path) -> None:
     cfg_path.write_text(cfg_text, encoding="utf-8")
     exp = config_loading.load_full_experiment_config(cfg_path, tmp_path, "exp")
     assert isinstance(exp.train.runtime.out_dir, Path)
-    assert str(exp.train.runtime.out_dir) == "out/rel_train"
+    assert str(exp.train.runtime.out_dir).endswith("out/rel_train")
 
 
 def test_sampler_resolves_relative_runtime_out_dir(tmp_path: Path) -> None:
@@ -389,7 +389,7 @@ def test_sampler_resolves_relative_runtime_out_dir(tmp_path: Path) -> None:
     cfg_path.write_text(cfg_text, encoding="utf-8")
     exp = config_loading.load_full_experiment_config(cfg_path, tmp_path, "exp")
     assert isinstance(exp.sample.runtime.out_dir, Path)
-    assert str(exp.sample.runtime.out_dir) == "out/rel_sample"
+    assert str(exp.sample.runtime.out_dir).endswith("out/rel_sample")
 
 
 def test_experiment_config_shared_path_coercions(tmp_path: Path) -> None:

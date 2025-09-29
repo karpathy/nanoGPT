@@ -104,11 +104,25 @@ def save_checkpoint(
 
 
 def propagate_metadata(cfg: TrainerConfig, shared: SharedConfig, *, logger) -> None:
-    """Copy dataset metadata into the training output directory when available."""
+    """Copy dataset metadata into train and sample output directories when available."""
     try:
         meta_src = cfg.data.meta_path(shared.dataset_dir)
-        if meta_src and meta_src.exists():
-            meta_dst = shared.train_out_dir / meta_src.name
-            shutil.copy2(meta_src, meta_dst)
-    except (OSError, IOError) as exc:
-        logger.warning(f"Failed to propagate meta file: {exc}")
+    except Exception as exc:  # pragma: no cover - defensive
+        if logger:
+            logger.warning(f"Failed to resolve meta source path: {exc}")
+        return
+
+    if not meta_src or not meta_src.exists():
+        return
+
+    destinations = [shared.train_out_dir]
+    if shared.sample_out_dir not in destinations:
+        destinations.append(shared.sample_out_dir)
+
+    for dst_dir in destinations:
+        try:
+            dst_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(meta_src, dst_dir / meta_src.name)
+        except (OSError, IOError) as exc:
+            if logger:
+                logger.warning(f"Failed to copy meta file to {dst_dir}: {exc}")

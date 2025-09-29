@@ -160,7 +160,10 @@ def load_full_experiment_config(
     shared["experiment"] = experiment_name
     effective_config["shared"] = shared
 
-    return ExperimentConfig.model_validate(effective_config)
+    return ExperimentConfig.model_validate(
+        effective_config,
+        context={"config_path": config_path},
+    )
 
 
 def load_train_config(config_path: Path) -> TrainerConfig:
