@@ -155,6 +155,7 @@ class TestTomlReading:
             try:
                 tomli_w.dump(content, f)
                 f.flush()
+                f.close()
                 path = Path(f.name)
                 result = config_loading.read_toml_dict(path)
                 assert isinstance(result, dict)
@@ -174,6 +175,7 @@ class TestTomlReading:
             try:
                 f.write(content)
                 f.flush()
+                f.close()
                 path = Path(f.name)
                 if content.strip():
                     with pytest.raises((Exception, tomllib.TOMLDecodeError)):

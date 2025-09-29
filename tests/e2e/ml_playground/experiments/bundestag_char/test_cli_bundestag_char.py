@@ -36,9 +36,12 @@ def tmp_dataset(tmp_path: Path) -> Path:
 
 def _write_exp_config(tmp_dir: Path, out_dir: Path, dataset_dir: Path) -> Path:
     """Create a minimal, strict experiment config TOML pointing to tmp paths."""
+    # Ensure Windows paths are properly escaped for TOML
+    dataset_dir_str = str(dataset_dir).replace("\\", "\\\\")
+    out_dir_str = str(out_dir).replace("\\", "\\\\")
     cfg = f'''
 [prepare]
-dataset_dir = "{dataset_dir}"
+dataset_dir = "{dataset_dir_str}"
 tokenizer_type = "char"
 
 [train.model]
@@ -85,8 +88,8 @@ lr_decay_iters = 2
 min_lr = 0.00008
 
 [train.runtime]
-out_dir = "{out_dir}"
-max_iters = 2
+out_dir = "{out_dir_str}"
+max_iters = 4
 eval_interval = 1
 eval_iters = 1
 log_interval = 1
@@ -101,7 +104,7 @@ last = 1
 best = 1
 
 [sample.runtime]
-out_dir = "{out_dir}"
+out_dir = "{out_dir_str}"
 device = "cpu"
 dtype = "float32"
 compile = false

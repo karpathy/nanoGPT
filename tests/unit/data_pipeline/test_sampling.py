@@ -56,6 +56,7 @@ class TestMemmapReader:
             try:
                 test_data.tofile(f)
                 f.flush()
+                f.close()
 
                 path = Path(f.name)
                 reader = MemmapReader.open(path, dtype=np.uint16)
@@ -101,6 +102,7 @@ class TestSampleBatch:
                 )
                 test_data.tofile(f)
                 f.flush()
+                f.close()
 
                 path = Path(f.name)
                 reader = MemmapReader.open(path, dtype=np.uint16)
