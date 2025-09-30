@@ -18,7 +18,7 @@ from ml_playground.configuration import (
 from ml_playground.configuration import loading as config_loading
 from ml_playground.configuration import cli as config_cli
 from ml_playground.data_pipeline import create_pipeline
-import ml_playground.sampler as sampler_mod
+import ml_playground.sampling as sampler_mod
 from ml_playground.training import Trainer as CoreTrainer
 from ml_playground.experiments import registry
 

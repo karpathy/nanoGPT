@@ -17,7 +17,7 @@ from ml_playground.configuration import (
     READ_POLICY_BEST,
     SharedConfig,
 )
-import ml_playground.sampler as sampler
+import ml_playground.sampling as sampler_mod
 from ml_playground.error_handling import DataError, CheckpointError
 from ml_playground.checkpoint import CheckpointManager
 from ml_playground.data_pipeline.sampling import SimpleBatches
@@ -277,7 +277,7 @@ def test_load_checkpoint_load_state_error_is_wrapped(
             # Force an error to be raised
             raise RuntimeError("Forced load error for testing")
 
-    monkeypatch.setattr(sampler, "GPT", _DummyGPT)
+    monkeypatch.setattr("ml_playground.sampling.runner.GPT", _DummyGPT)
     mgr = CheckpointManager(tmp_path)
     # The manager doesn't construct GPT; it only returns typed dicts. The ModelError is raised when applying state.
     # Simulate consumer applying load and catching a ModelError with path context in higher-level code; here we just ensure manager loads dicts.
@@ -317,7 +317,10 @@ def test_sample_happy_path_with_file_prompt_and_char_meta(
         def load_state_dict(self, sd: dict[str, Any], strict: bool = False) -> None:  # type: ignore[override]
             super().load_state_dict(sd)
 
-    monkeypatch.setattr(sampler, "GPT", lambda cfg, logger=None: _DummyModelWithLoad())
+    monkeypatch.setattr(
+        "ml_playground.sampling.runner.GPT",
+        lambda cfg, logger=None: _DummyModelWithLoad(),
+    )
 
     class _MiniCkpt:
         def __init__(self) -> None:
@@ -331,7 +334,7 @@ def test_sample_happy_path_with_file_prompt_and_char_meta(
             }
 
     monkeypatch.setattr(
-        sampler.Sampler, "_load_checkpoint", lambda *a, **k: _MiniCkpt()
+        sampler_mod.Sampler, "_load_checkpoint", lambda *a, **k: _MiniCkpt()
     )
 
     # Build SampleExperiment
@@ -358,7 +361,7 @@ def test_sample_happy_path_with_file_prompt_and_char_meta(
         train_out_dir=out_dir,
         sample_out_dir=out_dir,
     )
-    sampler.sample(exp, shared)
+    sampler_mod.sample(exp, shared)
 
     # Verify via logs (sampler logs instead of printing)
     text = caplog.text
@@ -390,7 +393,10 @@ def test_sample_with_compile_flag_uses_compiled_model(
         def load_state_dict(self, sd: dict[str, Any], strict: bool = False) -> None:  # type: ignore[override]
             super().load_state_dict(sd)
 
-    monkeypatch.setattr(sampler, "GPT", lambda cfg, logger=None: _DummyModelWithLoad2())
+    monkeypatch.setattr(
+        "ml_playground.sampling.runner.GPT",
+        lambda cfg, logger=None: _DummyModelWithLoad2(),
+    )
 
     class _MiniCkpt2:
         def __init__(self) -> None:
@@ -404,7 +410,7 @@ def test_sample_with_compile_flag_uses_compiled_model(
             }
 
     monkeypatch.setattr(
-        sampler.Sampler, "_load_checkpoint", lambda *a, **k: _MiniCkpt2()
+        sampler_mod.Sampler, "_load_checkpoint", lambda *a, **k: _MiniCkpt2()
     )
 
     rt = RuntimeConfig(
@@ -424,7 +430,7 @@ def test_sample_with_compile_flag_uses_compiled_model(
         train_out_dir=out_dir,
         sample_out_dir=out_dir,
     )
-    sampler.sample(exp, shared)
+    sampler_mod.sample(exp, shared)
     assert called["compiled"] == 1
 
 
@@ -521,7 +527,7 @@ def test_setup_tokenizer_requires_tokenizer_type(out_dir: Path) -> None:
         sample_out_dir=out_dir,
     )
     with pytest.raises(DataError):
-        s = sampler.Sampler(cfg, shared)
+        s = sampler_mod.Sampler(cfg, shared)
         s.run()
 
 
@@ -542,7 +548,7 @@ def test_setup_tokenizer_missing_meta_raises_clear_error(out_dir: Path) -> None:
         sample_out_dir=out_dir,
     )
     with pytest.raises(DataError) as exc_info:
-        s = sampler.Sampler(cfg, shared)
+        s = sampler_mod.Sampler(cfg, shared)
         s.run()
 
     error_msg = str(exc_info.value)
@@ -576,5 +582,5 @@ def test_sampler_requires_rotated_checkpoints(out_dir: Path) -> None:
         sample_out_dir=out_dir,
     )
     with pytest.raises(CheckpointError):
-        s = sampler.Sampler(cfg, shared)
+        s = sampler_mod.Sampler(cfg, shared)
         s.run()

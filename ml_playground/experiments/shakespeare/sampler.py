@@ -6,7 +6,7 @@ from ml_playground.experiments.protocol import (
     Sampler as _SamplerProto,
     SampleReport,
 )
-from ml_playground.sampler import Sampler as _CoreSampler
+from ml_playground.sampling import Sampler as _CoreSampler
 
 
 class ShakespeareSampler(_SamplerProto):
