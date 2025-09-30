@@ -576,12 +576,11 @@ from ml_playground.<package> import ...
 
 ### P17. Import compliance: remove re-exports and relative imports in `__init__.py`
 
-**Status:** 🔄 Planned (2025-09-30).
+**Status:** ✅ Completed (2025-09-30).
 
 **Objective**: Achieve 100% compliance with `IMPORT_GUIDELINES.md` by removing re-export facades and relative imports in package `__init__.py` files.
 
 **Scope:**
-
 - Replace relative imports with absolute ones in `ml_playground/configuration/cli.py`.
 - Remove (or minimize) re-exports in:
   - `ml_playground/training/__init__.py`
@@ -590,34 +589,43 @@ from ml_playground.<package> import ...
   - `ml_playground/training/hooks/__init__.py`
   - `ml_playground/sampling/__init__.py`
   - `ml_playground/configuration/__init__.py` (phase removal; update imports first)
+  - `ml_playground/data_pipeline/__init__.py`
+  - `ml_playground/data_pipeline/sampling/__init__.py`
+  - `ml_playground/data_pipeline/transforms/__init__.py`
 
-**Action items:**
+**Completed:**
+- ✅ Fixed relative imports in configuration/cli.py
+- ✅ Updated consumers to import from submodules (training.loop.runner, sampling.runner, etc.)
+- ✅ Removed all re-exports from __init__.py files
+- ✅ Updated CLI, experiments, and tests to use direct imports
+- ✅ Achieved zero backwards compatibility
+- ✅ All quality gates pass: linting, type checking, full test suite
 
-1. Update consumers to import from submodules (`training/loop/runner`, `sampling/runner`, etc.).
-2. Phase out configuration aggregator: adjust CLI, experiments, then tests; finally drop re-exports.
-3. Add a guideline note (or pre-commit check) to prevent future re-exports.
+**Commit**: `ab45200 refactor(import-compliance): complete P17 - remove all re-exports and relative imports`
 
-**Commit guidance:**
-
-- `refactor(training): remove __init__ re-exports; import submodules in CLI/experiments`
-- `refactor(sampling): remove re-exports; update CLI to import from sampling.runner`
-- `refactor(config): drop configuration aggregator re-exports; update tests`
+**PR**: #8 - Merged into master
 
 ---
 
 ### P18. Consolidate LIT integration modules and docs
 
-**Status:** 🔄 Planned (2025-09-30).
+**Status:** ✅ Completed (2025-09-30).
 
 **Objective**: Keep a single canonical LIT integration module and align docs.
 
 **Scope:**
-
 - Prefer `ml_playground.analysis.lit.integration` as canonical.
 - Remove `ml_playground/analysis/lit_integration.py` (legacy duplicate) and update references.
 - Update `docs/LIT.md` Make targets and invocations to the canonical module.
 
-**Commit guidance:** `refactor(analysis): consolidate LIT integration; update docs/LIT.md`
+**Completed:**
+- ✅ Removed legacy `ml_playground/analysis/lit_integration.py` file (241 lines)
+- ✅ Kept canonical `ml_playground/analysis/lit/integration.py` (273 lines)  
+- ✅ Updated public API policy test to remove forbidden import check for legacy file
+- ✅ Verified Makefile targets already use canonical module
+- ✅ No docs updates needed - docs already reference correct paths
+
+**Commit**: `refactor(analysis): consolidate LIT integration; remove legacy duplicate`
 
 ### P15. Consolidate Python cache directories (`.mypy_cache/`, `.ruff_cache/`, etc.)
 

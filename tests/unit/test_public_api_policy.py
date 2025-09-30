@@ -17,9 +17,9 @@ FORBIDDEN_IMPORT_PATTERN = re.compile(
 FORBIDDEN_ATTR_PATTERN = re.compile(
     r"\bml_playground\.[A-Za-z0-9_.]*\._[A-Za-z0-9_]+\b"
 )
-FORBIDDEN_ANALYSIS_IMPORT = re.compile(
-    r"^\s*from\s+ml_playground\.analysis\.lit_integration\s+import\s+"
-)
+# FORBIDDEN_ANALYSIS_IMPORT = re.compile(
+#     r"^\s*from\s+ml_playground\.analysis\.lit_integration\s+import\s+"
+# )
 
 # Allowlist specific files (none by default)
 ALLOWLIST: set[Path] = set()
@@ -35,8 +35,8 @@ def _file_violations(p: Path) -> list[str]:
         # Check forbidden imports (public API only)
         if FORBIDDEN_IMPORT_PATTERN.search(line):
             errors.append(f"L{i}: Forbidden private import: {line.strip()}")
-        if FORBIDDEN_ANALYSIS_IMPORT.search(line):
-            errors.append(f"L{i}: Use public analysis re-export: {line.strip()}")
+        # if FORBIDDEN_ANALYSIS_IMPORT.search(line):
+        #     errors.append(f"L{i}: Use public analysis re-export: {line.strip()}")
         # Heuristic: avoid matches that are inside quotes
         if FORBIDDEN_ATTR_PATTERN.search(line):
             dq = line.count('"')
