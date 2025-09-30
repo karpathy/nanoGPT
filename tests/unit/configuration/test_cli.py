@@ -27,7 +27,7 @@ from ml_playground.configuration import (
     OptimConfig,
     LRSchedule,
 )
-from ml_playground import config_loader
+from ml_playground.configuration import loading as config_loader
 from ml_playground.configuration import PreparerConfig
 
 runner = CliRunner()

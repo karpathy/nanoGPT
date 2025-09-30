@@ -475,15 +475,16 @@ def test_sampleconfig_more_ranges() -> None:
     SampleConfig(temperature=1e-6, top_k=0, top_p=1.0)
 
 
-def test_config_shim_exports() -> None:
-    from ml_playground import config as shim
-    from ml_playground import config_loader as loader
+def test_config_canonical_exports() -> None:
+    """Test that canonical configuration modules export expected APIs."""
+    from ml_playground.configuration import models
+    from ml_playground.configuration import loading
 
-    assert hasattr(shim, "TrainerConfig")
-    assert hasattr(shim, "SamplerConfig")
-    assert hasattr(shim, "DataConfig")
-    assert hasattr(shim, "RuntimeConfig")
-    assert hasattr(loader, "load_full_experiment_config")
+    assert hasattr(models, "TrainerConfig")
+    assert hasattr(models, "SamplerConfig")
+    assert hasattr(models, "DataConfig")
+    assert hasattr(models, "RuntimeConfig")
+    assert hasattr(loading, "load_full_experiment_config")
 
 
 def test_full_loader_incomplete_sample_config(tmp_path: Path) -> None:
