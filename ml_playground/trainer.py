@@ -1,37 +1,18 @@
-"""Compatibility shim for training APIs.
+from __future__ import annotations
 
-The core implementation now lives under ``ml_playground.training``. Importing
-from this module remains supported for existing integrations pending migration.
-"""
 
-from torch.amp.grad_scaler import GradScaler
-from torch.utils.tensorboard import SummaryWriter
+class RemovedImportError(ImportError):
+    """Raised when importing a retired compatibility shim."""
 
-from ml_playground.checkpoint import CheckpointManager
-from ml_playground.data_pipeline.sampling.batches import (
-    SimpleBatches,
-    sample_batch as _sample_batch,
-)
-from ml_playground.data_pipeline.sources.memmap import MemmapReader as _MemmapReader
-from ml_playground.estimator import estimate_loss
-from ml_playground.models.core.model import GPT
-from ml_playground.training import Trainer, get_lr, train
 
-sample_batch = _sample_batch
-MemmapReader = _MemmapReader
+def _raise() -> None:  # pragma: no cover - executed on import
+    raise RemovedImportError(
+        "`ml_playground.trainer` has been retired. Use the canonical module "
+        "`ml_playground.training` instead for `Trainer`, `train`, and `get_lr`."
+    )
 
-__all__ = [
-    "Trainer",
-    "train",
-    "get_lr",
-    "SimpleBatches",
-    "sample_batch",
-    "_sample_batch",
-    "MemmapReader",
-    "_MemmapReader",
-    "GPT",
-    "GradScaler",
-    "SummaryWriter",
-    "CheckpointManager",
-    "estimate_loss",
-]
+
+_raise()
+
+
+__all__: list[str] = []
