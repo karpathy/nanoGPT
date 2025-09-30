@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from ml_playground.configuration import (
+from ml_playground.configuration.models import (
     DataConfig,
     LRSchedule,
     ModelConfig,

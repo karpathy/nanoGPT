@@ -4,8 +4,8 @@ import torch
 import logging
 from ml_playground.models.core.config import GPTConfig
 from ml_playground.models.core.model import GPT
-from ml_playground.sampling import Sampler
-from ml_playground.configuration import (
+from ml_playground.sampling.runner import Sampler
+from ml_playground.configuration.models import (
     SamplerConfig,
     SampleConfig,
     RuntimeConfig,

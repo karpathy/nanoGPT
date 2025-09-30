@@ -5,7 +5,7 @@ from datetime import datetime
 import json
 from typing import Any
 
-from ml_playground.configuration import SamplerConfig
+from ml_playground.configuration.models import SamplerConfig
 from ml_playground.experiments.protocol import (
     Sampler as _SamplerProto,
     SampleReport,

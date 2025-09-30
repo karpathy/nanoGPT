@@ -4,7 +4,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from ml_playground.configuration import PreparerConfig, TrainerConfig, SamplerConfig
+from ml_playground.configuration.models import (
+    PreparerConfig,
+    TrainerConfig,
+    SamplerConfig,
+)
 
 
 @dataclass(frozen=True)

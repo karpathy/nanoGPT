@@ -8,7 +8,7 @@ import pickle
 import numpy as np
 
 from ml_playground._file_state import diff_file_states, snapshot_file_states
-from ml_playground.configuration import DataConfig
+from ml_playground.configuration.models import DataConfig
 from ml_playground.error_handling import DataError
 from ml_playground.logging_protocol import LoggerLike
 from ml_playground.data_pipeline.transforms.tokenization import coerce_tokenizer_type

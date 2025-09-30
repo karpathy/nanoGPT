@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 from ml_playground.experiments.bundestag_char.preparer import BundestagCharPreparer
-from ml_playground.configuration import PreparerConfig
+from ml_playground.configuration.models import PreparerConfig
 
 
 def test_preparer_allows_legacy_ngram_extra(tmp_path: Path) -> None:

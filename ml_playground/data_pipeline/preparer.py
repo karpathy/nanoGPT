@@ -4,11 +4,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
-from ml_playground.configuration import PreparerConfig, SharedConfig
-from ml_playground.configuration import DataConfig
-from ml_playground.data_pipeline.transforms import (
+from ml_playground.configuration.models import PreparerConfig, SharedConfig
+from ml_playground.configuration.models import DataConfig
+from ml_playground.data_pipeline.transforms.tokenization import prepare_with_tokenizer
+from ml_playground.data_pipeline.transforms.io import (
     diff_file_states,
-    prepare_with_tokenizer,
     snapshot_file_states,
     write_bin_and_meta,
 )

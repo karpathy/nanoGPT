@@ -7,11 +7,13 @@ from typing import List, Mapping
 import numpy as np
 import pytest
 
-from ml_playground.data_pipeline import (
+from ml_playground.data_pipeline.transforms.tokenization import (
     create_standardized_metadata,
     prepare_with_tokenizer,
-    seed_text_file,
     split_train_val,
+)
+from ml_playground.data_pipeline.transforms.io import (
+    seed_text_file,
     write_bin_and_meta,
 )
 from ml_playground.tokenizer import CharTokenizer, WordTokenizer

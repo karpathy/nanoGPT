@@ -2,7 +2,7 @@ from __future__ import annotations
 from pytest_mock import MockerFixture
 
 # New strict API imports
-from ml_playground.configuration import PreparerConfig
+from ml_playground.configuration.models import PreparerConfig
 from ml_playground.experiments.shakespeare.preparer import ShakespearePreparer
 
 

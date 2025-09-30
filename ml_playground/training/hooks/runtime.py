@@ -9,7 +9,7 @@ from typing import ContextManager, Any
 import torch
 from torch import autocast
 
-from ml_playground.configuration import TrainerConfig
+from ml_playground.configuration.models import TrainerConfig
 
 
 __all__ = ["RuntimeContext", "setup_runtime"]

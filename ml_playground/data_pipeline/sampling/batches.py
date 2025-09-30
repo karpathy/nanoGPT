@@ -11,7 +11,7 @@ import numpy as np
 import numpy.typing as npt
 import torch
 
-from ml_playground.configuration import DataConfig, DeviceKind
+from ml_playground.configuration.models import DataConfig, DeviceKind
 from ml_playground.data_pipeline.sources.memmap import MemmapReader
 
 __all__ = ["sample_batch", "SimpleBatches"]

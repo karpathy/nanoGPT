@@ -8,7 +8,7 @@ import torch
 import typer
 from typer.main import get_command
 
-from ml_playground.configuration import (
+from ml_playground.configuration.models import (
     ExperimentConfig,
     PreparerConfig,
     SamplerConfig,
@@ -17,9 +17,9 @@ from ml_playground.configuration import (
 )
 from ml_playground.configuration import loading as config_loading
 from ml_playground.configuration import cli as config_cli
-from ml_playground.data_pipeline import create_pipeline
-import ml_playground.sampling as sampler_mod
-from ml_playground.training import Trainer as CoreTrainer
+from ml_playground.data_pipeline.preparer import create_pipeline
+from ml_playground.sampling.runner import Sampler
+from ml_playground.training.loop.runner import Trainer as CoreTrainer
 from ml_playground.experiments import registry
 
 # (Removed unused type aliases)
@@ -194,7 +194,7 @@ def _run_sample(
 
     sample_cfg.logger.info(f"Running sampler for experiment: {experiment}")
     _log_command_status("pre-sample", shared, shared.sample_out_dir, sample_cfg.logger)
-    sampler = sampler_mod.Sampler(sample_cfg, shared)
+    sampler = Sampler(sample_cfg, shared)
     sampler.run()
     sample_cfg.logger.info(f"Sampler for {experiment} finished.")
     _log_command_status("post-sample", shared, shared.sample_out_dir, sample_cfg.logger)

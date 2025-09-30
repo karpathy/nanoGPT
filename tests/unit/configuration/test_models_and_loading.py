@@ -6,7 +6,7 @@ from typing import Any, cast
 import pytest
 from pydantic import ValidationError
 
-from ml_playground.configuration import (
+from ml_playground.configuration.models import (
     DataConfig,
     ExperimentConfig,
     LRSchedule,

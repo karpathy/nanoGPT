@@ -15,7 +15,7 @@ import ml_playground.cli as cli
 from ml_playground.cli import app
 from ml_playground.configuration import cli as config_cli
 from ml_playground.configuration import loading as config_loading
-from ml_playground.configuration import (
+from ml_playground.configuration.models import (
     TrainerConfig,
     SamplerConfig,
     RuntimeConfig,
@@ -28,7 +28,7 @@ from ml_playground.configuration import (
     LRSchedule,
 )
 from ml_playground.configuration import loading as config_loader
-from ml_playground.configuration import PreparerConfig
+from ml_playground.configuration.models import PreparerConfig
 
 runner = CliRunner()
 

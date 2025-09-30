@@ -3,10 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable
 
-from ml_playground.configuration import PreparerConfig
-from ml_playground.data_pipeline import (
+from ml_playground.configuration.models import PreparerConfig
+from ml_playground.data_pipeline.transforms.tokenization import prepare_with_tokenizer
+from ml_playground.data_pipeline.transforms.io import (
     diff_file_states,
-    prepare_with_tokenizer,
     seed_text_file,
     snapshot_file_states,
     write_bin_and_meta,

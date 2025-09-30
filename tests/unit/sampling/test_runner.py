@@ -9,7 +9,7 @@ import torch
 import numpy as np
 from numpy.typing import NDArray
 
-from ml_playground.configuration import (
+from ml_playground.configuration.models import (
     RuntimeConfig,
     SampleConfig,
     SamplerConfig,
@@ -17,10 +17,10 @@ from ml_playground.configuration import (
     READ_POLICY_BEST,
     SharedConfig,
 )
-import ml_playground.sampling as sampler_mod
+from ml_playground.sampling.runner import Sampler, sample
 from ml_playground.error_handling import DataError, CheckpointError
 from ml_playground.checkpoint import CheckpointManager
-from ml_playground.data_pipeline.sampling import SimpleBatches
+from ml_playground.data_pipeline.sampling.batches import SimpleBatches
 from ml_playground.models.core.config import GPTConfig
 from ml_playground.models.core.model import GPT
 
@@ -333,9 +333,7 @@ def test_sample_happy_path_with_file_prompt_and_char_meta(
                 "n_embd": 8,
             }
 
-    monkeypatch.setattr(
-        sampler_mod.Sampler, "_load_checkpoint", lambda *a, **k: _MiniCkpt()
-    )
+    monkeypatch.setattr(Sampler, "_load_checkpoint", lambda *a, **k: _MiniCkpt())
 
     # Build SampleExperiment
     rt = RuntimeConfig(
@@ -361,7 +359,7 @@ def test_sample_happy_path_with_file_prompt_and_char_meta(
         train_out_dir=out_dir,
         sample_out_dir=out_dir,
     )
-    sampler_mod.sample(exp, shared)
+    sample(exp, shared)
 
     # Verify via logs (sampler logs instead of printing)
     text = caplog.text
@@ -409,9 +407,7 @@ def test_sample_with_compile_flag_uses_compiled_model(
                 "n_embd": 8,
             }
 
-    monkeypatch.setattr(
-        sampler_mod.Sampler, "_load_checkpoint", lambda *a, **k: _MiniCkpt2()
-    )
+    monkeypatch.setattr(Sampler, "_load_checkpoint", lambda *a, **k: _MiniCkpt2())
 
     rt = RuntimeConfig(
         out_dir=out_dir, device="cpu", dtype="float32", compile=True, seed=1
@@ -430,7 +426,7 @@ def test_sample_with_compile_flag_uses_compiled_model(
         train_out_dir=out_dir,
         sample_out_dir=out_dir,
     )
-    sampler_mod.sample(exp, shared)
+    sample(exp, shared)
     assert called["compiled"] == 1
 
 
@@ -527,7 +523,7 @@ def test_setup_tokenizer_requires_tokenizer_type(out_dir: Path) -> None:
         sample_out_dir=out_dir,
     )
     with pytest.raises(DataError):
-        s = sampler_mod.Sampler(cfg, shared)
+        s = Sampler(cfg, shared)
         s.run()
 
 
@@ -548,7 +544,7 @@ def test_setup_tokenizer_missing_meta_raises_clear_error(out_dir: Path) -> None:
         sample_out_dir=out_dir,
     )
     with pytest.raises(DataError) as exc_info:
-        s = sampler_mod.Sampler(cfg, shared)
+        s = Sampler(cfg, shared)
         s.run()
 
     error_msg = str(exc_info.value)
@@ -582,5 +578,5 @@ def test_sampler_requires_rotated_checkpoints(out_dir: Path) -> None:
         sample_out_dir=out_dir,
     )
     with pytest.raises(CheckpointError):
-        s = sampler_mod.Sampler(cfg, shared)
+        s = Sampler(cfg, shared)
         s.run()

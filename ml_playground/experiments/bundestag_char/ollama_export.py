@@ -9,7 +9,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional, NoReturn, cast, Literal
-from ml_playground.configuration import READ_POLICY_BEST
+from ml_playground.configuration.models import READ_POLICY_BEST
 
 
 @dataclass(frozen=True)

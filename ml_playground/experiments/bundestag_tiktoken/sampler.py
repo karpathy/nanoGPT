@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from ml_playground.configuration import SamplerConfig, SharedConfig
+from ml_playground.configuration.models import SamplerConfig, SharedConfig
 from ml_playground.experiments.protocol import (
     Sampler as _SamplerProto,
     SampleReport,
 )
-from ml_playground.sampling import Sampler as _CoreSampler
+from ml_playground.sampling.runner import Sampler as _CoreSampler
 
 
 class BundestagTiktokenSampler(_SamplerProto):

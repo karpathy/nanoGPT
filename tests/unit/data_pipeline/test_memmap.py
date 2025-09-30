@@ -13,7 +13,7 @@ import torch
 
 from ml_playground.data_pipeline.sampling.batches import SimpleBatches, sample_batch
 from ml_playground.data_pipeline.sources.memmap import MemmapReader
-from ml_playground.configuration import DataConfig
+from ml_playground.configuration.models import DataConfig
 
 
 # Strategies for generating test data

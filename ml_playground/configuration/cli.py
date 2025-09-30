@@ -3,8 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional, Tuple
 
-from .loading import get_cfg_path, load_full_experiment_config
-from .models import ExperimentConfig
+from ml_playground.configuration.loading import (
+    get_cfg_path,
+    load_full_experiment_config,
+)
+from ml_playground.configuration.models import ExperimentConfig
 
 _PROJECT_HOME = Path(__file__).resolve().parent.parent.parent
 

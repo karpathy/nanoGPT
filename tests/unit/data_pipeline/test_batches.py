@@ -3,8 +3,8 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 import pytest
-from ml_playground.data_pipeline.sampling import SimpleBatches
-from ml_playground.configuration import DataConfig
+from ml_playground.data_pipeline.sampling.batches import SimpleBatches
+from ml_playground.configuration.models import DataConfig
 
 pytestmark = pytest.mark.skip(
     reason="Consolidated into tests/unit/ml_playground/test_sampler.py (SimpleBatches tests)"

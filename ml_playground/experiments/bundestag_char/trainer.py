@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from ml_playground.configuration import TrainerConfig, SharedConfig
+from ml_playground.configuration.models import TrainerConfig, SharedConfig
 from ml_playground.experiments.protocol import (
     Trainer as _TrainerProto,
     TrainReport,
 )
-from ml_playground.training import Trainer as _CoreTrainer
+from ml_playground.training.loop.runner import Trainer as _CoreTrainer
 
 
 class BundestagCharTrainer(_TrainerProto):

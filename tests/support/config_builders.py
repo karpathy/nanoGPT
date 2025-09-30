@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ml_playground.configuration import (
+from ml_playground.configuration.models import (
     DataConfig,
     LRSchedule,
     ModelConfig,

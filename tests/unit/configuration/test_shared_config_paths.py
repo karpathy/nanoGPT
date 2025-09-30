@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ml_playground.configuration import SharedConfig
+from ml_playground.configuration.models import SharedConfig
 from pydantic import ValidationError
 import pytest
 

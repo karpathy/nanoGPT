@@ -11,8 +11,8 @@ import numpy as np
 import pytest
 import torch
 
-from ml_playground.configuration import DataConfig
-from ml_playground.data_pipeline.sampling import SimpleBatches, sample_batch
+from ml_playground.configuration.models import DataConfig
+from ml_playground.data_pipeline.sampling.batches import SimpleBatches, sample_batch
 from ml_playground.data_pipeline.sources import MemmapReader
 
 
