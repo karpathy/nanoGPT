@@ -1,5 +1,6 @@
 """Normalized data pipeline utilities for ml_playground."""
 
+from ml_playground.data_pipeline.preparer import PreparationOutcome, create_pipeline
 from ml_playground.data_pipeline.sources.memmap import MemmapReader
 from ml_playground.data_pipeline.sampling.batches import SimpleBatches, sample_batch
 from ml_playground.data_pipeline.transforms.tokenization import (
@@ -18,6 +19,8 @@ from ml_playground.data_pipeline.transforms.io import (
 )
 
 __all__ = [
+    "PreparationOutcome",
+    "create_pipeline",
     "MemmapReader",
     "SimpleBatches",
     "sample_batch",

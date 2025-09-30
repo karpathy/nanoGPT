@@ -47,7 +47,7 @@ def load_preparers() -> None:
                         break
                 if cls is None:
                     continue
-                from ml_playground.prepare import PreparerConfig  # local import
+                from ml_playground.configuration import PreparerConfig  # local import
 
                 def _make_fn(_cls=cls) -> None:  # type: ignore[no-redef]
                     inst = _cls()

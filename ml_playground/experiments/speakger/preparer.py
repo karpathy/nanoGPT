@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from ml_playground.prepare import PreparerConfig
+from ml_playground.configuration import PreparerConfig
 from ml_playground.experiments.protocol import (
     Preparer as _PreparerProto,
     PrepareReport,

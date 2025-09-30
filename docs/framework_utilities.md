@@ -275,7 +275,14 @@ train_text = tokenizer.decode(train_ids)
 ### Data Preparation
 
 ```python
-from ml_playground.prepare import split_train_val, prepare_with_tokenizer, write_bin_and_meta, snapshot_files, diff_files, create_standardized_metadata
+from ml_playground.data_pipeline import (
+    create_standardized_metadata,
+    diff_file_states,
+    prepare_with_tokenizer,
+    snapshot_file_states,
+    split_train_val,
+    write_bin_and_meta,
+)
 
 # Split data
 train_text, val_text = split_train_val(data)
@@ -435,13 +442,13 @@ assert runtime.device in {"cpu", "mps", "cuda"}
 ```python
 from pathlib import Path
 from ml_playground.tokenizer import create_tokenizer
-from ml_playground.prepare import prepare_with_tokenizer, write_bin_and_meta
+from ml_playground.data_pipeline import prepare_with_tokenizer, write_bin_and_meta
 
 tok = create_tokenizer("tiktoken", encoding_name="gpt2")
 train_arr, val_arr, meta = prepare_with_tokenizer("hello world", tok)
 ds_dir = Path("/tmp/dataset")
 write_bin_and_meta(ds_dir, train_arr, val_arr, meta)
-```
+{{ ... }}
 
 ## Enforcement
 

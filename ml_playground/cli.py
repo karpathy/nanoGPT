@@ -17,7 +17,7 @@ from ml_playground.configuration import (
 )
 from ml_playground.configuration import loading as config_loading
 from ml_playground.configuration import cli as config_cli
-import ml_playground.prepare as prepare_mod
+from ml_playground.data_pipeline import create_pipeline
 import ml_playground.sampler as sampler_mod
 from ml_playground.training import Trainer as CoreTrainer
 from ml_playground.experiments import registry
@@ -142,7 +142,7 @@ def _run_prepare(
 ) -> None:
     """Run the full prepare flow for an experiment."""
     prepare_cfg.logger.info(f"Running pipeline for experiment: {experiment}")
-    pipeline = prepare_mod.create_pipeline(prepare_cfg, shared)
+    pipeline = create_pipeline(prepare_cfg, shared)
     pipeline.run()
     prepare_cfg.logger.info(f"Pipeline for {experiment} finished.")
 

@@ -7,12 +7,12 @@ from typing import List, Mapping
 import numpy as np
 import pytest
 
-import ml_playground.prepare as prep
-from ml_playground.prepare import (
-    split_train_val,
-    write_bin_and_meta,
+from ml_playground.data_pipeline import (
     create_standardized_metadata,
     prepare_with_tokenizer,
+    seed_text_file,
+    split_train_val,
+    write_bin_and_meta,
 )
 from ml_playground.tokenizer import CharTokenizer, WordTokenizer
 
@@ -51,8 +51,8 @@ class DummyTok:
 
 
 def _mk_arrays(n: int) -> tuple[np.ndarray, np.ndarray, dict]:
-    train = np.arange(n, dtype=np.uint16)
-    val = np.arange(n, dtype=np.uint16)
+    train: np.ndarray = np.arange(n, dtype=np.uint16)
+    val: np.ndarray = np.arange(n, dtype=np.uint16)
     meta = {"meta_version": 1}
     return train, val, meta
 
@@ -79,7 +79,7 @@ class _FakeTiktoken:
 
 
 def test_split_train_val_ratio() -> None:
-    train, val = prep.split_train_val("abcdefghij", split=0.7)
+    train, val = split_train_val("abcdefghij", split=0.7)
     assert train == "abcdefg"
     assert val == "hij"
 
@@ -101,7 +101,7 @@ def test_split_train_val_edges() -> None:
 
 def test_create_standardized_metadata_basic() -> None:
     tok = CharTokenizer(vocab={"a": 1, "b": 2})
-    meta = prep.create_standardized_metadata(tok, train_tokens=5, val_tokens=3)
+    meta = create_standardized_metadata(tok, train_tokens=5, val_tokens=3)
     assert meta["meta_version"] == 1
     assert meta["vocab_size"] == 2
     assert meta["train_tokens"] == 5
@@ -137,7 +137,7 @@ def test_create_standardized_metadata_tiktoken_enrichment() -> None:
 
 def test_prepare_with_tokenizer_arrays_and_meta() -> None:
     tok = CharTokenizer(vocab={"a": 1, "b": 2})
-    train, val, meta, tokenizer = prep.prepare_with_tokenizer("abba", tok, split=0.5)
+    train, val, meta, tokenizer = prepare_with_tokenizer("abba", tok, split=0.5)
     assert isinstance(train, np.ndarray) and train.dtype == np.uint16
     assert isinstance(val, np.ndarray) and val.dtype == np.uint16
     # With split=0.5, first half "ab" then "ba"
@@ -198,8 +198,8 @@ def test_write_bin_and_meta_already_exists_logs(tmp_path: Path) -> None:
             self.infos.append(str(msg))
 
     logger = ListLogger()
-    train = np.arange(2, dtype=np.uint16)
-    val = np.arange(2, dtype=np.uint16)
+    train: np.ndarray = np.arange(2, dtype=np.uint16)
+    val: np.ndarray = np.arange(2, dtype=np.uint16)
     meta = {"meta_version": 1}
 
     write_bin_and_meta(ds, train, val, meta, logger=logger, data_cfg=None)
@@ -220,7 +220,7 @@ def test_seed_text_file_copies_first_existing_candidate(tmp_path: Path) -> None:
     # Only src2 exists
     src2.write_text("hello", encoding="utf-8")
 
-    prep.seed_text_file(dst, [src1, src2])
+    seed_text_file(dst, [src1, src2])
     assert dst.exists()
     assert dst.read_text(encoding="utf-8") == "hello"
 
@@ -231,7 +231,7 @@ def test_seed_text_file_noop_if_dst_exists(tmp_path: Path) -> None:
     src.write_text("hello", encoding="utf-8")
     dst.write_text("old", encoding="utf-8")
 
-    prep.seed_text_file(dst, [src])
+    seed_text_file(dst, [src])
     # Should not overwrite existing dst
     assert dst.read_text(encoding="utf-8") == "old"
 
@@ -239,4 +239,4 @@ def test_seed_text_file_noop_if_dst_exists(tmp_path: Path) -> None:
 def test_seed_text_file_raises_when_no_candidates_exist(tmp_path: Path) -> None:
     dst = tmp_path / "dst.txt"
     with pytest.raises(FileNotFoundError):
-        prep.seed_text_file(dst, [tmp_path / "missing1.txt", tmp_path / "missing2.txt"])
+        seed_text_file(dst, [tmp_path / "missing1.txt", tmp_path / "missing2.txt"])

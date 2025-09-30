@@ -2,8 +2,8 @@ from __future__ import annotations
 from pytest_mock import MockerFixture
 
 # New strict API imports
+from ml_playground.configuration import PreparerConfig
 from ml_playground.experiments.shakespeare.preparer import ShakespearePreparer
-from ml_playground.prepare import PreparerConfig
 
 
 def test_shakespeare_download_and_encode(tmp_path, mocker: MockerFixture) -> None:

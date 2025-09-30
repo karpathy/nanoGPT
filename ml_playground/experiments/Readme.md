@@ -27,7 +27,7 @@ Conventions
 Universal meta policy
 
 - Preparers must write a standardized `meta.pkl` next to `train.bin` and `val.bin` in the dataset directory.
-- Use `ml_playground.prepare.write_bin_and_meta(...)` to atomically write `train.bin`, `val.bin`, and `meta.pkl`.
+- Use `ml_playground.data_pipeline.write_bin_and_meta(...)` to atomically write `train.bin`, `val.bin`, and `meta.pkl`.
 - The CLI will fail fast at train/sample time if `meta.pkl` is missing.
 
 All experiments now use the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../docs/framework_utilities.md).
@@ -196,7 +196,8 @@ Example `preparer.py` (strict API):
 ```python
 from __future__ import annotations
 from pathlib import Path
-from ml_playground.prepare import PreparerConfig, write_bin_and_meta
+from ml_playground.configuration import PreparerConfig
+from ml_playground.data_pipeline import write_bin_and_meta
 from ml_playground.experiments.protocol import Preparer as _PreparerProto, PrepareReport
 
 class MyPreparer(_PreparerProto):

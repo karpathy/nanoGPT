@@ -28,7 +28,7 @@ from ml_playground.configuration import (
     LRSchedule,
 )
 from ml_playground import config_loader
-from ml_playground.prepare import PreparerConfig
+from ml_playground.configuration import PreparerConfig
 
 runner = CliRunner()
 
