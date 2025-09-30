@@ -21,7 +21,7 @@ from ml_playground.configuration import (
 )
 from ml_playground.error_handling import DataError, FileOperationError
 from ml_playground.models.core.model import GPT
-from ml_playground.prepare import setup_tokenizer
+from ml_playground.data_pipeline.transforms.io import setup_tokenizer
 
 
 """

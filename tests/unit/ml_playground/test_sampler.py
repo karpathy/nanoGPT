@@ -20,7 +20,7 @@ from ml_playground.configuration import (
 import ml_playground.sampler as sampler
 from ml_playground.error_handling import DataError, CheckpointError
 from ml_playground.checkpoint import CheckpointManager
-from ml_playground.data import SimpleBatches
+from ml_playground.data_pipeline.sampling import SimpleBatches
 from ml_playground.models.core.config import GPTConfig
 from ml_playground.models.core.model import GPT
 

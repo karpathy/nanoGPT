@@ -8,7 +8,11 @@ from torch.amp.grad_scaler import GradScaler
 from torch.utils.tensorboard import SummaryWriter
 
 from ml_playground.checkpoint import CheckpointManager
-from ml_playground.data import SimpleBatches, _MemmapReader, _sample_batch
+from ml_playground.data_pipeline.sampling.batches import (
+    SimpleBatches,
+    sample_batch as _sample_batch,
+)
+from ml_playground.data_pipeline.sources.memmap import MemmapReader as _MemmapReader
 from ml_playground.estimator import estimate_loss
 from ml_playground.models.core.model import GPT
 from ml_playground.training import Trainer, get_lr, train

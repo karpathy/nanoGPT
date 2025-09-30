@@ -4,7 +4,7 @@ from typing import Any, Dict, Literal, Tuple, cast
 
 import torch
 
-from ml_playground.data import SimpleBatches
+from ml_playground.data_pipeline.sampling.batches import SimpleBatches
 from ml_playground.models.core.model import GPT
 
 

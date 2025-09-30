@@ -11,7 +11,8 @@ import numpy as np
 import pytest
 import torch
 
-from ml_playground.data import _MemmapReader, _sample_batch, SimpleBatches
+from ml_playground.data_pipeline.sampling.batches import SimpleBatches, sample_batch
+from ml_playground.data_pipeline.sources.memmap import MemmapReader
 from ml_playground.configuration import DataConfig
 
 
@@ -41,7 +42,7 @@ def device_strategy(draw: st.DrawFn) -> str:
 
 
 class TestMemmapReader:
-    """Property-based tests for _MemmapReader."""
+    """Property-based tests for ``MemmapReader``."""
 
     @given(length=st.integers(min_value=1, max_value=1000))
     @settings(max_examples=20)
@@ -57,7 +58,7 @@ class TestMemmapReader:
                 f.flush()
 
                 path = Path(f.name)
-                reader = _MemmapReader.open(path, dtype=np.uint16)
+                reader = MemmapReader.open(path, dtype=np.uint16)
 
                 # Check that length matches
                 assert reader.length == length
@@ -74,7 +75,7 @@ class TestMemmapReader:
 
 
 class TestSampleBatch:
-    """Property-based tests for _sample_batch function."""
+    """Property-based tests for ``sample_batch`` function."""
 
     @given(
         array_size=st.integers(min_value=1, max_value=1000),
@@ -102,9 +103,9 @@ class TestSampleBatch:
                 f.flush()
 
                 path = Path(f.name)
-                reader = _MemmapReader.open(path, dtype=np.uint16)
+                reader = MemmapReader.open(path, dtype=np.uint16)
 
-                x, y = _sample_batch(reader, batch_size, block_size, device)
+                x, y = sample_batch(reader, batch_size, block_size, device)
 
                 # Check shapes
                 assert x.shape == (batch_size, block_size)
