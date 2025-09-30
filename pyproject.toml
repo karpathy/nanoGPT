@@ -117,6 +117,7 @@ extend-exclude = [
     ".git",
     "htmlcov",
 ]
+cache-dir = ".cache/ruff"
 
 [tool.mypy]
 # When invoked without explicit targets, analyze only the project code.
@@ -130,6 +131,7 @@ exclude = '(^|.*/)(out/|data/|datasets/|checkpoints/|runs/|wandb/|lightning_logs
 follow_imports = "skip"
 # Avoid spending time resolving missing type stubs for external deps (torch, transformers, etc.)
 ignore_missing_imports = true
+cache_dir = ".cache/mypy"
 
 
 [tool.pytest.ini_options]
@@ -139,6 +141,7 @@ pythonpath = ["."]
 testpaths = [
     "tests",
 ]
+cache_dir = ".cache/pytest"
 norecursedirs = [
     ".git",
     ".hypothesis",
@@ -169,7 +172,6 @@ markers = [
     "acceptance: marks tests as acceptance (deselect with '-m \"not acceptance\"')",
     "e2e: marks tests as end-to-end tests",
 ]
-# BDD configuration for pytest-bdd
 bdd_features_base_dir = "tests/acceptance/features/"
 
 [tool.coverage.run]
@@ -214,22 +216,16 @@ precision = 2
 directory = "htmlcov"
 
 [cosmic-ray]
-module-path = "ml_playground/config.py"
+module-path = "ml_playground/checkpoint.py"
 timeout = 3.0
 excluded-modules = [
   "ml_playground/tokenizer_protocol.py",
   "ml_playground/lr_scheduler.py",
 ]
-test-command = "pytest -q -n auto tests/unit/ml_playground/test_config.py"
+test-command = "pytest -q -n auto tests/unit/training/checkpointing/test_service.py"
 no-copy-source-files = false
 
 [cosmic-ray.distributor]
 name = "local"
 
-[tool.mutmut]
-paths_to_mutate = [
-    "ml_playground/checkpoint.py",
-    "ml_playground/error_handling.py",
-]
-test_command = "pytest -q -n auto tests/unit/ml_playground/test_checkpoint.py tests/unit/ml_playground/test_error_handling.py"
-runner = "pytest"
+
