@@ -6,9 +6,9 @@ from pathlib import Path
 # Enforce that unit tests only import public APIs from ml_playground
 # This is a lightweight guard to avoid regressions.
 
-# Point to tests/unit/ml_playground
+# Point to tests/unit (now reorganized to match canonical package layout)
 UNIT_ROOT = Path(__file__).resolve().parent
-TESTS_ROOT = UNIT_ROOT / "ml_playground"
+TESTS_ROOT = UNIT_ROOT
 
 # Patterns considered violations in test sources
 FORBIDDEN_IMPORT_PATTERN = re.compile(
