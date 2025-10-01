@@ -71,50 +71,38 @@ pytest-core: ## Run pytest with $(PYTEST_BASE); pass extra args via PYARGS
 	$(PYTEST_CMD) $(PYARGS)
 
 # Full test suite
-pytest-all: ## Full test suite
+test: ## Run full test suite
 	$(PYTEST_CMD) tests
 
-test: ## Run full test suite
-	$(MAKE) pytest-all
-
 unit: ## Run unit tests only
-	$(MAKE) pytest-core PYARGS="tests/unit"
+	$(PYTEST_CMD) tests/unit
 
 unit-cov: ## Run unit tests with coverage for $(PKG)
-	$(RUN) pytest $(PYTEST_BASE) --cov=$(PKG) --cov-report=term-missing tests/unit
+	$(PYTEST_CMD) --cov=$(PKG) --cov-report=term-missing tests/unit
 
 integration: ## Run integration tests only
-	$(MAKE) pytest-core PYARGS="-m integration --no-cov"
+	$(PYTEST_CMD) -m integration --no-cov
 
 e2e: ## Run end-to-end tests only
-	$(MAKE) pytest-core PYARGS="-m e2e --no-cov"
+	$(PYTEST_CMD) tests/e2e
 
 acceptance: ## Run acceptance tests only (quiet)
-	$(RUN) pytest -q -m acceptance
-
-test-file: ## Run a single test file: make test-file FILE=path/to/test_*.py
-	@if [ -z "$(FILE)" ]; then echo "Usage: make test-file FILE=path/to/test_*.py"; exit 2; fi; \
-	$(RUN) pytest -q $(FILE)
+	$(PYTEST_CMD) tests/acceptance
 
 # Quality gates
 
 # Run type checking/lint/format (and tests) via pre-commit using repo hook config
-quality: ## Run pre-commit (ruff, format, type checks, tests) with .githooks config
+quality: ## Run pre-commit (ruff, format, type checks, deadcode, tests) with .githooks config
 	$(RUN) pre-commit run --config .githooks/.pre-commit-config.yaml --all-files
 
-# Extended quality: dead code + core quality + mutation testing (non-fatal)
-quality-ext: ## Extended quality: vulture + quality + mutation tests (non-fatal)
-	# Dead code scan (project package only)
-	# Core quality gate
-	$(MAKE) quality
-	# Mutation tests (non-fatal). Rely on pyproject.toml [cosmic-ray] configuration.
-	set +e; \
+# Extended quality: core quality + mutation testing (non-fatal)
+quality-ext: quality mutation ## Extended quality: vulture + quality + mutation tests (non-fatal)
+	
+mutation: ## Mutation tests (non-fatal). Rely on pyproject.toml [cosmic-ray] configuration.
+	@set +e; \
 	mkdir -p .cache/cosmic-ray; \
 	$(RUN) cosmic-ray init pyproject.toml .cache/cosmic-ray/session.sqlite >/dev/null 2>&1 || true; \
-	$(RUN) cosmic-ray exec pyproject.toml .cache/cosmic-ray/session.sqlite; code=$$?; set -e; \
-	if [ "$$code" -ne 0 ]; then \
-		echo "[warning] Cosmic Ray returned non-zero (code=$$code); proceeding"; \
-	fi
+	$(RUN) cosmic-ray exec pyproject.toml .cache/cosmic-ray/session.sqlite || echo "[warning] Cosmic Ray returned non-zero; proceeding"
 
 # Linting
 lint: ## Lint with Ruff
