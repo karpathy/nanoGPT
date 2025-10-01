@@ -304,6 +304,9 @@ class SamplerConfig(_FrozenStrictModel):
     runtime: RuntimeConfig
     sample: "SampleConfig"
     extras: dict[str, Any] = Field(default_factory=dict)
+    # Optional DI callables for sampling
+    checkpoint_load_fn: Optional[_t.Callable[..., Any]] = None
+    model_factory: Optional[_t.Callable[..., Any]] = None
 
 
 class OptimConfig(_FrozenStrictModel):

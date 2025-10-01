@@ -100,8 +100,18 @@ class Sampler:
         return model
 
     def _load_checkpoint(self) -> Checkpoint:
-        """Load a checkpoint according to the configured read policy."""
+        """Load a checkpoint according to the configured read policy.
+
+        Uses DI hook `cfg.checkpoint_load_fn` if provided, otherwise defaults
+        to manager's load_latest/load_best.
+        """
         ckpt_mgr = CheckpointManager(out_dir=self.out_dir)
+        # DI override
+        if self.cfg.checkpoint_load_fn is not None:
+            return self.cfg.checkpoint_load_fn(
+                manager=ckpt_mgr, cfg=self.cfg, logger=self.logger
+            )
+
         if self.runtime_cfg.checkpointing.read_policy == READ_POLICY_BEST:
             return ckpt_mgr.load_best_checkpoint(
                 device=self.runtime_cfg.device, logger=self.logger
@@ -112,7 +122,11 @@ class Sampler:
 
     def _init_model_from_checkpoint(self, checkpoint: Checkpoint) -> GPT:
         model_cfg = ModelConfig(**checkpoint.model_args)
-        model = GPT(model_cfg, self.logger)
+        # DI override for model factory
+        if self.cfg.model_factory is not None:
+            model = self.cfg.model_factory(model_cfg, self.logger)
+        else:
+            model = GPT(model_cfg, self.logger)
         model.load_state_dict(checkpoint.model, strict=False)
         model.eval()
         model.to(self.runtime_cfg.device)
