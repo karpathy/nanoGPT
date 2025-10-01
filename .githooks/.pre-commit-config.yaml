@@ -28,3 +28,11 @@ repos:
     entry: uv run vulture ml_playground --min-confidence 90
     language: system
     pass_filenames: false
+  - id: pytest
+    name: pytest
+    entry: bash
+    args:
+      - -c
+      - HYPOTHESIS_DATABASE_DIRECTORY=.cache/hypothesis HYPOTHESIS_STORAGE_DIRECTORY=.cache/hypothesis uv run pytest -q -n auto -W error --strict-markers --strict-config tests
+    language: system
+    pass_filenames: false

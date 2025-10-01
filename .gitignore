@@ -36,6 +36,9 @@ htmlcov/
 .cache/
 **/.cache/
 
+# Prevent stray Hypothesis cache at repo root (we use .cache/hypothesis instead)
+.hypothesis/
+
 # Mutation testing
 tb_logs/
 **/tensorboard/
@@ -66,3 +69,4 @@ tools/llama_cpp/llama-quantize
 .idea
 # Local developer resources
 .ldres/
+!/.ldres/tv-tasks.md
