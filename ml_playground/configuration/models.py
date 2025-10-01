@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Annotated, Any, Literal, Optional, Callable
+from typing import Annotated, Any, Literal, Optional
+import typing as _t
 
 from pydantic import (
     BaseModel,
@@ -153,10 +154,10 @@ class PreparerConfig(_FrozenStrictModel):
     doc_separator: str = ""
     extras: dict[str, Any] = Field(default_factory=dict)
     # Optional DI hooks (keep generic to avoid import cycles)
-    # read_text_fn: Optional function to read raw text from a Path
-    read_text_fn: Optional[Callable[..., Any]] = None
-    # tokenizer_factory: Optional function to create a tokenizer from a kind
-    tokenizer_factory: Optional[Callable[..., Any]] = None
+    # Function to read text from a path (e.g., Path -> str)
+    read_text_fn: Optional[_t.Callable[..., Any]] = None
+    # Factory to create a tokenizer from a kind
+    tokenizer_factory: Optional[_t.Callable[..., Any]] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -272,6 +273,13 @@ class TrainerConfig(_FrozenStrictModel):
     hf_model: HFModelConfig | None = None
     peft: PeftConfig | None = None
     checkpointing: RuntimeConfig.Checkpointing = RuntimeConfig.Checkpointing()
+    # Optional DI callables (kept generic to avoid import cycles)
+    # Hooks around a training step
+    before_step_hook: Optional[_t.Callable[..., Any]] = None
+    after_step_hook: Optional[_t.Callable[..., Any]] = None
+    # Checkpoint save/load indirections
+    checkpoint_save_fn: Optional[_t.Callable[..., Any]] = None
+    checkpoint_load_fn: Optional[_t.Callable[..., Any]] = None
 
     @model_validator(mode="after")
     def _cross_field_checks(self) -> "TrainerConfig":

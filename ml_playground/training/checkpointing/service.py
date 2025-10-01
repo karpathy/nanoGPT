@@ -41,6 +41,14 @@ def load_checkpoint(
     logger,
 ) -> Optional[Checkpoint]:
     """Load the latest or best checkpoint according to the read policy."""
+    # DI override if provided
+    if cfg.checkpoint_load_fn is not None:
+        try:
+            return cfg.checkpoint_load_fn(manager=manager, cfg=cfg, logger=logger)
+        except Exception as exc:  # pragma: no cover - DI override path is user-supplied
+            logger.warning(f"checkpoint_load_fn failed: {exc}")
+            return None
+
     if not manager.out_dir.exists():
         return None
 
@@ -96,6 +104,22 @@ def save_checkpoint(
         config=cfg.model_dump(),
         ema=ema.shadow if ema else None,
     )
+    # DI override if provided
+    if cfg.checkpoint_save_fn is not None:
+        try:
+            cfg.checkpoint_save_fn(
+                manager=manager,
+                cfg=cfg,
+                checkpoint=checkpoint,
+                is_best=is_best,
+                logger=logger,
+            )
+            return
+        except Exception as exc:  # pragma: no cover - DI override path is user-supplied
+            logger.warning(
+                f"checkpoint_save_fn failed, falling back to default save: {exc}"
+            )
+
     base_filename = "ckpt_best.pt" if is_best else "ckpt_last.pt"
     manager.save_checkpoint(
         checkpoint,
