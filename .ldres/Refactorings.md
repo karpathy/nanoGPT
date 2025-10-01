@@ -31,13 +31,13 @@ Pre-commit hooks automatically run `make quality` during commits, so manual invo
 - **P9** – Update documentation to reflect canonical package structure 🔄
 - **P10** – Consolidate cache directories under `.cache/` 🔄 (small; tool configs ✅)
 - **P11** – Remove mocking via dependency injection in configuration classes 🔄 (medium)
-- **P12** – Add README files to key subpackages 🔄 (small)
+- **P12** – Add README files to key subpackages ✅ (small)
 - **P13** – Audit and fix misnamed/misplaced tests 🔄 (small)
 - **P14** – Plan for `mutants/` directory management 🔄 (small; mutmut removed ✅)
 - **P15** – Consolidate Python cache directories 🔄 (small, duplicate of P10; tool configs ✅)
 - **P16** – Reorganize `ml_playground/` root utilities into subpackages 🔄 (large, do last)
-- **P17** – Import compliance: remove re-exports and relative imports in `__init__.py` 🔄 (high)
-- **P18** – Consolidate LIT integration modules and docs 🔄 (medium)
+- **P17** – Import compliance: remove re-exports and relative imports in `__init__.py` ✅ (high)
+- **P18** – Consolidate LIT integration modules and docs ✅ (medium)
 
 ---
 
