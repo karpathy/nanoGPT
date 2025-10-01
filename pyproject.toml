@@ -216,7 +216,7 @@ module-path = "ml_playground/checkpoint.py"
 timeout = 3.0
 excluded-modules = [
   "ml_playground/core/tokenizer_protocol.py",
-  "ml_playground/lr_scheduler.py",
+  "ml_playground/training/optim/lr_scheduler.py",
 ]
 test-command = "pytest -q -n auto tests/unit/training/checkpointing/test_service.py"
 no-copy-source-files = false
