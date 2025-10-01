@@ -66,7 +66,7 @@ This file tracks targeted refactoring tasks Thomas requested. Keep items small, 
 
 ---
 
-## Task 4: Rename module/project to ml_playgound (spelling per request)
+## Task 4: Rename module/project to ml_playground
 
 - Scope:
   - Update project display/name references to "ml_playgound" (pyproject, docs, badges, READMEs).
