@@ -2,7 +2,7 @@ import builtins
 from collections.abc import Mapping
 import pytest
 
-from ml_playground.tokenizer import (
+from ml_playground.core.tokenizer import (
     CharTokenizer,
     WordTokenizer,
     TiktokenTokenizer,

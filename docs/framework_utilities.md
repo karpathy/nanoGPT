@@ -262,7 +262,7 @@ progress.finish("Dataset preparation completed")
 ### Tokenizer Usage
 
 ```python
-from ml_playground.tokenizer import create_tokenizer
+from ml_playground.core.tokenizer import create_tokenizer
 
 # Create a tokenizer
 tokenizer = create_tokenizer("tiktoken", encoding_name="gpt2")
@@ -441,7 +441,7 @@ assert runtime.device in {"cpu", "mps", "cuda"}
 
 ```python
 from pathlib import Path
-from ml_playground.tokenizer import create_tokenizer
+from ml_playground.core.tokenizer import create_tokenizer
 from ml_playground.data_pipeline import prepare_with_tokenizer, write_bin_and_meta
 
 tok = create_tokenizer("tiktoken", encoding_name="gpt2")

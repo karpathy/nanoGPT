@@ -16,7 +16,7 @@ from ml_playground.data_pipeline.transforms.io import (
     seed_text_file,
     write_bin_and_meta,
 )
-from ml_playground.tokenizer import CharTokenizer, WordTokenizer
+from ml_playground.core.tokenizer import CharTokenizer, WordTokenizer
 
 
 """Logging helpers are provided via fixtures in conftest.py (list_logger, list_logger_factory)."""

@@ -12,7 +12,7 @@ from ml_playground.configuration.models import DataConfig
 from ml_playground.core.error_handling import DataError
 from ml_playground.logging_protocol import LoggerLike
 from ml_playground.data_pipeline.transforms.tokenization import coerce_tokenizer_type
-from ml_playground.tokenizer import create_tokenizer
+from ml_playground.core.tokenizer import create_tokenizer
 from ml_playground.tokenizer_protocol import Tokenizer
 
 __all__ = [

@@ -13,7 +13,7 @@ from ml_playground.data_pipeline.transforms.io import (
     snapshot_file_states,
     write_bin_and_meta,
 )
-from ml_playground.tokenizer import TiktokenTokenizer
+from ml_playground.core.tokenizer import TiktokenTokenizer
 from ml_playground.experiments.protocol import (
     Preparer as _PreparerProto,
     PrepareReport,
