@@ -107,25 +107,21 @@ extend-exclude = [
     "**/mlruns/**",
     ".cache",
     "**/.cache/**",
-    ".hf_cache",
-    "**/.hf_cache/**",
     ".venv",
     "env",
-    ".pytest_cache",
-    ".mypy_cache",
-    ".ruff_cache",
     ".git",
     "htmlcov",
 ]
 cache-dir = ".cache/ruff"
 
+# When invoked without explicit targets, analyze only the project code.
 [tool.mypy]
 # When invoked without explicit targets, analyze only the project code.
 files = ["ml_playground"]
 # Also exclude common ignored/artifact directories if mypy is invoked without args.
 # Additionally exclude analysis (LIT integration) to avoid pulling heavy third-party types
 # that slow down type checking and are not part of core runtime.
-exclude = '(^|.*/)(out/|data/|datasets/|checkpoints/|runs/|wandb/|lightning_logs/|artifacts/|mlruns/|htmlcov/|ml_playground/experiments/|ml_playground/analysis/|\\.idea/|\\.vscode/|\\.venv/|env/|\\.pytest_cache/|\\.mypy_cache/|\\.ruff_cache/|\\.hf_cache/|\\.cache/|\\.git/)'
+exclude = '(^|.*/)(out/|data/|datasets/|checkpoints/|runs/|wandb/|lightning_logs/|artifacts/|mlruns/|htmlcov/|ml_playground/experiments/|ml_playground/analysis/|\\.idea/|\\.vscode/|\\.venv/|env/|\\.cache/|\\.git/)'
 
 # Speed up type checking by not following imports into third-party libraries
 follow_imports = "skip"
@@ -136,7 +132,7 @@ cache_dir = ".cache/mypy"
 
 [tool.pytest.ini_options]
 # Updated pytest settings for ml_playground
-addopts = "-W error --strict-markers --strict-config -v"
+addopts = "-W error -W ignore:Skipping collection of '.hypothesis' directory.*:UserWarning --strict-markers --strict-config -v"
 pythonpath = ["."]
 testpaths = [
     "tests",
@@ -144,7 +140,6 @@ testpaths = [
 cache_dir = ".cache/pytest"
 norecursedirs = [
     ".git",
-    ".hypothesis",
     ".idea",
     ".vscode",
     ".venv",
@@ -158,12 +153,13 @@ norecursedirs = [
     "lightning_logs",
     "artifacts",
     "mlruns",
-    ".hf_cache",
     ".cache",
     "htmlcov",
-    ".pytest_cache",
-    ".mypy_cache",
-    ".ruff_cache",
+]
+filterwarnings = [
+    # Hypothesis plugin warns when skipping '.hypothesis' if norecursedirs overrides defaults.
+    # We centralize Hypothesis database under .cache/hypothesis; ignore this warning under -W error.
+    "ignore:Skipping collection of '.hypothesis' directory.*:UserWarning",
 ]
 markers = [
     "slow: marks tests as slow (deselected by default)",
@@ -213,7 +209,7 @@ fail_under = 100
 precision = 2
 
 [tool.coverage.html]
-directory = "htmlcov"
+directory = ".cache/coverage/htmlcov"
 
 [cosmic-ray]
 module-path = "ml_playground/checkpoint.py"

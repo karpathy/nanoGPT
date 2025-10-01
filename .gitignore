@@ -20,51 +20,33 @@ __pycache__/
 *.gz
 *.bz2
 *.xz
-*.zst
 *.gguf
 *.ggml
 *.weights
 **/.venv*/
 
-# Project artifacts and caches
+# Project artifacts
 out/
-.pytest_cache/
-.hypothesis/
-.hypothesis_cache/
 .coverage
-.coverage.*
 coverage.xml
 coverage/
 htmlcov/
 
-# Mutation testing
-mutants/
-{{ ... }}
+# Centralized caches (preferred location)
+.cache/
+**/.cache/
 
-logs/
-**/logs/
+# Mutation testing
 tb_logs/
 **/tensorboard/
 events.out.tfevents.*
 
 # Bundestag MP datasets (sensitive CSVs)
-**/all_mps_mapping.csv
 **/all_mps_meta.csv
 **/Bundestag.csv
 
 .output.txt
 /.env
-
-# Local caches (any location)
-.cache/
-**/.cache/
-.hf_cache/
-**/.hf_cache/
-
-# Local Hugging Face/Transformers cache directories (any location)
-# (kept for clarity; overlaps with .hf_cache patterns)
-.hf_cache/
-**/.hf_cache/
 
 # Experiment-specific generated data (do not version)
 **/datasets/

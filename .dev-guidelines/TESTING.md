@@ -163,7 +163,8 @@ Testing Docs
 make quality-ext
 ```
 
-- This initializes (if needed) and executes Cosmic Ray sessions at `out/cosmic-ray/session.sqlite`. The step is non-fatal and not part of CI or pre-commit by default.
+- This initializes (if needed) and executes Cosmic Ray sessions at `.cache/cosmic-ray/session.sqlite`. The step is non-fatal and not part of CI or pre-commit by default.
+- The `.cache/cosmic-ray/` directory is treated like other build artifacts: never commit it, clean it with `make clean` if needed.
 
 ## Running Tests
 

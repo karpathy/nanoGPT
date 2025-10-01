@@ -12,6 +12,8 @@ from typing import Callable
 import random
 import numpy as np
 import pytest
+from hypothesis import settings
+from hypothesis.database import DirectoryBasedExampleDatabase
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -23,6 +25,45 @@ def _seed_randomness() -> None:
     """
     random.seed(1337)
     np.random.seed(1337)
+
+
+# ----------------------------------------------------------------------------
+# Hypothesis global database location
+# ----------------------------------------------------------------------------
+
+# Ensure Hypothesis stores its example database under the centralized cache.
+# This applies regardless of how pytest is invoked (Makefile, pre-commit, IDE, etc.).
+settings.register_profile(
+    "repo-default",
+    database=DirectoryBasedExampleDatabase(Path(".cache/hypothesis")),
+)
+settings.load_profile("repo-default")
+
+
+def pytest_load_initial_conftests(args, early_config, parser) -> None:  # type: ignore[override]
+    """Early hook: ensure no top-level .hypothesis dir exists before collection.
+
+    Pre-commit runs pytest with -W error; Hypothesis plugin warns when it sees
+    a top-level .hypothesis dir skipped by norecursedirs. We remove it here to
+    avoid the warning entirely.
+    """
+    top = Path.cwd() / ".hypothesis"
+    try:
+        if top.exists():
+            # Safety: only remove if it's a directory inside repo root
+            if top.is_dir():
+                for p in sorted(top.rglob("*"), reverse=True):
+                    try:
+                        if p.is_file() or p.is_symlink():
+                            p.unlink(missing_ok=True)
+                        elif p.is_dir():
+                            p.rmdir()
+                    except Exception:
+                        pass
+                top.rmdir()
+    except Exception:
+        # Non-fatal: better to proceed than fail early
+        pass
 
 
 # ----------------------------------------------------------------------------

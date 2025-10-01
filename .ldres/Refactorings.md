@@ -16,6 +16,14 @@ These prompts are self-contained and aligned with:
 
 Pre-commit hooks automatically run `make quality` during commits, so manual invocations are optional if you want faster feedback. Use short-lived feature branches, follow Conventional Commits, and always pair behavioral changes with tests. Never bypass verification (`--no-verify` is prohibited).
 
+### Mandatory workflow for every prompt (no exceptions)
+
+- **Create feature branch**: Update `main`, then create a kebab-case feature branch (`git switch -c <type>/<scope>-<desc>`).
+- **Keep changesets tiny**: Implement the minimal behavior in ≤200 touched lines per commit, pairing tests and code.
+- **Run quality gates**: Execute `make quality` (or stricter slices) locally before each commit and before opening the PR.
+- **Open focused PR**: Push the branch, open a PR summarizing the change, list validation commands, and request review.
+- **Merge cleanly into `main`**: After CI passes and review approval, use fast-forward or rebase-merge so the branch lands on `main` (a.k.a. master); delete the feature branch afterward.
+
 ---
 
 ## Index
@@ -187,6 +195,14 @@ Remaining checklist:
 
 **Commit guidance**: `git commit -m "docs(<area>): update for canonical package structure"`
 
+**Execution checklist (mandatory):**
+
+- Create branch `docs/<scope>-canonical-structure` off updated `main`.
+- Implement the smallest viable doc edits in ≤200 touched lines per commit with paired tests if needed.
+- Run `make quality` (or doc-focused slices) before each commit and prior to opening the PR.
+- Push branch, open PR summarizing scope and validation commands, request review.
+- After approval and green CI, fast-forward or rebase-merge into `main`, then delete the feature branch.
+
 ---
 
 ### P10. Consolidate cache directories under `.cache/`
@@ -227,6 +243,14 @@ Remaining checklist:
    - `README.md` - Update any cache-related instructions
 
 **Commit guidance**: `git commit -m "chore(cache): consolidate all caches under .cache/"`
+
+**Execution checklist (mandatory):**
+
+- Create branch `chore/cache-consolidation` from synced `main`.
+- Apply focused config/gitignore updates with ≤200 lines per commit, pairing any test adjustments.
+- Run targeted `make quality` slices impacting tooling plus full gate before PR.
+- Push branch, open PR with summary, validation commands, reviewers.
+- Merge via fast-forward/rebase into `main` once CI passes, then remove branch.
 
 ---
 
@@ -504,6 +528,14 @@ from ml_playground.<package> import ...
 
 **Commit guidance**: `git commit -m "test(structure): rename/relocate misplaced tests"`
 
+**Execution checklist (mandatory):**
+
+- Create branch `test/structure-audit` from updated `main`.
+- Apply renames/moves in minimal commits, keeping ≤200 touched lines and aligning docstrings/tests together.
+- Run targeted pytest slices plus `make quality` before PR.
+- Push branch, open PR summarizing relocations and validation runs, request review.
+- Merge cleanly into `main` via rebase/fast-forward once approved, prune branch.
+
 ---
 
 ### P14. Plan for `mutants/` directory management
@@ -571,6 +603,14 @@ from ml_playground.<package> import ...
 5. **Consider renaming** to `.mutants/` (hidden directory) if keeping as build artifact
 
 **Commit guidance**: `git commit -m "docs(testing): document mutation testing artifacts in mutants/"`
+
+**Execution checklist (mandatory):**
+
+- Create branch `docs/mutation-artifacts` from synced `main`.
+- Keep commits ≤200 touched lines, pairing doc changes with any config/test updates.
+- Run `make quality` before each commit and prior to PR submission.
+- Push branch, open PR detailing documentation updates and validation, solicit review.
+- Merge to `main` with a clean fast-forward/rebase after approval, remove branch.
 
 ---
 
@@ -743,14 +783,24 @@ from ml_playground.<package> import ...
    - Update test locations to match (e.g., `tests/unit/core/test_checkpoint.py` → `tests/unit/training/checkpointing/test_manager.py`)
 
 4. **Fix import violations while moving**:
-   - Add `from __future__ import annotations` if missing
-   - Change relative imports to absolute imports (per memory IMPORT_GUIDELINES violations)
 
-5. **Update `__init__.py`** exports:
+**Commit guidance**: Use focused Conventional Commits per move (e.g., `refactor(training): relocate checkpoint manager`).
+
+**Execution checklist (mandatory):**
+
+- Create branch `refactor/root-utility-reorg` from a freshly rebased `main`.
+- Move one cohesive module group at a time, keeping commits ≤200 touched lines and pairing code/test/doc changes.
+- Run targeted pytest slices plus `make quality` after each group; rerun full gate before PR.
+- Push branch, open PR detailing moves, validation runs, migration notes, request review.
+- After approvals with green CI, rebase-merge or fast-forward into `main`, prune the feature branch.
+- Add `from __future__ import annotations` where absent during moves.
+- Replace any remaining relative imports with absolute imports per `.dev-guidelines/IMPORT_GUIDELINES.md`.
+
+1. **Update `__init__.py`** exports:
    - `ml_playground/__init__.py` - Re-export commonly used items for backward compatibility
    - Consider adding deprecation warnings for old import paths
 
-6. **Update documentation**:
+2. **Update documentation**:
    - Update P9 documentation task to reflect new locations
    - Update `docs/framework_utilities.md` with new import paths
 

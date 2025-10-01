@@ -12,6 +12,9 @@ SHELL := /bin/bash
 all: quality
 
 # Be quieter and focus output on failures only
+export UV_CACHE_DIR := .cache/uv
+export HYPOTHESIS_DATABASE_DIRECTORY := .cache/hypothesis
+export HYPOTHESIS_STORAGE_DIRECTORY := .cache/hypothesis
 PYTEST_BASE=-q -n auto -W error --strict-markers --strict-config
 RUN=uv run
 PKG=ml_playground
@@ -98,24 +101,22 @@ test-file: ## Run a single test file: make test-file FILE=path/to/test_*.py
 # Run type checking first to fail fast on typing issues
 quality: typecheck lint format test ## Type-check, lint, format, and run tests
 
-# Extended quality: dead code + core quality + mutation testing (non-fatal) 
+# Extended quality: dead code + core quality + mutation testing (non-fatal)
 quality-ext: ## Extended quality: vulture + quality + mutation tests (non-fatal)
 	# Dead code scan (project package only)
-	$(MAKE) deadcode
 	# Core quality gate
 	$(MAKE) quality
 	# Mutation tests (non-fatal). Rely on pyproject.toml [cosmic-ray] configuration.
 	set +e; \
-	$(RUN) cosmic-ray init pyproject.toml out/cosmic-ray/session.sqlite >/dev/null 2>&1 || true; \
-	$(RUN) cosmic-ray exec pyproject.toml out/cosmic-ray/session.sqlite; code=$$?; set -e; \
+	mkdir -p .cache/cosmic-ray; \
+	$(RUN) cosmic-ray init pyproject.toml .cache/cosmic-ray/session.sqlite >/dev/null 2>&1 || true; \
+	$(RUN) cosmic-ray exec pyproject.toml .cache/cosmic-ray/session.sqlite; code=$$?; set -e; \
 	if [ "$$code" -ne 0 ]; then \
-	  echo "[warning] Cosmic Ray returned non-zero (code=$$code); proceeding"; \
+		echo "[warning] Cosmic Ray returned non-zero (code=$$code); proceeding"; \
 	fi
 
-# CI alias for extended quality
-quality-ci: quality-ext ## Alias of quality-ext for CI pipelines
-
-lint: ## Run Ruff checks
+# Linting
+lint: ## Lint with Ruff
 	$(RUN) ruff check .
 
 format: ## Auto-fix with Ruff and format code
