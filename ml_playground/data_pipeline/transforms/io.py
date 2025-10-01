@@ -7,7 +7,7 @@ import pickle
 
 import numpy as np
 
-from ml_playground._file_state import diff_file_states, snapshot_file_states
+from ml_playground.core.file_state import diff_file_states, snapshot_file_states
 from ml_playground.configuration.models import DataConfig
 from ml_playground.core.error_handling import DataError
 from ml_playground.core.logging_protocol import LoggerLike
