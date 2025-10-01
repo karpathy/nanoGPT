@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Annotated, Any, Literal, Optional
+from typing import Annotated, Any, Literal, Optional, TYPE_CHECKING
 import typing as _t
 
 from pydantic import (
@@ -20,9 +20,25 @@ from pydantic import (
 
 from ml_playground.core.logging_protocol import LoggerLike
 
+if TYPE_CHECKING:  # import for type checking only to avoid runtime cycles
+    pass
 READ_POLICY_LATEST: Literal["latest"] = "latest"
 READ_POLICY_BEST: Literal["best"] = "best"
 DEFAULT_READ_POLICY: Literal["best"] = READ_POLICY_BEST
+
+# ----- DI type aliases (kept generic to avoid import cycles) -----
+# Read raw text from a filesystem path
+ReadTextFn = _t.Callable[[Path], str]
+# Construct a tokenizer object from a generic discriminator (e.g., kind/enum)
+TokenizerFactoryFn = _t.Callable[[object], Any]
+# Trainer hooks around a single training step
+BeforeStepHook = _t.Callable[..., None]
+AfterStepHook = _t.Callable[..., None]
+# Checkpoint IO indirections
+CheckpointLoadFn = _t.Callable[..., Any]
+CheckpointSaveFn = _t.Callable[..., None]
+# Sampler model factory (uses local ModelConfig without importing runtime symbols)
+ModelFactoryFn = _t.Callable[[Any, object], Any]
 
 
 def merge_configs(base_config: Any, override_config: Any) -> dict[str, Any]:
@@ -155,9 +171,9 @@ class PreparerConfig(_FrozenStrictModel):
     extras: dict[str, Any] = Field(default_factory=dict)
     # Optional DI hooks (keep generic to avoid import cycles)
     # Function to read text from a path (e.g., Path -> str)
-    read_text_fn: Optional[_t.Callable[..., Any]] = None
+    read_text_fn: Optional[ReadTextFn] = None
     # Factory to create a tokenizer from a kind
-    tokenizer_factory: Optional[_t.Callable[..., Any]] = None
+    tokenizer_factory: Optional[TokenizerFactoryFn] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -275,11 +291,11 @@ class TrainerConfig(_FrozenStrictModel):
     checkpointing: RuntimeConfig.Checkpointing = RuntimeConfig.Checkpointing()
     # Optional DI callables (kept generic to avoid import cycles)
     # Hooks around a training step
-    before_step_hook: Optional[_t.Callable[..., Any]] = None
-    after_step_hook: Optional[_t.Callable[..., Any]] = None
+    before_step_hook: Optional[BeforeStepHook] = None
+    after_step_hook: Optional[AfterStepHook] = None
     # Checkpoint save/load indirections
-    checkpoint_save_fn: Optional[_t.Callable[..., Any]] = None
-    checkpoint_load_fn: Optional[_t.Callable[..., Any]] = None
+    checkpoint_save_fn: Optional[CheckpointSaveFn] = None
+    checkpoint_load_fn: Optional[CheckpointLoadFn] = None
 
     @model_validator(mode="after")
     def _cross_field_checks(self) -> "TrainerConfig":
@@ -305,8 +321,8 @@ class SamplerConfig(_FrozenStrictModel):
     sample: "SampleConfig"
     extras: dict[str, Any] = Field(default_factory=dict)
     # Optional DI callables for sampling
-    checkpoint_load_fn: Optional[_t.Callable[..., Any]] = None
-    model_factory: Optional[_t.Callable[..., Any]] = None
+    checkpoint_load_fn: Optional[CheckpointLoadFn] = None
+    model_factory: Optional[ModelFactoryFn] = None
 
 
 class OptimConfig(_FrozenStrictModel):
@@ -515,6 +531,14 @@ __all__ = [
     "READ_POLICY_LATEST",
     "READ_POLICY_BEST",
     "DEFAULT_READ_POLICY",
+    # DI type aliases
+    "ReadTextFn",
+    "TokenizerFactoryFn",
+    "BeforeStepHook",
+    "AfterStepHook",
+    "CheckpointLoadFn",
+    "CheckpointSaveFn",
+    "ModelFactoryFn",
     "SECTION_PREPARE",
     "SECTION_TRAIN",
     "SECTION_SAMPLE",
@@ -533,3 +557,15 @@ __all__ = [
     "ExperimentConfig",
     "SharedConfig",
 ]
+
+# Ensure forward references across configuration models are resolved at import time
+# This is safe/idempotent and avoids requiring callers to rebuild explicitly.
+PreparerConfig.model_rebuild()
+RuntimeConfig.model_rebuild()
+TrainerConfig.model_rebuild()
+SamplerConfig.model_rebuild()
+ModelConfig.model_rebuild()
+DataConfig.model_rebuild()
+SampleConfig.model_rebuild()
+ExperimentConfig.model_rebuild()
+SharedConfig.model_rebuild()
