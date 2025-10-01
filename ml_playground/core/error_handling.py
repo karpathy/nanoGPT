@@ -7,7 +7,7 @@ import sys
 import traceback
 from typing import Any, Callable, Optional, Type, TypeVar
 from pathlib import Path
-from ml_playground.logging_protocol import LoggerLike
+from ml_playground.core.logging_protocol import LoggerLike
 
 # Type variable for generic error handling
 T = TypeVar("T")

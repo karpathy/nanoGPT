@@ -17,7 +17,7 @@ from pydantic import (
     model_validator,
 )
 
-from ml_playground.logging_protocol import LoggerLike
+from ml_playground.core.logging_protocol import LoggerLike
 
 READ_POLICY_LATEST: Literal["latest"] = "latest"
 READ_POLICY_BEST: Literal["best"] = "best"
