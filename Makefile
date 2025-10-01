@@ -72,7 +72,7 @@ pytest-core: ## Run pytest with $(PYTEST_BASE); pass extra args via PYARGS
 
 # Full test suite
 pytest-all: ## Full test suite
-	$(PYTEST_CMD)
+	$(PYTEST_CMD) tests
 
 test: ## Run full test suite
 	$(MAKE) pytest-all

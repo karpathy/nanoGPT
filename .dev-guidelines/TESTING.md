@@ -49,10 +49,22 @@ Testing Docs
 
 ### 3. Directory Layout and Naming
 
-- **Structure**: `tests/unit/ml_playground/test_<module>.py`
+- **Structure** (canonical): `tests/unit/<package>/test_<module>.py`
+- **Packages** mirror `ml_playground/` layout, for example:
+  - `tests/unit/training/`, `tests/unit/sampling/`, `tests/unit/data_pipeline/`, `tests/unit/configuration/`, `tests/unit/core/`, `tests/unit/experiments/`, `tests/unit/analysis/`
 - **Test functions**: `test_<behavior>_<condition>_<expected>()`
 - **Test classes** (if grouping needed): `Test<Subject>` only; no `__init__` in test classes.
 - **Docstrings**: Each test function must have a one-line docstring stating the behavior it covers.
+
+Quick reference (examples):
+
+```text
+ml_playground/training/checkpointing/     -> tests/unit/training/checkpointing/test_<module>.py
+ml_playground/sampling/                   -> tests/unit/sampling/test_<module>.py
+ml_playground/data_pipeline/              -> tests/unit/data_pipeline/test_<module>.py
+ml_playground/configuration/              -> tests/unit/configuration/test_<module>.py
+ml_playground/models/                     -> tests/unit/core/test_<module>.py
+```
 
 **Rationale**: Predictable discovery and easy navigation.
 
@@ -220,20 +232,17 @@ vocab_size = 256
 """
     config_path = tmp_path / "test.toml"
     config_path.write_text(config_content, encoding="utf-8")
-    
+
     # Act / Assert
     if expected_valid:
-        config = load_toml(config_path)
-        assert config.model.block_size == block_size
+        exp = load_full_experiment_config(config_path)
+        assert exp.train.model.block_size == block_size
     else:
         with pytest.raises(ValueError):
-            load_toml(config_path)
-```
+            load_full_experiment_config(config_path)
 
 ### Fixture with tmp_path
 
-```python
-import json
 from pathlib import Path
 import pytest
 
@@ -247,13 +256,13 @@ def config_file(tmp_path: Path) -> Path:
 
 ## Adding New Tests
 
-Create files under `tests/unit/ml_playground/test_<module>.py`:
+Create files under `tests/unit/<package>/test_<module>.py`:
 
 ```python
 from __future__ import annotations
 from pathlib import Path
 import pytest
-from ml_playground.config import load_toml, TrainerConfig
+from ml_playground.configuration import load_full_experiment_config
 
 
 def test_config_loading_handles_missing_file(tmp_path: Path) -> None:
@@ -263,5 +272,5 @@ def test_config_loading_handles_missing_file(tmp_path: Path) -> None:
 
     # Act / Assert
     with pytest.raises(FileNotFoundError):
-        load_toml(missing_path)
+        load_full_experiment_config(missing_path)
 ```

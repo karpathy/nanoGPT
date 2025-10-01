@@ -132,7 +132,7 @@ cache_dir = ".cache/mypy"
 
 [tool.pytest.ini_options]
 # Updated pytest settings for ml_playground
-addopts = "-W error -W ignore:Skipping collection of '.hypothesis' directory.*:UserWarning --strict-markers --strict-config -v"
+addopts = "-W error --strict-markers --strict-config -v -W \"ignore:Skipping collection of '.hypothesis' directory.*:UserWarning\""
 pythonpath = ["."]
 testpaths = [
     "tests",
