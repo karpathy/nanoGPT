@@ -1,4 +1,0 @@
-# file: /Users/tv/code/nanoGPT/ml_playground/trainer.py
-# hypothesis_version: 6.140.2
-
-[-1.0, 0.0, 0.1, 0.9, 100.0, 1000000000.0, 'LR', 'Loss/train', 'Loss/val', 'Trainer', '_orig_mod', 'bfloat16', 'ckpt_best.pt', 'ckpt_last.pt', 'cpu', 'cuda', 'float16', 'float32', 'get_lr', 'lr', 'train', 'val']

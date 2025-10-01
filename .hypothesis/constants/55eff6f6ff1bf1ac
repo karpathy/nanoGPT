@@ -1,4 +1,0 @@
-# file: /Users/tv/code/nanoGPT/ml_playground/config_loader.py
-# hypothesis_version: 6.140.2
-
-['.ldres', 'config.toml', 'config_path', 'context', 'default_config.toml', 'etc', 'experiment', 'experiments', 'ml_playground', 'prepare', 'project_home', 'provenance', 'raw', 'sample', 'shared', 'train', 'utf-8']

@@ -1,4 +1,0 @@
-# file: /Users/tv/code/nanoGPT/ml_playground/cli.py
-# hypothesis_version: 6.140.2
-
-[8050, '\nLoop cancelled.', '\nSampling cancelled.', '\nTraining cancelled.', '%(message)s', '---', '--exp-config', '127.0.0.1', 'SharedConfig', '__main__', 'bundestag_char', 'dataset_dir', 'exp_config', 'meta.pkl', 'obj', 'out_dir', 'post-sample', 'post-train', 'pre-sample', 'pre-train', 'train.bin', 'val.bin']

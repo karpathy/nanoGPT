@@ -1,4 +1,0 @@
-# file: /Users/tv/code/nanoGPT/ml_playground/checkpoint.py
-# hypothesis_version: 6.140.2
-
-['.json', '.tmp', '_', 'best_val_loss', 'ckpt_best_*.pt', 'ckpt_last_*.pt', 'config', 'ema', 'inf', 'iter_num', 'model', 'model_args', 'optimizer']

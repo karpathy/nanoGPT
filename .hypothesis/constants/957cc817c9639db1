@@ -1,4 +1,0 @@
-# file: /Users/tv/code/nanoGPT/ml_playground/config.py
-# hypothesis_version: 6.140.2
-
-[0.0, 6e-05, 0.0006, 0.1, 0.8, 0.9, 0.95, 1.0, 200, 767, 1024, 1337, 2000, 600000, './raw', '/', 'DTypeKind', 'DataConfig', 'DeviceKind', 'ExperimentConfig', 'KEY_EXTRAS', 'LRSchedule', 'ModelConfig', 'OptimConfig', 'PreparerConfig', 'RuntimeConfig', 'SECTION_PREPARE', 'SECTION_SAMPLE', 'SECTION_TRAIN', 'SampleConfig', 'SamplerConfig', 'SharedConfig', 'TrainerConfig', 'after', 'before', 'best', 'bfloat16', 'char', 'ckpt_best.pt', 'ckpt_last.pt', 'config_path', 'cpu', 'cuda', 'dataset_dir', 'extras', 'float16', 'float32', 'forbid', 'latest', 'load_experiment_toml', 'meta.pkl', 'mps', 'must not be NaN', 'out_dir', 'perplexity', 'prepare', 'project_home', 'random', 'raw_dir', 'raw_text_path', 'runtime', 'sample', 'sample_out_dir', 'sequential', 'shared', 'tiktoken', 'train', 'train.bin', 'train_out_dir', 'val.bin', 'val_loss', 'word']

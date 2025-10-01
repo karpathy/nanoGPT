@@ -1,4 +1,0 @@
-# file: /Users/tv/code/nanoGPT/ml_playground/sampler.py
-# hypothesis_version: 6.140.2
-
-['---------------', 'FILE:', 'Sampler', 'Sampling...', 'bfloat16', 'cpu', 'cuda', 'float16', 'float32', 'utf-8']

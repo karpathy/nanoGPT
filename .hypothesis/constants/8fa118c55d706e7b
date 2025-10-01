@@ -1,4 +1,0 @@
-# file: /Users/tv/code/nanoGPT/ml_playground/analysis/sample_quality.py
-# hypothesis_version: 6.140.2
-
-[0.0, '...', '== Anomalies ==', '== Header ==', '== Lines ==', '== N-grams ==', 'Jahr:', 'Sprecher:', 'Thema:', '[.!?…]$', '\\w+|[^\\w\\s]', 'stray_year_tokens: -', 'top_repeated_lines:', 'top_repeated_ngrams:', 'utf-8']

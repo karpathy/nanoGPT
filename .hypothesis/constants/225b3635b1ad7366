@@ -1,4 +1,0 @@
-# file: /Users/tv/code/nanoGPT/ml_playground/prepare.py
-# hypothesis_version: 6.140.2
-
-[0.0, 0.9, '.', '.tmp', 'Encoder', 'Preparer', '\\w+|[^\\w\\s]', 'char', 'cl100k_base', 'data_config', 'decode', 'diff_files', 'encode', 'encoding_name', 'has_decode', 'has_encode', 'meta.pkl', 'meta_version', 'name', 'raw_text', 'raw_text_path', 'rb', 'seed_text_file', 'setup_tokenizer', 'snapshot_files', 'split_train_val', 'stoi', 'tiktoken', 'tokenizer', 'tokenizer_type', 'train.bin', 'train_tokens', 'unknown', 'utf-8', 'val.bin', 'val_tokens', 'vocab', 'vocab_size', 'wb', 'word', 'write_bin_and_meta']

@@ -1,4 +1,0 @@
-# file: /Users/tv/code/nanoGPT/ml_playground/data.py
-# hypothesis_version: 6.140.2
-
-['_MemmapReader', 'dtype', 'r', 'random', 'rb', 'sampler', 'sequential', 'train', 'uint16', 'uint32', 'val']
