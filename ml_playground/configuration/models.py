@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Annotated, Any, Literal, Optional
+from typing import Annotated, Any, Literal, Optional, Callable
 
 from pydantic import (
     BaseModel,
@@ -152,6 +152,11 @@ class PreparerConfig(_FrozenStrictModel):
     add_structure_tokens: bool = False
     doc_separator: str = ""
     extras: dict[str, Any] = Field(default_factory=dict)
+    # Optional DI hooks (keep generic to avoid import cycles)
+    # read_text_fn: Optional function to read raw text from a Path
+    read_text_fn: Optional[Callable[..., Any]] = None
+    # tokenizer_factory: Optional function to create a tokenizer from a kind
+    tokenizer_factory: Optional[Callable[..., Any]] = None
 
     @model_validator(mode="before")
     @classmethod

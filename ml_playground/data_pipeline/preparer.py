@@ -45,7 +45,11 @@ class _PreparationPipeline:
 
     def run(self) -> PreparationOutcome:
         tokenizer_kind: TokenizerKind = self._resolve_tokenizer_type()
-        tokenizer = create_tokenizer(tokenizer_kind)
+        # Prefer DI factory if provided
+        if self._cfg.tokenizer_factory is not None:
+            tokenizer = self._cfg.tokenizer_factory(tokenizer_kind)
+        else:
+            tokenizer = create_tokenizer(tokenizer_kind)
         raw_text = self._load_raw_text()
         return self.prepare_from_text(raw_text, tokenizer)
 
@@ -117,6 +121,8 @@ class _PreparationPipeline:
     def _load_raw_text(self) -> str:
         raw_text_path = self._cfg.raw_text_path
         if raw_text_path is not None:
+            if self._cfg.read_text_fn is not None:
+                return self._cfg.read_text_fn(Path(raw_text_path))
             return Path(raw_text_path).read_text(encoding="utf-8")
         raise DataError("No raw text path provided in preparer config")
 
