@@ -9,7 +9,7 @@ import numpy as np
 
 from ml_playground.core.error_handling import DataError
 from ml_playground.core.tokenizer import CharTokenizer, WordTokenizer, create_tokenizer
-from ml_playground.tokenizer_protocol import Tokenizer
+from ml_playground.core.tokenizer_protocol import Tokenizer
 
 __all__ = [
     "TokenizerKind",

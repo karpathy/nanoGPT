@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, Mapping, Optional, Sequence, Literal
 from types import MappingProxyType
-from ml_playground.tokenizer_protocol import Tokenizer
+from ml_playground.core.tokenizer_protocol import Tokenizer
 
 
 __all__ = ["Tokenizer", "create_tokenizer"]
