@@ -11,7 +11,7 @@ from ml_playground.configuration.models import (
     SharedConfig,
     READ_POLICY_BEST,
 )
-from ml_playground.error_handling import CheckpointError
+from ml_playground.core.error_handling import CheckpointError
 from ml_playground.models.core.model import GPT
 
 

@@ -19,7 +19,7 @@ from ml_playground.configuration.models import (
     READ_POLICY_BEST,
     SharedConfig,
 )
-from ml_playground.error_handling import DataError, FileOperationError
+from ml_playground.core.error_handling import DataError, FileOperationError
 from ml_playground.models.core.model import GPT
 from ml_playground.data_pipeline.transforms.io import setup_tokenizer
 

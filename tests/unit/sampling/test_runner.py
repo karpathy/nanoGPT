@@ -18,7 +18,7 @@ from ml_playground.configuration.models import (
     SharedConfig,
 )
 from ml_playground.sampling.runner import Sampler, sample
-from ml_playground.error_handling import DataError, CheckpointError
+from ml_playground.core.error_handling import DataError, CheckpointError
 from ml_playground.checkpoint import CheckpointManager
 from ml_playground.data_pipeline.sampling.batches import SimpleBatches
 from ml_playground.models.core.config import GPTConfig

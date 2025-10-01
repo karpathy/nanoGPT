@@ -16,7 +16,7 @@ from ml_playground.experiments.protocol import (
     Preparer as _PreparerProto,
     PrepareReport,
 )
-from ml_playground.error_handling import validate_file_exists
+from ml_playground.core.error_handling import validate_file_exists
 
 
 class BundestagCharPreparer(_PreparerProto):

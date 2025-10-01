@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from ml_playground.error_handling import (
+from ml_playground.core.error_handling import (
     setup_logging,
     safe_call,
     safe_file_operation,
@@ -145,7 +145,7 @@ def test_handle_exception_keyboard_interrupt(monkeypatch: pytest.MonkeyPatch) ->
     logger.setLevel(logging.INFO)
     logger.addHandler(logging.StreamHandler(stream))
 
-    from ml_playground.error_handling import handle_exception
+    from ml_playground.core.error_handling import handle_exception
 
     try:
         raise KeyboardInterrupt

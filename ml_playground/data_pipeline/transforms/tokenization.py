@@ -7,7 +7,7 @@ import re
 
 import numpy as np
 
-from ml_playground.error_handling import DataError
+from ml_playground.core.error_handling import DataError
 from ml_playground.tokenizer import CharTokenizer, WordTokenizer, create_tokenizer
 from ml_playground.tokenizer_protocol import Tokenizer
 

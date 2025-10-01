@@ -19,7 +19,7 @@ from ml_playground.experiments.protocol import (
     Preparer as _PreparerProto,
     PrepareReport,
 )
-from ml_playground.error_handling import (
+from ml_playground.core.error_handling import (
     DataError,
     validate_file_exists,
     ProgressReporter,

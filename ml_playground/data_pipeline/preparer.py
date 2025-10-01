@@ -16,7 +16,7 @@ from ml_playground.data_pipeline.transforms.tokenization import (
     TokenizerKind,
     coerce_tokenizer_type,
 )
-from ml_playground.error_handling import DataError
+from ml_playground.core.error_handling import DataError
 from ml_playground.tokenizer import create_tokenizer
 from ml_playground.tokenizer_protocol import Tokenizer
 

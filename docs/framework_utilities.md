@@ -244,7 +244,7 @@ The framework provides several utilities for managing experiments:
 ### Error Handling
 
 ```python
-from ml_playground.error_handling import DataError, safe_file_operation, validate_file_exists, ProgressReporter
+from ml_playground.core.error_handling import DataError, safe_file_operation, validate_file_exists, ProgressReporter
 
 # Validate that a file exists
 validate_file_exists(input_file_path, "Input text file")

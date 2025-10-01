@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple, TypedDict, Union, 
 import torch
 from torch.serialization import pickle as _torch_pickle  # type: ignore[attr-defined]
 
-from ml_playground.error_handling import CheckpointError, CheckpointLoadError
+from ml_playground.core.error_handling import CheckpointError, CheckpointLoadError
 from ml_playground.logging_protocol import LoggerLike
 
 TorchUnpicklingError = _torch_pickle.UnpicklingError  # type: ignore[attr-defined]
