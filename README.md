@@ -4,6 +4,7 @@ This module provides a single, one-way interface to prepare data, train, and sam
 It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 
 - Developer Guidelines: see `.dev-guidelines/Readme.md` for setup, development workflow, and policies.
+- Tools index: see `tools/README.md` for helper scripts and usage.
 
 ## Documentation abstraction policy
 
@@ -25,7 +26,7 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 │   ├── integration/           # multi-module tests via Python APIs
 │   ├── e2e/                   # CLI-level smoke tests
 │   └── acceptance/            # higher-level behaviors and policies
-├── tools/                     # developer tools and vendor integrations
+├── tools/                     # developer tools and vendor integrations (see tools/README.md)
 │   └── llama_cpp/             # GGUF conversion helper (vendored instructions)
 ├── docs/                      # supplementary docs (framework utilities, LIT, etc.)
 ├── lit_nlp/                   # optional LIT integration
