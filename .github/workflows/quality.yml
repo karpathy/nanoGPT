@@ -31,3 +31,12 @@ jobs:
 
       - name: Ensure coverage badges committed
         run: git diff --exit-code docs/assets/coverage.svg docs/assets/coverage-lines.svg docs/assets/coverage-branches.svg
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-badge-${{ github.run_id }}
+          path: |
+            .cache/coverage/coverage.json
+            .cache/coverage/htmlcov/
