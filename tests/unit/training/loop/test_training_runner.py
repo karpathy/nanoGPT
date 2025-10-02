@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import pytest
 import torch
 
 import ml_playground.training.loop.runner as runner_mod
+from ml_playground.training.loop.runner import TrainerDependencies
 from ml_playground.configuration.models import (
     DataConfig,
     LRSchedule,
@@ -157,66 +158,139 @@ def _shared(tmp_path: Path, cfg: TrainerConfig) -> SharedConfig:
     )
 
 
-def test_train_eval_only_breaks_early_and_returns(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(
-        runner_mod,
-        "initialize_batches",
-        lambda cfg, shared: _FakeBatches(device="cpu"),
-    )
+def _build_deps(
+    *,
+    evaluation: Dict[int, Dict[str, float]] | None = None,
+    saved_hook: Callable[[Dict[str, Any]], None] | None = None,
+    load_checkpoint_result: Optional[Checkpoint] = None,
+    get_lr_override: Callable[[int, LRSchedule, OptimConfig], float] | None = None,
+) -> Tuple[TrainerDependencies, _FakeCkptMgr]:
+    evaluation = evaluation or {}
+    batches = _FakeBatches(device="cpu")
+    model = _FakeModel()
+    optimizer = _FakeOptimizer()
+    scaler = _FakeScaler()
+    writer = _FakeWriter()
+    manager = _FakeCkptMgr()
 
-    def _init_model(
+    def init_batches(cfg: TrainerConfig, shared: SharedConfig) -> _FakeBatches:
+        del cfg, shared
+        return batches
+
+    def init_model(
         cfg: TrainerConfig, logger: Any
     ) -> Tuple[_FakeModel, _FakeOptimizer]:
         del cfg, logger
-        return _FakeModel(), _FakeOptimizer()
+        return model, optimizer
 
-    monkeypatch.setattr(runner_mod, "initialize_model", _init_model)
-    monkeypatch.setattr(
-        runner_mod,
-        "initialize_components",
-        lambda model, cfg, runtime, log_dir: (
-            model,
-            _FakeScaler(),
-            None,
-            _FakeWriter(),
-        ),
-    )
-    monkeypatch.setattr(
-        runner_mod, "create_manager", lambda cfg, shared: _FakeCkptMgr()
-    )
-    monkeypatch.setattr(runner_mod, "load_checkpoint", lambda mgr, cfg, logger: None)
-    monkeypatch.setattr(
-        runner_mod, "propagate_metadata", lambda cfg, shared, logger: None
-    )
-    monkeypatch.setattr(
-        runner_mod,
-        "run_evaluation",
-        lambda cfg, logger, iter_num, lr, raw_model, batches, ctx, writer: {
-            "train": 0.5,
-            "val": 0.4,
-        },
-    )
+    def init_components(
+        model_param: torch.nn.Module,
+        cfg: TrainerConfig,
+        runtime: runner_mod.RuntimeContext,
+        log_dir: str,
+    ) -> Tuple[torch.nn.Module, _FakeScaler, None, _FakeWriter]:
+        del cfg, runtime, log_dir
+        return model_param, scaler, None, writer
 
-    saved_calls: list[Dict[str, Any]] = []
+    def create_manager(cfg: TrainerConfig, shared: SharedConfig) -> _FakeCkptMgr:
+        del cfg, shared
+        return manager
 
-    def _save_checkpoint(
-        manager, cfg, *, model, optimizer, ema, iter_num, best_val_loss, logger, is_best
+    def load_checkpoint(
+        manager_param: _FakeCkptMgr,
+        cfg: TrainerConfig,
+        *,
+        logger: Any,
+    ) -> Optional[Checkpoint]:
+        del manager_param, cfg, logger
+        return load_checkpoint_result
+
+    def apply_checkpoint(
+        checkpoint: Checkpoint,
+        *,
+        model: torch.nn.Module,
+        optimizer: Any,
+        ema: Optional[Any],
+    ) -> Tuple[int, float]:
+        del model, optimizer, ema
+        return checkpoint.iter_num, checkpoint.best_val_loss
+
+    def save_checkpoint(
+        manager_param: _FakeCkptMgr,
+        cfg: TrainerConfig,
+        *,
+        model: torch.nn.Module,
+        optimizer: Any,
+        ema: Optional[Any],
+        iter_num: int,
+        best_val_loss: float,
+        logger: Any,
+        is_best: bool,
     ) -> None:
-        saved_calls.append(
-            {
-                "iter_num": iter_num,
-                "best": is_best,
-                "best_val_loss": best_val_loss,
-            }
-        )
+        del cfg, model, optimizer, ema, logger
+        manager_param.saved.append(_Saved(is_best=is_best, iter_num=iter_num))
+        if saved_hook is not None:
+            saved_hook(
+                {
+                    "iter_num": iter_num,
+                    "best": is_best,
+                    "best_val_loss": best_val_loss,
+                }
+            )
 
-    monkeypatch.setattr(runner_mod, "save_checkpoint", _save_checkpoint)
+    def propagate_metadata(
+        cfg: TrainerConfig,
+        shared: SharedConfig,
+        *,
+        logger: Any,
+    ) -> None:
+        del cfg, shared, logger
+
+    def run_evaluation(
+        cfg: TrainerConfig,
+        *,
+        logger: Any,
+        iter_num: int,
+        lr: float,
+        raw_model: torch.nn.Module,
+        batches: Any,
+        ctx: Any,
+        writer: Optional[_FakeWriter],
+    ) -> Dict[str, float]:
+        del cfg, logger, lr, raw_model, batches, ctx, writer
+        return evaluation.get(iter_num, evaluation.get(-1, {"train": 0.5, "val": 0.5}))
+
+    def get_lr(iteration: int, schedule: LRSchedule, optim: OptimConfig) -> float:
+        if get_lr_override is not None:
+            return get_lr_override(iteration, schedule, optim)
+        return runner_mod.get_lr(iteration, schedule, optim)
+
+    deps = TrainerDependencies(
+        initialize_batches=init_batches,
+        initialize_model=init_model,
+        initialize_components=init_components,
+        create_manager=create_manager,
+        load_checkpoint=load_checkpoint,
+        apply_checkpoint=apply_checkpoint,
+        save_checkpoint=save_checkpoint,
+        propagate_metadata=propagate_metadata,
+        run_evaluation=run_evaluation,
+        get_lr=get_lr,
+    )
+    return deps, manager
+
+
+def test_train_eval_only_breaks_early_and_returns(tmp_path: Path) -> None:
+    saved_calls: list[Dict[str, Any]] = []
+    deps, _manager = _build_deps(
+        evaluation={0: {"train": 0.5, "val": 0.4}},
+        saved_hook=saved_calls.append,
+    )
 
     cfg = _make_cfg(tmp_path, eval_only=True, max_iters=0)
     shared = _shared(tmp_path, cfg)
-    it, best = runner_mod.Trainer(cfg, shared).run()
+
+    it, best = runner_mod.Trainer(cfg, shared, deps=deps).run()
 
     assert it == 0
     assert best == pytest.approx(0.4)
@@ -224,124 +298,50 @@ def test_train_eval_only_breaks_early_and_returns(
 
 
 def test_train_writes_best_checkpoint_on_improvement_after_first_iter(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
-    monkeypatch.setattr(
-        runner_mod,
-        "initialize_batches",
-        lambda cfg, shared: _FakeBatches(device="cpu"),
-    )
-    monkeypatch.setattr(
-        runner_mod,
-        "initialize_model",
-        lambda cfg, logger: (_FakeModel(), _FakeOptimizer()),
-    )
-    monkeypatch.setattr(
-        runner_mod,
-        "initialize_components",
-        lambda model, cfg, runtime, log_dir: (
-            model,
-            _FakeScaler(),
-            None,
-            _FakeWriter(),
-        ),
-    )
-    fake_mgr = _FakeCkptMgr()
-    monkeypatch.setattr(runner_mod, "create_manager", lambda cfg, shared: fake_mgr)
-    monkeypatch.setattr(runner_mod, "load_checkpoint", lambda mgr, cfg, logger: None)
-    monkeypatch.setattr(
-        runner_mod, "propagate_metadata", lambda cfg, shared, logger: None
-    )
-
     calls: Dict[int, Dict[str, float]] = {
         0: {"train": 0.6, "val": 0.5},
         1: {"train": 0.5, "val": 0.2},
     }
-
-    def _eval(cfg, logger, iter_num, lr, raw_model, batches, ctx, writer):
-        del cfg, logger, lr, raw_model, batches, ctx, writer
-        return calls.get(iter_num, calls[1])
-
-    monkeypatch.setattr(runner_mod, "run_evaluation", _eval)
-
-    saved_calls: list[_Saved] = []
-
-    def _save_checkpoint(
-        manager, cfg, *, model, optimizer, ema, iter_num, best_val_loss, logger, is_best
-    ) -> None:
-        del manager, cfg, model, optimizer, ema, best_val_loss, logger
-        saved_calls.append(_Saved(is_best=is_best, iter_num=iter_num))
-
-    monkeypatch.setattr(runner_mod, "save_checkpoint", _save_checkpoint)
+    saved_calls: list[Dict[str, Any]] = []
+    deps, manager = _build_deps(
+        evaluation=calls,
+        saved_hook=saved_calls.append,
+    )
 
     cfg = _make_cfg(tmp_path, eval_only=False, max_iters=2)
     shared = _shared(tmp_path, cfg)
 
-    it, best = runner_mod.Trainer(cfg, shared).run()
+    it, best = runner_mod.Trainer(cfg, shared, deps=deps).run()
 
     assert it >= 1
-    assert any(call.is_best and call.iter_num == 1 for call in saved_calls)
-    assert any(not call.is_best for call in saved_calls)
+    assert any(call["best"] and call["iter_num"] == 1 for call in saved_calls)
+    assert any(not call["best"] for call in saved_calls)
     assert best == pytest.approx(0.2)
+    assert manager.saved, "checkpoints should be recorded"
 
 
-def test_trainer_updates_optimizer_lr_via_get_lr(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(
-        runner_mod,
-        "initialize_batches",
-        lambda cfg, shared: _FakeBatches(device="cpu"),
+def test_trainer_updates_optimizer_lr_via_get_lr(tmp_path: Path) -> None:
+    lr_calls: list[Tuple[int, float]] = []
+
+    def track_lr(iteration: int, schedule: LRSchedule, optim: OptimConfig) -> float:
+        value = runner_mod.get_lr(iteration, schedule, optim)
+        lr_calls.append((iteration, value))
+        return value
+
+    deps, _manager = _build_deps(
+        evaluation={0: {"train": 0.5, "val": 0.4}},
+        get_lr_override=track_lr,
     )
-    monkeypatch.setattr(
-        runner_mod,
-        "initialize_model",
-        lambda cfg, logger: (_FakeModel(), _FakeOptimizer()),
-    )
-    monkeypatch.setattr(
-        runner_mod,
-        "initialize_components",
-        lambda model, cfg, runtime, log_dir: (
-            model,
-            _FakeScaler(),
-            None,
-            _FakeWriter(),
-        ),
-    )
-    monkeypatch.setattr(
-        runner_mod, "create_manager", lambda cfg, shared: _FakeCkptMgr()
-    )
-    monkeypatch.setattr(runner_mod, "load_checkpoint", lambda mgr, cfg, logger: None)
-    monkeypatch.setattr(
-        runner_mod, "propagate_metadata", lambda cfg, shared, logger: None
-    )
-    monkeypatch.setattr(
-        runner_mod,
-        "run_evaluation",
-        lambda cfg, logger, iter_num, lr, raw_model, batches, ctx, writer: {
-            "train": 0.5,
-            "val": 0.4,
-        },
-    )
-    monkeypatch.setattr(runner_mod, "save_checkpoint", lambda *args, **kwargs: None)
 
     cfg = _make_cfg(tmp_path, eval_only=False, max_iters=3)
     shared = _shared(tmp_path, cfg)
 
-    lr_calls: list[Tuple[int, float]] = []
-    original_get_lr = runner_mod.get_lr
-
-    def _get_lr(it: int, schedule: LRSchedule, optim: OptimConfig) -> float:
-        val = original_get_lr(it, schedule, optim)
-        lr_calls.append((it, val))
-        return val
-
-    monkeypatch.setattr(runner_mod, "get_lr", _get_lr)
-
-    trainer = runner_mod.Trainer(cfg, shared)
+    trainer = runner_mod.Trainer(cfg, shared, deps=deps)
     trainer.run()
 
-    assert lr_calls, "get_lr should be invoked"
+    assert lr_calls, "get_lr must be invoked at least once"
     for _, lr in lr_calls:
         assert 0.0 <= lr <= cfg.optim.learning_rate + 1e-6
     assert any(lr > 0 for _, lr in lr_calls)

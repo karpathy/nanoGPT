@@ -4,13 +4,19 @@ from __future__ import annotations
 
 import time
 from contextlib import AbstractContextManager
-from typing import Optional, Tuple, cast
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, Optional, Tuple, cast
 
 import torch
 from torch.amp.grad_scaler import GradScaler
 from torch.utils.tensorboard import SummaryWriter
 
-from ml_playground.configuration.models import TrainerConfig, SharedConfig
+from ml_playground.configuration.models import (
+    TrainerConfig,
+    SharedConfig,
+    LRSchedule,
+    OptimConfig,
+)
 from ml_playground.ema import EMA
 from ml_playground.models.core.model import GPT
 
@@ -31,41 +37,99 @@ from ml_playground.training.hooks.runtime import RuntimeContext, setup_runtime
 from ml_playground.training.loop.scheduler import get_lr
 
 
-__all__ = ["Trainer", "train", "get_lr"]
+__all__ = [
+    "Trainer",
+    "TrainerDependencies",
+    "default_trainer_dependencies",
+    "train",
+    "get_lr",
+]
+
+
+@dataclass(frozen=True)
+class TrainerDependencies:
+    initialize_batches: Callable[[TrainerConfig, SharedConfig], Any]
+    initialize_model: Callable[[TrainerConfig, Any], Tuple[Any, Any]]
+    initialize_components: Callable[
+        [Any, TrainerConfig, RuntimeContext, str],
+        Tuple[Any, GradScaler, Optional[EMA], Optional[SummaryWriter]],
+    ]
+    create_manager: Callable[[TrainerConfig, SharedConfig], Any]
+    load_checkpoint: Callable[..., Optional[Any]]
+    apply_checkpoint: Callable[..., Tuple[int, float]]
+    save_checkpoint: Callable[..., None]
+    propagate_metadata: Callable[..., None]
+    run_evaluation: Callable[..., Dict[str, float]]
+    get_lr: Callable[[int, LRSchedule, OptimConfig], float]
+
+
+def default_trainer_dependencies() -> TrainerDependencies:
+    def _init_components(
+        model: Any,
+        cfg: TrainerConfig,
+        runtime: RuntimeContext,
+        log_dir: str,
+    ) -> Tuple[Any, GradScaler, Optional[EMA], Optional[SummaryWriter]]:
+        return initialize_components(model, cfg, runtime, log_dir=log_dir)
+
+    return TrainerDependencies(
+        initialize_batches=initialize_batches,
+        initialize_model=initialize_model,
+        initialize_components=_init_components,
+        create_manager=create_manager,
+        load_checkpoint=load_checkpoint,
+        apply_checkpoint=apply_checkpoint,
+        save_checkpoint=save_checkpoint,
+        propagate_metadata=propagate_metadata,
+        run_evaluation=run_evaluation,
+        get_lr=get_lr,
+    )
 
 
 class Trainer:
     """Coordinate the end-to-end training loop for a configured experiment."""
 
-    def __init__(self, cfg: TrainerConfig, shared: SharedConfig):
+    def __init__(
+        self,
+        cfg: TrainerConfig,
+        shared: SharedConfig,
+        deps: Optional[TrainerDependencies] = None,
+    ):
         self.cfg = cfg
         self.shared = shared
         self.logger = cfg.logger
+
+        self.deps = deps or default_trainer_dependencies()
 
         self.runtime: RuntimeContext = setup_runtime(cfg)
         self.ctx: AbstractContextManager[object] = self.runtime.autocast_context
         self.device_type = self.runtime.device_type
 
-        self.batches = initialize_batches(cfg, shared)
-        self.model, self.optimizer = initialize_model(cfg, self.logger)
+        self.batches = self.deps.initialize_batches(cfg, shared)
+        self.model, self.optimizer = self.deps.initialize_model(cfg, self.logger)
 
         self.out_dir = shared.train_out_dir
         self.out_dir.mkdir(parents=True, exist_ok=True)
-        self.ckpt_mgr = create_manager(cfg, shared)
+        self.ckpt_mgr = self.deps.create_manager(cfg, shared)
 
-        self.model, self.scaler, self.ema, self.writer = initialize_components(
+        (
+            self.model,
+            self.scaler,
+            self.ema,
+            self.writer,
+        ) = self.deps.initialize_components(
             self.model,
             cfg,
             self.runtime,
-            log_dir=str(self.out_dir),
+            str(self.out_dir),
         )
 
         self.iter_num = 0
         self.best_val_loss = 1e9
 
-        checkpoint = load_checkpoint(self.ckpt_mgr, cfg, logger=self.logger)
+        checkpoint = self.deps.load_checkpoint(self.ckpt_mgr, cfg, logger=self.logger)
         if checkpoint:
-            self.iter_num, self.best_val_loss = apply_checkpoint(
+            self.iter_num, self.best_val_loss = self.deps.apply_checkpoint(
                 checkpoint,
                 model=cast(GPT, getattr(self.model, "_orig_mod", self.model)),
                 optimizer=self.optimizer,
@@ -109,7 +173,7 @@ class Trainer:
 
         try:
             while True:
-                lr = get_lr(self.iter_num, self.cfg.schedule, self.cfg.optim)
+                lr = self.deps.get_lr(self.iter_num, self.cfg.schedule, self.cfg.optim)
                 for param_group in self.optimizer.param_groups:
                     param_group["lr"] = lr
 
@@ -117,7 +181,7 @@ class Trainer:
                     self.iter_num % self.cfg.runtime.eval_interval == 0
                     and self.cfg.runtime.eval_iters > 0
                 ):
-                    losses = run_evaluation(
+                    losses = self.deps.run_evaluation(
                         self.cfg,
                         logger=self.logger,
                         iter_num=self.iter_num,
@@ -130,7 +194,7 @@ class Trainer:
                     if losses["val"] < self.best_val_loss:
                         self.best_val_loss = losses["val"]
                         if self.iter_num > 0:
-                            save_checkpoint(
+                            self.deps.save_checkpoint(
                                 self.ckpt_mgr,
                                 self.cfg,
                                 model=raw_model,
@@ -200,7 +264,7 @@ class Trainer:
         finally:
             try:
                 if should_save_checkpoint:
-                    save_checkpoint(
+                    self.deps.save_checkpoint(
                         self.ckpt_mgr,
                         self.cfg,
                         model=raw_model,
@@ -215,8 +279,8 @@ class Trainer:
                 self.logger.warning(f"Failed to save final checkpoint: {exc}")
 
             try:
-                propagate_metadata(self.cfg, self.shared, logger=self.logger)
-            except (OSError, RuntimeError) as exc:
+                self.deps.propagate_metadata(self.cfg, self.shared, logger=self.logger)
+            except Exception as exc:
                 self.logger.warning(f"Failed to propagate meta file: {exc}")
 
             if self.writer:
@@ -244,7 +308,7 @@ class Trainer:
         self.optimizer.zero_grad(set_to_none=True)
 
         if self.ema:
-            self.ema.update(self.model)
+            self.ema.update(cast(GPT, getattr(self.model, "_orig_mod", self.model)))
         return loss_tensor
 
 

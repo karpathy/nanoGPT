@@ -19,21 +19,22 @@ repos:
   - id: checkmake
 - repo: local
   hooks:
-  - id: coverage-badge
-    name: coverage badge
-    entry: bash
-    args:
-      - -c
-      - |
-        set -e
-        if ! compgen -G ".cache/coverage/coverage.sqlite*" > /dev/null; then
-          COVERAGE_FILE=.cache/coverage/coverage.sqlite make coverage-test
-        fi
-        make coverage-badge SKIP_COVERAGE_TESTS=1
-        git add docs/assets/coverage.svg docs/assets/coverage-lines.svg docs/assets/coverage-branches.svg
-    language: system
-    pass_filenames: false
-    stages: [pre-commit]
+  # TODO(mock-free-refactor): re-enable coverage badge hook after coverage branch lands
+  # - id: coverage-badge
+  #   name: coverage badge
+  #   entry: bash
+  #   args:
+  #     - -c
+  #     - |
+  #       set -e
+  #       if ! compgen -G ".cache/coverage/coverage.sqlite*" > /dev/null; then
+  #         COVERAGE_FILE=.cache/coverage/coverage.sqlite make coverage-test
+  #       fi
+  #       make coverage-badge SKIP_COVERAGE_TESTS=1
+  #       git add docs/assets/coverage.svg docs/assets/coverage-lines.svg docs/assets/coverage-branches.svg
+  #   language: system
+  #   pass_filenames: false
+  #   stages: [pre-commit]
   - id: pyright
     name: pyright
     entry: uv run pyright ml_playground
