@@ -316,6 +316,106 @@ No separate test run in the Make target is necessary.
 
 ---
 
+## Coverage status (2025-10-02)
+
+- **Local coverage snapshot**: `ml_playground/training/checkpointing/service.py` remains at 66.27% with
+  missed lines `[76-82, 109-110, 117-119, 138-141, 144, 154-156]` per `.cache/coverage/coverage.json`.
+- **CI artifact**: GitHub runner covers the same file at 93.98% (only line `144` missed) according to
+  `tmp/coverage-ci/coverage.json`.
+- **Current decision**: Pause further coverage/badge work until the test suite complies with the
+  mock-free policy; revisit after completing Tasks 9–13 and rebase coverage changes on top of the
+  updated fixtures.
+
+---
+
+## Task 9: Replace monkeypatches in training loop unit tests
+
+- Scope:
+  - Refactor `tests/unit/training/loop/test_training_runner.py` to comply with `.dev-guidelines/TESTING.md` and `tests/unit/README.md`
+  guidance against monkeypatching internal seams.
+  - Introduce pytest fixtures (e.g., `_fake_batches`, `_fake_model`, checkpoint manager doubles) in
+    `tests/unit/conftest.py` or a local `conftest.py` and inject collaborators via constructor or
+    dependency overrides instead of `monkeypatch.setattr`.
+  - Ensure `Trainer` can accept injected dependencies without modifying production behavior for
+    non-test callers (consider helper factory or fixture that wires dependencies).
+- Acceptance criteria:
+  - The test file contains no `monkeypatch` usage or direct attribute patching of `runner_mod`.
+  - Fixtures provide reusable fakes with clear Arrange/Act/Assert structure; tests still enforce best/last checkpoint behaviors.
+  - `make unit` and `make quality` remain green.
+- Commit guidance:
+  - Branch: `test/training-loop-fixture-refactor`
+  - Commit: `test(training): replace monkeypatches with fixtures in training_runner tests`
+
+---
+
+## Task 10: Remove monkeypatch usage from configuration CLI tests
+
+- Scope:
+  - Update `tests/unit/configuration/test_cli.py` to stop patching CLI internals and environment via
+    `monkeypatch`/`MagicMock`.
+  - Provide fixtures for temporary configs, logging sinks, and checkpoint directories, leveraging
+    helper utilities instead of runtime patching.
+- Acceptance criteria:
+  - No `monkeypatch`, `patch`, or `MagicMock` references remain in the file; collaborators come from fixtures
+  or lightweight fakes defined alongside the tests.
+  - CLI tests continue to verify error handling and success paths without altering global state.
+  - `make unit` stays under target runtime.
+- Commit guidance:
+  - Branch: `test/config-cli-fixtures`
+  - Commit: `test(configuration): replace monkeypatch usage with fixtures in CLI tests`
+
+---
+
+## Task 11: Refactor sampling runner unit tests to fixture-based fakes
+
+- Scope:
+  - Rework `tests/unit/sampling/test_runner.py` to remove `monkeypatch` usage for tokenizer setup,
+    checkpoint loading, and sampler orchestration.
+  - Move shared doubles into fixtures (e.g., fake tokenizer registry, fake checkpoint files) stored
+    in `tests/unit/sampling/conftest.py`.
+- Acceptance criteria:
+  - The file no longer references `monkeypatch` or related patch APIs.
+  - Tests still validate sequential/random sampling flows and error handling using fixture-provided collaborators.
+  - Coverage is unchanged or improved; `make unit` passes.
+- Commit guidance:
+  - Branch: `test/sampling-runner-fixtures`
+  - Commit: `test(sampling): eliminate monkeypatch in runner tests`
+
+---
+
+## Task 12: Convert experiments loader tests away from monkeypatch
+
+- Scope:
+  - Modify `tests/unit/experiments/test_experiments_loader.py` to replace `monkeypatch.setattr` with
+    fixture-driven module registries and temporary package structures.
+  - Use `tmp_path` to create synthetic experiment modules/files and load them through the public API.
+- Acceptance criteria:
+  - No runtime attribute patching remains; fixtures encapsulate filesystem setup and module registration.
+  - Tests continue to cover success and failure branches for experiment loading.
+  - `make unit` succeeds without performance regressions.
+- Commit guidance:
+  - Branch: `test/experiments-loader-fixtures`
+  - Commit: `test(experiments): replace monkeypatch with fixtures`
+
+---
+
+## Task 13: Align integration datasets tests with mock-free policy
+
+- Scope:
+  - Audit `tests/integration/test_datasets_shakespeare.py` and remove `monkeypatch`/`patch` usage,
+    replacing them with fixtures that supply in-memory datasets, clocks, and file handles.
+  - Ensure integration tests mimic real data flow using temporary directories and deterministic sample
+    data per `.dev-guidelines/TESTING.md`.
+- Acceptance criteria:
+  - Integration tests run without patching internal functions; all collaborators come from fixtures or helper modules.
+  - Tests remain under the 100ms performance target and continue to validate download/encode behavior.
+  - `make integration` passes.
+- Commit guidance:
+  - Branch: `test/integration-shakespeare-fixtures`
+  - Commit: `test(integration): remove monkeypatch from shakespeare dataset tests`
+
+---
+
 This document enumerates prioritized refactoring prompts that can be handed to code-generation agents.
 Each numbered task contains nested sub-goals to encourage small, reviewable commits.
 

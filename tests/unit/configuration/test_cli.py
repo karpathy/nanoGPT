@@ -1,57 +1,93 @@
 from __future__ import annotations
+
 import pytest
 from pathlib import Path
-from pytest_mock import MockerFixture
+from typing import Any, Callable, Iterator, cast
+
 from typer.testing import CliRunner
 
 # Additional imports for consolidated CLI tests
-import sys
-import subprocess
 import logging
+import subprocess
+import sys
+
 import typer
-from typing import cast
 
 import ml_playground.cli as cli
-from ml_playground.cli import app
+from ml_playground.cli import (
+    CLIDependencies,
+    app,
+    override_cli_dependencies,
+)
 from ml_playground.configuration import cli as config_cli
+from ml_playground.configuration import loading as config_loader
 from ml_playground.configuration import loading as config_loading
 from ml_playground.configuration.models import (
-    TrainerConfig,
-    SamplerConfig,
+    DataConfig,
+    ExperimentConfig,
+    LRSchedule,
+    ModelConfig,
+    OptimConfig,
+    PreparerConfig,
     RuntimeConfig,
     SampleConfig,
-    ExperimentConfig,
+    SamplerConfig,
     SharedConfig,
-    ModelConfig,
-    DataConfig,
-    OptimConfig,
-    LRSchedule,
+    TrainerConfig,
 )
-from ml_playground.configuration import loading as config_loader
-from ml_playground.configuration.models import PreparerConfig
 
 runner = CliRunner()
 
 
-def _make_shared(
-    experiment: str,
+@pytest.fixture()
+def dataset_dir(tmp_path: Path) -> Iterator[Path]:
+    data_dir = tmp_path / "dataset"
+    data_dir.mkdir(parents=True)
+    (data_dir / "meta.pkl").write_text("meta")
+    yield data_dir
+
+
+@pytest.fixture()
+def out_dirs(tmp_path: Path) -> Iterator[tuple[Path, Path]]:
+    train_root = tmp_path / "train"
+    sample_root = tmp_path / "sample"
+    train_root.mkdir(parents=True)
+    sample_root.mkdir(parents=True)
+    yield train_root, sample_root
+
+
+@pytest.fixture()
+def shared_factory(
+    dataset_dir: Path, out_dirs: tuple[Path, Path]
+) -> Callable[[str], SharedConfig]:
+    train_root, sample_root = out_dirs
+
+    def _factory(experiment: str) -> SharedConfig:
+        config_path = dataset_dir / f"{experiment}.toml"
+        config_path.write_text("{}")
+        sample_experiment_dir = sample_root / experiment
+        sample_experiment_dir.mkdir(parents=True, exist_ok=True)
+        (sample_experiment_dir / "meta.pkl").write_text("meta")
+        return SharedConfig(
+            experiment=experiment,
+            config_path=config_path,
+            project_home=dataset_dir.parent,
+            dataset_dir=dataset_dir,
+            train_out_dir=train_root,
+            sample_out_dir=sample_root,
+        )
+
+    return _factory
+
+
+def _make_full_experiment(
+    shared: SharedConfig,
     *,
-    dataset_dir: Path | None = None,
-    out_dir: Path | None = None,
-) -> SharedConfig:
-    return SharedConfig(
-        experiment=experiment,
-        config_path=Path("config.toml"),
-        project_home=Path("."),
-        dataset_dir=dataset_dir or Path("."),
-        train_out_dir=out_dir or Path("."),
-        sample_out_dir=out_dir or Path("."),
-    )
-
-
-def _make_full_experiment(shared: SharedConfig) -> ExperimentConfig:
+    sample: SamplerConfig | None = None,
+    prepare: PreparerConfig | None = None,
+) -> ExperimentConfig:
     return ExperimentConfig(
-        prepare=PreparerConfig(),
+        prepare=prepare or PreparerConfig(),
         train=TrainerConfig(
             model=ModelConfig(),
             data=DataConfig(),
@@ -59,7 +95,8 @@ def _make_full_experiment(shared: SharedConfig) -> ExperimentConfig:
             schedule=LRSchedule(),
             runtime=RuntimeConfig(out_dir=shared.train_out_dir),
         ),
-        sample=SamplerConfig(
+        sample=sample
+        or SamplerConfig(
             runtime=RuntimeConfig(out_dir=shared.sample_out_dir),
             sample=SampleConfig(),
         ),
@@ -67,147 +104,257 @@ def _make_full_experiment(shared: SharedConfig) -> ExperimentConfig:
     )
 
 
-def test_main_prepare_shakespeare_success(mocker: MockerFixture) -> None:
-    """Test prepare command with shakespeare dataset succeeds."""
-    mock_run = mocker.patch("ml_playground.cli._run_prepare")
-    shared = _make_shared("shakespeare")
-    mocker.patch(
-        "ml_playground.configuration.cli.load_experiment",
-        return_value=_make_full_experiment(shared),
+def _make_deps(
+    *,
+    load_experiment: Callable[[str, Path | None], ExperimentConfig],
+    ensure_train: Callable[[ExperimentConfig], Any] | None = None,
+    ensure_sample: Callable[[ExperimentConfig], Any] | None = None,
+    run_prepare: Callable[[str, PreparerConfig, Path, SharedConfig], None]
+    | None = None,
+    run_train: Callable[[str, TrainerConfig, Path, SharedConfig], None] | None = None,
+    run_sample: Callable[[str, SamplerConfig, Path, SharedConfig], None] | None = None,
+) -> CLIDependencies:
+    return CLIDependencies(
+        load_experiment=load_experiment,
+        ensure_train_prerequisites=ensure_train or _noop,
+        ensure_sample_prerequisites=ensure_sample or _noop,
+        run_prepare=run_prepare or _noop,
+        run_train=run_train or _noop,
+        run_sample=run_sample or _noop,
     )
-    result = runner.invoke(app, ["prepare", "shakespeare"])
+
+
+def _noop(*_args: Any, **_kwargs: Any) -> None:
+    return None
+
+
+def test_main_prepare_shakespeare_success(
+    shared_factory: Callable[[str], SharedConfig],
+) -> None:
+    """Test prepare command with shakespeare dataset succeeds."""
+
+    shared = shared_factory("shakespeare")
+    exp = _make_full_experiment(shared)
+    calls: dict[str, int] = {"prepare": 0}
+
+    def _run_prepare(
+        experiment: str,
+        prepare_cfg: PreparerConfig,
+        config_path: Path,
+        shared: SharedConfig,
+    ) -> None:
+        calls["prepare"] += 1
+        assert experiment == "shakespeare"
+        assert prepare_cfg is exp.prepare
+        assert shared is exp.shared
+        assert config_path == exp.shared.config_path
+
+    deps = _make_deps(
+        load_experiment=lambda experiment, exp_config: exp,
+        run_prepare=_run_prepare,
+    )
+
+    with override_cli_dependencies(deps):
+        result = runner.invoke(app, ["prepare", "shakespeare"])
+
     assert result.exit_code == 0
-    mock_run.assert_called_once()
+    assert calls["prepare"] == 1
 
 
 def test_main_sample_missing_meta_fails(
-    tmp_path: Path, mocker: MockerFixture, caplog: pytest.LogCaptureFixture
+    shared_factory: Callable[[str], SharedConfig],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Sample should fail fast when neither train meta nor runtime meta exist."""
-    shared = _make_shared("shakespeare", out_dir=Path("out"))
-    mocker.patch(
-        "ml_playground.configuration.cli.load_experiment",
-        return_value=_make_full_experiment(shared),
+
+    shared = shared_factory("shakespeare")
+    exp = _make_full_experiment(shared)
+
+    def _ensure_sample(_exp: ExperimentConfig) -> tuple[Path, Path]:
+        raise ValueError("Missing required meta file for sampling")
+
+    deps = _make_deps(
+        load_experiment=lambda experiment, exp_config: exp,
+        ensure_sample=_ensure_sample,
     )
-    # Prepare command does not require additional prerequisite helpers
-    mocker.patch(
-        "ml_playground.cli.config_cli.ensure_sample_prerequisites",
-        side_effect=ValueError("Missing required meta file for sampling"),
-    )
-    result = runner.invoke(app, ["sample", "shakespeare"])
+
+    with override_cli_dependencies(deps):
+        result = runner.invoke(app, ["sample", "shakespeare"])
+
     assert result.exit_code == 1
     assert "Missing required meta file for sampling" in caplog.messages[-1]
 
 
-def test_main_prepare_bundestag_char_success(mocker: MockerFixture) -> None:
-    """Test prepare command with bundestag_char dataset succeeds."""
-    mock_run = mocker.patch("ml_playground.cli._run_prepare")
-    shared = _make_shared("bundestag_char")
-    mocker.patch(
-        "ml_playground.configuration.cli.load_experiment",
-        return_value=_make_full_experiment(shared),
-    )
-    result = runner.invoke(app, ["prepare", "bundestag_char"])
-    assert result.exit_code == 0
-    mock_run.assert_called_once()
-
-
-def test_main_prepare_unknown_dataset_fails(
-    mocker: MockerFixture, caplog: pytest.LogCaptureFixture
+def test_main_prepare_bundestag_char_success(
+    shared_factory: Callable[[str], SharedConfig],
 ) -> None:
-    """Unknown experiment should surface as a CLI error exit."""
-    mocker.patch(
-        "ml_playground.configuration.cli.load_experiment",
-        side_effect=FileNotFoundError("Config not found"),
+    """Test prepare command with bundestag_char dataset succeeds."""
+
+    shared = shared_factory("bundestag_char")
+    exp = _make_full_experiment(shared)
+    calls: dict[str, int] = {"prepare": 0}
+
+    def _run_prepare(
+        experiment: str,
+        prepare_cfg: PreparerConfig,
+        config_path: Path,
+        shared: SharedConfig,
+    ) -> None:
+        calls["prepare"] += 1
+        assert experiment == "bundestag_char"
+        assert prepare_cfg is exp.prepare
+        assert shared is exp.shared
+
+    deps = CLIDependencies(
+        load_experiment=lambda experiment, exp_config: exp,
+        ensure_train_prerequisites=_noop,
+        ensure_sample_prerequisites=_noop,
+        run_prepare=_run_prepare,
+        run_train=_noop,
+        run_sample=_noop,
     )
-    result = runner.invoke(app, ["prepare", "unknown"])
+
+    with override_cli_dependencies(deps):
+        result = runner.invoke(app, ["prepare", "bundestag_char"])
+
+    assert result.exit_code == 0
+    assert calls["prepare"] == 1
+
+
+def test_main_prepare_unknown_dataset_fails(caplog: pytest.LogCaptureFixture) -> None:
+    """Unknown experiment should surface as a CLI error exit."""
+
+    def _load_experiment(_experiment: str, _path: Path | None) -> ExperimentConfig:
+        raise FileNotFoundError("Config not found")
+
+    deps = _make_deps(load_experiment=_load_experiment)
+
+    with override_cli_dependencies(deps):
+        result = runner.invoke(app, ["prepare", "unknown"])
+
     assert result.exit_code == 1
     assert "Config not found" in caplog.messages[-1]
 
 
-def test_main_train_success(tmp_path: Path, mocker: MockerFixture) -> None:
+def test_main_train_success(shared_factory: Callable[[str], SharedConfig]) -> None:
     """Train command loads config and invokes trainer once prerequisites pass."""
-    mock_run = mocker.patch("ml_playground.cli._run_train")
-    shared = _make_shared("shakespeare")
-    mocker.patch(
-        "ml_playground.configuration.cli.load_experiment",
-        return_value=_make_full_experiment(shared),
+
+    shared = shared_factory("shakespeare")
+    exp = _make_full_experiment(shared)
+    calls: dict[str, int] = {"train": 0}
+
+    def _run_train(
+        experiment: str,
+        train_cfg: TrainerConfig,
+        config_path: Path,
+        shared: SharedConfig,
+    ) -> None:
+        calls["train"] += 1
+        assert experiment == "shakespeare"
+        assert train_cfg is exp.train
+        assert shared is exp.shared
+
+    deps = _make_deps(
+        load_experiment=lambda experiment, exp_config: exp,
+        ensure_train=lambda e: shared.dataset_dir / "meta.pkl",
+        run_train=_run_train,
     )
-    mocker.patch(
-        "ml_playground.cli.config_cli.ensure_train_prerequisites",
-        return_value=Path("meta.pkl"),
-    )
-    result = runner.invoke(app, ["train", "shakespeare"])
+
+    with override_cli_dependencies(deps):
+        result = runner.invoke(app, ["train", "shakespeare"])
+
     assert result.exit_code == 0
-    mock_run.assert_called_once()
+    assert calls["train"] == 1
 
 
 def test_main_train_no_train_block_fails(
-    tmp_path: Path, mocker: MockerFixture, caplog: pytest.LogCaptureFixture
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Train command surfaces loader errors as CLI exits."""
-    mocker.patch(
-        "ml_playground.configuration.cli.load_experiment",
-        side_effect=ValueError("Missing train config"),
+
+    def _load_experiment(_experiment: str, _path: Path | None) -> ExperimentConfig:
+        raise ValueError("Missing train config")
+
+    deps = CLIDependencies(
+        load_experiment=_load_experiment,
+        ensure_train_prerequisites=_noop,
+        ensure_sample_prerequisites=_noop,
+        run_prepare=_noop,
+        run_train=_noop,
+        run_sample=_noop,
     )
-    result = runner.invoke(app, ["train", "shakespeare"])
+
+    with override_cli_dependencies(deps):
+        result = runner.invoke(app, ["train", "shakespeare"])
+
     assert result.exit_code == 1
     assert "Missing train config" in caplog.messages[-1]
 
 
-def test_main_sample_success(tmp_path: Path, mocker: MockerFixture) -> None:
+def test_main_sample_success(shared_factory: Callable[[str], SharedConfig]) -> None:
     """Sample command loads config and invokes sampler once prerequisites pass."""
-    mock_sample_cfg = SamplerConfig(
-        runtime=RuntimeConfig(out_dir=Path("out")),
+
+    shared = shared_factory("shakespeare")
+    sample_cfg = SamplerConfig(
+        runtime=RuntimeConfig(out_dir=shared.sample_out_dir),
         sample=SampleConfig(start="x"),
     )
-    mock_run = mocker.patch("ml_playground.cli._run_sample")
-    shared = _make_shared("shakespeare")
-    exp = _make_full_experiment(shared).model_copy(update={"sample": mock_sample_cfg})
-    mocker.patch(
-        "ml_playground.configuration.cli.load_experiment",
-        return_value=exp,
+    exp = _make_full_experiment(shared, sample=sample_cfg)
+    calls: dict[str, int] = {"sample": 0}
+
+    def _run_sample(
+        experiment: str,
+        sample_cfg: SamplerConfig,
+        config_path: Path,
+        shared: SharedConfig,
+    ) -> None:
+        calls["sample"] += 1
+        assert experiment == "shakespeare"
+        assert sample_cfg.sample.start == "x"
+
+    train_meta = shared.dataset_dir / "meta.pkl"
+    runtime_meta = shared.sample_out_dir / shared.experiment / "meta.pkl"
+    deps = _make_deps(
+        load_experiment=lambda experiment, exp_config: exp,
+        ensure_sample=lambda e: (train_meta, runtime_meta),
+        run_sample=_run_sample,
     )
-    mocker.patch(
-        "ml_playground.cli.config_cli.ensure_sample_prerequisites",
-        return_value=(Path("meta.pkl"), Path("meta.pkl")),
-    )
-    result = runner.invoke(app, ["sample", "shakespeare"])
+
+    with override_cli_dependencies(deps):
+        result = runner.invoke(app, ["sample", "shakespeare"])
+
     assert result.exit_code == 0
-    mock_run.assert_called_once()
+    assert calls["sample"] == 1
 
 
 def test_main_sample_no_sample_block_fails(
-    tmp_path: Path, mocker: MockerFixture, caplog: pytest.LogCaptureFixture
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Test sample command fails when strict loader raises."""
-    mocker.patch(
-        "ml_playground.configuration.cli.load_experiment",
-        side_effect=ValueError("Missing sample config"),
+    """Sample command raises when configuration validation fails."""
+
+    def _load_experiment(_experiment: str, _path: Path | None) -> ExperimentConfig:
+        raise ValueError("Missing sample config")
+
+    deps = CLIDependencies(
+        load_experiment=_load_experiment,
+        ensure_train_prerequisites=_noop,
+        ensure_sample_prerequisites=_noop,
+        run_prepare=_noop,
+        run_train=_noop,
+        run_sample=_noop,
     )
-    result = runner.invoke(app, ["sample", "shakespeare"])
+
+    with override_cli_dependencies(deps):
+        result = runner.invoke(app, ["sample", "shakespeare"])
+
     assert result.exit_code == 1
     assert "Missing sample config" in caplog.messages[-1]
-
-
-# Tests for removed functionality (legacy registry usage, direct train/sample calls)
-# have been updated to reflect the new CLI architecture.
-
-
-# ---------------------------------------------------------------------------
-# Consolidated from test_cli_cache.py
-# ---------------------------------------------------------------------------
 
 
 def test_strict_mode_has_no_override_functions() -> None:
     # Strict mode: configuration is TOML-only, no override helpers are exposed
     assert not hasattr(config_loader, "apply_train_overrides")
     assert not hasattr(config_loader, "apply_sample_overrides")
-
-
-# ---------------------------------------------------------------------------
-# Consolidated from test_cli_device_setup.py
-# ---------------------------------------------------------------------------
 
 
 def test_global_setup_sets_seed_and_is_deterministic() -> None:
@@ -248,11 +395,6 @@ def test_global_setup_enables_tf32_when_cuda_available(
 def test_global_setup_no_crash_without_cuda() -> None:
     # Should not raise even if CUDA unavailable
     cli._global_device_setup("cuda", "float16", seed=42)
-
-
-# ---------------------------------------------------------------------------
-# Consolidated from test_cli_effective_wrappers.py
-# ---------------------------------------------------------------------------
 
 
 def test_load_train_config_resolves_relative_paths(tmp_path: Path):
@@ -323,11 +465,6 @@ max_new_tokens = 1
     assert r is not None
     assert r.out_dir.is_absolute()
     assert str(r.out_dir).startswith(str(p.parent))
-
-
-# ---------------------------------------------------------------------------
-# Consolidated from test_cli_logger_and_ensure.py
-# ---------------------------------------------------------------------------
 
 
 class _Ctx:
@@ -445,12 +582,6 @@ def test_extract_exp_config_edge_cases():
     assert cli._extract_exp_config(cast(typer.Context, Ctx3())) is None
 
 
-# ---------------------------------------------------------------------------
-# Consolidated from test_cli_more_helpers_and_loader.py
-# (selected tests not already covered above)
-# ---------------------------------------------------------------------------
-
-
 # Removed legacy cache/loader tests tied to ensure_loaded() (no longer present)
 def test_run_or_exit_keyboard_interrupt_with_message(caplog: pytest.LogCaptureFixture):
     caplog.set_level(logging.INFO, logger="ml_playground.cli")
@@ -514,26 +645,6 @@ def test__load_sample_config_missing_sample_block(tmp_path: Path):
         config_loader.load_sample_config(cfg_path)
 
 
-# Removed legacy _load_sample_config top-level key validation test
-
-
-# Removed legacy _load_sample_config nested [sample.sample] presence test
-
-
-# Removed legacy _load_sample_config runtime/ref requirement test
-
-
-# Removed legacy _load_sample_config runtime_ref unsupported value test
-
-
-# Removed legacy _load_sample_config missing train.runtime test
-
-
-# ---------------------------------------------------------------------------
-# Consolidated from test_cli_overrides_cache_and_paths.py
-# ---------------------------------------------------------------------------
-
-
 def test_get_cfg_path_explicit_and_default(tmp_path: Path):
     explicit = tmp_path / "x.toml"
     # Explicit path returned as-is
@@ -581,11 +692,6 @@ def test_load_config_error_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     with pytest.raises(Exception) as ei4:
         config_loader.load_train_config(bad_cfg)
     assert "bad.toml" in str(ei4.value).lower()
-
-
-# ---------------------------------------------------------------------------
-# Consolidated from test_cli_parse.py
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -636,40 +742,35 @@ def test_cli_global_exp_config_missing_exits(tmp_path):
     assert "config file not found" in cp.stdout.lower()
 
 
-# ---------------------------------------------------------------------------
-# Consolidated from test_cli_speakger.py
-# ---------------------------------------------------------------------------
-
-
 def test_sample_routes_to_injected_sampler(
-    monkeypatch: pytest.MonkeyPatch, mocker: MockerFixture
+    shared_factory: Callable[[str], SharedConfig],
 ) -> None:
-    """CLI should dispatch 'sample speakger' to the unified injected-config sampler path (_run_sample)."""
-    # Patch the unified run path; we don't want to import heavy experiment deps
-    run_sample = mocker.patch("ml_playground.cli._run_sample")
-    # Ensure legacy sampler entry point is not consulted anymore
-    called = {"count": 0}
+    """CLI should dispatch 'sample speakger' to the injected sampler run path."""
 
-    def _legacy_sample_from_toml(path):  # type: ignore[no-untyped-def]
-        called["count"] += 1
+    shared = shared_factory("speakger")
+    exp = _make_full_experiment(shared)
+    calls: dict[str, int] = {"run_sample": 0}
 
-    monkeypatch.setattr(
-        "ml_playground.experiments.speakger.sampler.sample_from_toml",
-        _legacy_sample_from_toml,
-        raising=False,
+    def _run_sample(
+        experiment: str,
+        sample_cfg: SamplerConfig,
+        config_path: Path,
+        shared_cfg: SharedConfig,
+    ) -> None:
+        calls["run_sample"] += 1
+        assert experiment == "speakger"
+        assert shared_cfg is shared
+
+    deps = _make_deps(
+        load_experiment=lambda experiment, exp_config: exp,
+        ensure_sample=lambda e: (
+            shared.dataset_dir / "meta.pkl",
+            shared.sample_out_dir / shared.experiment / "meta.pkl",
+        ),
+        run_sample=_run_sample,
     )
 
-    shared = _make_shared("speakger")
-    mocker.patch(
-        "ml_playground.configuration.cli.load_experiment",
-        return_value=_make_full_experiment(shared),
-    )
-    mocker.patch(
-        "ml_playground.cli.config_cli.ensure_sample_prerequisites",
-        return_value=(Path("meta.pkl"), Path("meta.pkl")),
-    )
+    with override_cli_dependencies(deps):
+        cli.main(["sample", "speakger"])
 
-    cli.main(["sample", "speakger"])
-
-    run_sample.assert_called_once()
-    assert called["count"] == 0
+    assert calls["run_sample"] == 1

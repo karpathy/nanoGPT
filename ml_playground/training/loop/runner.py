@@ -37,13 +37,7 @@ from ml_playground.training.hooks.runtime import RuntimeContext, setup_runtime
 from ml_playground.training.loop.scheduler import get_lr
 
 
-__all__ = [
-    "Trainer",
-    "TrainerDependencies",
-    "default_trainer_dependencies",
-    "train",
-    "get_lr",
-]
+__all__ = ["Trainer", "train", "get_lr"]
 
 
 @dataclass(frozen=True)

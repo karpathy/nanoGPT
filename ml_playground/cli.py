@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any, Callable
 
@@ -26,6 +28,110 @@ from ml_playground.experiments import registry
 
 
 __all__ = ["main"]
+
+
+@dataclass(frozen=True)
+class CLIDependencies:
+    load_experiment: Callable[[str, Path | None], ExperimentConfig]
+    ensure_train_prerequisites: Callable[[ExperimentConfig], Any]
+    ensure_sample_prerequisites: Callable[[ExperimentConfig], Any]
+    run_prepare: Callable[[str, PreparerConfig, Path, SharedConfig], None]
+    run_train: Callable[[str, TrainerConfig, Path, SharedConfig], None]
+    run_sample: Callable[[str, SamplerConfig, Path, SharedConfig], None]
+
+
+def _run_prepare_impl(
+    experiment: str,
+    prepare_cfg: PreparerConfig,
+    config_path: Path,
+    shared: Any,
+) -> None:
+    """Run the full prepare flow for an experiment."""
+    prepare_cfg.logger.info(f"Running pipeline for experiment: {experiment}")
+    pipeline = create_pipeline(prepare_cfg, shared)
+    pipeline.run()
+    prepare_cfg.logger.info(f"Pipeline for {experiment} finished.")
+
+
+def _run_train_impl(
+    experiment: str,
+    train_cfg: TrainerConfig,
+    config_path: Path,
+    shared: Any,
+) -> None:
+    """Run the full training flow for an experiment."""
+    if not train_cfg.runtime:
+        train_cfg.logger.error("Runtime configuration is missing for training.")
+        raise typer.Exit(1)
+
+    _global_device_setup(
+        train_cfg.runtime.device,
+        train_cfg.runtime.dtype,
+        train_cfg.runtime.seed,
+    )
+
+    train_cfg.logger.info(f"Running trainer for experiment: {experiment}")
+    _log_command_status("pre-train", shared, shared.train_out_dir, train_cfg.logger)
+
+    trainer = CoreTrainer(train_cfg, shared)
+    trainer.run()
+
+    train_cfg.logger.info(f"Trainer for {experiment} finished.")
+    _log_command_status("post-train", shared, shared.train_out_dir, train_cfg.logger)
+
+
+def _run_sample_impl(
+    experiment: str,
+    sample_cfg: SamplerConfig,
+    config_path: Path,
+    shared: Any,
+) -> None:
+    """Run the full sampling flow for an experiment."""
+    if not sample_cfg.runtime:
+        sample_cfg.logger.error("Runtime configuration is missing for sampling.")
+        raise typer.Exit(1)
+
+    _global_device_setup(
+        sample_cfg.runtime.device,
+        sample_cfg.runtime.dtype,
+        sample_cfg.runtime.seed,
+    )
+
+    sample_cfg.logger.info(f"Running sampler for experiment: {experiment}")
+    _log_command_status("pre-sample", shared, shared.sample_out_dir, sample_cfg.logger)
+    sampler = Sampler(sample_cfg, shared)
+    sampler.run()
+    sample_cfg.logger.info(f"Sampler for {experiment} finished.")
+    _log_command_status("post-sample", shared, shared.sample_out_dir, sample_cfg.logger)
+
+
+def default_cli_dependencies() -> CLIDependencies:
+    return CLIDependencies(
+        load_experiment=config_cli.load_experiment,
+        ensure_train_prerequisites=config_cli.ensure_train_prerequisites,
+        ensure_sample_prerequisites=config_cli.ensure_sample_prerequisites,
+        run_prepare=_run_prepare_impl,
+        run_train=_run_train_impl,
+        run_sample=_run_sample_impl,
+    )
+
+
+_CLI_DEPENDENCIES: CLIDependencies = default_cli_dependencies()
+
+
+def get_cli_dependencies() -> CLIDependencies:
+    return _CLI_DEPENDENCIES
+
+
+@contextmanager
+def override_cli_dependencies(deps: CLIDependencies):
+    global _CLI_DEPENDENCIES
+    previous = _CLI_DEPENDENCIES
+    _CLI_DEPENDENCIES = deps
+    try:
+        yield
+    finally:
+        _CLI_DEPENDENCIES = previous
 
 
 # --- Global device setup ---------------------------------------------------
@@ -95,11 +201,6 @@ def run_or_exit(
         logger = logging.getLogger(__name__)
         logger.error(f"{e}")
         raise typer.Exit(exception_exit_code)
-
-
-def _load_experiment(experiment: str, exp_config_path: Path | None) -> ExperimentConfig:
-    """Load the full experiment configuration."""
-    return config_cli.load_experiment(experiment, exp_config_path)
 
 
 def _log_dir(tag: str, dir_name: str, dir_path: Path | None, logger) -> None:
@@ -281,10 +382,11 @@ def prepare(
 ) -> None:
     """Prepare data for an experiment."""
     exp_config_path = _extract_exp_config(ctx)
+    deps = get_cli_dependencies()
 
     def _do_prepare() -> None:
-        exp = _load_experiment(experiment, exp_config_path)
-        _run_prepare(experiment, exp.prepare, exp.shared.config_path, exp.shared)
+        exp = deps.load_experiment(experiment, exp_config_path)
+        deps.run_prepare(experiment, exp.prepare, exp.shared.config_path, exp.shared)
 
     run_or_exit(
         _do_prepare,
@@ -299,8 +401,10 @@ def train(
 ) -> None:
     """Train a model for an experiment."""
     exp_config_path = _extract_exp_config(ctx)
+    deps = get_cli_dependencies()
+
     run_or_exit(
-        lambda: _run_train_cmd(experiment, exp_config_path),
+        lambda: _run_train_cmd(experiment, exp_config_path, deps),
         keyboard_interrupt_msg="\nTraining cancelled.",
     )
 
@@ -312,8 +416,10 @@ def sample(
 ) -> None:
     """Sample from a trained model."""
     exp_config_path = _extract_exp_config(ctx)
+    deps = get_cli_dependencies()
+
     run_or_exit(
-        lambda: _run_sample_cmd(experiment, exp_config_path),
+        lambda: _run_sample_cmd(experiment, exp_config_path, deps),
         keyboard_interrupt_msg="\nSampling cancelled.",
     )
 
@@ -353,18 +459,30 @@ def main(argv: list[str] | None = None) -> int | None:
 # ---------------------------------------------------------------------------
 
 
-def _run_train_cmd(experiment: str, exp_config_path: Path | None) -> None:
+def _run_train_cmd(
+    experiment: str,
+    exp_config_path: Path | None,
+    deps: CLIDependencies | None = None,
+) -> None:
     """Run train command: load full ExperimentConfig once and pass section."""
-    exp = _load_experiment(experiment, exp_config_path)
-    config_cli.ensure_train_prerequisites(exp)
-    _run_train(experiment, exp.train, exp.shared.config_path, exp.shared)
+    if deps is None:
+        deps = get_cli_dependencies()
+    exp = deps.load_experiment(experiment, exp_config_path)
+    deps.ensure_train_prerequisites(exp)
+    deps.run_train(experiment, exp.train, exp.shared.config_path, exp.shared)
 
 
-def _run_sample_cmd(experiment: str, exp_config_path: Path | None) -> None:
+def _run_sample_cmd(
+    experiment: str,
+    exp_config_path: Path | None,
+    deps: CLIDependencies | None = None,
+) -> None:
     """Run sample command: load full ExperimentConfig once and pass section."""
-    exp = _load_experiment(experiment, exp_config_path)
-    config_cli.ensure_sample_prerequisites(exp)
-    _run_sample(experiment, exp.sample, exp.shared.config_path, exp.shared)
+    if deps is None:
+        deps = get_cli_dependencies()
+    exp = deps.load_experiment(experiment, exp_config_path)
+    deps.ensure_sample_prerequisites(exp)
+    deps.run_sample(experiment, exp.sample, exp.shared.config_path, exp.shared)
 
 
 if __name__ == "__main__":
