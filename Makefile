@@ -195,11 +195,16 @@ else
 		echo "[error] No coverage data found. Run 'make coverage-test' first."; exit 2; \
 	fi
 endif
-	COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage combine
+	@if compgen -G "$(CURDIR)/.cache/coverage/coverage.sqlite.*" > /dev/null; then \
+		COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage combine; \
+	fi
 	COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage report -m --fail-under=0
 	COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage html -d .cache/coverage/htmlcov --fail-under=0
 	COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage json -o .cache/coverage/coverage.json --fail-under=0
 	COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage xml -o .cache/coverage/coverage.xml --fail-under=0
+ifeq ($(VERBOSE_COVERAGE),1)
+	@echo "[debug] coverage sqlite files:" && ls -1 .cache/coverage
+endif
 
 coverage-badge: ## Generate SVG coverage badge at docs/assets/coverage.svg
 	$(MAKE) coverage-report SKIP_COVERAGE_TESTS=$(SKIP_COVERAGE_TESTS)

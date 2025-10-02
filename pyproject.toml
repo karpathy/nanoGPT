@@ -79,7 +79,6 @@ dev = [
     "tomli-w>=1.0.0",
     "pre-commit>=4.3.0",
     "coverage-badge>=1.1.0",
-    "pybadges>=3.0.0",
 ]
 
 
@@ -166,22 +165,26 @@ filterwarnings = [
 markers = [
     "slow: marks tests as slow (deselected by default)",
     "integration: marks tests as integration tests",
-    "perf: marks tests as performance tests (deselected by default)",
     "acceptance: marks tests as acceptance (deselect with '-m \"not acceptance\"')",
     "e2e: marks tests as end-to-end tests",
 ]
 bdd_features_base_dir = "tests/acceptance/features/"
 
+[tool.ruff.lint.isort]
+known-first-party = ["ml_playground", "tests", "tools"]
+classes = []
+
 [tool.coverage.run]
-source = ["ml_playground"]
 branch = true
 parallel = true
 data_file = ".cache/coverage/coverage.sqlite"
+source = [
+    "ml_playground",
+]
 omit = [
     "tests/*",
     "*/conftest.py",
     "**/datasets/*",
-    "**/checkpoints/*",
     "**/runs/*",
     "**/wandb/*",
     "**/lightning_logs/*",
@@ -189,6 +192,8 @@ omit = [
     "**/mlruns/*",
     "**/.hf_cache/*",
     "**/.cache/*",
+    "**/tools/*",
+    "**/_remote_module_non_scriptable.py",
     # Temporarily exclude analysis (LIT integration) due to dependency issues
     "ml_playground/analysis/*",
 ]
