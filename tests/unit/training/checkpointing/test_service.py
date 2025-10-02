@@ -18,6 +18,7 @@ from ml_playground.configuration.models import (
     READ_POLICY_LATEST,
 )
 from ml_playground.core.error_handling import CheckpointError
+from ml_playground.checkpoint import Checkpoint
 from ml_playground.training.checkpointing import service
 
 
@@ -101,6 +102,10 @@ def _make_shared(tmp_path: Path, cfg: TrainerConfig) -> SharedConfig:
 
 def _with_checkpoint_load_fn(cfg: TrainerConfig, fn) -> TrainerConfig:
     return cfg.model_copy(update={"checkpoint_load_fn": fn})
+
+
+def _with_checkpoint_save_fn(cfg: TrainerConfig, fn) -> TrainerConfig:
+    return cfg.model_copy(update={"checkpoint_save_fn": fn})
 
 
 def _with_sample_out_dir(shared: SharedConfig, sample_out_dir: Path) -> SharedConfig:
@@ -231,6 +236,72 @@ def test_load_checkpoint_handles_checkpoint_error(tmp_path: Path) -> None:
     assert logger.warnings == ["Could not load checkpoint (latest): bad checkpoint"]
 
 
+def test_load_checkpoint_override_success(tmp_path: Path) -> None:
+    sentinel = object()
+    cfg = _with_checkpoint_load_fn(_make_cfg(tmp_path), lambda **_kwargs: sentinel)
+    shared = _make_shared(tmp_path, cfg)
+
+    class _Manager:
+        def __init__(self) -> None:
+            self.out_dir = shared.train_out_dir
+
+    result = service.load_checkpoint(_Manager(), cfg, logger=_StubLogger())
+    assert result is sentinel
+
+
+class _TrackingModel:
+    def __init__(self) -> None:
+        self.state: dict[str, Any] | None = None
+        self.strict: bool | None = None
+
+    def state_dict(self) -> dict[str, Any]:
+        return {"model": 1}
+
+    def load_state_dict(self, state: dict[str, Any], strict: bool = False) -> None:
+        self.state = state
+        self.strict = strict
+
+
+class _TrackingOptimizer:
+    def __init__(self) -> None:
+        self.state: dict[str, Any] | None = None
+
+    def state_dict(self) -> dict[str, Any]:
+        return {"opt": 1}
+
+    def load_state_dict(self, state: dict[str, Any]) -> None:
+        self.state = state
+
+
+def test_apply_checkpoint_restores_state_and_ema() -> None:
+    checkpoint = Checkpoint(
+        model={"weights": [1, 2, 3]},
+        optimizer={"moments": [0.1]},
+        model_args={"hidden": 4},
+        iter_num=42,
+        best_val_loss=0.123,
+        config={"cfg": True},
+        ema={"shadow": {"weights": [0.9]}},
+    )
+    model = _TrackingModel()
+    optimizer = _TrackingOptimizer()
+    ema = _StubEMA()
+
+    iter_num, best_val_loss = service.apply_checkpoint(
+        checkpoint,
+        model=model,  # type: ignore[arg-type]
+        optimizer=optimizer,
+        ema=ema,
+    )
+
+    assert iter_num == 42
+    assert best_val_loss == pytest.approx(0.123)
+    assert model.state == {"weights": [1, 2, 3]}
+    assert model.strict is False
+    assert optimizer.state == {"moments": [0.1]}
+    assert ema.shadow == {"shadow": {"weights": [0.9]}}
+
+
 def test_propagate_metadata_copies_file(tmp_path: Path) -> None:
     cfg = _make_cfg(tmp_path)
     shared = _make_shared(tmp_path, cfg)
@@ -248,3 +319,134 @@ def test_propagate_metadata_copies_file(tmp_path: Path) -> None:
 
     assert meta_dst.exists()
     assert meta_dst.read_bytes() == b"meta"
+
+
+def test_save_checkpoint_uses_override(tmp_path: Path) -> None:
+    calls: list[dict[str, Any]] = []
+
+    def override(**kwargs: Any) -> None:
+        calls.append(kwargs)
+
+    cfg = _with_checkpoint_save_fn(_make_cfg(tmp_path), override)
+    shared = _make_shared(tmp_path, cfg)
+
+    class _Manager:
+        def __init__(self) -> None:
+            self.out_dir = shared.train_out_dir
+
+        def save_checkpoint(
+            self, *args: Any, **kwargs: Any
+        ) -> None:  # pragma: no cover
+            raise AssertionError("manager.save_checkpoint should not be called")
+
+    ema = _StubEMA()
+    ema.shadow = {"ema": True}
+
+    service.save_checkpoint(
+        _Manager(),
+        cfg,
+        model=_TrackingModel(),
+        optimizer=_TrackingOptimizer(),
+        ema=ema,
+        iter_num=3,
+        best_val_loss=0.4,
+        logger=None,
+        is_best=False,
+    )
+
+    assert calls
+    payload = calls[0]
+    assert payload["is_best"] is False
+    assert payload["checkpoint"].ema == {"ema": True}
+
+
+def test_save_checkpoint_fallbacks_after_override_failure(tmp_path: Path) -> None:
+    messages: list[str] = []
+
+    def override(**_kwargs: Any) -> None:
+        raise RuntimeError("boom")
+
+    cfg = _with_checkpoint_save_fn(_make_cfg(tmp_path), override)
+
+    class _Logger:
+        def warning(self, message: str) -> None:
+            messages.append(message)
+
+    class _Manager:
+        def __init__(self) -> None:
+            self.out_dir = tmp_path
+            self.calls: list[dict[str, Any]] = []
+
+        def save_checkpoint(
+            self, checkpoint, *, base_filename, metric, iter_num, logger, is_best
+        ):
+            self.calls.append(
+                {
+                    "checkpoint": checkpoint,
+                    "base_filename": base_filename,
+                    "metric": metric,
+                    "iter_num": iter_num,
+                    "logger": logger,
+                    "is_best": is_best,
+                }
+            )
+
+    manager = _Manager()
+    optimizer = _TrackingOptimizer()
+    service.save_checkpoint(
+        manager,
+        cfg,
+        model=_TrackingModel(),
+        optimizer=optimizer,
+        ema=None,
+        iter_num=10,
+        best_val_loss=0.99,
+        logger=_Logger(),
+        is_best=True,
+    )
+
+    assert manager.calls
+    call = manager.calls[0]
+    assert call["base_filename"] == "ckpt_best.pt"
+    assert call["metric"] == pytest.approx(0.99)
+    assert messages == ["checkpoint_save_fn failed, falling back to default save: boom"]
+
+
+def test_propagate_metadata_ignores_meta_resolution_error(
+    monkeypatch, tmp_path: Path
+) -> None:
+    cfg = _make_cfg(tmp_path)
+    shared = _make_shared(tmp_path, cfg)
+    logger = _StubLogger()
+
+    def failing_meta_path(_dataset_dir: Path) -> Path:
+        raise RuntimeError("nope")
+
+    object.__setattr__(
+        cfg.data, "meta_path", failing_meta_path
+    )  # bypass frozen model guard
+
+    service.propagate_metadata(cfg, shared, logger=logger)
+
+    assert logger.warnings == ["Failed to resolve meta source path: nope"]
+
+
+def test_propagate_metadata_logs_copy_failure(monkeypatch, tmp_path: Path) -> None:
+    cfg = _make_cfg(tmp_path)
+    shared = _make_shared(tmp_path, cfg)
+    shared = _with_sample_out_dir(shared, tmp_path / "sample-out")
+    ds_dir = shared.dataset_dir
+    ds_dir.mkdir(parents=True, exist_ok=True)
+    meta_src = ds_dir / "meta.pkl"
+    meta_src.write_bytes(b"meta")
+
+    logger = _StubLogger()
+
+    def failing_copy(src: Path, dst: Path) -> None:
+        raise OSError(f"cannot copy to {dst}")
+
+    monkeypatch.setattr(service.shutil, "copy2", failing_copy)
+
+    service.propagate_metadata(cfg, shared, logger=logger)
+
+    assert any("cannot copy" in msg for msg in logger.warnings)

@@ -1,6 +1,6 @@
 # Coverage Baseline
 
-Last updated: 2025-10-02 (after DI trainer refactor)
+Last updated: 2025-10-02
 
 This document captures the current automated test coverage for the `ml_playground` package and describes how to
 regenerate the reports. Use it to prioritize work that pushes statement and branch coverage towards 100%.
@@ -38,21 +38,19 @@ The modules below fell under 90% statement coverage when `make coverage-report` 
 `.cache/coverage/coverage.json`):
 
 - **`ml_playground/training/ema.py`** — statements: 16, missing: 8, coverage: 40.00%.
-- **`ml_playground/training/checkpointing/service.py`** — statements: 63, missing: 20, coverage: 66.27%.
 - **`ml_playground/data_pipeline/preparer.py`** — statements: 83, missing: 49, coverage: 33.66%.
-- **`ml_playground/models/core/inference.py`** — statements: 43, missing: 18, coverage: 56.14%.
-- **`ml_playground/training/loop/runner.py`** — statements: 176, missing: 32, coverage: 87.02%.
+- **`ml_playground/training/loop/runner.py`** — statements: 136, missing: 25, coverage: 78.92%.
 - **`ml_playground/core/logging_protocol.py`** — statements: 9, branch misses only, coverage: 76.47%.
 - **`ml_playground/core/tokenizer_protocol.py`** — statements: 14, missing: 2, coverage: 75.00%.
 - **`ml_playground/sampling/runner.py`** — statements: 98, missing: 17, coverage: 78.69%.
 - **`ml_playground/training/hooks/logging.py`** — statements: 11, missing: 2, coverage: 76.92%.
-- **Bundestag Qwen 1.5B LoRA preparer** (`experiments/bundestag_qwen15b_lora_mps/preparer.py`) — statements: 44,
-  missing: 35, coverage: 15.52%.
+- **Bundestag Qwen 1.5B LoRA prepareer** (`experiments/bundestag_qwen15b_lora_mps/preparer.py`) — statements: 44,
+    missing: 35, coverage: 15.52%.
 - **Bundestag Qwen 1.5B LoRA sampler** (`experiments/bundestag_qwen15b_lora_mps/sampler.py`) — statements: 10,
-  missing: 10, coverage: 0.00%.
+    missing: 10, coverage: 0.00%.
 - **Bundestag Qwen 1.5B LoRA trainer** (`experiments/bundestag_qwen15b_lora_mps/trainer.py`) — statements: 10,
-  missing: 10, coverage: 0.00%.
-- **Bundestag Tiktoken preparer** (`experiments/bundestag_tiktoken/preparer.py`) — statements: 40, missing: 29,
+    missing: 10, coverage: 0.00%.
+{{ ... }}
   coverage: 27.50%.
 - **SpeakGER preparer** (`experiments/speakger/preparer.py`) — statements: 13, missing: 6, coverage: 53.85%.
 - **SpeakGER sampler** (`experiments/speakger/sampler.py`) — statements: 99, missing: 21, coverage: 78.99%.
