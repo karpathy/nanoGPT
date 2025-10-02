@@ -7,14 +7,14 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 .SILENT:
 
-.PHONY: all help test unit unit-cov integration e2e acceptance test-file coverage quality quality-ext quality-ci lint format pyright mypy typecheck setup sync verify clean prepare train sample loop tensorboard deadcode gguf-help pytest-core pytest-all check-exp check-exp-config check-tool ai-guidelines venv312-lit-setup venv312-lit-run venv312-lit-stop
+.PHONY: all help test unit unit-cov integration e2e acceptance test-file coverage quality quality-ext quality-ci lint format pyright mypy typecheck setup sync verify clean prepare train sample loop tensorboard deadcode gguf-help pytest-core pytest-all check-exp check-exp-config check-tool ai-guidelines venv312-lit-setup venv312-lit-run venv312-lit-stop coverage-badge
 
 all: quality
 
 # Be quieter and focus output on failures only
-export UV_CACHE_DIR := .cache/uv
-export HYPOTHESIS_DATABASE_DIRECTORY := .cache/hypothesis
-export HYPOTHESIS_STORAGE_DIRECTORY := .cache/hypothesis
+export UV_CACHE_DIR := $(CURDIR)/.cache/uv
+export HYPOTHESIS_DATABASE_DIRECTORY := $(CURDIR)/.cache/hypothesis
+export HYPOTHESIS_STORAGE_DIRECTORY := $(CURDIR)/.cache/hypothesis
 PYTEST_BASE=-q -n auto -W error --strict-markers --strict-config
 RUN=uv run
 PKG=ml_playground
@@ -174,21 +174,36 @@ tensorboard: ## Run TensorBoard (LOGDIR=out/<run>/logs/tb [PORT=6006])
 
 gguf-help: ## Show llama.cpp converter help
 	$(RUN) python tools/llama_cpp/convert-hf-to-gguf.py --help || true
-
 # Coverage helper
 coverage: coverage-report ## [deprecated] use `make coverage-report`
 	@echo "[info] coverage-report completed; artifacts stored under .cache/coverage"
 
-coverage-report: ## Generate coverage reports (term, HTML, JSON) under .cache/coverage
-	mkdir -p .cache/coverage
-	$(RUN) coverage erase
-	$(RUN) coverage run -m pytest -n 0 -m "not perf"
-	$(RUN) coverage combine
-	$(RUN) coverage report -m --fail-under=0
-	$(RUN) coverage html -d .cache/coverage/htmlcov --fail-under=0
-	$(RUN) coverage json -o .cache/coverage/coverage.json --fail-under=0
+coverage-test: ## Run pytest under coverage to materialize coverage data
+	mkdir -p .cache/coverage .cache/hypothesis
+	COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage erase
+	HYPOTHESIS_DATABASE_DIRECTORY=$(CURDIR)/.cache/hypothesis \
+	HYPOTHESIS_STORAGE_DIRECTORY=$(CURDIR)/.cache/hypothesis \
+	HYPOTHESIS_SEED=0 \
+	PYTHONHASHSEED=0 \
+	COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage run -m pytest -n 0 -m "not perf"
 
-# ---------------------------------------------------------------------------
+coverage-report: ## Generate coverage reports (term, HTML, JSON) under .cache/coverage
+ifndef SKIP_COVERAGE_TESTS
+	$(MAKE) coverage-test
+else
+	@if ! compgen -G "$(CURDIR)/.cache/coverage/coverage.sqlite*" > /dev/null; then \
+		echo "[error] No coverage data found. Run 'make coverage-test' first."; exit 2; \
+	fi
+endif
+	COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage combine
+	COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage report -m --fail-under=0
+	COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage html -d .cache/coverage/htmlcov --fail-under=0
+	COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage json -o .cache/coverage/coverage.json --fail-under=0
+	COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage xml -o .cache/coverage/coverage.xml --fail-under=0
+
+coverage-badge: ## Generate SVG coverage badge at docs/assets/coverage.svg
+	$(MAKE) coverage-report SKIP_COVERAGE_TESTS=$(SKIP_COVERAGE_TESTS)
+	$(RUN) python tools/coverage_badges.py .cache/coverage/coverage.json docs/assets
 # LIT: Minimal integration runner (persistent .venv312)
 # Uses ml_playground/analysis/lit/integration.py
 # ---------------------------------------------------------------------------

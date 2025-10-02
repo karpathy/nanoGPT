@@ -78,6 +78,8 @@ dev = [
     "hypothesis>=6.0.0",
     "tomli-w>=1.0.0",
     "pre-commit>=4.3.0",
+    "coverage-badge>=1.1.0",
+    "pybadges>=3.0.0",
 ]
 
 

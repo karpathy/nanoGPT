@@ -25,3 +25,9 @@ jobs:
 
       - name: Run quality gates
         run: make quality
+
+      - name: Regenerate coverage badge
+        run: make coverage-badge
+
+      - name: Ensure coverage badges committed
+        run: git diff --exit-code docs/assets/coverage.svg docs/assets/coverage-lines.svg docs/assets/coverage-branches.svg

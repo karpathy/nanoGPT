@@ -1,5 +1,8 @@
 # ml-playground: strict, typed, UV-only training/sampling module
 
+![Line Coverage](docs/assets/coverage-lines.svg)
+![Branch Coverage](docs/assets/coverage-branches.svg)
+
 This module provides a single, one-way interface to prepare data, train, and sample.
 It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 

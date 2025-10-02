@@ -463,6 +463,19 @@ wheels = [
 ]
 
 [[package]]
+name = "coverage-badge"
+version = "1.1.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "coverage" },
+    { name = "setuptools" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/be/8f/e92b0a010c76b0da82709838b3f3ae9aec638d0c44dbfb1186a5751f5d2e/coverage_badge-1.1.2.tar.gz", hash = "sha256:fe7ed58a3b72dad85a553b64a99e963dea3847dcd0b8ddd2b38a00333618642c", size = 6335, upload-time = "2024-08-02T23:34:08.58Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/90/3d/5642a1a06191b2e1e0f87a2e824e6d3eb7c32c589a68ed4d1dcbd3324d63/coverage_badge-1.1.2-py2.py3-none-any.whl", hash = "sha256:d8413ce51c91043a1692b943616b450868cbeeb0ea6a0c54a32f8318c9c96ff7", size = 6493, upload-time = "2024-08-02T23:34:07.063Z" },
+]
+
+[[package]]
 name = "datasets"
 version = "4.1.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1305,9 +1318,11 @@ dependencies = [
 dev = [
     { name = "cosmic-ray" },
     { name = "coverage" },
+    { name = "coverage-badge" },
     { name = "hypothesis" },
     { name = "mypy" },
     { name = "pre-commit" },
+    { name = "pybadges" },
     { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-bdd" },
@@ -1348,9 +1363,11 @@ provides-extras = ["lit"]
 dev = [
     { name = "cosmic-ray", specifier = ">=8.3.0" },
     { name = "coverage", extras = ["toml"], specifier = ">=7.10.6" },
+    { name = "coverage-badge", specifier = ">=1.1.0" },
     { name = "hypothesis", specifier = ">=6.0.0" },
     { name = "mypy", specifier = ">=1.17.1" },
     { name = "pre-commit", specifier = ">=4.3.0" },
+    { name = "pybadges", specifier = ">=3.0.0" },
     { name = "pyright", specifier = ">=1.1.405" },
     { name = "pytest", specifier = ">=8.4.1" },
     { name = "pytest-bdd", specifier = ">=8.1.0" },
@@ -2115,6 +2132,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/0a/f9/4ee798dc902533159250fb4321267730bc0a107d8c6889e07c3add4fe3a5/pyarrow-21.0.0-cp313-cp313t-musllinux_1_2_aarch64.whl", hash = "sha256:fc0d2f88b81dcf3ccf9a6ae17f89183762c8a94a5bdcfa09e05cfe413acf0503", size = 43276625, upload-time = "2025-07-18T00:56:48.002Z" },
     { url = "https://files.pythonhosted.org/packages/5a/da/e02544d6997037a4b0d22d8e5f66bc9315c3671371a8b18c79ade1cefe14/pyarrow-21.0.0-cp313-cp313t-musllinux_1_2_x86_64.whl", hash = "sha256:6299449adf89df38537837487a4f8d3bd91ec94354fdd2a7d30bc11c48ef6e79", size = 44951890, upload-time = "2025-07-18T00:56:52.568Z" },
     { url = "https://files.pythonhosted.org/packages/e5/4e/519c1bc1876625fe6b71e9a28287c43ec2f20f73c658b9ae1d485c0c206e/pyarrow-21.0.0-cp313-cp313t-win_amd64.whl", hash = "sha256:222c39e2c70113543982c6b34f3077962b44fca38c0bd9e68bb6781534425c10", size = 26371006, upload-time = "2025-07-18T00:56:56.379Z" },
+]
+
+[[package]]
+name = "pybadges"
+version = "3.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jinja2" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0e/6a/6296d49ba2b4b62e7ea97606c6c6b21c291784afd63c56b2390f658c8cb3/pybadges-3.0.1.tar.gz", hash = "sha256:a29962d3435a5a1b5b775f3f2b89e2d519f39d947d5118c279e36bf890158faa", size = 58600, upload-time = "2023-10-11T21:44:21.921Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/dc/a4/78905bcfa9db1e6402721a2f4a66ac45c2251c7a842cd4aeaec77b37456c/pybadges-3.0.1-py3-none-any.whl", hash = "sha256:6e37f3eacd503143c3110438cf69bc3f2cd988ce4514de23dd5de8cbfa162a05", size = 57344, upload-time = "2023-10-11T21:44:19.758Z" },
 ]
 
 [[package]]

@@ -34,7 +34,10 @@ Testing Docs
 
 - **Framework**: pytest only. Do not use unittest or nose.
 - **Runner**: `make test` (invokes pytest under the hood)
-- **Coverage**: `make coverage`
+- **Coverage**: `make coverage-badge`
+  (generates reports under `.cache/coverage` and refreshes
+  `docs/assets/coverage.svg`, `docs/assets/coverage-lines.svg`, and
+  `docs/assets/coverage-branches.svg`)
 - **Random seed**: Enforced determinism via `tests/conftest.py` with fixed seed.
 
 **Rationale**: One toolchain avoids fragmentation and flakiness.
@@ -164,6 +167,11 @@ ml_playground/models/                     -> tests/unit/core/test_<module>.py
   `if __name__ == "__main__":`).
 
 **Rationale**: Complete test coverage ensures zero blind spots and maximum confidence in code quality.
+
+**Badge workflow**:
+
+- Pre-commit automatically runs `make coverage-badge` and stages the refreshed line and branch badges.
+- CI re-runs the same target and fails if any of the coverage badge SVGs differ from the committed versions.
 
 ### 12. Flaky Test Policy (IMMEDIATE ACTION REQUIRED)
 
