@@ -1,10 +1,12 @@
 # Centralized Framework Utilities
 
-This document describes the centralized framework utilities that have been introduced to provide consistent error handling, progress reporting, and file operations across all experiments in the ml_playground.
+This document describes the centralized framework utilities that have been introduced to provide consistent error
+handling, progress reporting, and file operations across all experiments in the ml_playground.
 
 ## Overview
 
-The ml_playground now includes several centralized utility modules that provide standardized functionality for common operations:
+The ml_playground now includes several centralized utility modules that provide standardized functionality for common
+operations:
 
 1. `error_handling.py` - Centralized exception classes and error handling utilities
 2. `tokenizer.py` - Unified tokenizer protocol and implementations
@@ -68,21 +70,26 @@ The updated `ml_playground/prepare.py` module provides:
 ### File State Management
 
 - `snapshot_files(paths: Iterable[Path])` - Take a snapshot of file states for diffing later
-- `diff_files(paths: Iterable[Path], before: dict[Path, tuple[bool, float, int]])` - Compare file states and determine what changed
+- `diff_files(paths: Iterable[Path], before: dict[Path, tuple[bool, float, int]])` - Compare file states and determine
+  what changed
 
 ### Metadata Creation
 
-- `create_standardized_metadata(tokenizer: Tokenizer, train_tokens: int, val_tokens: int, extras: dict = None)` - Create standardized metadata for dataset preparation
+- `create_standardized_metadata(tokenizer: Tokenizer, train_tokens: int, val_tokens: int, extras: dict = None)` - Create
+  standardized metadata for dataset preparation
 
 ### Data Preparation Example
 
 - `split_train_val(text: str, split: float = 0.9)` - Split given text into train/val by ratio
-- `prepare_with_tokenizer(text: str, tokenizer: Tokenizer, split: float = 0.9)` - Prepare train/val data and metadata using a tokenizer
-- `write_bin_and_meta(ds_dir: Path, train: np.ndarray, val: np.ndarray, meta: dict)` - Write train.bin, val.bin, and meta.pkl atomically
+- `prepare_with_tokenizer(text: str, tokenizer: Tokenizer, split: float = 0.9)` - Prepare train/val data and metadata
+  using a tokenizer
+- `write_bin_and_meta(ds_dir: Path, train: np.ndarray, val: np.ndarray, meta: dict)` - Write train.bin, val.bin, and
+  meta.pkl atomically
 
 ## CLI Utilities
 
-The `ml_playground/cli.py` module provides the command-line interface for the framework. It uses a standardized structure for defining and running commands.
+The `ml_playground/cli.py` module provides the command-line interface for the framework. It uses a standardized
+structure for defining and running commands.
 
 ### Commands
 
@@ -113,13 +120,17 @@ Output is quieter by default due to a global `.SILENT:` in the Makefile; only ex
 
 ## Configuration System
 
-The framework uses a TOML-based configuration system with strict Pydantic models for validation and type safety. The configuration stack now lives under `ml_playground/configuration/`, which is split into three focused modules:
+The framework uses a TOML-based configuration system with strict Pydantic models for validation and type safety. The
+configuration stack now lives under `ml_playground/configuration/`, which is split into three focused modules:
 
 - `ml_playground/configuration/models.py` — all Pydantic schemas (`ExperimentConfig`, `TrainerConfig`, etc.).
-- `ml_playground/configuration/loading.py` — TOML IO helpers (`read_toml_dict`, `load_full_experiment_config`, section loaders) plus deep-merge utilities.
-- `ml_playground/configuration/cli.py` — adapters used by the Typer CLI (`load_experiment`, prerequisite checks, config path helpers).
+- `ml_playground/configuration/loading.py` — TOML IO helpers (`read_toml_dict`, `load_full_experiment_config`, section
+  loaders) plus deep-merge utilities.
+- `ml_playground/configuration/cli.py` — adapters used by the Typer CLI (`load_experiment`, prerequisite checks, config
+  path helpers).
 
-Legacy modules `ml_playground/config.py` and `ml_playground/config_loader.py` remain as thin re-export shims for compatibility but should not receive new logic.
+Legacy modules `ml_playground/config.py` and `ml_playground/config_loader.py` remain as thin re-export shims for
+compatibility but should not receive new logic.
 
 ### Config Models
 
@@ -133,46 +144,52 @@ Legacy modules `ml_playground/config.py` and `ml_playground/config_loader.py` re
 - `RuntimeConfig` — Output paths, device/dtype, seeding, checkpoint policy, logging, and loop cadence.
 - `SampleConfig` — Inference-time sampling knobs.
 
-All config models inherit from `_FrozenStrictModel` (immutable, `extra="forbid"`). `ExperimentConfig` always carries a `logger` (injected via default factory or overridden by the loader/CLI); section models do not define their own logger.
+All config models inherit from `_FrozenStrictModel` (immutable, `extra="forbid"`). `ExperimentConfig` always carries a
+`logger` (injected via default factory or overridden by the loader/CLI); section models do not define their own logger.
 
 ### Validated Type Aliases
 
 Common numeric constraints are expressed via annotated aliases:
 
-| Alias                         | Constraint                   | Example uses                                 |
-|-------------------------------|------------------------------|----------------------------------------------|
-| `AtLeastOneInt`               | `int >= 1`                   | `RuntimeConfig.eval_interval`, `DataConfig.batch_size` |
-| `NonNegativeStrictInt`        | `int >= 0`                   | `RuntimeConfig.max_iters`, `ckpt_top_k`      |
-| `PositiveStrictInt`           | `int > 0`                    | `ModelConfig.n_layer`, `n_head`, `n_embd`    |
-| `SeedInt`                     | `int >= 0`                   | `RuntimeConfig.seed`                          |
-| `MinutesNonNegative`          | `int >= 0`                   | `RuntimeConfig.ckpt_time_interval_minutes`    |
-| `UnitIntervalStrictFloat`     | `0.0 <= float <= 1.0`        | `RuntimeConfig.best_smoothing_alpha`, `ema_decay` |
-| `PosUnitIntervalStrictFloat`  | `0.0 < float <= 1.0`         | `SampleConfig.top_p`                          |
-| `NonNaNNonNegativeStrictFloat`| `float >= 0.0` and not NaN   | `OptimConfig.grad_clip`, `weight_decay`       |
-| `EpochCount`                  | alias of `AtLeastOneInt`     | `RuntimeConfig.iters_per_epoch`, `max_epochs` |
+- **`AtLeastOneInt`** (`int >= 1`): used by `RuntimeConfig.eval_interval`, `DataConfig.batch_size`.
+- **`NonNegativeStrictInt`** (`int >= 0`): used by `RuntimeConfig.max_iters`, `RuntimeConfig.ckpt_top_k`.
+- **`PositiveStrictInt`** (`int > 0`): used by `ModelConfig.n_layer`, `ModelConfig.n_head`, `ModelConfig.n_embd`.
+- **`SeedInt`** (`int >= 0`): used by `RuntimeConfig.seed`.
+- **`MinutesNonNegative`** (`int >= 0`): used by `RuntimeConfig.ckpt_time_interval_minutes`.
+- **`UnitIntervalStrictFloat`** (`0.0 <= float <= 1.0`): used by `RuntimeConfig.best_smoothing_alpha`,
+  `RuntimeConfig.ema_decay`.
+- **`PosUnitIntervalStrictFloat`** (`0.0 < float <= 1.0`): used by `SampleConfig.top_p`.
+- **`NonNaNNonNegativeStrictFloat`** (`float >= 0` and not NaN): used by `OptimConfig.grad_clip`,
+  `OptimConfig.weight_decay`.
+- **`EpochCount`** (`AtLeastOneInt` alias): used by `RuntimeConfig.iters_per_epoch`, `RuntimeConfig.max_epochs`.
 
-Examples:
-
-- `RuntimeConfig.eval_interval: AtLeastOneInt`
-- `DataConfig.batch_size: AtLeastOneInt`
-- `ModelConfig.n_layer: PositiveStrictInt`
+Example annotations include `RuntimeConfig.eval_interval: AtLeastOneInt`, `DataConfig.batch_size: AtLeastOneInt`, and
+`ModelConfig.n_layer: PositiveStrictInt`.
 
 ### Path Handling
 
 - Path fields (e.g., `dataset_dir`, `raw_dir`, `out_dir`) are `pathlib.Path` in models.
-- `SharedConfig` is the single authority for resolving project-scoped paths. A `@model_validator(before=True)` resolves `project_home`, `dataset_dir`, `train_out_dir`, and `sample_out_dir` relative to `config_path` when provided as strings or relative Paths.
-- Section models (`PreparerConfig`, `TrainerConfig`, `SamplerConfig`) no longer carry ad-hoc path resolution; they accept already-normalized values. Minimal relative resolution remains for section-local fields when explicitly needed and context is available.
+- `SharedConfig` is the single authority for resolving project-scoped paths. A `@model_validator(before=True)` resolves
+  `project_home`, `dataset_dir`, `train_out_dir`, and `sample_out_dir` relative to `config_path` when provided as
+  strings or relative Paths.
+- Section models (`PreparerConfig`, `TrainerConfig`, `SamplerConfig`) no longer carry ad-hoc path resolution; they
+  accept already-normalized values. Minimal relative resolution remains for section-local fields when explicitly needed
+  and context is available.
 
 ### Loader & CLI Adapters
 
-- Use `ml_playground/configuration/loading.load_full_experiment_config()` for end-to-end resolution (defaults + experiment TOML + `.ldres` overrides).
-- Section helpers `load_train_config`, `load_sample_config`, and `load_prepare_config` live alongside the full loader and apply consistent provenance metadata.
-- CLI code should call `ml_playground/configuration/cli.load_experiment()` and related helpers (`cfg_path_for`, `ensure_*_prerequisites`). Avoid re-implementing filesystem logic inside command handlers.
+- Use `ml_playground/configuration/loading.load_full_experiment_config()` for end-to-end resolution (defaults +
+  experiment TOML + `.ldres` overrides).
+- Section helpers `load_train_config`, `load_sample_config`, and `load_prepare_config` live alongside the full loader
+  and apply consistent provenance metadata.
+- CLI code should call `ml_playground/configuration/cli.load_experiment()` and related helpers (`cfg_path_for`,
+  `ensure_*_prerequisites`). Avoid re-implementing filesystem logic inside command handlers.
 
 ### Logger Behavior
 
 - `ExperimentConfig` always carries a logger via a default factory; the loader/CLI may override it.
-- Section configs (`PreparerConfig`, `TrainerConfig`, `SamplerConfig`) do not define their own logger fields; they inherit common behavior from `_FrozenStrictModel` but remain free of logger extras in the schema.
+- Section configs (`PreparerConfig`, `TrainerConfig`, `SamplerConfig`) do not define their own logger fields; they
+  inherit common behavior from `_FrozenStrictModel` but remain free of logger extras in the schema.
 
 ### Strictness and Unknown Keys
 
@@ -188,48 +205,54 @@ Config validators enforce a few important invariants:
 - If `train.schedule.decay_lr == true` then `train.schedule.min_lr <= train.optim.learning_rate`.
 - If `train.schedule.decay_lr == false` then `train.schedule.warmup_iters == 0`.
 - For tokenization: when `train.data.tokenizer == "tiktoken"`, enforce `train.data.ngram_size == 1`.
-- `RuntimeConfig` cadence and timing fields are range-checked (e.g., `eval_interval >= 1`, `ckpt_time_interval_minutes >= 0`, etc.).
+- `RuntimeConfig` cadence and timing fields are range-checked (e.g., `eval_interval >= 1`, `ckpt_time_interval_minutes
+  >= 0`, etc.).
 
 These validations fail fast with descriptive errors to catch misconfigurations early.
 
 ## Common Pitfalls
 
-- __Relative paths in TOML are not auto-resolved by models__
-  - Models accept `Path` only; loaders resolve TOML strings relative to the config file directory. If constructing models directly in code, pass `Path` objects.
+- **Relative paths in TOML are not auto-resolved by models**
+  - Models accept `Path` only; loaders resolve TOML strings relative to the config file directory. If constructing
+    models directly in code, pass `Path` objects.
 
-- __Missing `[sample.runtime]` section__
-  - `SamplerConfig.runtime` is required; no `runtime_ref` indirections are supported. Define `[sample.runtime]` explicitly in TOML.
+- **Missing `[sample.runtime]` section**
+  - `SamplerConfig.runtime` is required; no `runtime_ref` indirections are supported. Define `[sample.runtime]`
+    explicitly in TOML.
 
-- __Using `tiktoken` with `ngram_size > 1`__
+- **Using `tiktoken` with `ngram_size > 1`**
   - For `DataConfig`, when `tokenizer == "tiktoken"`, set `ngram_size = 1`.
 
-- __Scheduler warmup with `decay_lr = false`__
+- **Scheduler warmup with `decay_lr = false`**
   - If LR decay is disabled, set `warmup_iters = 0`.
 
-- __`min_lr` higher than `learning_rate` when decay is enabled__
+- **`min_lr` higher than `learning_rate` when decay is enabled**
   - Ensure `schedule.min_lr <= optim.learning_rate` when `schedule.decay_lr = true`.
 
-- __`max_iters = 0` for eval-only/smoke flows__
+- **`max_iters = 0` for eval-only/smoke flows**
   - Allowed. `RuntimeConfig.max_iters` can be 0; ensure `eval_interval`, `eval_iters`, and `log_interval` are >= 1.
 
-- __Checkpoint rotation knobs inert by default__
-  - `ckpt_top_k = 0` disables top-k pruning. Set `ckpt_top_k > 0` and ensure metric settings are correct (`ckpt_metric`, `ckpt_greater_is_better`).
+- **Checkpoint rotation knobs inert by default**
+  - `ckpt_top_k = 0` disables top-k pruning. Set `ckpt_top_k > 0` and ensure metric settings are correct (`ckpt_metric`,
+    `ckpt_greater_is_better`).
 
-- __Unknown keys in TOML__
+- **Unknown keys in TOML**
   - All models use `extra="forbid"`. Remove unknown keys or add them under `extras` where appropriate.
 
-- __Logger availability__
-  - `ExperimentConfig` always has a logger (default factory or loader/CLI override). Section configs do not accept a logger field; avoid injecting extras into sections.
+- **Logger availability**
+  - `ExperimentConfig` always has a logger (default factory or loader/CLI override). Section configs do not accept a
+    logger field; avoid injecting extras into sections.
 
 ## Architectural Overview
 
 The framework is designed to be modular and extensible. The core components are:
 
-- __CLI__ - Entry point for all operations
-- __Configuration__ - Manages experiment configuration
-- __Data Preparation__ - Handles dataset preparation and tokenization
-- __Training Package__ - `ml_playground.training` orchestrates the training loop via `loop/`, `hooks/`, and `checkpointing/` modules
-- __Sampler__ - Handles sampling from a trained model
+- **CLI** - Entry point for all operations
+- **Configuration** - Manages experiment configuration
+- **Data Preparation** - Handles dataset preparation and tokenization
+- **Training Package** - `ml_playground.training` orchestrates the training loop via `loop/`, `hooks/`, and
+  `checkpointing/` modules
+- **Sampler** - Handles sampling from a trained model
 
 ## Experiment Utilities
 
@@ -312,60 +335,72 @@ model = GPT(gpt_cfg, logger=exp.logger)
 
 ## Benefits
 
-1. __Reduced Code Duplication__ - Common functionality is now centralized
-2. __Consistent Error Handling__ - Standardized exception classes and error messages
-3. __Better Progress Reporting__ - Unified progress reporting across all experiments
-4. __Enhanced Validation__ - Comprehensive validation utilities for configuration and data
-5. __Improved Maintainability__ - Easier to maintain and update since functionality is centralized
+1. **Reduced Code Duplication** - Common functionality is now centralized
+2. **Consistent Error Handling** - Standardized exception classes and error messages
+3. **Better Progress Reporting** - Unified progress reporting across all experiments
+4. **Enhanced Validation** - Comprehensive validation utilities for configuration and data
+5. **Improved Maintainability** - Easier to maintain and update since functionality is centralized
 
 ## Strict Refactoring Guidance (Binding)
 
-The following guidance operationalizes the Developer Guidelines and Import Standards for framework code and tests. Apply these rules immediately and update tests in lockstep.
+The following guidance operationalizes the Developer Guidelines and Import Standards for framework code and tests. Apply
+these rules immediately and update tests in lockstep.
 
-- __Single Source of Truth for Configuration__
+- **Single Source of Truth for Configuration**
   - Use `ml_playground/config.py` as the only configuration authority.
-  - Prefer `load_experiment_toml()` and strongly typed models: `ExperimentConfig`, `TrainerConfig`, `SamplerConfig`, `RuntimeConfig`.
+  - Prefer `load_experiment_toml()` and strongly typed models: `ExperimentConfig`, `TrainerConfig`, `SamplerConfig`,
+    `RuntimeConfig`.
   - Paths must be `pathlib.Path`. Resolve relative paths relative to the TOML file location, not CWD.
 
-- __Public APIs only (no internal/legacy helpers)__
-  - Tests and modules must import and use public APIs from concrete submodules, never private helpers in `ml_playground/cli.py` or ad-hoc wrappers.
-  - If a test references `cli._internal_*` or `_get_experiment_loader`, delete/replace the test with public-API equivalents.
+- **Public APIs only (no internal/legacy helpers)**
+  - Tests and modules must import and use public APIs from concrete submodules, never private helpers in
+    `ml_playground/cli.py` or ad-hoc wrappers.
+  - If a test references `cli._internal_*` or `_get_experiment_loader`, delete/replace the test with public-API
+    equivalents.
 
-- __Tokenizer Protocol as the only tokenization entrypoint__
+- **Tokenizer Protocol as the only tokenization entrypoint**
   - Use `ml_playground/tokenizer.py` factory `create_tokenizer()` and the `Tokenizer` protocol.
-  - `DataConfig` controls tokenizer selection (`char`, `word`, `tiktoken`) and parameters (e.g., `ngram_size`). Do not re-implement tokenizers in experiments.
+  - `DataConfig` controls tokenizer selection (`char`, `word`, `tiktoken`) and parameters (e.g., `ngram_size`). Do not
+    re-implement tokenizers in experiments.
 
-- __Centralized Error Handling__
+- **Centralized Error Handling**
   - Raise and handle exceptions from `ml_playground/error_handling.py`.
   - Use `safe_file_operation()` and `ProgressReporter` for predictable I/O and progress.
 
-- __Import Hygiene (zero workarounds)__
-  - Absolute, submodule-level imports only. No umbrella re-exports or star imports. No local imports except documented cycle breaks.
+- **Import Hygiene (zero workarounds)**
+  - Absolute, submodule-level imports only. No umbrella re-exports or star imports. No local imports except documented
+    cycle breaks.
   - Follow `.dev-guidelines/Readme.md` (Import Standards) strictly.
 
-- __Tests updated first, then code in small steps__
+- **Tests updated first, then code in small steps**
   - For each refactor, update or remove obsolete tests in the same commit. Run all quality gates before committing.
 
 ## Deprecations and Removals
 
 The following items are legacy/back-compat and must be removed or migrated:
 
-- Obsolete CLI internal helpers (e.g., `ml_playground.cli._get_experiment_loader`, `cli._resolve_and_load_configs`, `cli._apply_train_overrides`, `cli.load_app_config`). Replace with public functions in `ml_playground/config.py` and explicit CLI flows.
-- Ad-hoc config loaders and duplicate path-resolution logic (e.g., alternate `config_loader` modules). Consolidate on `ml_playground/config.py` models and validators.
-- Legacy test assumptions about relative paths and implicit defaults. Tests must create minimal TOMLs and assert behavior via typed models.
+- Obsolete CLI internal helpers (e.g., `ml_playground.cli._get_experiment_loader`, `cli._resolve_and_load_configs`,
+  `cli._apply_train_overrides`, `cli.load_app_config`). Replace with public functions in `ml_playground/config.py` and
+  explicit CLI flows.
+- Ad-hoc config loaders and duplicate path-resolution logic (e.g., alternate `config_loader` modules). Consolidate on
+  `ml_playground/config.py` models and validators.
+- Legacy test assumptions about relative paths and implicit defaults. Tests must create minimal TOMLs and assert
+  behavior via typed models.
 - Backward-compat CLI flags mutating config. Configuration comes from TOML plus well-defined env JSON overrides only.
 
 ## Strict Mode (No Backward Compatibility)
 
-The framework enforces strict behavior across configuration, checkpoints, and tokenizer metadata. Legacy formats and implicit fallbacks are not supported.
+The framework enforces strict behavior across configuration, checkpoints, and tokenizer metadata. Legacy formats and
+implicit fallbacks are not supported.
 
-- __Configuration (TOML-only, strict schema)__
+- **Configuration (TOML-only, strict schema)**
   - Models in `ml_playground/config.py` are the single source of truth.
   - Unknown/extra keys are forbidden (Pydantic `extra="forbid"`).
   - No runtime references/indirections are supported; `SamplerConfig.runtime` must be provided explicitly in TOML.
-  - Path resolution and coercion to `Path` happen in loaders relative to the TOML file; models themselves only accept `Path`.
+  - Path resolution and coercion to `Path` happen in loaders relative to the TOML file; models themselves only accept
+    `Path`.
 
-- __Sampler Checkpoints (rotated files only)__
+- **Sampler Checkpoints (rotated files only)**
   - Sampler loads checkpoints exclusively via `CheckpointManager` rotated files.
   - Supported patterns:
     - Last: `ckpt_last_XXXXXXXX.pt`
@@ -373,18 +408,22 @@ The framework enforces strict behavior across configuration, checkpoints, and to
   - Stable, non-rotated filenames are not used.
   - If no rotated checkpoints exist, a `CheckpointError` is raised.
 
-- __Tokenizer Metadata (required fields)__
+- **Tokenizer Metadata (required fields)**
   - `meta.pkl` must include `tokenizer_type` in {`char`, `word`, `tiktoken`}.
-  - No inference from legacy fields (e.g., `kind`, `stoi`, `itos`, `vocab`). Missing `tokenizer_type` raises `DataError`.
-  - For `char`/`word`, vocab fields (`stoi`/`vocab`) are optional but recommended; for `tiktoken`, `encoding_name` defaults to `cl100k_base` when omitted.
+  - No inference from legacy fields (e.g., `kind`, `stoi`, `itos`, `vocab`). Missing `tokenizer_type` raises
+    `DataError`.
+  - For `char`/`word`, vocab fields (`stoi`/`vocab`) are optional but recommended; for `tiktoken`, `encoding_name`
+    defaults to `cl100k_base` when omitted.
 
-These rules ensure deterministic behavior, type safety, and maintainability. Tests and examples have been updated to comply with strict mode.
+These rules ensure deterministic behavior, type safety, and maintainability. Tests and examples have been updated to
+comply with strict mode.
 
 ## Migration Plan (Step-by-Step)
 
 1) Inventory and delete obsolete tests
    - Remove tests referencing private CLI internals or legacy loaders.
-   - Keep only tests that exercise public APIs (`config.py`, `trainer.py`, `sampler.py`, `prepare.py`, `tokenizer.py`, `checkpoint.py`).
+   - Keep only tests that exercise public APIs (`config.py`, `trainer.py`, `sampler.py`, `prepare.py`, `tokenizer.py`,
+     `checkpoint.py`).
 
 2) Consolidate configuration
    - Replace any usage of alternate loaders with:
@@ -393,7 +432,8 @@ These rules ensure deterministic behavior, type safety, and maintainability. Tes
    - Ensure validation uses strict models; no reference-resolution mechanics are supported.
 
 3) Normalize path handling
-   - Resolve relative paths against the TOML file directory via `SharedConfig`'s pre-validator. Downstream modules must treat these paths as canonical and avoid re-resolving.
+   - Resolve relative paths against the TOML file directory via `SharedConfig`'s pre-validator. Downstream modules must
+     treat these paths as canonical and avoid re-resolving.
 
 4) Tokenization
    - Use `create_tokenizer()` exclusively. Migrate any custom tokenization code into the unified protocol or remove it.
@@ -418,7 +458,8 @@ These rules ensure deterministic behavior, type safety, and maintainability. Tes
 - Replace imports of private CLI helpers with public APIs.
 - Construct minimal TOML files in tests; avoid implicit global defaults unless explicitly passed.
 - Validate types and error messages from Pydantic models directly (no monkeypatching internals).
-- Use `tmp_path` for any filesystem needs; assert on files created by `prepare.write_bin_and_meta()` and checkpoint routines.
+- Use `tmp_path` for any filesystem needs; assert on files created by `prepare.write_bin_and_meta()` and checkpoint
+  routines.
 - Prefer parametrized tests for schedules, learning-rate helpers, and tokenizers.
 
 ## Example: Loading an Experiment

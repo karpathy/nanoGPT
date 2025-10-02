@@ -1,7 +1,7 @@
 ---
 trigger: always_on
-description: 
-globs: 
+description:
+globs:
 ---
 
 # Import Guidelines: Strict Policy and Rationale
@@ -57,7 +57,8 @@ This is a prescriptive, low‑choice standard for all Python imports in the code
 
 9. **Cycle handling**
    - First choice: refactor to remove the cycle (extract shared code to a lower-level module).
-   - If refactor is not immediately feasible, a single, narrowly-scoped local import is permitted inside the function that needs it, with a code comment "Cycle break: short rationale". Track a task to remove the cycle.
+   - If refactor is not immediately feasible, a single, narrowly-scoped local import is permitted inside the function
+     that needs it, with a code comment "Cycle break: short rationale". Track a task to remove the cycle.
 
 10. **Type-only imports**
     - Use typing.TYPE_CHECKING guards for heavy or optional typing dependencies.
@@ -65,7 +66,8 @@ This is a prescriptive, low‑choice standard for all Python imports in the code
 
 11. **Lazy imports**
     - Not allowed by default.
-    - Allowed only when both conditions hold: breaks a hard import cycle or defers a large, cold-path dependency with measurable startup benefit. Must be documented with a comment "Lazy import: <reason + expected impact>".
+    - Allowed only when both conditions hold: breaks a hard import cycle or defers a large, cold-path dependency with
+      measurable startup benefit. Must be documented with a comment "Lazy import: <reason + expected impact>".
 
 12. ****init**.py usage**
     - May exist for package recognition or minimal metadata only.
@@ -117,7 +119,8 @@ def compute():
 
 - Run the project's linter/formatter/import organizer before every commit to enforce ordering and grouping.
 - Type checkers must pass with type-only guards for heavy/optional types.
-- Changes to import structure should follow TDD and be committed with paired tests when behavior or public API surface changes.
+- Changes to import structure should follow TDD and be committed with paired tests when behavior or public API surface
+  changes.
 
 ## Review Checklist (Must Pass All)
 

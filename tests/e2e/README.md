@@ -1,6 +1,7 @@
 # End-to-End (E2E) Tests
 
-E2E tests exercise the application via public entry points (usually the CLI) in a realistic, but tiny, environment. They validate wiring across modules, configuration loading/merging, logging, and basic I/O.
+E2E tests exercise the application via public entry points (usually the CLI) in a realistic, but tiny, environment.
+They validate wiring across modules, configuration loading/merging, logging, and basic I/O.
 
 ## Principles
 

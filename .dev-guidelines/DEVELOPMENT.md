@@ -1,7 +1,7 @@
 ---
 trigger: always_on
-description: 
-globs: 
+description:
+globs:
 ---
 
 # ml_playground Development Practices
@@ -10,7 +10,8 @@ Core development practices, quality standards, and workflow for ml_playground co
 
 ## Quality Gates (Mandatory)
 
-For detailed information about the centralized framework utilities, see [Framework Utilities Documentation](../docs/framework_utilities.md).
+For detailed information about the centralized framework utilities, see [Framework Utilities
+Documentation](../docs/framework_utilities.md).
 
 Run this Make target before every commit (same commands under the hood):
 
@@ -29,8 +30,11 @@ CI and pre-commit both invoke `make quality` as the core gate.
 - **One logical change per commit** (e.g., fix a test, adjust a config, refactor a function)
 - **Keep commits under ~200 lines** unless unavoidable
 - **Run quality gates before each commit**, not just before PR
-- **Pairing rule (REQUIRED)**: Each functional or behavioral change MUST include its tests in the same commit (unit and/or integration). Creating new files (untracked) is expected when adding tests—stage them together with the production change.
-- **Granularity**: Prefer a short sequence of TDD commits to a single large commit. Each step should keep the suite green.
+- **Pairing rule (REQUIRED)**: Each functional or behavioral change MUST include its tests in the same commit (unit
+  and/or integration). Creating new files (untracked) is expected when adding tests—stage them together with the
+  production change.
+- **Granularity**: Prefer a short sequence of TDD commits to a single large commit. Each step should keep the suite
+  green.
 
 ### Practical Tips
 
@@ -38,8 +42,10 @@ CI and pre-commit both invoke `make quality` as the core gate.
 - Separate mechanical formatting from semantic changes
 - Split large features into reviewable increments
 - Keep tests passing at every step
-- Pair production and test changes: when adding/refactoring code, include the minimal tests that specify the behavior in the same commit.
-- Acceptable exceptions: documentation only commits, pure test refactors (no behavior change), or mechanical formatting. For everything else, pair code+tests.
+- Pair production and test changes: when adding/refactoring code, include the minimal tests that specify the behavior in
+  the same commit.
+- Acceptable exceptions: documentation only commits, pure test refactors (no behavior change), or mechanical formatting.
+  For everything else, pair code+tests.
 
 ### Runnable State Requirement (MANDATORY)
 
@@ -48,7 +54,8 @@ CI and pre-commit both invoke `make quality` as the core gate.
   - `make quality` passes locally (same as pre-commit/CI gate).
   - No partially applied migrations or broken CLI entry points.
   - Documentation build (if modified) is not broken.
-- Do not commit code that knowingly breaks the build with intent to "fix later". Split work into smaller, independently runnable commits.
+- Do not commit code that knowingly breaks the build with intent to "fix later". Split work into smaller, independently
+  runnable commits.
 
 ### Branching Model (Feature Branches REQUIRED)
 
@@ -83,7 +90,8 @@ Ruff automatically applies modern Python best practices:
 - **Configuration and overrides**:
   - TOML is the primary source of truth; avoid ad-hoc CLI flags that mutate config.
   - Allowed exceptions (documented and tested):
-    - Global CLI option `--exp-config PATH` to choose a specific experiment TOML; `experiments/default_config.toml` is merged first.
+    - Global CLI option `--exp-config PATH` to choose a specific experiment TOML; `experiments/default_config.toml` is
+      merged first.
     - Environment JSON overrides: `ML_PLAYGROUND_TRAIN_OVERRIDES` and `ML_PLAYGROUND_SAMPLE_OVERRIDES`.
       These are deep-merged and then strictly re-validated; invalid env overrides are ignored.
 
@@ -96,7 +104,7 @@ Ruff automatically applies modern Python best practices:
 **Centralized sections**:
 
 - `[tool.ruff]` for lint/format settings
-- `[tool.mypy]` for type checker settings  
+- `[tool.mypy]` for type checker settings
 - `[tool.pyright]` for static analysis include/exclude
 - `[tool.pytest.ini_options]` for pytest testpaths and options
 

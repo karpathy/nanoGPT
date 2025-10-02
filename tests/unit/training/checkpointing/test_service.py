@@ -17,6 +17,7 @@ from ml_playground.configuration.models import (
     READ_POLICY_BEST,
     READ_POLICY_LATEST,
 )
+from ml_playground.core.error_handling import CheckpointError
 from ml_playground.training.checkpointing import service
 
 
@@ -38,6 +39,19 @@ class _StubOptimizer:
 
     def zero_grad(self, *, set_to_none: bool = True) -> None:
         del set_to_none
+
+
+class _StubLogger:
+    def __init__(self) -> None:
+        self.warnings: list[str] = []
+
+    def warning(self, message: str) -> None:
+        self.warnings.append(message)
+
+
+class _StubEMA:
+    def __init__(self) -> None:
+        self.shadow: dict[str, Any] | None = {}
 
 
 def _make_cfg(tmp_path: Path, *, read_policy: str = READ_POLICY_BEST) -> TrainerConfig:
@@ -83,6 +97,14 @@ def _make_shared(tmp_path: Path, cfg: TrainerConfig) -> SharedConfig:
         train_out_dir=cfg.runtime.out_dir,
         sample_out_dir=cfg.runtime.out_dir,
     )
+
+
+def _with_checkpoint_load_fn(cfg: TrainerConfig, fn) -> TrainerConfig:
+    return cfg.model_copy(update={"checkpoint_load_fn": fn})
+
+
+def _with_sample_out_dir(shared: SharedConfig, sample_out_dir: Path) -> SharedConfig:
+    return shared.model_copy(update={"sample_out_dir": sample_out_dir})
 
 
 def test_save_checkpoint_invokes_manager(tmp_path: Path) -> None:
@@ -161,6 +183,54 @@ def test_load_checkpoint_respects_policy(monkeypatch, tmp_path: Path) -> None:
     assert mgr.best_called is True
 
 
+def test_load_checkpoint_override_exception(tmp_path: Path) -> None:
+    cfg = _with_checkpoint_load_fn(
+        _make_cfg(tmp_path),
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+    shared = _make_shared(tmp_path, cfg)
+    logger = _StubLogger()
+
+    class _Manager:
+        def __init__(self) -> None:
+            self.out_dir = shared.train_out_dir
+
+    result = service.load_checkpoint(_Manager(), cfg, logger=logger)
+    assert result is None
+    assert logger.warnings == ["checkpoint_load_fn failed: boom"]
+
+
+def test_load_checkpoint_missing_out_dir(tmp_path: Path) -> None:
+    cfg = _with_checkpoint_load_fn(_make_cfg(tmp_path), None)
+    logger = _StubLogger()
+
+    class _Manager:
+        def __init__(self) -> None:
+            self.out_dir = tmp_path / "missing"
+
+    result = service.load_checkpoint(_Manager(), cfg, logger=logger)
+    assert result is None
+    assert not logger.warnings
+
+
+def test_load_checkpoint_handles_checkpoint_error(tmp_path: Path) -> None:
+    cfg = _make_cfg(tmp_path, read_policy=READ_POLICY_LATEST)
+    logger = _StubLogger()
+
+    class _Manager:
+        def __init__(self) -> None:
+            self.out_dir = tmp_path / "out_err"
+            self.out_dir.mkdir(parents=True, exist_ok=True)
+
+        def load_latest_checkpoint(self, *, device, logger):  # type: ignore[no-untyped-def]
+            del device, logger
+            raise CheckpointError("bad checkpoint")
+
+    result = service.load_checkpoint(_Manager(), cfg, logger=logger)
+    assert result is None
+    assert logger.warnings == ["Could not load checkpoint (latest): bad checkpoint"]
+
+
 def test_propagate_metadata_copies_file(tmp_path: Path) -> None:
     cfg = _make_cfg(tmp_path)
     shared = _make_shared(tmp_path, cfg)
@@ -169,8 +239,12 @@ def test_propagate_metadata_copies_file(tmp_path: Path) -> None:
     meta_src = ds_dir / "meta.pkl"
     meta_src.write_bytes(b"meta")
 
-    service.propagate_metadata(cfg, shared, logger=None)
+    shared = _with_sample_out_dir(shared, tmp_path / "sample-out")
 
-    meta_dst = shared.train_out_dir / "meta.pkl"
+    expanded_shared = shared
+    meta_dst = expanded_shared.train_out_dir / meta_src.name
+
+    service.propagate_metadata(cfg, expanded_shared, logger=None)
+
     assert meta_dst.exists()
     assert meta_dst.read_bytes() == b"meta"

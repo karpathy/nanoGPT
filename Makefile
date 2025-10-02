@@ -176,10 +176,17 @@ gguf-help: ## Show llama.cpp converter help
 	$(RUN) python tools/llama_cpp/convert-hf-to-gguf.py --help || true
 
 # Coverage helper
-coverage: ## Run coverage for non-performance tests and generate reports
-	$(RUN) coverage run -m pytest -m "not perf"
-	$(RUN) coverage report -m
-	$(RUN) coverage xml
+coverage: coverage-report ## [deprecated] use `make coverage-report`
+	@echo "[info] coverage-report completed; artifacts stored under .cache/coverage"
+
+coverage-report: ## Generate coverage reports (term, HTML, JSON) under .cache/coverage
+	mkdir -p .cache/coverage
+	$(RUN) coverage erase
+	$(RUN) coverage run -m pytest -n 0 -m "not perf"
+	$(RUN) coverage combine
+	$(RUN) coverage report -m --fail-under=0
+	$(RUN) coverage html -d .cache/coverage/htmlcov --fail-under=0
+	$(RUN) coverage json -o .cache/coverage/coverage.json --fail-under=0
 
 # ---------------------------------------------------------------------------
 # LIT: Minimal integration runner (persistent .venv312)

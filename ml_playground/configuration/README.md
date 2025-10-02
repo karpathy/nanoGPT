@@ -1,26 +1,30 @@
 # Configuration Package
 
 ## Purpose
-Configuration models and loading utilities for ml_playground. Provides strict typing, validation, and TOML-based configuration management with override support.
+
+Configuration management utilities for `ml_playground`. Provides Pydantic models and loading helpers for experiment
+configs.
 
 ## Structure
-- `models.py` - Pydantic configuration models and validation
-- `loading.py` - Configuration loading, merging, and resolution
-- `cli.py` - CLI-specific configuration adapters
+
+- `models.py` - Pydantic configuration models
+- `loading.py` - TOML loading and deep merge helpers
 
 ## Key APIs
-- `ExperimentConfig` - Complete experiment configuration
-- `TrainerConfig` / `SamplerConfig` / `PreparerConfig` - Section-specific configs
-- `load_full_experiment_config()` - Load and merge experiment configuration
-- `load_train_config()` / `load_sample_config()` - Partial config loading
+
+- `ExperimentConfig` - Complete configuration tree
+- `TrainerConfig` - Training-specific configuration
+- `load_full_experiment_config()` - Load and validate experiment configuration
 
 ## Usage Example
+
 ```python
-from ml_playground.configuration import load_full_experiment_config
+from ml_playground.configuration.loading import load_full_experiment_config
 
 config = load_full_experiment_config(config_path, project_home, experiment_name)
 ```
 
 ## Related Documentation
-- [Framework Utilities](../docs/framework_utilities.md) - Configuration structure
+
+- [Framework Utilities](../docs/framework_utilities.md) - Configuration guidelines
 - [Development Guidelines](../.dev-guidelines/DEVELOPMENT.md) - Configuration policies

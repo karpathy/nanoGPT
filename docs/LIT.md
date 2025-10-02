@@ -1,6 +1,7 @@
 # LIT (Learning Interpretability Tool) — Minimal Integration
 
-The optional LIT UI lives under `ml_playground/analysis/lit/` and provides a tiny echo-model demo for quick inspection. We keep this minimal and isolated from the main project environment.
+The optional LIT UI lives under `ml_playground/analysis/lit/` and provides a tiny echo-model demo
+for quick inspection. We keep this minimal and isolated from the main project environment.
 
 ## Quickstart (UV, Python 3.12)
 

@@ -5,7 +5,8 @@ description: Git branching, versioning, and commit policy
 
 # Git Versioning & Workflow
 
-Canonical rules for branches, commit messages, and history management. Keep commits runnable and history linear to maintain velocity and reliability.
+Canonical rules for branches, commit messages, and history management. Keep commits runnable and history linear to
+maintain velocity and reliability.
 
 ## Branching Model (Feature Branches REQUIRED)
 

@@ -41,9 +41,12 @@ Testing Docs
 
 ### 2. Test Levels (ULTRA-STRICT Performance Requirements)
 
-- **Unit tests** (required): LIGHTNING FAST (<10ms each), isolated, no network, no filesystem writes. One spec per behavior. MUST achieve 100% success rate.
-- **Integration tests** (allowed/required): Minimal real integration across 2–3 components, no live external services. Use in-memory or ephemeral resources. Must complete in <100ms each.
-- **End-to-end tests** (discouraged): Only when explicitly approved; must run in CI under 30s total with recorded/replayed I/O.
+- **Unit tests** (required): LIGHTNING FAST (<10ms each), isolated, no network, no filesystem writes. One spec per
+  behavior. MUST achieve 100% success rate.
+- **Integration tests** (allowed/required): Minimal real integration across 2–3 components, no live external services.
+  Use in-memory or ephemeral resources. Must complete in <100ms each.
+- **End-to-end tests** (discouraged): Only when explicitly approved; must run in CI under 30s total with
+  recorded/replayed I/O.
 
 **Rationale**: Speed is critical for developer productivity; any slow test breaks the flow.
 
@@ -51,7 +54,8 @@ Testing Docs
 
 - **Structure** (canonical): `tests/unit/<package>/test_<module>.py`
 - **Packages** mirror `ml_playground/` layout, for example:
-  - `tests/unit/training/`, `tests/unit/sampling/`, `tests/unit/data_pipeline/`, `tests/unit/configuration/`, `tests/unit/core/`, `tests/unit/experiments/`, `tests/unit/analysis/`
+  - `tests/unit/training/`, `tests/unit/sampling/`, `tests/unit/data_pipeline/`, `tests/unit/configuration/`,
+    `tests/unit/core/`, `tests/unit/experiments/`, `tests/unit/analysis/`
 - **Test functions**: `test_<behavior>_<condition>_<expected>()`
 - **Test classes** (if grouping needed): `Test<Subject>` only; no `__init__` in test classes.
 - **Docstrings**: Each test function must have a one-line docstring stating the behavior it covers.
@@ -99,12 +103,14 @@ ml_playground/models/                     -> tests/unit/core/test_<module>.py
 ### 5.1 No Test-Specific Code Paths in Production (Non-Negotiable)
 
 - Production code must never contain branches, flags, or behavior that exists only to satisfy tests.
-  - Examples of forbidden patterns: `if TESTING: ...`, checking `PYTEST_CURRENT_TEST`, special test-only parameters, alternate I/O paths only under tests.
+  - Examples of forbidden patterns: `if TESTING: ...`, checking `PYTEST_CURRENT_TEST`, special test-only parameters,
+    alternate I/O paths only under tests.
 - Tests must exercise the same public API and code paths used in production.
 - Make code testable via proper seams instead:
   - Dependency injection with sensible production defaults (e.g., pass Path, clock, RNG, HTTP client).
   - Use pytest fixtures and mocks/monkeypatch for external boundaries (network, filesystem, time, env).
-- Idempotency and determinism are product qualities, not test toggles. Implement them unconditionally where applicable.
+- Idempotency and determinism are product qualities, not test toggles. Implement them unconditionally where
+  applicable.
 
 ### 6. Fixtures (Strict Usage)
 
@@ -154,13 +160,15 @@ ml_playground/models/                     -> tests/unit/core/test_<module>.py
 - **Per-module line coverage**: 100% for ALL `ml_playground/*` modules
 - **Branch coverage**: 100% for ALL modules (NO COMPROMISES)
 - **New/changed code**: Must achieve 100% coverage before merge
-- **No pragma comments**: ABSOLUTELY FORBIDDEN except for impossible-to-test code (if 0:, if **name** == **main**:)
+- **No pragma comments**: ABSOLUTELY FORBIDDEN except for impossible-to-test code (`if 0:`,
+  `if __name__ == "__main__":`).
 
 **Rationale**: Complete test coverage ensures zero blind spots and maximum confidence in code quality.
 
 ### 12. Flaky Test Policy (IMMEDIATE ACTION REQUIRED)
 
-**ABSOLUTE ZERO TOLERANCE**: Any flaky test is IMMEDIATELY removed from the suite. NO 24h grace period. NO xfail exceptions. NO second chances.
+**ABSOLUTE ZERO TOLERANCE**: Any flaky test is IMMEDIATELY removed from the suite. NO 24h grace period. NO xfail
+exceptions. NO second chances.
 
 **Enforcement**: First flake = immediate deletion. Tests must be 100% deterministic and reliable.
 
@@ -175,8 +183,10 @@ ml_playground/models/                     -> tests/unit/core/test_<module>.py
 make quality-ext
 ```
 
-- This initializes (if needed) and executes Cosmic Ray sessions at `.cache/cosmic-ray/session.sqlite`. The step is non-fatal and not part of CI or pre-commit by default.
-- The `.cache/cosmic-ray/` directory is treated like other build artifacts: never commit it, clean it with `make clean` if needed.
+- This initializes (if needed) and executes Cosmic Ray sessions at `.cache/cosmic-ray/session.sqlite`. The step is
+  non-fatal and not part of CI or pre-commit by default.
+- The `.cache/cosmic-ray/` directory is treated like other build artifacts: never commit it, clean it with `make clean`
+  if needed.
 
 ## Running Tests
 

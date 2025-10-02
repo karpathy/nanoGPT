@@ -1,18 +1,18 @@
 # tools/
 
-Centralized developer tools and helper scripts for ml_playground. All tools are invoked via UV-managed Python (no raw pip, no manual venv activation).
+Centralized developer utilities and helper scripts that support the `ml_playground` project. These are optional, mostly
+used for convenience during development. (No raw pip, no manual venv activation).
 
 ## Purpose
 
 - Provide small, focused utilities used during development and maintenance.
 - Keep operational scripts discoverable and documented in one place.
-- Ensure consistent, reproducible execution via the project venv.
 
 ## Structure
 
 - `port_kill.py` — kill a process bound to a TCP port (Mac/Linux).
 - `cleanup_ignored_tracked.py` — remove accidentally tracked files that should be ignored.
-- `setup_ai_guidelines.py` — bootstrap or update developer guideline docs.
+- `setup_ai_guidelines.py`: Configures symlinks for AI pair-programming workflow per guideline docs.
 - `llama_cpp/` — vendor instructions and helpers for GGUF conversion.
 
 ## Usage

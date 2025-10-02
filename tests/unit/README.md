@@ -1,6 +1,7 @@
 # Unit Tests
 
-Unit tests validate individual functions, classes, and small modules in isolation. They should be trivial to read and fast to run.
+Unit tests validate individual functions, classes, and small modules in isolation. They should be trivial to read and fast
+to run.
 
 ## Principles
 
@@ -10,20 +11,34 @@ Unit tests validate individual functions, classes, and small modules in isolatio
 
 ## Fixtures & collaborators
 
-- Keep unit tests self-contained. Prefer inline stub classes or dependency injection instead of monkeypatching or mocking.
-- When shared setup is unavoidable, reuse fixtures defined in `tests/conftest.py` or a package-local `conftest.py`; keep them pure and deterministic.
+- Keep unit tests self-contained. Prefer inline stub classes or dependency injection instead of monkeypatching or
+  mocking.
+- When shared setup is unavoidable, reuse fixtures defined in `tests/conftest.py` or a package-local `conftest.py`;
+  keep them pure and deterministic.
 - Follow the canonical guidance in `.dev-guidelines/TESTING.md#fixtures-strict-usage` for scope and purity rules.
+
+## Naming
+
+- **File names**: `test_<module>.py` within the corresponding directory (e.g.,
+  `tests/unit/training/checkpointing/test_service.py`).
+- **Test functions**: Prefer `test_<unit_of_behavior>_<expected_outcome>` (snake_case, verbs included when meaningful).
+- **Helpers/stubs**: Prefix with `_Stub` or `_make_` to signal test-only collaborators and avoid collisions with
+  production symbols.
 
 ## Testing Approaches
 
 ### Traditional Unit Tests
+
 Standard unit tests that validate specific behaviors with hand-crafted examples.
 
 ### Property-Based Tests
+
 Property-based tests using Hypothesis to validate invariants across a wide range of generated inputs:
 
-- **Configuration System**: Tests dictionary merging, TOML serialization, and path computation with generated data structures
-- **Data Loading Logic**: Tests batch sampling, memory mapping, and device placement with various array sizes and configurations
+- **Configuration System**: Tests dictionary merging, TOML serialization, and path computation with generated data
+  structures
+- **Data Loading Logic**: Tests batch sampling, memory mapping, and device placement with various array sizes and
+  configurations
 {{ ... }}
 
 ## Run Locally

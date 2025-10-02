@@ -1,6 +1,7 @@
 # Integration Tests
 
-Integration tests verify that multiple components work together correctly via Python APIs (not necessarily the CLI). They use real code paths and small in-memory or tiny on-disk data.
+Integration tests verify that multiple components work together correctly via Python APIs (not necessarily the CLI).
+They use real code paths and small in-memory or tiny on-disk data.
 
 ## Principles
 

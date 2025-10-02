@@ -5,13 +5,16 @@ description: documentation standards for nanoGPT/ml_playground
 
 # Documentation Guidelines
 
-Unified standards for all documentation in this repository. Applies to top-level docs, module docs, experiment READMEs, tests READMEs, and tools.
+Unified standards for all documentation in this repository. Applies to top-level docs, module docs, experiment
+READMEs, tests READMEs, and tools.
 
 ## Abstraction Policy
 
 - Top level (repo `README.md`): high-level orientation and entrypoints only.
-- Mid level (e.g., `ml_playground/experiments/Readme.md`): overview of experiments and shared conventions. Avoid per-file details.
-- Low level (e.g., `ml_playground/experiments/<name>/Readme.md`): operational detail to run the experiment, but remain concise. Defer general concepts to shared docs.
+- Mid level (e.g., `ml_playground/experiments/Readme.md`): overview of experiments and shared conventions. Avoid per-file
+  details.
+- Low level (e.g., `ml_playground/experiments/<name>/Readme.md`): operational detail to run the experiment, but remain
+  concise. Defer general concepts to shared docs.
 - The deeper you go in the tree, the more concrete the instructions — but keep them brief and avoid duplication.
 
 ## Required Sections per Experiment Readme
@@ -46,7 +49,8 @@ ml_playground/experiments/shakespeare/
 
 ## Linking to Framework Docs
 
-- When referring to shared helpers or patterns, link to `docs/framework_utilities.md` rather than duplicating explanations.
+- When referring to shared helpers or patterns, link to `docs/framework_utilities.md` rather than duplicating
+  explanations.
 - Example line: “For framework utilities, see `docs/framework_utilities.md`.”
 
 ## Markdown Style (markdownlint)
@@ -61,7 +65,8 @@ ml_playground/experiments/shakespeare/
 
 - Use relative links within the repository: `../../docs/framework_utilities.md` from experiment folders.
 - Prefer short, stable link text.
-- When linking to another folder, link to that folder's `Readme.md` (single entry point) instead of deep files. Deep documents should be discovered from that folder's `Readme.md`.
+- When linking to another folder, link to that folder's `Readme.md` (single entry point) instead of deep files. Deep
+  documents should be discovered from that folder's `Readme.md`.
 
 ## DRY Documentation
 
@@ -79,8 +84,10 @@ ml_playground/experiments/shakespeare/
 
 - Docs must pass `make quality` (markdownlint part of our checks) before commit.
 - Prefer granular commits with clear `docs(<area>): <subject>` messages.
-- When documenting functional changes to code, ensure the associated commit pairs production code and tests in the same change per TDD policy (see `DEVELOPMENT.md`).
-- Reviewers check: abstraction level appropriate, tree annotated, headings/lists/code blocks spacing correct, and links valid.
+- When documenting functional changes to code, ensure the associated commit pairs production code and tests in the same
+  change per TDD policy (see `DEVELOPMENT.md`).
+- Reviewers check: abstraction level appropriate, tree annotated, headings/lists/code blocks spacing correct, and links
+  valid.
 
 ## Tests and Tools READMEs
 

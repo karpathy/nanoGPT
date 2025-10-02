@@ -38,8 +38,10 @@ make prepare bundestag_char
 
 Notes:
 
-- The prepare step is responsible for writing `meta.pkl` into your dataset directory alongside `train.bin` and `val.bin`.
-- If you use a custom preparer, ensure it calls `ml_playground.prepare.write_bin_and_meta(...)` or equivalent utilities which always write a standardized `meta.pkl`.
+- The prepare step is responsible for writing `meta.pkl` into your dataset directory alongside `train.bin` and
+  `val.bin`.
+- If you use a custom preparer, ensure it calls `ml_playground.prepare.write_bin_and_meta(...)` or equivalent
+  utilities which always write a standardized `meta.pkl`.
 
 ### Training
 
@@ -50,7 +52,8 @@ make train bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
 
 Notes:
 
-- Universal meta policy: training requires `meta.pkl` to exist at `train.data.meta_path` (usually `<dataset_dir>/meta.pkl`).
+- Universal meta policy: training requires `meta.pkl` to exist at `train.data.meta_path` (usually
+  `<dataset_dir>/meta.pkl`).
 - The CLI will fail fast with a clear error if `meta.pkl` is missing.
 
 ### Sampling
@@ -62,7 +65,8 @@ make sample bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
 
 Notes:
 
-- Sampling requires `meta.pkl` to exist either at `train.data.meta_path` or under the sample runtime output directory at `<out_dir>/<experiment>/meta.pkl`.
+- Sampling requires `meta.pkl` to exist either at `train.data.meta_path` or under the sample runtime output directory at
+  `<out_dir>/<experiment>/meta.pkl`.
 - The CLI will fail fast with a clear error if `meta.pkl` cannot be found in one of the expected locations.
 
 ### End-to-End Loop
@@ -73,15 +77,19 @@ make loop bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
 
 Make output is intentionally quieter by default via a global `.SILENT:` directive; only explicit messages are printed.
 
-- The loop will only skip the prepare step if `train.bin`, `val.bin`, and `meta.pkl` are present in the dataset directory.
+- The loop will only skip the prepare step if `train.bin`, `val.bin`, and `meta.pkl` are present in the dataset
+  directory.
 
 ## Configuration System
 
-- All configuration via TOML- __Single Source of Truth for Configuration__
+- All configuration via TOML — __Single Source of Truth for Configuration__
   - Use the `ml_playground/configuration/` package as the only configuration authority (`models`, `loading`, `cli`).
-  - Prefer `configuration.loading.load_experiment_toml()` (or `load_full_experiment_config`) and strongly typed models: `ExperimentConfig`, `TrainerConfig`, `SamplerConfig`, `RuntimeConfig`.
-  - Global CLI option `--exp-config PATH` selects an alternative experiment TOML file (replaces the experiment’s `config.toml`). The global `experiments/default_config.toml` is still merged first under the experiment config.
-  - Environment JSON overrides are supported, deep-merged, and strictly re-validated; invalid overrides are ignored to avoid breaking flows:
+  - Prefer `configuration.loading.load_experiment_toml()` (or `load_full_experiment_config`) and strongly typed models:
+    `ExperimentConfig`, `TrainerConfig`, `SamplerConfig`, `RuntimeConfig`.
+  - Global CLI option `--exp-config PATH` selects an alternative experiment TOML file (replaces the experiment’s
+    `config.toml`). The global `experiments/default_config.toml` is still merged first under the experiment config.
+  - Environment JSON overrides are supported, deep-merged, and strictly re-validated; invalid overrides are ignored to
+    avoid breaking flows:
     - `ML_PLAYGROUND_TRAIN_OVERRIDES`
     - `ML_PLAYGROUND_SAMPLE_OVERRIDES`
 - Paths automatically converted to `pathlib.Path` objects
@@ -110,7 +118,8 @@ make quality-ext
 2. Implement the minimal production code to make the test pass.
 3. Refactor with tests green.
 
-Commit pairing rule (required): each functional change MUST include its tests in the same commit (unit/integration). Exceptions: documentation-only, test-only refactors (no behavior change), mechanical formatting.
+Commit pairing rule (required): each functional change MUST include its tests in the same commit (unit/integration).
+Exceptions: documentation-only, test-only refactors (no behavior change), mechanical formatting.
 
 Recommended commit sequence per behavior:
 
