@@ -45,7 +45,10 @@ def load_checkpoint(
     if cfg.checkpoint_load_fn is not None:
         try:
             return cfg.checkpoint_load_fn(manager=manager, cfg=cfg, logger=logger)
-        except Exception as exc:  # pragma: no cover - DI override path is user-supplied
+        except (
+            CheckpointError,
+            RuntimeError,
+        ) as exc:  # pragma: no cover - DI override path is user-supplied
             logger.warning(f"checkpoint_load_fn failed: {exc}")
             return None
 
@@ -115,7 +118,10 @@ def save_checkpoint(
                 logger=logger,
             )
             return
-        except Exception as exc:  # pragma: no cover - DI override path is user-supplied
+        except (
+            CheckpointError,
+            RuntimeError,
+        ) as exc:  # pragma: no cover - DI override path is user-supplied
             logger.warning(
                 f"checkpoint_save_fn failed, falling back to default save: {exc}"
             )
@@ -135,7 +141,12 @@ def propagate_metadata(cfg: TrainerConfig, shared: SharedConfig, *, logger) -> N
     """Copy dataset metadata into train and sample output directories when available."""
     try:
         meta_src = cfg.data.meta_path(shared.dataset_dir)
-    except Exception as exc:  # pragma: no cover - defensive
+    except (
+        OSError,
+        ValueError,
+        TypeError,
+        RuntimeError,
+    ) as exc:  # pragma: no cover - defensive
         if logger:
             logger.warning(f"Failed to resolve meta source path: {exc}")
         return

@@ -14,6 +14,7 @@ from ml_playground.configuration.models import TrainerConfig, SharedConfig
 from ml_playground.ema import EMA
 from ml_playground.models.core.model import GPT
 
+from ml_playground.core.error_handling import CheckpointError
 from ml_playground.training.checkpointing.service import (
     apply_checkpoint,
     create_manager,
@@ -176,9 +177,10 @@ class Trainer:
                                 "Loss/train", scaled_loss, self.iter_num
                             )
                             self.writer.add_scalar("LR", lr, self.iter_num)
-                    except Exception:
-                        # Never fail training loop due to TB writer issues
-                        pass
+                    except (ValueError, RuntimeError, OSError) as exc:
+                        self.logger.debug(
+                            "TensorBoard logging skipped due to writer error: %s", exc
+                        )
 
                 self.iter_num += 1
                 local_iter_num += 1
@@ -209,12 +211,12 @@ class Trainer:
                         logger=self.logger,
                         is_best=False,
                     )
-            except Exception as exc:
+            except (CheckpointError, RuntimeError, OSError) as exc:
                 self.logger.warning(f"Failed to save final checkpoint: {exc}")
 
             try:
                 propagate_metadata(self.cfg, self.shared, logger=self.logger)
-            except Exception as exc:
+            except (OSError, RuntimeError) as exc:
                 self.logger.warning(f"Failed to propagate meta file: {exc}")
 
             if self.writer:

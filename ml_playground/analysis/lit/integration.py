@@ -27,7 +27,10 @@ def run_server_bundestag_char(
         for p in paths:
             try:
                 return importlib.import_module(p)
-            except Exception as err:  # pragma: no cover - best-effort compatibility
+            except (
+                ImportError,
+                ModuleNotFoundError,
+            ) as err:  # pragma: no cover - best-effort compatibility
                 last_err = err
         # If all imports failed, raise with context
         try:
@@ -35,7 +38,7 @@ def run_server_bundestag_char(
 
             lit_ver = getattr(lit_nlp, "__version__", "<unknown>")
             ver_msg = f"(detected lit-nlp version: {lit_ver})"
-        except Exception:
+        except (ImportError, AttributeError):
             ver_msg = "(lit-nlp not importable)"
         raise RuntimeError(
             "Unable to import LIT server module. Tried: lit_nlp.server, "
@@ -57,7 +60,7 @@ def run_server_bundestag_char(
 
             lit_ver = getattr(lit_nlp, "__version__", "<unknown>")
             ver_msg = f"(detected lit-nlp version: {lit_ver})"
-        except Exception:
+        except (ImportError, AttributeError):
             ver_msg = "(lit-nlp not importable)"
         raise RuntimeError(
             "LIT is not available or incompatible. "
@@ -97,7 +100,7 @@ def run_server_bundestag_char(
             file_lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
             if file_lines:
                 samples = file_lines[:10]
-    except Exception:
+    except (OSError, UnicodeError):
         # Non-fatal; keep embedded samples
         pass
 
@@ -145,7 +148,12 @@ def run_server_bundestag_char(
 
     try:
         app = lit_server.Server(models, datasets)
-    except Exception as e:  # pragma: no cover
+    except (
+        TypeError,
+        AttributeError,
+        RuntimeError,
+        ValueError,
+    ) as e:  # pragma: no cover
         raise RuntimeError(f"Failed to build LIT app: {e}") from e
 
     url = f"http://{host}:{port if port else '<auto>'}"
@@ -187,7 +195,7 @@ def run_server_bundestag_char(
                         fn(port, host)
                         logger.info(f"Started via {name}(port, host)")
                         return True
-                    except Exception:
+                    except (RuntimeError, ValueError, OSError):
                         return False
 
     # 1) Try common module-level starters
@@ -216,7 +224,7 @@ def run_server_bundestag_char(
                     logger.info(f"Started via app.{fname}(port, host)")
                     started = True
                     break
-                except Exception:
+                except (RuntimeError, ValueError, OSError):
                     continue
 
     # 3) Final fallback: try to run via werkzeug.run_simple using common WSGI callables
@@ -231,7 +239,7 @@ def run_server_bundestag_char(
                 )
                 run_simple(hostname=host, port=port or 5432, application=app)  # blocks
                 started = True
-            except Exception:
+            except (RuntimeError, TypeError, ValueError):
                 # 3b) Try a nested .app attribute (common Flask pattern)
                 if hasattr(app, "app"):
                     wsgi_app = getattr(app, "app")
@@ -242,7 +250,7 @@ def run_server_bundestag_char(
                         hostname=host, port=port or 5432, application=wsgi_app
                     )  # blocks
                     started = True
-        except Exception:  # pragma: no cover
+        except (ImportError, RuntimeError, TypeError, ValueError):  # pragma: no cover
             tried_calls.append("werkzeug.run_simple(app|app.app)")
 
     if not started:
