@@ -124,14 +124,29 @@ ml_playground/models/                     -> tests/unit/core/test_<module>.py
 
 **Rationale**: Contained, fast, and reproducible tests.
 
-### 7. Mocking and Fakes (Hard Limits)
+### 7. Mocking and Fakes (No Exceptions)
 
-- **Mock only external boundaries**: network (requests), filesystem, time, randomness, environment, subprocess.
-- **Do not mock internal code**: Test behavior through public API.
-- **Prefer fakes**: Over mocks where feasible (in-memory repositories, stub services).
-- **No live HTTP**: All network calls must be mocked or faked.
+- **No mocking or monkeypatching anywhere** (unit, integration, or E2E).
+  This includes `pytest.monkeypatch`, `unittest.mock`, `pytest_mock`, and
+  similar APIs.
+- **Use dependency injection and fakes** exclusively:
+  - Provide lightweight in-memory fakes and DI seams in production code where
+    collaboration is required.
+  - For external boundaries (network, filesystem, time, randomness,
+    environment, subprocess), use deterministic fakes, tmp resources, or
+    seamable adapters.
+- **No live HTTP**: Use fake clients/adapters with recorded deterministic
+  responses.
 
-**Rationale**: Stability and meaningful coverage.
+Enforcement:
+
+- A pre-commit hook forbids the following tokens anywhere under `tests/`:
+  `monkeypatch`, `pytest.MonkeyPatch`, `unittest.mock`,
+  `from unittest import mock`, `pytest_mock`, `MagicMock`, `patch(`.
+- Ruff banned-API also flags disallowed imports/usages in code.
+
+**Rationale**: Determinism, stability, and meaningful coverage without runtime
+patching.
 
 ### 8. Data and I/O
 
