@@ -8,4 +8,3 @@ tests/unit/core/test_checkpoint.py
 tests/unit/analysis/analysis/test_lit_integration.py
 tests/unit/training/hooks/test_evaluation.py
 tests/unit/training/checkpointing/test_service.py
-tests/integration/test_datasets_shakespeare.py
