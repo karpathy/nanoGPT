@@ -2,7 +2,6 @@
 # Remove entries as you refactor each file. The pre-commit hook excludes these paths from scanning.
 tests/unit/configuration/test_models_and_loading.py
 tests/unit/test_public_api_policy.py
-tests/unit/core/test_error_handling.py
 tests/unit/core/test_checkpoint.py
 tests/unit/analysis/analysis/test_lit_integration.py
 tests/unit/training/hooks/test_evaluation.py
