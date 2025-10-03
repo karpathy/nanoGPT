@@ -108,6 +108,100 @@ Ruff automatically applies modern Python best practices:
 - `[tool.pyright]` for static analysis include/exclude
 - `[tool.pytest.ini_options]` for pytest testpaths and options
 
+## Dev Tooling Quick Reference
+
+Use these commands from the repository root (or specify `--repo`/`--cwd` when required). They are
+optimized for non-interactive or copy-paste workflows.
+
+### uv / uvx
+
+- **One-off commands**:
+
+  ```bash
+  uvx python -m http.server 8000
+  uvx ruff check ml_playground/
+  ```
+
+- **Locked sync (no drift)**:
+
+  ```bash
+  uv sync --locked
+  ```
+
+- **Regenerate lockfile with explicit upgrade**:
+
+  ```bash
+  uv lock --upgrade
+  ```
+
+### ripgrep (`rg`)
+
+- **Search code (smart case)**:
+
+  ```bash
+  rg "CheckpointManager" ml_playground/
+  ```
+
+- **Search tests only**:
+
+  ```bash
+  rg --glob 'tests/**' "make quality"
+  ```
+
+### GitHub CLI (`gh`)
+
+- **Create draft PR (copy existing description file)**:
+
+  ```bash
+  gh pr create --draft --base master --title "docs: add dev tooling quick reference" --body-file .ldres/pr-body.md
+  ```
+
+- **Watch PR status (non-interactive)**:
+
+  ```bash
+  gh pr checks --watch
+  ```
+
+- **Open PR in browser**:
+
+  ```bash
+  gh pr view --web
+  ```
+
+### `fzf` helpers
+
+- **Interactive file picker feeding `rg`**:
+
+  ```bash
+  rg --files | fzf | xargs open
+  ```
+
+- **Pick Make targets**:
+
+  ```bash
+  awk -F: '/^[a-zA-Z0-9_-]+:/ {print $1}' Makefile | sort -u | fzf | xargs -r make
+  ```
+
+### Non-interactive status & logs
+
+- **Tail quality logs (CI artifact)**:
+
+  ```bash
+  gh run download --name quality --dir /tmp/mlp-quality && tail -n 200 /tmp/mlp-quality/*/logs.txt
+  ```
+
+- **Follow local development server**:
+
+  ```bash
+  uvx python scripts/run_dev_server.py 2>&1 | tee /tmp/mlp-dev.log
+  ```
+
+- **Check git status without pager**:
+
+  ```bash
+  git -c pager.status=cat status --short --branch
+  ```
+
 ## Architecture Notes
 
 ### Checkpointing and Resume
