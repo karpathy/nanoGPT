@@ -228,20 +228,6 @@ or `core/`, `ml_playground/training/optim/`, `ml_playground/core/`), aligned wit
 
 ---
 
-## Task 3: Rename refactorings list to tv-tasks.md
-
-- Scope:
-  - Adopt `.ldres/tv-tasks.md` as the source of truth for Thomas's task list.
-  - Optionally add a pointer note at the top of `.ldres/Refactorings.md` indicating this file supersedes it.
-- Acceptance criteria:
-  - `.ldres/tv-tasks.md` exists and is referenced in ongoing work.
-  - Team uses this file for new action items.
-- Commit guidance:
-  - Branch: `docs/tv-tasks`
-  - Commit: `docs(tasks): add tv-tasks.md and point from Refactorings.md`
-
----
-
 ## Notes
 
 - `make quality` is the canonical gate and already runs pre-commit hooks

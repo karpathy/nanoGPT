@@ -4,7 +4,7 @@
   <clipPath id="round"><rect width="139.5" height="20" rx="3" fill="#fff"/></clipPath>
   <g clip-path="url(#round)">
     <rect width="87.5" height="20" fill="#555555"/>
-    <rect x="87.5" width="52.0" height="20" fill="#ffa500"/>
+    <rect x="87.5" width="52.0" height="20" fill="#dfb317"/>
     <rect width="139.5" height="20" fill="url(#smooth)"/>
   </g>
   <g fill="#fff" text-anchor="middle" font-family="DejaVu Sans,Verdana,Geneva,sans-serif" font-size="11">

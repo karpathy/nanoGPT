@@ -158,7 +158,6 @@ sample: check-exp ## Sample model (EXP=<name> [CONFIG=path])
 	echo $$cmd; $$cmd
 
 loop: check-exp ## Full loop (EXP=<name> [CONFIG=path])
-	cmd="$(CLI) loop $(EXP)"; \
 	if [ -n "$(CONFIG)" ]; then cmd="$$cmd --exp-config $(CONFIG)"; fi; \
 	echo $$cmd; $$cmd
 
@@ -174,10 +173,10 @@ tensorboard: ## Run TensorBoard (LOGDIR=out/<run>/logs/tb [PORT=6006])
 
 gguf-help: ## Show llama.cpp converter help
 	$(RUN) python tools/llama_cpp/convert-hf-to-gguf.py --help || true
+
 # Coverage helper
 coverage: coverage-report ## [deprecated] use `make coverage-report`
 	@echo "[info] coverage-report completed; artifacts stored under .cache/coverage"
-
 coverage-test: ## Run pytest under coverage to materialize coverage data
 	mkdir -p .cache/coverage .cache/hypothesis
 	COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage erase
@@ -202,31 +201,13 @@ endif
 	COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage html -d .cache/coverage/htmlcov --fail-under=0
 	COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage json -o .cache/coverage/coverage.json --fail-under=0
 	COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage xml -o .cache/coverage/coverage.xml --fail-under=0
-ifeq ($(VERBOSE_COVERAGE),1)
-	@echo "[debug] coverage sqlite files:" && ls -1 .cache/coverage
-endif
+	@if [ "$(VERBOSE_COVERAGE)" = "1" ]; then \
+		echo "[debug] coverage sqlite files:" && ls -1 .cache/coverage; \
+	fi
 
-coverage-badge: ## Generate SVG coverage badge at docs/assets/coverage.svg
-	$(MAKE) coverage-report SKIP_COVERAGE_TESTS=$(SKIP_COVERAGE_TESTS)
+coverage-badge: ## Generate SVG coverage badges at docs/assets
+	if [ ! -f .cache/coverage/coverage.json ]; then $(MAKE) coverage-report; fi
 	$(RUN) python tools/coverage_badges.py .cache/coverage/coverage.json docs/assets
-# LIT: Minimal integration runner (persistent .venv312)
-# Uses ml_playground/analysis/lit/integration.py
-# ---------------------------------------------------------------------------
-
-venv312-lit-setup: ## Create/refresh .venv312 for LIT integration (uses constraints + platform extras)
-	uv venv --python 3.12 .venv312
-	uv pip install -p .venv312/bin/python -r ml_playground/analysis/lit/requirements.txt
-
-venv312-lit-run: ## Run our LIT integration (bundestag_char PoC) on .venv312
-	@if [ ! -x .venv312/bin/python ]; then \
-	  echo "Missing .venv312; run: make venv312-lit-setup"; exit 2; \
-	fi; \
-	TFDS_DIR="$$(pwd)/.cache/tensorflow_datasets"; mkdir -p "$$TFDS_DIR"; \
-	LIT_CACHE_DIR="$$(pwd)/.cache/lit_nlp/file_cache"; mkdir -p "$$LIT_CACHE_DIR"; \
-	HOST="$${HOST:-127.0.0.1}" PORT="$${PORT:-5432}" RUN_PY="--python .venv312/bin/python" \
-	PYTHONUNBUFFERED=1 OMP_NUM_THREADS=1 TF_ENABLE_ONEDNN_OPTS=0 TF_FORCE_GPU_ALLOW_GROWTH=true TFDS_DATA_DIR="$$TFDS_DIR" LIT_CACHE_DIR="$$LIT_CACHE_DIR" \
-	  $(CLI) analyze bundestag_char --host "$$HOST" --port "$$PORT"
-
 venv312-lit-stop: ## Stop LIT integration server by port (default 5432)
 	PORT="$${PORT:-5432}" RUN_PY="--python .venv312/bin/python" \
 	&& $(RUN) $(RUN_PY) python tools/port_kill.py --port "$$PORT" --graceful || true
