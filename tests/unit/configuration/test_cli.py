@@ -21,7 +21,6 @@ from ml_playground.cli import (
 )
 from ml_playground.configuration import cli as config_cli
 from ml_playground.configuration import loading as config_loader
-from ml_playground.configuration import loading as config_loading
 from ml_playground.configuration.models import (
     DataConfig,
     ExperimentConfig,
@@ -373,20 +372,16 @@ def test_global_setup_sets_seed_and_is_deterministic() -> None:
     assert abs(a - c) < 1e-8
 
 
-def test_global_setup_enables_tf32_when_cuda_available(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_global_setup_enables_tf32_when_cuda_available() -> None:
     import torch
 
-    # Simulate CUDA availability; ensure flags become True after setup
-    monkeypatch.setattr(torch.cuda, "is_available", lambda: True, raising=True)
-    # Reset flags before
+    # Simulate CUDA availability via DI; ensure flags become True after setup
     try:
         torch.backends.cuda.matmul.allow_tf32 = False
         torch.backends.cudnn.allow_tf32 = False
     except Exception:
         pass
-    cli._global_device_setup("cuda", "bfloat16", seed=1)
+    cli._global_device_setup("cuda", "bfloat16", seed=1, cuda_is_available=lambda: True)
     # Flags should be enabled
     assert getattr(torch.backends.cuda.matmul, "allow_tf32", True) is True
     assert getattr(torch.backends.cudnn, "allow_tf32", True) is True
@@ -655,7 +650,7 @@ def test_get_cfg_path_explicit_and_default(tmp_path: Path):
     assert d.as_posix().endswith("ml_playground/experiments/bundestag_char/config.toml")
 
 
-def test_load_config_error_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_load_config_error_branches(tmp_path: Path):
     # 1) Missing config path -> exit
     with pytest.raises(FileNotFoundError):
         config_loader.load_train_config(Path("/__no_such_file__"))
@@ -669,21 +664,11 @@ def test_load_config_error_branches(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     )
 
     # 2) Defaults invalid -> exit mentioning defaults path
-    # Mock the defaults path to point to our test location
     test_defaults_path = tmp_path / "default_config.toml"
     test_defaults_path.write_text("this is not valid toml")
 
-    def mock_default_config_path_from_root(project_root: Path) -> Path:
-        return test_defaults_path
-
-    monkeypatch.setattr(
-        config_loading,
-        "_default_config_path_from_root",
-        mock_default_config_path_from_root,
-    )
-
     with pytest.raises(Exception) as ei3:
-        config_loader.load_train_config(cfg)
+        config_loader.load_train_config(cfg, default_config_path=test_defaults_path)
     assert "default_config.toml" in str(ei3.value).lower()
 
     # 3) Experiment config invalid -> exit mentioning cfg path

@@ -166,10 +166,16 @@ def load_full_experiment_config(
     )
 
 
-def load_train_config(config_path: Path) -> TrainerConfig:
+def load_train_config(
+    config_path: Path, *, default_config_path: Path | None = None
+) -> TrainerConfig:
     raw_exp = read_toml_dict(config_path)
     project_root = Path(__file__).resolve().parent.parent.parent
-    defaults_path = _default_config_path_from_root(project_root)
+    defaults_path = (
+        default_config_path
+        if default_config_path is not None
+        else _default_config_path_from_root(project_root)
+    )
     defaults_raw = read_toml_dict(defaults_path) if defaults_path.exists() else {}
 
     raw_merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
@@ -184,7 +190,9 @@ def load_train_config(config_path: Path) -> TrainerConfig:
     return cfg
 
 
-def load_sample_config(config_path: Path) -> SamplerConfig:
+def load_sample_config(
+    config_path: Path, *, default_config_path: Path | None = None
+) -> SamplerConfig:
     raw_exp = read_toml_dict(config_path)
     project_root = Path(__file__).resolve().parent.parent.parent
     defaults_path = _default_config_path_from_root(project_root)
@@ -205,7 +213,9 @@ def load_sample_config(config_path: Path) -> SamplerConfig:
     return cfg
 
 
-def load_prepare_config(config_path: Path) -> PreparerConfig:
+def load_prepare_config(
+    config_path: Path, *, default_config_path: Path | None = None
+) -> PreparerConfig:
     raw_exp = read_toml_dict(config_path)
     project_root = Path(__file__).resolve().parent.parent.parent
     defaults_path = _default_config_path_from_root(project_root)

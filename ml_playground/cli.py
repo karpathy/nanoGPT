@@ -4,7 +4,7 @@ import logging
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Any, Callable
+from typing import Annotated, Any, Callable, Optional
 
 import torch
 import typer
@@ -135,14 +135,25 @@ def override_cli_dependencies(deps: CLIDependencies):
 
 
 # --- Global device setup ---------------------------------------------------
-def _global_device_setup(device: str, dtype: str, seed: int) -> None:
+def _global_device_setup(
+    device: str,
+    dtype: str,
+    seed: int,
+    *,
+    cuda_is_available: Optional[Callable[[], bool]] = None,
+) -> None:
     """Set global seeds and enable TF32 as needed.
 
     Centralizes side-effectful setup so other modules don't repeat it.
     """
     try:
         torch.manual_seed(seed)
-        if torch.cuda.is_available():
+        _cuda_available = (
+            cuda_is_available()
+            if cuda_is_available is not None
+            else torch.cuda.is_available()
+        )
+        if _cuda_available:
             torch.cuda.manual_seed(seed)
             torch.backends.cuda.matmul.allow_tf32 = True
             torch.backends.cudnn.allow_tf32 = True
