@@ -38,18 +38,18 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
 
 ### Open · tv-2025-10-03:PR?? · Harmonize Python version requirements
 
-- **Summary**: Align `pyproject.toml` and `.dev-guidelines/SETUP.md` Python version statements.
 - **Priority**: P1
 - **Size**: S
 - **Meta?**: Yes — prevents environment drift.
 - **Dependencies**: None; coordinate with tooling owners if version pin changes are needed.
 - **Next steps**:
-  1. Decide authoritative Python version target with stakeholders.
+  1. Python version target is 3.13.x (requirement `>=3.13`).
   2. Update `pyproject.toml`, documentation, and tooling configs accordingly.
   3. Run `make quality` and update CI matrices if required.
 - **Validation**: `make quality`; targeted CI run if matrix changes.
 - **Git plan**:
   - Branch: `chore/python-version-alignment`
+{{ ... }}
   - Commits:
     - `chore(config): align python version requirements`
       (`pyproject.toml`, `.dev-guidelines/SETUP.md`, `.github/workflows/quality.yml` if needed)
