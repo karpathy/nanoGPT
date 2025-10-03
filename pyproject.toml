@@ -115,6 +115,17 @@ extend-exclude = [
 ]
 cache-dir = ".cache/ruff"
 
+[tool.ruff.lint]
+extend-select = [
+  "TID252", # flake8-tidy-imports banned API
+]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"unittest.mock" = { msg = "Do not use mocks; prefer fixtures/fakes per .dev-guidelines/TESTING.md." }
+"pytest_mock" = { msg = "Do not use pytest-mock; prefer fixtures/fakes per .dev-guidelines/TESTING.md." }
+"mock" = { msg = "Do not use mock; prefer fixtures/fakes per .dev-guidelines/TESTING.md." }
+"pytest.MonkeyPatch" = { msg = "Do not use monkeypatch; inject dependencies via fixtures and DI hooks." }
+
 # When invoked without explicit targets, analyze only the project code.
 [tool.mypy]
 # When invoked without explicit targets, analyze only the project code.
