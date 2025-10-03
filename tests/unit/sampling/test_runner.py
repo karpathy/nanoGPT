@@ -174,9 +174,7 @@ class _DummyModel:
 # ---------------------------
 
 
-def test_load_checkpoint_no_files_raises(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_load_checkpoint_no_files_raises(tmp_path: Path) -> None:
     """It should raise CheckpointError when no checkpoint files exist."""
     mgr = CheckpointManager(tmp_path)
     with pytest.raises(CheckpointError) as e:
@@ -186,9 +184,7 @@ def test_load_checkpoint_no_files_raises(
     assert "No last checkpoints discovered" in str(e.value)
 
 
-def test_load_checkpoint_non_dict_raises(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_load_checkpoint_non_dict_raises(tmp_path: Path) -> None:
     """It should raise CheckpointError when checkpoint is not a dict."""
     # Craft a non-dict checkpoint by creating a tensor
     ckpt = tmp_path / "ckpt_best.pt"
@@ -203,9 +199,7 @@ def test_load_checkpoint_non_dict_raises(
     assert "mapping payload" in str(e.value)
 
 
-def test_load_checkpoint_missing_keys_raises(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_load_checkpoint_missing_keys_raises(tmp_path: Path) -> None:
     """It should raise CheckpointError when checkpoint is missing required keys."""
     # Craft checkpoint with missing keys
     ckpt = tmp_path / "ckpt_last_00000001.pt"
@@ -228,9 +222,7 @@ def test_load_checkpoint_missing_keys_raises(
     assert "model_args" in str(e.value)
 
 
-def test_load_checkpoint_bad_model_args_raises(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_load_checkpoint_bad_model_args_raises(tmp_path: Path) -> None:
     """It should raise CheckpointError when model_args is missing required keys."""
     # Craft checkpoint with invalid model_args
     ckpt = tmp_path / "ckpt_last_00000001.pt"
@@ -243,9 +235,7 @@ def test_load_checkpoint_bad_model_args_raises(
         )
 
 
-def test_load_checkpoint_load_state_error_is_wrapped(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_load_checkpoint_load_state_error_is_wrapped(tmp_path: Path) -> None:
     """It should wrap load_state_dict errors as ModelError with path info."""
     # Prepare a valid-looking checkpoint but force load failure via Dummy GPT
     # Use a discoverable filename for CheckpointManager
@@ -269,15 +259,6 @@ def test_load_checkpoint_load_state_error_is_wrapped(
         ckpt,
     )
 
-    class _DummyGPT(_DummyModel):
-        def __init__(self, config: Any) -> None:  # match GPT(conf)
-            super().__init__()
-
-        def load_state_dict(self, sd: dict) -> None:
-            # Force an error to be raised
-            raise RuntimeError("Forced load error for testing")
-
-    monkeypatch.setattr("ml_playground.sampling.runner.GPT", _DummyGPT)
     mgr = CheckpointManager(tmp_path)
     # The manager doesn't construct GPT; it only returns typed dicts. The ModelError is raised when applying state.
     # Simulate consumer applying load and catching a ModelError with path context in higher-level code; here we just ensure manager loads dicts.
@@ -297,7 +278,6 @@ def test_load_checkpoint_load_state_error_is_wrapped(
 
 def test_sample_happy_path_with_file_prompt_and_char_meta(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
     out_dir: Path,
 ) -> None:
@@ -312,15 +292,10 @@ def test_sample_happy_path_with_file_prompt_and_char_meta(
 
     # Device/dtype context is handled internally by sampler; no monkeypatching needed.
 
-    # Patch sampler internals to return a minimal checkpoint and stub GPT to dummy
+    # Supply DI hooks to avoid monkeypatching
     class _DummyModelWithLoad(_DummyModel):
         def load_state_dict(self, sd: dict[str, Any], strict: bool = False) -> None:  # type: ignore[override]
             super().load_state_dict(sd)
-
-    monkeypatch.setattr(
-        "ml_playground.sampling.runner.GPT",
-        lambda cfg, logger=None: _DummyModelWithLoad(),
-    )
 
     class _MiniCkpt:
         def __init__(self) -> None:
@@ -333,7 +308,11 @@ def test_sample_happy_path_with_file_prompt_and_char_meta(
                 "n_embd": 8,
             }
 
-    monkeypatch.setattr(Sampler, "_load_checkpoint", lambda *a, **k: _MiniCkpt())
+    def _load_ckpt_di(**_: Any) -> Any:
+        return _MiniCkpt()
+
+    def _model_factory_di(cfg: Any, logger: Any) -> Any:  # noqa: ARG001
+        return _DummyModelWithLoad()
 
     # Build SampleExperiment
     rt = RuntimeConfig(
@@ -346,7 +325,12 @@ def test_sample_happy_path_with_file_prompt_and_char_meta(
         temperature=0.1,
         top_k=1,
     )
-    exp = SamplerConfig(runtime=rt, sample=sample_conf)
+    exp = SamplerConfig(
+        runtime=rt,
+        sample=sample_conf,
+        checkpoint_load_fn=_load_ckpt_di,
+        model_factory=_model_factory_di,
+    )
 
     # Capture logs from sampler module
     caplog.set_level("INFO", logger="ml_playground.sampler")
@@ -368,7 +352,7 @@ def test_sample_happy_path_with_file_prompt_and_char_meta(
 
 
 def test_sample_with_compile_flag_uses_compiled_model(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: Any, out_dir: Path
+    tmp_path: Path, capsys: Any, out_dir: Path
 ) -> None:
     """When compile=True, sample should use torch.compile(model)."""
     _write_char_meta(out_dir / "meta.pkl")
@@ -383,18 +367,10 @@ def test_sample_with_compile_flag_uses_compiled_model(
             called["compiled"] += 1
             return super().generate(*args, **kwargs)
 
-    # Stub torch.compile
-    monkeypatch.setattr(torch, "compile", lambda m: _Compiled())  # type: ignore[attr-defined]
-
-    # Patch sampler internals: GPT returns dummy to be compiled; supply minimal checkpoint
+    # Provide DI hooks: model factory, checkpoint loader, and compile function
     class _DummyModelWithLoad2(_DummyModel):
         def load_state_dict(self, sd: dict[str, Any], strict: bool = False) -> None:  # type: ignore[override]
             super().load_state_dict(sd)
-
-    monkeypatch.setattr(
-        "ml_playground.sampling.runner.GPT",
-        lambda cfg, logger=None: _DummyModelWithLoad2(),
-    )
 
     class _MiniCkpt2:
         def __init__(self) -> None:
@@ -407,7 +383,14 @@ def test_sample_with_compile_flag_uses_compiled_model(
                 "n_embd": 8,
             }
 
-    monkeypatch.setattr(Sampler, "_load_checkpoint", lambda *a, **k: _MiniCkpt2())
+    def _load_ckpt_di2(**_: Any) -> Any:
+        return _MiniCkpt2()
+
+    def _model_factory_di2(cfg: Any, logger: Any) -> Any:  # noqa: ARG001
+        return _DummyModelWithLoad2()
+
+    def _compile_model_di(model: Any) -> Any:
+        return _Compiled()
 
     rt = RuntimeConfig(
         out_dir=out_dir, device="cpu", dtype="float32", compile=True, seed=1
@@ -415,7 +398,13 @@ def test_sample_with_compile_flag_uses_compiled_model(
     sc = SampleConfig(
         start="\n", num_samples=1, max_new_tokens=3, temperature=0.5, top_k=0
     )
-    exp = SamplerConfig(runtime=rt, sample=sc)
+    exp = SamplerConfig(
+        runtime=rt,
+        sample=sc,
+        checkpoint_load_fn=_load_ckpt_di2,
+        model_factory=_model_factory_di2,
+        compile_model_fn=_compile_model_di,
+    )
 
     # Call sampler directly
     shared = SharedConfig(

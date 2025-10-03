@@ -39,6 +39,8 @@ CheckpointLoadFn = _t.Callable[..., Any]
 CheckpointSaveFn = _t.Callable[..., None]
 # Sampler model factory (uses local ModelConfig without importing runtime symbols)
 ModelFactoryFn = _t.Callable[[Any, object], Any]
+# Optional model compile indirection for sampling
+CompileModelFn = _t.Callable[[Any], Any]
 
 
 def merge_configs(base_config: Any, override_config: Any) -> dict[str, Any]:
@@ -323,6 +325,9 @@ class SamplerConfig(_FrozenStrictModel):
     # Optional DI callables for sampling
     checkpoint_load_fn: Optional[CheckpointLoadFn] = None
     model_factory: Optional[ModelFactoryFn] = None
+    # Optional compile hook; if provided and runtime.compile=True, this will be used
+    # to compile/wrap the model. Defaults to torch.compile when available.
+    compile_model_fn: Optional[CompileModelFn] = None
 
 
 class OptimConfig(_FrozenStrictModel):
@@ -539,6 +544,7 @@ __all__ = [
     "CheckpointLoadFn",
     "CheckpointSaveFn",
     "ModelFactoryFn",
+    "CompileModelFn",
     "SECTION_PREPARE",
     "SECTION_TRAIN",
     "SECTION_SAMPLE",
