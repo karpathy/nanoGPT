@@ -157,7 +157,7 @@ def test_save_checkpoint_invokes_manager(tmp_path: Path) -> None:
     assert payload["is_best"] is True
 
 
-def test_load_checkpoint_respects_policy(monkeypatch, tmp_path: Path) -> None:
+def test_load_checkpoint_respects_policy(tmp_path: Path) -> None:
     cfg_latest = _make_cfg(tmp_path, read_policy=READ_POLICY_LATEST)
     shared = _make_shared(tmp_path, cfg_latest)
 
