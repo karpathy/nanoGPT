@@ -68,5 +68,6 @@ tools/llama_cpp/llama-quantize
 .vscode
 .idea
 # Local developer resources
-.ldres/
-!/.ldres/tv-tasks.md
+.ldres/*
+!.ldres/
+!.ldres/tv-tasks.md
