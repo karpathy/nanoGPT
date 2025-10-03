@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from ml_playground.configuration.models import (
     DataConfig,
     LRSchedule,
@@ -62,14 +60,13 @@ def _cfg() -> TrainerConfig:
     )
 
 
-def test_run_evaluation_records_scalars(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_evaluation_records_scalars() -> None:
     cfg = _cfg()
     logger = _Logger()
-    monkeypatch.setattr(
-        evaluation,
-        "estimate_loss",
-        lambda model, batches, eval_iters, ctx: {"train": 0.5, "val": 0.4},
-    )
+
+    def fake_estimate(model, batches, eval_iters, ctx):
+        del model, batches, eval_iters, ctx
+        return {"train": 0.5, "val": 0.4}
 
     writer = _Writer()
     losses = evaluation.run_evaluation(
@@ -81,6 +78,7 @@ def test_run_evaluation_records_scalars(monkeypatch: pytest.MonkeyPatch) -> None
         batches=None,
         ctx=None,
         writer=writer,
+        estimate_loss_fn=fake_estimate,
     )
 
     assert losses == {"train": 0.5, "val": 0.4}
