@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Mapping, Optional, Sequence, Literal
+from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Literal
 from types import MappingProxyType
 from ml_playground.core.tokenizer_protocol import Tokenizer
 
@@ -79,17 +79,23 @@ class WordTokenizer:
 class TiktokenTokenizer:
     """`tiktoken`-based BPE tokenizer supporting GPT-style byte pair encoding."""
 
-    def __init__(self, encoding_name: str = "cl100k_base"):
+    def __init__(
+        self,
+        encoding_name: str = "cl100k_base",
+        *,
+        loader: Callable[[], Any] | None = None,
+    ):
+        module_loader = loader if loader is not None else lambda: __import__("tiktoken")
         try:
-            import tiktoken
-        except ImportError:
+            tiktoken_module = module_loader()
+        except ImportError as exc:
             raise ImportError(
                 "tiktoken is required for TiktokenTokenizer but is not installed. "
                 "Please install it with `pip install tiktoken`."
-            )
+            ) from exc
 
         self.encoding_name = encoding_name
-        self.encoder = tiktoken.get_encoding(encoding_name)
+        self.encoder = tiktoken_module.get_encoding(encoding_name)
         self._name = "tiktoken"
 
     @property
@@ -136,6 +142,7 @@ def create_tokenizer(
     if tokenizer_type == "word":
         return WordTokenizer(**kwargs)
     if tokenizer_type == "tiktoken":
-        encoding_name = kwargs.get("encoding_name", "cl100k_base")
-        return TiktokenTokenizer(encoding_name=encoding_name)
+        encoding_name = kwargs.pop("encoding_name", "cl100k_base")
+        loader = kwargs.pop("loader", None)
+        return TiktokenTokenizer(encoding_name=encoding_name, loader=loader)
     raise ValueError(f"Unknown tokenizer type: {tokenizer_type}")

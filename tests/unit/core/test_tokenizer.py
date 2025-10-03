@@ -1,4 +1,3 @@
-import builtins
 from collections.abc import Mapping
 import pytest
 
@@ -150,22 +149,15 @@ def test_create_tokenizer_factory_unknown_proto() -> None:
         create_tokenizer("nope")
 
 
-def test_tiktoken_tokenizer_import_error_proto(monkeypatch: pytest.MonkeyPatch) -> None:
-    real_import = builtins.__import__
+def test_tiktoken_tokenizer_import_error_proto() -> None:
+    def failing_loader():
+        raise ImportError("boom")
 
-    def fake_import(name, *args, **kwargs):
-        if name == "tiktoken":
-            raise ImportError("boom")
-        return real_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", fake_import)
     with pytest.raises(ImportError):
-        TiktokenTokenizer()
+        TiktokenTokenizer(loader=failing_loader)
 
 
-def test_tiktoken_tokenizer_properties_with_fake_module(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_tiktoken_tokenizer_properties_with_fake_module() -> None:
     """Provide a fake tiktoken module to validate TiktokenTokenizer properties without installing tiktoken.
     This helps kill decorator removal mutants on TiktokenTokenizer.* properties.
     """
@@ -186,16 +178,7 @@ def test_tiktoken_tokenizer_properties_with_fake_module(
         def get_encoding(name):
             return FakeEncoder()
 
-    real_import = builtins.__import__
-
-    def fake_import(name, *args, **kwargs):
-        if name == "tiktoken":
-            return FakeTiktokenModule
-        return real_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", fake_import)
-
-    tk = TiktokenTokenizer()
+    tk = TiktokenTokenizer(loader=lambda: FakeTiktokenModule)
     assert tk.name == "tiktoken"
     assert tk.vocab_size == 3
     assert tk.decode(tk.encode("hi")) == "ab"
