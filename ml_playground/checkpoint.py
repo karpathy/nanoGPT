@@ -90,12 +90,20 @@ class CheckpointDependencies:
             posix_cls = None
 
         supports_missing_ok = True
+        probe_path = Path(".checkpoint_unlink_probe")
         try:
-            Path("/dev/null").unlink(missing_ok=True)  # type: ignore[arg-type]
+            probe_path.touch(exist_ok=True)
+            probe_path.unlink(missing_ok=True)
         except TypeError:
             supports_missing_ok = False
-        except FileNotFoundError:
-            supports_missing_ok = True
+        except OSError:
+            supports_missing_ok = False
+        finally:
+            if probe_path.exists():
+                try:
+                    probe_path.unlink()
+                except OSError:
+                    pass
 
         return cls(
             torch_load=torch.load,
@@ -305,6 +313,9 @@ class CheckpointManager:
         # Manage last checkpoints
         if self.keep_last > 0 and not is_best:
             # Track the new last checkpoint and prune oldest beyond the retention window
+            self.last_checkpoints = [
+                ckpt for ckpt in self.last_checkpoints if ckpt.path != path
+            ]
             self.last_checkpoints.append(ckpt_info)
             # Sort by creation time (oldest first)
             self.last_checkpoints.sort(key=lambda x: x.created_at)

@@ -27,6 +27,8 @@ def test_lit_integration_server_path(tmp_path: Path) -> None:
     lit_root = pkg_root / "lit_nlp"
     api_root = lit_root / "api"
 
+    api_root.mkdir(parents=True, exist_ok=True)
+
     (lit_root / "__init__.py").write_text(
         "__version__ = '0.0-test'\n", encoding="utf-8"
     )

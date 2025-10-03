@@ -36,6 +36,27 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
 </details>
 <!-- markdownlint-enable MD033 -->
 
+### Open · tv-2025-10-03:PR?? · Reproducible builds epic
+
+- **Summary**: Draft and land the reproducible-buildsroadmap capturing UV lockfiles, deterministic
+  coverage, container parity, and environment logging.
+- **Priority**: P0
+- **Size**: M
+- **Meta?**: Yes — establishes infrastructure for deterministic workflows.
+- **Dependencies**: Findings from `coverage-badge-rebase` / PR #35.
+- **Next steps**:
+  1. Write epic issue/PR describing scope, risks, and acceptance metrics.
+  2. Break out sub-tracks (lockfiles, CI container, RNG policy, coverage config, environment telemetry).
+  3. Circulate for review and align on sequencing.
+- **Validation**: `make quality` for doc commits.
+- **Git plan**:
+  - Branch: `docs/reproducible-build-epic`
+  - Commits:
+    - `docs(roadmap): outline reproducible build initiative`
+      (`docs/roadmap/reproducible-builds.md`, `.ldres/tv-tasks.md` cross-reference)
+- **PR**: Title `docs: propose reproducible build roadmap`; body covering Summary, Testing (`make quality`),
+  Checklist (stakeholder sign-off, issue links).
+
 ### Open · tv-2025-10-03:PR?? · Harmonize Python version requirements
 
 - **Summary**: Align `pyproject.toml` and `.dev-guidelines/SETUP.md` Python version statements.
@@ -44,7 +65,7 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
 - **Meta?**: Yes — prevents environment drift.
 - **Dependencies**: None; coordinate with tooling owners if version pin changes are needed.
 - **Next steps**:
-  1. Python version target is 13.13.7.
+  1. Decide authoritative Python version target with stakeholders.
   2. Update `pyproject.toml`, documentation, and tooling configs accordingly.
   3. Run `make quality` and update CI matrices if required.
 - **Validation**: `make quality`; targeted CI run if matrix changes.
@@ -80,33 +101,10 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
       (`ml_playground/model.py`)
     - `refactor(data): add future annotations import to datasets package`
       (`ml_playground/datasets/__init__.py`)
+    - `refactor(experiments): add future annotations import to bundestag qwen package`
       (`ml_playground/experiments/bundestag_qwen15b_lora_mps/__init__.py`)
 - **PR**: Title `refactor: enforce import guidelines`; body outlining files touched and validation.
 
-### Open · tv-2025-10-03:PR?? · Improve exception handling hygiene
-
-- **Next steps**:
-  1. Stage granular commits: checkpointing, training loop, and analysis LIT modules + task doc updates.
-  2. Ensure `make quality` log captured for PR notes; gather relevant test artifacts if needed.
-  3. Draft PR body summarizing exception-handling refinements, validation, and follow-up for tooling scripts.
-  4. Update task tracker with PR number once available.
-- **Validation**: `make quality`; relevant test targets.
-- **Git plan**:
-  - Branch: `refactor/error-handling`
-  - Commits:
-    - `refactor(data): tighten exception handling`
-{{ ... }}
-    - `refactor(prepare): tighten exception handling`
-      (`ml_playground/prepare.py`)
-    - `refactor(sampler): tighten exception handling`
-      (`ml_playground/sampler.py`)
-    - `refactor(trainer): tighten exception handling`
-      (`ml_playground/trainer.py`)
-    - `refactor(cli): tighten exception handling`
-      (`ml_playground/cli.py`)
-    - `refactor(config): tighten exception handling`
-      (`ml_playground/config.py`)
-- **PR**: Title `refactor: tighten exception handling`; body listing modules updated and tests run.
 ### Open · tv-2025-10-03:PR?? · Establish regression test suite
 
 - **Summary**: Consolidate regression tests under `tests/regression/`, add a README, and articulate scope

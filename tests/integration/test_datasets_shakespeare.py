@@ -5,6 +5,41 @@ from ml_playground.configuration.models import PreparerConfig
 from ml_playground.experiments.shakespeare.preparer import ShakespearePreparer
 
 
+class _StubTokenizer:
+    """Lightweight tokenizer satisfying the Tokenizer protocol for tests."""
+
+    def __init__(self) -> None:
+        self._calls: list[str] = []
+        self.stoi: dict[str, int] = {}
+        self.itos: dict[int, str] = {}
+
+    @property
+    def name(self) -> str:
+        return "stub"
+
+    @property
+    def vocab_size(self) -> int:
+        return len(self.stoi)
+
+    def encode(self, text: str) -> list[int]:
+        self._calls.append(text)
+        # Build deterministic stoi/itos on the fly to maintain reversible mapping.
+        for ch in text:
+            if ch not in self.stoi:
+                idx = len(self.stoi)
+                self.stoi[ch] = idx
+                self.itos[idx] = ch
+        return [self.stoi[ch] for ch in text]
+
+    def decode(self, token_ids):  # type: ignore[override]
+        return "".join(self.itos.get(int(i), "") for i in token_ids)
+
+    def pop_calls(self) -> list[str]:
+        calls = list(self._calls)
+        self._calls.clear()
+        return calls
+
+
 def test_shakespeare_download_and_encode(tmp_path) -> None:
     """Test shakespeare preparer downloads, splits, encodes, and writes outputs without mocks."""
     test_text = "Hello world! This is test data for Shakespeare."
@@ -27,12 +62,7 @@ def test_shakespeare_download_and_encode(tmp_path) -> None:
         http_calls.append(url)
         return _Resp(test_text)
 
-    enc_calls: list[str] = []
-
-    class _Tok:
-        def encode(self, x: str):
-            enc_calls.append(x)
-            return list(range(len(x)))
+    tokenizer = _StubTokenizer()
 
     writer_called: dict[str, object] = {"called": False, "args": None}
 
@@ -45,7 +75,7 @@ def test_shakespeare_download_and_encode(tmp_path) -> None:
         {
             "base_dir": exp_dir,
             "http_get": _http_get,
-            "tokenizer_factory": lambda: _Tok(),
+            "tokenizer_factory": lambda: tokenizer,
             "writer_fn": _writer,
         }
     )
@@ -56,7 +86,7 @@ def test_shakespeare_download_and_encode(tmp_path) -> None:
     assert http_calls, "http_get should be called"
     assert (ds_dir / "input.txt").exists()
     # Tokenizer used twice (train/val)
-    assert len(enc_calls) == 2
+    assert len(tokenizer.pop_calls()) == 2
     # Writer called and received ds_dir
     assert writer_called["called"] is True
     args_obj = writer_called["args"]
@@ -76,15 +106,7 @@ def test_shakespeare_skip_download_if_exists(tmp_path) -> None:
     def _http_get(_url: str, timeout: int = 30):
         raise AssertionError("http_get should not be called when input exists")
 
-    class _Tok:
-        def __init__(self) -> None:
-            self.calls = 0
-
-        def encode(self, s: str):
-            self.calls += 1
-            return list(range(len(s)))
-
-    tok = _Tok()
+    tok = _StubTokenizer()
     writer_called = {"n": 0}
 
     def _writer(*a, **k):
@@ -103,7 +125,7 @@ def test_shakespeare_skip_download_if_exists(tmp_path) -> None:
     ShakespearePreparer().prepare(cfg)
 
     assert writer_called["n"] == 1
-    assert tok.calls == 2
+    assert len(tok.pop_calls()) == 2
 
 
 def test_shakespeare_data_split_ratios(tmp_path) -> None:
@@ -114,25 +136,21 @@ def test_shakespeare_data_split_ratios(tmp_path) -> None:
     test_text = "x" * 100
     (ds_dir / "input.txt").write_text(test_text)
 
-    captured: list[str] = []
-
-    class _Tok:
-        def encode(self, s: str):
-            captured.append(s)
-            return list(range(len(s)))
+    tok = _StubTokenizer()
 
     cfg = PreparerConfig()
     cfg.extras.update(
         {
             "base_dir": exp_dir,
-            "tokenizer_factory": lambda: _Tok(),
+            "tokenizer_factory": lambda: tok,
             "writer_fn": lambda *a, **k: None,
         }
     )
 
     ShakespearePreparer().prepare(cfg)
 
-    assert len(captured) == 2
-    train_text, val_text = captured
+    calls = tok.pop_calls()
+    assert len(calls) == 2
+    train_text, val_text = calls
     assert len(train_text) == 90
     assert len(val_text) == 10

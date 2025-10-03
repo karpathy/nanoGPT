@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import shutil
-from typing import Optional
+from pathlib import Path
+from typing import Callable, Optional, cast
 
 from ml_playground.checkpoint import Checkpoint, CheckpointManager
 from ml_playground.configuration.models import (
@@ -22,6 +23,10 @@ __all__ = [
     "save_checkpoint",
     "propagate_metadata",
 ]
+
+DEFAULT_COPY_FN: Callable[[Path, Path], None] = cast(
+    Callable[[Path, Path], None], shutil.copy2
+)
 
 
 def create_manager(cfg: TrainerConfig, shared: SharedConfig) -> CheckpointManager:
@@ -137,7 +142,13 @@ def save_checkpoint(
     )
 
 
-def propagate_metadata(cfg: TrainerConfig, shared: SharedConfig, *, logger) -> None:
+def propagate_metadata(
+    cfg: TrainerConfig,
+    shared: SharedConfig,
+    *,
+    logger,
+    copy_fn: Callable[[Path, Path], None] = DEFAULT_COPY_FN,
+) -> None:
     """Copy dataset metadata into train and sample output directories when available."""
     try:
         meta_src = cfg.data.meta_path(shared.dataset_dir)
@@ -161,7 +172,7 @@ def propagate_metadata(cfg: TrainerConfig, shared: SharedConfig, *, logger) -> N
     for dst_dir in destinations:
         try:
             dst_dir.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(meta_src, dst_dir / meta_src.name)
+            copy_fn(meta_src, dst_dir / meta_src.name)
         except (OSError, IOError) as exc:
             if logger:
                 logger.warning(f"Failed to copy meta file to {dst_dir}: {exc}")

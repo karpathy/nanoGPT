@@ -412,9 +412,7 @@ def test_save_checkpoint_fallbacks_after_override_failure(tmp_path: Path) -> Non
     assert messages == ["checkpoint_save_fn failed, falling back to default save: boom"]
 
 
-def test_propagate_metadata_ignores_meta_resolution_error(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_propagate_metadata_ignores_meta_resolution_error(tmp_path: Path) -> None:
     cfg = _make_cfg(tmp_path)
     shared = _make_shared(tmp_path, cfg)
     logger = _StubLogger()
@@ -431,7 +429,7 @@ def test_propagate_metadata_ignores_meta_resolution_error(
     assert logger.warnings == ["Failed to resolve meta source path: nope"]
 
 
-def test_propagate_metadata_logs_copy_failure(monkeypatch, tmp_path: Path) -> None:
+def test_propagate_metadata_logs_copy_failure(tmp_path: Path) -> None:
     cfg = _make_cfg(tmp_path)
     shared = _make_shared(tmp_path, cfg)
     shared = _with_sample_out_dir(shared, tmp_path / "sample-out")
@@ -445,8 +443,6 @@ def test_propagate_metadata_logs_copy_failure(monkeypatch, tmp_path: Path) -> No
     def failing_copy(src: Path, dst: Path) -> None:
         raise OSError(f"cannot copy to {dst}")
 
-    monkeypatch.setattr(service.shutil, "copy2", failing_copy)
-
-    service.propagate_metadata(cfg, shared, logger=logger)
+    service.propagate_metadata(cfg, shared, logger=logger, copy_fn=failing_copy)
 
     assert any("cannot copy" in msg for msg in logger.warnings)
