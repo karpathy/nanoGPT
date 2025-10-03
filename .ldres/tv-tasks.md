@@ -36,28 +36,6 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
 </details>
 <!-- markdownlint-enable MD033 -->
 
-### Open · tv-2025-10-03:PR?? · Merge no-mock branch into master
-
-- **Summary**: Rebase `no-mock` atop `master`, validate, and merge to enforce mock-free policy.
-- **Priority**: P1
-- **Size**: S
-- **Meta?**: No.
-- **Dependencies**: Badge workflow stabilization (PR #35) to keep CI gates green.
-- **Next steps**:
-  1. Rebase `no-mock` onto latest `master` after badge fix lands.
-  2. Run `make quality` and `make coverage-test`; inspect CI Quality Gates.
-  3. Remove temporary allowlist entries and fast-forward merge.
-- **Validation**: `make quality`; `make coverage-test`.
-- **Git plan**:
-  - Branch: `no-mock` (rebased)
-  - Commits:
-    - `test(tests): remove mock allowlist entry`
-      (`tests/.no-mock-allowlist`)
-    - Conflict-resolution commits if required (touching affected `tests/` modules and
-      `.github/workflows/quality.yml` only if badge gating changes).
-- **PR**: Title `test: finalize mock-free test suite`; body summarizing rebase verification, listing
-  validation commands, and confirming allowlist removal.
-
 ### Open · tv-2025-10-03:PR?? · Harmonize Python version requirements
 
 - **Summary**: Align `pyproject.toml` and `.dev-guidelines/SETUP.md` Python version statements.
@@ -129,7 +107,6 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
     - `refactor(config): tighten exception handling`
       (`ml_playground/config.py`)
 - **PR**: Title `refactor: tighten exception handling`; body listing modules updated and tests run.
-
 ### Open · tv-2025-10-03:PR?? · Establish regression test suite
 
 - **Summary**: Consolidate regression tests under `tests/regression/`, add a README, and articulate scope
