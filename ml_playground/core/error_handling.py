@@ -86,11 +86,25 @@ class FileOperationError(MLPlaygroundError):
     pass
 
 
-def setup_logging(name: str, level: int = logging.INFO) -> LoggerLike:
-    """Construct a logger with a stream handler and consistent formatting."""
+def setup_logging(
+    name: str,
+    level: int = logging.INFO,
+    *,
+    stream_handler_factory: Callable[[], logging.Handler] | None = None,
+) -> LoggerLike:
+    """Construct a logger with a stream handler and consistent formatting.
+
+    Args:
+        name: Logger name to configure.
+        level: Logging level to apply.
+        stream_handler_factory: Optional factory for constructing the handler.
+            Primarily used in tests to avoid monkeypatching.
+    """
+
     logger = logging.getLogger(name)
     if not logger.handlers:
-        handler = logging.StreamHandler()
+        handler_factory = stream_handler_factory or logging.StreamHandler
+        handler = handler_factory()
         formatter = logging.Formatter(
             "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         )
@@ -105,13 +119,16 @@ def handle_exception(
     exc_value: BaseException,
     exc_traceback: Any,
     logger: LoggerLike,
+    *,
+    excepthook: Callable[[Type[BaseException], BaseException, Any], None] | None = None,
 ) -> None:
     """Log uncaught exceptions while preserving keyboard interrupt semantics."""
 
+    hook = excepthook if excepthook is not None else sys.__excepthook__
     if issubclass(exc_type, KeyboardInterrupt):
         # Handle keyboard interrupt gracefully
         logger.info("Received keyboard interrupt, exiting...")
-        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        hook(exc_type, exc_value, exc_traceback)
         return
 
     logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))

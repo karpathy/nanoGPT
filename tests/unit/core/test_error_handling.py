@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import io
 import logging
-import sys
 from pathlib import Path
 
 import pytest
@@ -26,7 +25,7 @@ from ml_playground.core.error_handling import (
 )
 
 
-def test_setup_logging_idempotent_and_level(monkeypatch: pytest.MonkeyPatch):
+def test_setup_logging_idempotent_and_level():
     name = "ml_pg_test_logger"
     # capture log output
     stream = io.StringIO()
@@ -35,12 +34,18 @@ def test_setup_logging_idempotent_and_level(monkeypatch: pytest.MonkeyPatch):
         def __init__(self):
             super().__init__(stream)
 
-    monkeypatch.setattr(logging, "StreamHandler", _Stream)
-
-    logger = setup_logging(name, level=logging.DEBUG)
+    logger = setup_logging(
+        name,
+        level=logging.DEBUG,
+        stream_handler_factory=lambda: _Stream(),
+    )
     logger.debug("hello")
     # re-call should not add duplicate handlers
-    logger2 = setup_logging(name, level=logging.INFO)
+    logger2 = setup_logging(
+        name,
+        level=logging.INFO,
+        stream_handler_factory=lambda: _Stream(),
+    )
     logger2.info("world")
 
     out = stream.getvalue()
@@ -137,11 +142,10 @@ def test_progress_reporter_percentages(caplog: pytest.LogCaptureFixture) -> None
     assert messages[-1] == "Done"
 
 
-def test_handle_exception_keyboard_interrupt(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_handle_exception_keyboard_interrupt() -> None:
     """Ensure KeyboardInterrupt is handled gracefully."""
     logger = logging.getLogger("ml_pg_test_kb")
     stream = io.StringIO()
-    monkeypatch.setattr(sys, "__excepthook__", lambda *a, **kw: None)  # Suppress exit
     logger.setLevel(logging.INFO)
     logger.addHandler(logging.StreamHandler(stream))
 
@@ -150,7 +154,13 @@ def test_handle_exception_keyboard_interrupt(monkeypatch: pytest.MonkeyPatch) ->
     try:
         raise KeyboardInterrupt
     except KeyboardInterrupt as e:
-        handle_exception(type(e), e, e.__traceback__, logger)
+        handle_exception(
+            type(e),
+            e,
+            e.__traceback__,
+            logger,
+            excepthook=lambda *a, **kw: None,
+        )
 
     assert "Received keyboard interrupt" in stream.getvalue()
 
