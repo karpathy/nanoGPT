@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
-import os
+from dataclasses import replace
 from pathlib import Path
 from typing import Mapping
-from unittest.mock import patch
 
 import pytest
 import torch
@@ -13,6 +12,7 @@ import torch
 from ml_playground.checkpoint import (
     Checkpoint,
     CheckpointManager,
+    CheckpointDependencies,
     CheckpointError,
     CheckpointLoadError,
     TorchUnpicklingError,
@@ -34,6 +34,11 @@ def ckpt_obj() -> Checkpoint:
         best_val_loss=1.0,
         config={"foo": "bar"},
     )
+
+
+def make_deps(**overrides: object) -> CheckpointDependencies:
+    deps = CheckpointDependencies.default()
+    return replace(deps, **overrides)
 
 
 # -----------------------------------------------------------------------------
@@ -103,33 +108,35 @@ def test_checkpoint_manager_best_rotation_and_sidecar_cleanup(
     # Sidecar for the removed (worse) one should not exist
     assert not sidecar.exists()
     # Verify the logging output
-    with patch.object(logger, "info") as mock_info:
-        mgr.save_checkpoint(
-            ckpt_obj,
-            base_filename="ignored",
-            metric=1.0,  # A better metric to trigger pruning
-            iter_num=12,
-            is_best=True,
-            logger=logger,
-        )
-        # Create a new best checkpoint to trigger pruning of the one with metric 1.234567
-        mgr.save_checkpoint(
-            ckpt_obj,
-            base_filename="ignored",
-            metric=0.5,
-            iter_num=13,
-            is_best=True,
-            logger=logger,
-        )
-        # Check that the log message for removing the old checkpoint was called
-        # We need to check the calls made to the mock logger
-        found_log = any(
-            "Removed old best checkpoint" in call.args[0]
-            for call in mock_info.call_args_list
-        )
-        assert found_log, (
-            "The log message for removing an old checkpoint was not found."
-        )
+    logs: list[str] = []
+
+    class _Logger:
+        def info(self, msg: str) -> None:
+            logs.append(msg)
+
+        def error(self, msg: str) -> None:
+            logs.append(f"ERR: {msg}")
+
+    logger_proxy = _Logger()
+
+    mgr.save_checkpoint(
+        ckpt_obj,
+        base_filename="ignored",
+        metric=1.0,  # A better metric to trigger pruning
+        iter_num=12,
+        is_best=True,
+        logger=logger_proxy,
+    )
+    # Create a new best checkpoint to trigger pruning of the one with metric 1.234567
+    mgr.save_checkpoint(
+        ckpt_obj,
+        base_filename="ignored",
+        metric=0.5,
+        iter_num=13,
+        is_best=True,
+        logger=logger_proxy,
+    )
+    assert any("Removed old best checkpoint" in entry for entry in logs)
 
 
 def test_discovery_and_errors_in_init(tmp_path: Path) -> None:
@@ -306,13 +313,14 @@ def test_checkpoint_to_dict_includes_optional_ema() -> None:
 
 
 def test_load_latest_checkpoint_wraps_runtime_errors(
-    tmp_path: Path, ckpt_obj: Checkpoint, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, ckpt_obj: Checkpoint
 ) -> None:
     """load_latest_checkpoint should wrap torch.load failures in CheckpointError."""
 
     logger = logging.getLogger("test")
-    mgr = CheckpointManager(tmp_path, atomic=False, keep_last=1, keep_best=0)
-    mgr.save_checkpoint(
+    # Save a baseline checkpoint using real dependencies
+    baseline_mgr = CheckpointManager(tmp_path, atomic=False, keep_last=1, keep_best=0)
+    baseline_mgr.save_checkpoint(
         ckpt_obj,
         base_filename="ignored",
         metric=float("inf"),
@@ -323,31 +331,24 @@ def test_load_latest_checkpoint_wraps_runtime_errors(
     def _boom(*_args: object, **_kwargs: object) -> Mapping[str, object]:
         raise RuntimeError("torch-load-failure")
 
-    monkeypatch.setattr("ml_playground.checkpoint.torch.load", _boom)
-
-    called: dict[str, object] = {}
-
-    def fake_add_safe_globals(globs: list[object]) -> None:
-        called["globs"] = globs
-
-    monkeypatch.setattr(
-        "ml_playground.checkpoint.torch.serialization.add_safe_globals",
-        fake_add_safe_globals,
+    captured: dict[str, object] = {}
+    deps = make_deps(
+        torch_load=lambda *args, **kwargs: _boom(*args, **kwargs),
+        add_safe_globals=lambda globs: captured.setdefault("globs", globs),
     )
+    mgr = CheckpointManager(tmp_path, atomic=False, keep_last=1, keep_best=0, deps=deps)
 
     with pytest.raises(CheckpointError, match="Failed to load checkpoint"):
         mgr.load_latest_checkpoint(device="cpu", logger=logger)
 
-    assert "globs" in called
+    assert "globs" in captured
 
 
-def test_load_best_checkpoint_success(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_load_best_checkpoint_success(tmp_path: Path) -> None:
     """Best checkpoint loading should succeed and return a reconstructed object."""
 
     logger = logging.getLogger("test")
-    mgr = CheckpointManager(tmp_path, atomic=False, keep_last=0, keep_best=1)
+    baseline_mgr = CheckpointManager(tmp_path, atomic=False, keep_last=0, keep_best=1)
     ckpt = Checkpoint(
         model={"w": torch.tensor([5])},
         optimizer={"state": {}},
@@ -356,7 +357,7 @@ def test_load_best_checkpoint_success(
         best_val_loss=0.2,
         config={"bar": 1},
     )
-    mgr.save_checkpoint(
+    baseline_mgr.save_checkpoint(
         ckpt,
         base_filename="ignored",
         metric=0.2,
@@ -365,23 +366,27 @@ def test_load_best_checkpoint_success(
         is_best=True,
     )
 
-    monkeypatch.setattr(
-        "ml_playground.checkpoint.torch.serialization.add_safe_globals",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("duplicate")),
+    deps = make_deps(
+        add_safe_globals=lambda *_a, **_k: (_ for _ in ()).throw(
+            RuntimeError("duplicate")
+        ),
+        torch_load=lambda *_args, **_kwargs: ckpt.to_dict(),
     )
+    mgr = CheckpointManager(tmp_path, atomic=False, keep_last=0, keep_best=1, deps=deps)
 
-    monkeypatch.setattr(
-        "ml_playground.checkpoint.torch.load",
-        lambda *_args, **_kwargs: ckpt.to_dict(),
-    )
+    logs: list[str] = []
 
-    with patch.object(logger, "info") as mock_info:
-        loaded = mgr.load_best_checkpoint(device="cpu", logger=logger)
-        assert loaded.iter_num == ckpt.iter_num
-        assert loaded.best_val_loss == ckpt.best_val_loss
-        mock_info.assert_called_with(
-            f"Loaded checkpoint from {mgr.best_checkpoints[0].path}"
-        )
+    class _Logger:
+        def info(self, msg: str) -> None:
+            logs.append(msg)
+
+        def error(self, msg: str) -> None:
+            logs.append(f"ERR: {msg}")
+
+    loaded = mgr.load_best_checkpoint(device="cpu", logger=_Logger())
+    assert loaded.iter_num == ckpt.iter_num
+    assert loaded.best_val_loss == ckpt.best_val_loss
+    assert any("Loaded checkpoint" in msg for msg in logs)
 
 
 def test_discover_existing_best_invalid_metric(tmp_path: Path) -> None:
@@ -396,9 +401,7 @@ def test_discover_existing_best_invalid_metric(tmp_path: Path) -> None:
         CheckpointManager(out, keep_last=0, keep_best=1)
 
 
-def test_discover_existing_last_malformed_and_stat_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_discover_existing_last_malformed_and_stat_failure(tmp_path: Path) -> None:
     """Malformed filenames and stat errors are surfaced during discovery."""
 
     out = tmp_path / "out"
@@ -419,17 +422,15 @@ def test_discover_existing_last_malformed_and_stat_failure(
     good_path = out / "ckpt_last_00000001.pt"
     torch.save({"ok": 1}, good_path)
 
-    original_stat = Path.stat
-
-    def boom_stat(self: Path, *, follow_symlinks: bool = True) -> os.stat_result:  # type: ignore[override]
-        if self == good_path:
-            raise OSError("stat failed")
-        return original_stat(self, follow_symlinks=follow_symlinks)
-
-    monkeypatch.setattr(Path, "stat", boom_stat, raising=False)
-
+    deps = make_deps(
+        path_stat=lambda path: (
+            (_ for _ in ()).throw(OSError("stat failed"))
+            if path == good_path
+            else CheckpointDependencies.default().path_stat(path)
+        )
+    )
     with pytest.raises(CheckpointError, match="Failed to stat checkpoint"):
-        CheckpointManager(out, keep_last=1, keep_best=0)
+        CheckpointManager(out, keep_last=1, keep_best=0, deps=deps)
 
 
 def test_discover_existing_best_filename_errors(tmp_path: Path) -> None:
@@ -471,7 +472,7 @@ def test_discover_existing_best_populates_entries(tmp_path: Path) -> None:
 
 
 def test_save_checkpoint_prune_last_failure(
-    tmp_path: Path, ckpt_obj: Checkpoint, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, ckpt_obj: Checkpoint
 ) -> None:
     """Errors during last-checkpoint pruning should raise `CheckpointError`."""
 
@@ -485,14 +486,27 @@ def test_save_checkpoint_prune_last_failure(
         logger=logger,
     )
 
-    original_unlink = Path.unlink
+    target_prefix = "ckpt_last_00000000"
 
-    def boom_unlink(self: Path, missing_ok: bool = False) -> None:
-        if self.name.startswith("ckpt_last_00000000"):
+    def boom_unlink(path: Path) -> None:
+        if path.name.startswith(target_prefix):
             raise OSError("can't remove")
-        original_unlink(self, missing_ok=missing_ok)
+        CheckpointDependencies.default().path_unlink(path)
 
-    monkeypatch.setattr(Path, "unlink", boom_unlink, raising=False)
+    mgr = CheckpointManager(
+        tmp_path,
+        atomic=False,
+        keep_last=1,
+        keep_best=0,
+        deps=make_deps(path_unlink=boom_unlink, unlink_supports_missing_ok=False),
+    )
+    mgr.save_checkpoint(
+        ckpt_obj,
+        base_filename="ignored",
+        metric=float("inf"),
+        iter_num=0,
+        logger=logger,
+    )
 
     with pytest.raises(CheckpointError, match="Failed to remove old last checkpoint"):
         mgr.save_checkpoint(
@@ -505,7 +519,7 @@ def test_save_checkpoint_prune_last_failure(
 
 
 def test_save_checkpoint_prune_best_failure(
-    tmp_path: Path, ckpt_obj: Checkpoint, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, ckpt_obj: Checkpoint
 ) -> None:
     """Errors during best-checkpoint pruning should raise `CheckpointError`."""
 
@@ -520,14 +534,26 @@ def test_save_checkpoint_prune_best_failure(
         is_best=True,
     )
 
-    original_unlink = Path.unlink
-
-    def boom_unlink_best(self: Path, missing_ok: bool = False) -> None:
-        if "1.000000" in self.name or "2.000000" in self.name:
+    def boom_unlink_best(path: Path) -> None:
+        if "1.000000" in path.name or "2.000000" in path.name:
             raise OSError("can't remove best")
-        original_unlink(self, missing_ok=missing_ok)
+        CheckpointDependencies.default().path_unlink(path)
 
-    monkeypatch.setattr(Path, "unlink", boom_unlink_best, raising=False)
+    mgr = CheckpointManager(
+        tmp_path,
+        atomic=False,
+        keep_last=0,
+        keep_best=1,
+        deps=make_deps(path_unlink=boom_unlink_best, unlink_supports_missing_ok=False),
+    )
+    mgr.save_checkpoint(
+        ckpt_obj,
+        base_filename="ignored",
+        metric=2.0,
+        iter_num=1,
+        logger=logger,
+        is_best=True,
+    )
 
     with pytest.raises(CheckpointError, match="Failed to remove old best checkpoint"):
         mgr.save_checkpoint(
@@ -541,7 +567,7 @@ def test_save_checkpoint_prune_best_failure(
 
 
 def test_load_latest_checkpoint_wraps_unpickling_error(
-    tmp_path: Path, ckpt_obj: Checkpoint, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, ckpt_obj: Checkpoint
 ) -> None:
     """Torch unpickling errors should be wrapped in `CheckpointError`."""
 
@@ -555,9 +581,18 @@ def test_load_latest_checkpoint_wraps_unpickling_error(
         logger=logger,
     )
 
-    monkeypatch.setattr(
-        "ml_playground.checkpoint.torch.load",
-        lambda *_a, **_kw: (_ for _ in ()).throw(TorchUnpicklingError("bad pickle")),
+    deps = make_deps(
+        torch_load=lambda *_a, **_kw: (_ for _ in ()).throw(
+            TorchUnpicklingError("bad pickle")
+        )
+    )
+    mgr = CheckpointManager(tmp_path, atomic=False, keep_last=1, keep_best=0, deps=deps)
+    mgr.save_checkpoint(
+        ckpt_obj,
+        base_filename="ignored",
+        metric=float("inf"),
+        iter_num=3,
+        logger=logger,
     )
 
     with pytest.raises(CheckpointError, match="Failed to load checkpoint"):
@@ -583,28 +618,26 @@ def test_discover_best_checkpoint_no_metric(tmp_path: Path) -> None:
     assert mgr.best_checkpoints[0].metric == float("inf")
 
 
-def test_safe_globals_branches(
-    tmp_path: Path, ckpt_obj: Checkpoint, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_safe_globals_branches(tmp_path: Path, ckpt_obj: Checkpoint) -> None:
     """Cover branches where add_safe_globals or its dependencies are missing."""
     out = tmp_path / "out"
     out.mkdir()
-    mgr = CheckpointManager(out, keep_last=1, keep_best=0)
-    mgr.save_checkpoint(ckpt_obj, "ignored", 1.0, 1, logging.getLogger("test"))
+    base_mgr = CheckpointManager(out, keep_last=1, keep_best=0)
+    base_mgr.save_checkpoint(ckpt_obj, "ignored", 1.0, 1, logging.getLogger("test"))
 
-    # Case 1: add_safe_globals is not callable
-    monkeypatch.setattr("torch.serialization.add_safe_globals", None)
+    deps_no_callable = make_deps(add_safe_globals=None)
+    mgr = CheckpointManager(out, keep_last=1, keep_best=0, deps=deps_no_callable)
     mgr.load_latest_checkpoint("cpu", logging.getLogger("test"))
 
-    # Case 2: PosixPath class is not found
-    monkeypatch.setattr("torch.serialization.add_safe_globals", lambda *a, **kw: None)
-    monkeypatch.setattr("pathlib._local", None)
+    deps_no_posix = make_deps(
+        add_safe_globals=lambda *a, **kw: None,
+        posix_path_cls=None,
+    )
+    mgr = CheckpointManager(out, keep_last=1, keep_best=0, deps=deps_no_posix)
     mgr.load_latest_checkpoint("cpu", logging.getLogger("test"))
 
 
-def test_add_safe_globals_exception_path(
-    tmp_path: Path, ckpt_obj: Checkpoint, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_add_safe_globals_exception_path(tmp_path: Path, ckpt_obj: Checkpoint) -> None:
     """Ensure the exception handling in add_safe_globals is covered."""
     out = tmp_path / "out"
     out.mkdir()
@@ -614,13 +647,14 @@ def test_add_safe_globals_exception_path(
     def boom_add_safe_globals(*args: object, **kwargs: object) -> None:
         raise RuntimeError("Boom!")
 
-    monkeypatch.setattr("torch.serialization.add_safe_globals", boom_add_safe_globals)
-    # The call should not raise an exception
+    deps = make_deps(add_safe_globals=lambda *args, **kwargs: boom_add_safe_globals())
+    mgr = CheckpointManager(out, keep_last=1, keep_best=0, deps=deps)
+    mgr.save_checkpoint(ckpt_obj, "ignored", 1.0, 1, logging.getLogger("test"))
     mgr.load_latest_checkpoint("cpu", logging.getLogger("test"))
 
 
 def test_load_best_checkpoint_final_coverage(
-    tmp_path: Path, ckpt_obj: Checkpoint, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, ckpt_obj: Checkpoint
 ) -> None:
     """Cover the final remaining branches in load_best_checkpoint."""
     out = tmp_path / "out"
@@ -642,38 +676,40 @@ def test_load_best_checkpoint_final_coverage(
     )
 
     # 3. Test the CheckpointLoadError path
-    monkeypatch.setattr(
-        "ml_playground.checkpoint.torch.load",
-        lambda *a, **kw: (_ for _ in ()).throw(OSError("boom")),
+    deps_error = make_deps(
+        torch_load=lambda *a, **kw: (_ for _ in ()).throw(OSError("boom"))
     )
+    mgr_error = CheckpointManager(
+        tmp_path, atomic=False, keep_last=0, keep_best=1, deps=deps_error
+    )
+    mgr_error.best_checkpoints = list(mgr.best_checkpoints)
     with pytest.raises(CheckpointLoadError):
-        mgr.load_best_checkpoint("cpu", logging.getLogger("test"))
+        mgr_error.load_best_checkpoint("cpu", logging.getLogger("test"))
 
-    # 4. Test the normal load path to cover add_safe_globals
-    monkeypatch.undo()
-    mgr.load_best_checkpoint("cpu", logging.getLogger("test"))
+    deps_normal = make_deps()
+    mgr_normal = CheckpointManager(
+        tmp_path, atomic=False, keep_last=0, keep_best=1, deps=deps_normal
+    )
+    mgr_normal.best_checkpoints = list(mgr.best_checkpoints)
+    mgr_normal.load_best_checkpoint("cpu", logging.getLogger("test"))
 
 
-def test_discover_existing_best_stat_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_discover_existing_best_stat_failure(tmp_path: Path) -> None:
     """A stat failure on a best checkpoint should raise CheckpointError."""
     out = tmp_path / "out"
     out.mkdir()
     best_path = out / "ckpt_best_00000001_1.0.pt"
     torch.save({}, best_path)
 
-    original_stat = Path.stat
-
-    def boom_stat(self: Path, *, follow_symlinks: bool = True) -> os.stat_result:
-        if self == best_path:
-            raise OSError("stat failed")
-        return original_stat(self, follow_symlinks=follow_symlinks)
-
-    monkeypatch.setattr(Path, "stat", boom_stat, raising=False)
-
+    deps = make_deps(
+        path_stat=lambda path: (
+            (_ for _ in ()).throw(OSError("stat failed"))
+            if path == best_path
+            else CheckpointDependencies.default().path_stat(path)
+        )
+    )
     with pytest.raises(CheckpointError, match="Failed to stat checkpoint"):
-        CheckpointManager(out, keep_last=0, keep_best=1)
+        CheckpointManager(out, keep_last=0, keep_best=1, deps=deps)
 
 
 def test_load_best_checkpoint_discovers_from_disk(

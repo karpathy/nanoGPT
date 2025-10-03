@@ -321,26 +321,25 @@ No separate test run in the Make target is necessary.
 - **Local coverage snapshot**: `ml_playground/training/checkpointing/service.py` remains at 66.27% with
   missed lines `[76-82, 109-110, 117-119, 138-141, 144, 154-156]` per `.cache/coverage/coverage.json`.
 - **CI artifact**: GitHub runner covers the same file at 93.98% (only line `144` missed) according to
-  `tmp/coverage-ci/coverage.json`.
 - **Current decision**: Pause further coverage/badge work until the test suite complies with the
   mock-free policy; revisit after completing Tasks 9–13 and rebase coverage changes on top of the
   updated fixtures.
 
 ---
 
-## Task 9: Replace monkeypatches in training loop unit tests ✅ (2025-10-03)
+## Task 9: Replace monkeypatches in training loop unit tests (2025-10-03)
 
 - Scope:
   - Refactor `tests/unit/training/loop/test_training_runner.py` to comply with `.dev-guidelines/TESTING.md` and `tests/unit/README.md`
   guidance against monkeypatching internal seams.
-  - Introduce pytest fixtures (e.g., `_fake_batches`, `_fake_model`, checkpoint manager doubles) in
-    `tests/unit/conftest.py` or a local `conftest.py` and inject collaborators via constructor or
+    `tests/unit/conftest.py` and inject collaborators via constructor or
     dependency overrides instead of `monkeypatch.setattr`.
   - Ensure `Trainer` can accept injected dependencies without modifying production behavior for
     non-test callers (consider helper factory or fixture that wires dependencies).
+  - Remove temporary allowlist entry for `tests/unit/core/test_checkpoint.py` once mocks are gone.
 - Acceptance criteria:
   - The test file contains no `monkeypatch` usage or direct attribute patching of `runner_mod`.
-  - Fixtures provide reusable fakes with clear Arrange/Act/Assert structure; tests still enforce best/last checkpoint behaviors.
+{{ ... }}
   - `make unit` and `make quality` remain green.
 - Commit guidance:
   - Branch: `test/training-loop-fixture-refactor`
@@ -352,7 +351,7 @@ via `TrainerDependencies` and contains no `monkeypatch` usage.
 
 ---
 
-## Task 10: Remove monkeypatch usage from configuration CLI tests
+## Task 10: Remove monkeypatch usage from configuration CLI tests ✅ (2025-10-03)
 
 - Scope:
   - Update `tests/unit/configuration/test_cli.py` to stop patching CLI internals and environment via
@@ -367,6 +366,11 @@ via `TrainerDependencies` and contains no `monkeypatch` usage.
 - Commit guidance:
   - Branch: `test/config-cli-fixtures`
   - Commit: `test(configuration): replace monkeypatch usage with fixtures in CLI tests`
+
+Status: Completed.
+Refactored `tests/unit/configuration/test_cli.py` to use DI seams. Introduced
+`default_config_path` parameter in loaders and `cuda_is_available` injection for
+`cli._global_device_setup()`; no `monkeypatch` remains.
 
 ---
 
@@ -393,7 +397,7 @@ Status: Completed.
 
 ---
 
-## Task 12: Convert experiments loader tests away from monkeypatch
+## Task 12: Convert experiments loader tests away from monkeypatch ✅ (2025-10-03)
 
 - Scope:
   - Modify `tests/unit/experiments/test_experiments_loader.py` to replace `monkeypatch.setattr` with
@@ -406,6 +410,12 @@ Status: Completed.
 - Commit guidance:
   - Branch: `test/experiments-loader-fixtures`
   - Commit: `test(experiments): replace monkeypatch with fixtures`
+
+Status: Completed.
+Added DI parameters to `ml_playground/experiments/registry.load_preparers()`
+for `resources` and `import_module`; updated
+`tests/unit/experiments/test_experiments_loader.py` to use DI and removed
+`monkeypatch` usage.
 
 ---
 

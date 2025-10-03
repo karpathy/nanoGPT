@@ -1,20 +1,32 @@
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Tuple, TypedDict, Union, cast
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Tuple,
+    TypedDict,
+    Union,
+    cast,
+)
 
 import torch
 from torch.serialization import pickle as _torch_pickle  # type: ignore[attr-defined]
-
 from ml_playground.core.error_handling import CheckpointError, CheckpointLoadError
 from ml_playground.core.logging_protocol import LoggerLike
 
 TorchUnpicklingError = _torch_pickle.UnpicklingError  # type: ignore[attr-defined]
 
 
-__all__ = ["Checkpoint", "CheckpointManager"]
+__all__ = ["Checkpoint", "CheckpointManager", "CheckpointDependencies"]
 
 
 def _atomic_save(obj: Any, path: Path, atomic: bool) -> None:
@@ -46,6 +58,53 @@ class CheckpointPayload(TypedDict, total=False):
 
 _PayloadMapping = Mapping[str, Any]
 ExpectedTypes = Union[type, Tuple[type, ...]]
+
+
+@dataclass
+class CheckpointDependencies:
+    torch_load: Callable[..., Any]
+    add_safe_globals: Callable[[Iterable[Any]], None] | None
+    path_stat: Callable[[Path], os.stat_result]
+    path_unlink: Callable[[Path], None]
+    posix_path_cls: type | None
+    unlink_supports_missing_ok: bool
+
+    @classmethod
+    def default(cls) -> "CheckpointDependencies":
+        def _path_stat(path: Path) -> os.stat_result:
+            return path.stat()
+
+        def _path_unlink(path: Path) -> None:
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
+
+        add_safe_globals = getattr(torch.serialization, "add_safe_globals", None)
+        posix_cls: type | None = None
+        try:
+            import pathlib
+
+            posix_cls = getattr(getattr(pathlib, "_local", None), "PosixPath", None)
+        except Exception:
+            posix_cls = None
+
+        supports_missing_ok = True
+        try:
+            Path("/dev/null").unlink(missing_ok=True)  # type: ignore[arg-type]
+        except TypeError:
+            supports_missing_ok = False
+        except FileNotFoundError:
+            supports_missing_ok = True
+
+        return cls(
+            torch_load=torch.load,
+            add_safe_globals=add_safe_globals,
+            path_stat=_path_stat,
+            path_unlink=_path_unlink,
+            posix_path_cls=posix_cls,
+            unlink_supports_missing_ok=supports_missing_ok,
+        )
 
 
 def _expect_mapping(value: Any, field: str) -> Dict[str, Any]:
@@ -152,7 +211,13 @@ class CheckpointManager:
     """A utility class for managing checkpoints with advanced features."""
 
     def __init__(
-        self, out_dir: Path, atomic: bool = True, keep_last: int = 1, keep_best: int = 1
+        self,
+        out_dir: Path,
+        atomic: bool = True,
+        keep_last: int = 1,
+        keep_best: int = 1,
+        *,
+        deps: CheckpointDependencies | None = None,
     ):
         self.out_dir = out_dir
         self.atomic = atomic
@@ -164,6 +229,7 @@ class CheckpointManager:
         self.keep_best = keep_best
         self.last_checkpoints: List[_CkptInfo] = []
         self.best_checkpoints: List[_CkptInfo] = []
+        self._deps = deps or CheckpointDependencies.default()
         # Discover any existing checkpoints so behavior persists across restarts
         self._discover_existing()
 
@@ -181,13 +247,17 @@ class CheckpointManager:
                     f"Could not parse iteration from last-checkpoint filename {p.name}: {e}"
                 ) from e
             try:
-                created = p.stat().st_mtime
+                created = self._deps.path_stat(p).st_mtime
             except OSError as e:
                 raise CheckpointError(f"Failed to stat checkpoint file {p}: {e}") from e
             self.last_checkpoints.append(_CkptInfo(p, float("inf"), it, created))
         for p in sorted(self.out_dir.glob("ckpt_best_*.pt")):
             stem = p.stem  # e.g., ckpt_best_00000010_1.234567
             parts = stem.split("_")
+            if len(parts) < 3:
+                raise CheckpointError(
+                    f"Unexpected best-checkpoint filename format: {p.name}"
+                )
             try:
                 it = int(parts[2])
             except ValueError as e:
@@ -203,7 +273,7 @@ class CheckpointManager:
                         f"Could not parse metric from best-checkpoint filename {p.name}: {e}"
                     ) from e
             try:
-                created = p.stat().st_mtime
+                created = self._deps.path_stat(p).st_mtime
             except OSError as e:
                 raise CheckpointError(f"Failed to stat checkpoint file {p}: {e}") from e
             self.best_checkpoints.append(_CkptInfo(p, metric, it, created))
@@ -242,7 +312,10 @@ class CheckpointManager:
             while len(self.last_checkpoints) > self.keep_last:
                 old = self.last_checkpoints.pop(0)
                 try:
-                    old.path.unlink()
+                    if self._deps.unlink_supports_missing_ok:
+                        old.path.unlink(missing_ok=False)
+                    else:
+                        self._deps.path_unlink(old.path)
                     logger.info(f"Removed old last checkpoint: {old.path}")
                 except OSError as e:
                     raise CheckpointError(
@@ -268,11 +341,17 @@ class CheckpointManager:
                 # Delete the files
                 for ckpt in to_remove:
                     try:
-                        ckpt.path.unlink()
+                        if self._deps.unlink_supports_missing_ok:
+                            ckpt.path.unlink(missing_ok=False)
+                        else:
+                            self._deps.path_unlink(ckpt.path)
                         # Also remove sidecar file if it exists
                         sidecar = ckpt.path.with_suffix(ckpt.path.suffix + ".json")
                         if sidecar.exists():
-                            sidecar.unlink()
+                            if self._deps.unlink_supports_missing_ok:
+                                sidecar.unlink(missing_ok=False)
+                            else:
+                                self._deps.path_unlink(sidecar)
                         logger.info(f"Removed old best checkpoint: {ckpt.path}")
                     except OSError as e:
                         raise CheckpointError(
@@ -301,20 +380,16 @@ class CheckpointManager:
         try:
             # PyTorch 2.6+: default weights_only=True breaks loading objects like PosixPath;
             # use safe allowlist to enable loading our known globals and set weights_only=False for tests
-            import pathlib
-
-            add_safe_globals = getattr(torch.serialization, "add_safe_globals", None)
+            add_safe_globals = self._deps.add_safe_globals
             if callable(add_safe_globals):
-                posix_path_cls = getattr(
-                    getattr(pathlib, "_local", None), "PosixPath", None
-                )
+                posix_path_cls = self._deps.posix_path_cls
                 if posix_path_cls is not None:
                     try:
                         add_safe_globals([posix_path_cls])  # type: ignore[arg-type]
                     except (RuntimeError, TypeError):
                         # Ignore duplicates or incompatible registrations
                         pass
-            checkpoint_dict = torch.load(
+            checkpoint_dict = self._deps.torch_load(
                 str(latest_ckpt.path), map_location=device, weights_only=False
             )
         except (OSError, RuntimeError, TorchUnpicklingError) as e:
@@ -345,19 +420,15 @@ class CheckpointManager:
 
         try:
             # See comment in load_latest_checkpoint regarding safe loading
-            import pathlib
-
-            add_safe_globals = getattr(torch.serialization, "add_safe_globals", None)
+            add_safe_globals = self._deps.add_safe_globals
             if callable(add_safe_globals):
-                posix_path_cls = getattr(
-                    getattr(pathlib, "_local", None), "PosixPath", None
-                )
+                posix_path_cls = self._deps.posix_path_cls
                 if posix_path_cls is not None:
                     try:
                         add_safe_globals([posix_path_cls])  # type: ignore[arg-type]
                     except (RuntimeError, TypeError):
                         pass
-            checkpoint_dict = torch.load(
+            checkpoint_dict = self._deps.torch_load(
                 str(best_ckpt.path), map_location=device, weights_only=False
             )
         except (OSError, RuntimeError, TorchUnpicklingError) as e:
