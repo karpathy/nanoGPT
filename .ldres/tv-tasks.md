@@ -328,7 +328,7 @@ No separate test run in the Make target is necessary.
 
 ---
 
-## Task 9: Replace monkeypatches in training loop unit tests
+## Task 9: Replace monkeypatches in training loop unit tests ✅ (2025-10-03)
 
 - Scope:
   - Refactor `tests/unit/training/loop/test_training_runner.py` to comply with `.dev-guidelines/TESTING.md` and `tests/unit/README.md`
@@ -345,6 +345,10 @@ No separate test run in the Make target is necessary.
 - Commit guidance:
   - Branch: `test/training-loop-fixture-refactor`
   - Commit: `test(training): replace monkeypatches with fixtures in training_runner tests`
+
+Status: Completed.
+`tests/unit/training/loop/test_training_runner.py` already uses dependency injection
+via `TrainerDependencies` and contains no `monkeypatch` usage.
 
 ---
 
@@ -366,7 +370,7 @@ No separate test run in the Make target is necessary.
 
 ---
 
-## Task 11: Refactor sampling runner unit tests to fixture-based fakes
+## Task 11: Refactor sampling runner unit tests to fixture-based fakes ✅ (2025-10-03)
 
 - Scope:
   - Rework `tests/unit/sampling/test_runner.py` to remove `monkeypatch` usage for tokenizer setup,
@@ -380,6 +384,12 @@ No separate test run in the Make target is necessary.
 - Commit guidance:
   - Branch: `test/sampling-runner-fixtures`
   - Commit: `test(sampling): eliminate monkeypatch in runner tests`
+
+Status: Completed.
+`tests/unit/sampling/test_runner.py` now uses dependency injection via
+`SamplerConfig.checkpoint_load_fn`, `SamplerConfig.model_factory`, and
+`SamplerConfig.compile_model_fn`. All direct monkeypatching of `GPT`,
+`torch.compile`, and internal methods has been removed.
 
 ---
 
