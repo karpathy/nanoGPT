@@ -114,7 +114,7 @@ def _make_sampler_cfg(out_dir: Path) -> SamplerConfig:
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
 def test_sampler_writes_json_stats_and_prints_analysis(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: Any
+    tmp_path: Path, capsys: Any
 ) -> None:
     # Arrange directories
     out_dir = tmp_path / "out"
@@ -127,17 +127,13 @@ def test_sampler_writes_json_stats_and_prints_analysis(
         {"best_val_loss": 3.4015, "iter_num": 100}, out_dir / "state" / "best.pt"
     )
 
-    # Monkeypatch heavy deps to dummy ones
-    monkeypatch.setattr(
-        gm,
-        "AutoTokenizer",
-        SimpleNamespace(from_pretrained=DummyTokenizer.from_pretrained),
-    )
-    monkeypatch.setattr(gm, "AutoModelForCausalLM", DummyBaseModel)
-    monkeypatch.setattr(gm, "PeftModel", DummyPeftModel)
+    # Inject factories via cfg.extras instead of monkeypatching
 
     # Act via injected config
     cfg = _make_sampler_cfg(out_dir)
+    cfg.extras["tokenizer_factory"] = DummyTokenizer.from_pretrained
+    cfg.extras["base_model_factory"] = DummyBaseModel.from_pretrained
+    cfg.extras["peft_model_factory"] = DummyPeftModel.from_pretrained
     gm.SpeakGerSampler().sample(cfg)
 
     # Assert: files created

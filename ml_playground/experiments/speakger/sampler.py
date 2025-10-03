@@ -90,15 +90,41 @@ def _analyze_text(text: str) -> dict[str, Any]:
     return {"header": header, "lines": lines, "ngrams": ngrams, "anomalies": anomalies}
 
 
-def _run_sampling(out_dir: Path, model_name: str, prompt: str, logger):
+def _run_sampling(
+    out_dir: Path,
+    model_name: str,
+    prompt: str,
+    logger,
+    *,
+    tokenizer_factory: Any | None = None,
+    base_model_factory: Any | None = None,
+    peft_model_factory: Any | None = None,
+):
     samples_dir = out_dir / "samples"
     samples_dir.mkdir(parents=True, exist_ok=True)
 
-    tok = AutoTokenizer.from_pretrained(out_dir / "tokenizer", use_fast=True)  # type: ignore[attr-defined]
-    base = AutoModelForCausalLM.from_pretrained(model_name)  # type: ignore[attr-defined]
+    # Resolve factories with sensible defaults (heavy deps if available)
+    _tok_factory = (
+        tokenizer_factory
+        if tokenizer_factory is not None
+        else AutoTokenizer.from_pretrained  # type: ignore[attr-defined]
+    )
+    _base_factory = (
+        base_model_factory
+        if base_model_factory is not None
+        else AutoModelForCausalLM.from_pretrained  # type: ignore[attr-defined]
+    )
+    _peft_factory = (
+        peft_model_factory
+        if peft_model_factory is not None
+        else PeftModel.from_pretrained  # type: ignore[attr-defined]
+    )
+
+    tok = _tok_factory(out_dir / "tokenizer", use_fast=True)
+    base = _base_factory(model_name)
     try:
         # build adapters path using Path joining, not bitwise and
-        model = PeftModel.from_pretrained(base, out_dir / "adapters" / "best")  # type: ignore[attr-defined]
+        model = _peft_factory(base, out_dir / "adapters" / "best")
     except (FileNotFoundError, NotADirectoryError):
         model = base  # type: ignore[assignment]
 
@@ -149,7 +175,16 @@ class SpeakGerSampler(_SamplerProto):
         # Model name is expected to be provided via extras for this experiment
         model_name = str(cfg.extras.get("hf_model_name", "dummy"))
         prompt = cfg.sample.start
-        txt_path, json_path = _run_sampling(out_dir, model_name, prompt, cfg.logger)
+        # Optional DI factories provided via cfg.extras for tests
+        txt_path, json_path = _run_sampling(
+            out_dir,
+            model_name,
+            prompt,
+            cfg.logger,
+            tokenizer_factory=cfg.extras.get("tokenizer_factory"),
+            base_model_factory=cfg.extras.get("base_model_factory"),
+            peft_model_factory=cfg.extras.get("peft_model_factory"),
+        )
         return SampleReport(
             created_files=(txt_path, json_path),
             updated_files=(),
