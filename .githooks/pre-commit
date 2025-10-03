@@ -2,6 +2,44 @@
 # Pre-commit hook using pre-commit framework with uv
 
 set -euo pipefail
+
+# Hard enforcement BEFORE pre-commit's isolated staging: scan working tree tests/ for mocks
+if files=$(find tests -type f -name '*.py' 2>/dev/null) && [ -n "$files" ]; then
+  # Exclude allowlisted files from the scan
+  if [ -f tests/.no-mock-allowlist ]; then
+    files=$(comm -23 <(echo "$files" | sort) <(sort tests/.no-mock-allowlist))
+  fi
+  if [ -n "$files" ]; then
+    found=0
+    tokens=(
+      'monkeypatch'
+      'pytest.MonkeyPatch'
+      'unittest.mock'
+      'from unittest import mock'
+      'pytest_mock'
+      'MagicMock'
+      'patch('
+    )
+    while IFS= read -r f; do
+      for t in "${tokens[@]}"; do
+        lines=$(grep -n "$t" "$f" || true)
+        # Drop matches where the actual file content (after the colon) is a comment
+        lines=$(echo "$lines" | awk -F: '{line=$0; sub(/^[^:]*:/,"",line); if (line !~ /^[[:space:]]*#/) print $0 }' || true)
+        if [ -n "$lines" ]; then
+          echo "$lines"
+          found=1
+        fi
+      done
+    done <<EOF
+$(echo "$files")
+EOF
+    if [ "$found" -eq 1 ]; then
+      echo 'Error: found disallowed mocking APIs in tests. Use fixtures/DI per .dev-guidelines/TESTING.md.' >&2
+      exit 1
+    fi
+  fi
+fi
+
 echo "[pre-commit] Core quality gates (ruff, format, pyright, mypy, pytest via uv)"
 uv run pre-commit run --config .githooks/.pre-commit-config.yaml
 
