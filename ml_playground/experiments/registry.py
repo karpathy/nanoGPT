@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Callable, Dict
+from typing import Any, Callable, Dict
 from importlib import import_module
 from importlib import resources
 
@@ -7,7 +7,11 @@ from importlib import resources
 PREPARERS: Dict[str, Callable[[], None]] = {}
 
 
-def load_preparers() -> None:
+def load_preparers(
+    *,
+    resources_mod: Any | None = None,
+    import_mod: Callable[[str], Any] | None = None,
+) -> None:
     """Plugin loader: import experiment preparers to populate PREPARERS.
 
     Strict mode: only class-based API is supported. An experiment must expose
@@ -19,8 +23,10 @@ def load_preparers() -> None:
         return
 
     pkg = "ml_playground.experiments"
+    _resources = resources_mod if resources_mod is not None else resources
+    _import = import_mod if import_mod is not None else import_module
     try:
-        root = resources.files(pkg)
+        root = _resources.files(pkg)
     except (ImportError, FileNotFoundError, OSError, RuntimeError):
         # If discovery fails (e.g., frozen environments), do nothing; callers may
         # have injected PREPARERS via tests or alternative mechanisms.
@@ -37,7 +43,7 @@ def load_preparers() -> None:
             if not prep_file.is_file():
                 continue
             try:
-                mod = import_module(f"{pkg}.{exp_name}.preparer")
+                mod = _import(f"{pkg}.{exp_name}.preparer")
                 # Find first class with a 'prepare' attribute
                 cls = None
                 for attr_name in dir(mod):

@@ -57,7 +57,9 @@ repos:
       - -c
       - |
         set -e
-        files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^tests/.*\.py$' || true)
+        # Enforce across the entire test suite, not only staged files
+        # Use git ls-files on the tests tree and filter to .py to avoid pathspec glob issues
+        files=$(git ls-files tests | grep -E '\.py$' || true)
         [ -z "$files" ] && exit 0
         if grep -nE '\b(monkeypatch|pytest\\.MonkeyPatch|unittest\\.mock|from\\s+unittest\\s+import\\s+mock|pytest_mock|MagicMock|patch\\()' $files; then
           echo 'Error: found disallowed mocking APIs in tests. Use fixtures/DI per .dev-guidelines/TESTING.md.' >&2

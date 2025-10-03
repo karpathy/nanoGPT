@@ -7,7 +7,7 @@ import pytest
 import ml_playground.experiments.registry as registry
 
 
-def test_load_preparers_returns_if_already_populated(monkeypatch: pytest.MonkeyPatch):
+def test_load_preparers_returns_if_already_populated():
     # Pre-populate
     registry.PREPARERS.clear()
     registry.PREPARERS["foo"] = lambda: None
@@ -18,19 +18,17 @@ def test_load_preparers_returns_if_already_populated(monkeypatch: pytest.MonkeyP
             "resources.files should not be called when PREPARERS present"
         )
 
-    monkeypatch.setattr(registry, "resources", SimpleNamespace(files=bad_files))
-    registry.load_preparers()
+    registry.load_preparers(resources_mod=SimpleNamespace(files=bad_files))
     assert "foo" in registry.PREPARERS
 
 
-def test_load_preparers_handles_resources_error(monkeypatch: pytest.MonkeyPatch):
+def test_load_preparers_handles_resources_error():
     registry.PREPARERS.clear()
 
     def raise_files(_):  # noqa: D401
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(registry, "resources", SimpleNamespace(files=raise_files))
-    registry.load_preparers()
+    registry.load_preparers(resources_mod=SimpleNamespace(files=raise_files))
     assert registry.PREPARERS == {}
 
 
@@ -66,10 +64,10 @@ class _FakeRoot:
             yield e
 
 
-def test_load_preparers_registers_class(monkeypatch: pytest.MonkeyPatch):
+def test_load_preparers_registers_class():
     registry.PREPARERS.clear()
     root = _FakeRoot([_FakeEntry("expA", True, True)])
-    monkeypatch.setattr(registry, "resources", SimpleNamespace(files=lambda _: root))
+    resources_ns = SimpleNamespace(files=lambda _: root)
 
     class Prep:
         def prepare(self, *_args, **_kwargs):  # noqa: D401
@@ -78,32 +76,28 @@ def test_load_preparers_registers_class(monkeypatch: pytest.MonkeyPatch):
 
     # import_module should return module with class Prep
     fake_mod = SimpleNamespace(Prep=Prep)
-    monkeypatch.setattr(registry, "import_module", lambda name: fake_mod)
-
-    registry.load_preparers()
+    registry.load_preparers(
+        resources_mod=resources_ns, import_mod=lambda name: fake_mod
+    )
     assert "expA" in registry.PREPARERS
     # Calling the registered function shouldn't raise
     registry.PREPARERS["expA"]()
 
 
-def test_load_preparers_raises_on_import_failure(monkeypatch: pytest.MonkeyPatch):
+def test_load_preparers_raises_on_import_failure():
     registry.PREPARERS.clear()
     root = _FakeRoot([_FakeEntry("bad", True, True)])
-    monkeypatch.setattr(registry, "resources", SimpleNamespace(files=lambda _: root))
-    monkeypatch.setattr(
-        registry,
-        "import_module",
-        lambda name: (_ for _ in ()).throw(RuntimeError("nope")),
-    )
+    resources_ns = SimpleNamespace(files=lambda _: root)
+
+    def bad_import(name: str):  # noqa: D401
+        return (_ for _ in ()).throw(RuntimeError("nope"))
 
     with pytest.raises(SystemExit) as ei:
-        registry.load_preparers()
+        registry.load_preparers(resources_mod=resources_ns, import_mod=bad_import)
     assert "Failed to load experiment 'bad':" in str(ei.value)
 
 
-def test_load_preparers_skips_non_dir_and_missing_preparer(
-    monkeypatch: pytest.MonkeyPatch,
-):
+def test_load_preparers_skips_non_dir_and_missing_preparer():
     registry.PREPARERS.clear()
     # One non-dir, one dir without preparer.py
     root = _FakeRoot(
@@ -112,33 +106,31 @@ def test_load_preparers_skips_non_dir_and_missing_preparer(
             _FakeEntry("expNoPrep", True, False),
         ]
     )
-    monkeypatch.setattr(registry, "resources", SimpleNamespace(files=lambda _: root))
-    registry.load_preparers()
+    registry.load_preparers(resources_mod=SimpleNamespace(files=lambda _: root))
     assert registry.PREPARERS == {}
 
 
-def test_load_preparers_module_without_prepare_class(monkeypatch: pytest.MonkeyPatch):
+def test_load_preparers_module_without_prepare_class():
     registry.PREPARERS.clear()
     root = _FakeRoot([_FakeEntry("expNoClass", True, True)])
-    monkeypatch.setattr(registry, "resources", SimpleNamespace(files=lambda _: root))
+    resources_ns = SimpleNamespace(files=lambda _: root)
 
     # Module has classes but none with 'prepare'
     class X:  # noqa: D401
         pass
 
     fake_mod = SimpleNamespace(X=X)
-    monkeypatch.setattr(registry, "import_module", lambda name: fake_mod)
-    registry.load_preparers()
+    registry.load_preparers(
+        resources_mod=resources_ns, import_mod=lambda name: fake_mod
+    )
     # Should not register anything
     assert registry.PREPARERS == {}
 
 
-def test_load_preparers_noarg_prepare_calls_without_args(
-    monkeypatch: pytest.MonkeyPatch,
-):
+def test_load_preparers_noarg_prepare_calls_without_args():
     registry.PREPARERS.clear()
     root = _FakeRoot([_FakeEntry("expNoArg", True, True)])
-    monkeypatch.setattr(registry, "resources", SimpleNamespace(files=lambda _: root))
+    resources_ns = SimpleNamespace(files=lambda _: root)
 
     prepared = {"called": False}
 
@@ -147,14 +139,15 @@ def test_load_preparers_noarg_prepare_calls_without_args(
             prepared["called"] = True
 
     fake_mod = SimpleNamespace(Prep=Prep)
-    monkeypatch.setattr(registry, "import_module", lambda name: fake_mod)
-    registry.load_preparers()
+    registry.load_preparers(
+        resources_mod=resources_ns, import_mod=lambda name: fake_mod
+    )
     assert "expNoArg" in registry.PREPARERS
     registry.PREPARERS["expNoArg"]()
     assert prepared["called"] is True
 
 
-def test_load_preparers_catches_per_entry_exception(monkeypatch: pytest.MonkeyPatch):
+def test_load_preparers_catches_per_entry_exception():
     registry.PREPARERS.clear()
 
     class _BoomEntry:
@@ -165,8 +158,8 @@ def test_load_preparers_catches_per_entry_exception(monkeypatch: pytest.MonkeyPa
             raise RuntimeError("boom")
 
     root = _FakeRoot([_BoomEntry(), _FakeEntry("ok", True, False)])
-    monkeypatch.setattr(registry, "resources", SimpleNamespace(files=lambda _: root))
+    resources_ns = SimpleNamespace(files=lambda _: root)
     # Should not raise
-    registry.load_preparers()
+    registry.load_preparers(resources_mod=resources_ns)
     # No registrations since second entry had no preparer
     assert registry.PREPARERS == {}
