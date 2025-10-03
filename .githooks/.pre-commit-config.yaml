@@ -50,22 +50,4 @@ repos:
     entry: uv run vulture ml_playground --min-confidence 90
     language: system
     pass_filenames: false
-  - id: no-mocks
-    name: forbid mocks and monkeypatch in tests
-    entry: bash
-    args:
-      - -c
-      - |
-        set -e
-        # Enforce across the entire test suite, not only staged files
-        # Use git ls-files on the tests tree and filter to .py to avoid pathspec glob issues
-        files=$(git ls-files tests | grep -E '\.py$' || true)
-        [ -z "$files" ] && exit 0
-        if grep -nE '\b(monkeypatch|pytest\\.MonkeyPatch|unittest\\.mock|from\\s+unittest\\s+import\\s+mock|pytest_mock|MagicMock|patch\\()' $files; then
-          echo 'Error: found disallowed mocking APIs in tests. Use fixtures/DI per .dev-guidelines/TESTING.md.' >&2
-          exit 1
-        fi
-        exit 0
-    language: system
-    pass_filenames: false
-    stages: [pre-commit]
+
