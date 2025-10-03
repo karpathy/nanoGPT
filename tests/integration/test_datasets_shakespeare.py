@@ -1,116 +1,136 @@
 from __future__ import annotations
-from pytest_mock import MockerFixture
 
 # New strict API imports
 from ml_playground.configuration.models import PreparerConfig
 from ml_playground.experiments.shakespeare.preparer import ShakespearePreparer
 
 
-def test_shakespeare_download_and_encode(tmp_path, mocker: MockerFixture) -> None:
-    """Test shakespeare preparer downloads, splits, encodes, and writes outputs."""
+def test_shakespeare_download_and_encode(tmp_path) -> None:
+    """Test shakespeare preparer downloads, splits, encodes, and writes outputs without mocks."""
     test_text = "Hello world! This is test data for Shakespeare."
 
-    # Arrange: redirect preparer exp_dir via module __file__
-    import ml_playground.experiments.shakespeare.preparer as prep_mod
-
+    # Arrange: set base_dir via DI
     exp_dir = tmp_path / "experiments" / "shakespeare"
     exp_dir.mkdir(parents=True, exist_ok=True)
     ds_dir = exp_dir / "datasets"
-    # Point module __file__ to our temp exp_dir
-    monkey = mocker
-    monkey.patch.object(prep_mod, "__file__", str(exp_dir / "preparer.py"))
 
-    # Mock network and tokenizer
-    mock_response = mocker.Mock()
-    mock_response.text = test_text
-    mock_response.raise_for_status.return_value = None
-    get_mock = mocker.patch(
-        "ml_playground.experiments.shakespeare.preparer.requests.get",
-        return_value=mock_response,
-    )
+    class _Resp:
+        def __init__(self, text: str) -> None:
+            self.text = text
+
+        def raise_for_status(self) -> None:  # no-op
+            return None
+
+    http_calls: list[str] = []
+
+    def _http_get(url: str, timeout: int = 30):
+        http_calls.append(url)
+        return _Resp(test_text)
 
     enc_calls: list[str] = []
-    mock_tok = mocker.Mock()
 
-    def _enc(x: str):
-        enc_calls.append(x)
-        return list(range(len(x)))
+    class _Tok:
+        def encode(self, x: str):
+            enc_calls.append(x)
+            return list(range(len(x)))
 
-    mock_tok.encode.side_effect = _enc
-    mocker.patch.object(prep_mod, "create_tokenizer", return_value=mock_tok)
+    writer_called: dict[str, object] = {"called": False, "args": None}
 
-    # Spy on writer util to assert it's called
-    writer_spy = mocker.patch.object(prep_mod, "write_bin_and_meta")
+    def _writer(path, train_ids, val_ids, meta, logger=None):
+        writer_called["called"] = True
+        writer_called["args"] = (path, train_ids, val_ids, meta)
 
-    # Act
-    report = ShakespearePreparer().prepare(PreparerConfig())
+    cfg = PreparerConfig()
+    cfg.extras.update(
+        {
+            "base_dir": exp_dir,
+            "http_get": _http_get,
+            "tokenizer_factory": lambda: _Tok(),
+            "writer_fn": _writer,
+        }
+    )
+
+    report = ShakespearePreparer().prepare(cfg)
 
     # Assert: download occurred and input file written
-    get_mock.assert_called_once()
+    assert http_calls, "http_get should be called"
     assert (ds_dir / "input.txt").exists()
-
     # Tokenizer used twice (train/val)
     assert len(enc_calls) == 2
-
-    # Writer called once with ds_dir
-    writer_spy.assert_called_once()
-    args, kwargs = writer_spy.call_args
-    assert args and args[0] == ds_dir
+    # Writer called and received ds_dir
+    assert writer_called["called"] is True
+    args_obj = writer_called["args"]
+    assert isinstance(args_obj, tuple)
+    assert args_obj[0] == ds_dir
     # Report includes created or updated files tuples
     assert hasattr(report, "created_files") and hasattr(report, "messages")
 
 
-def test_shakespeare_skip_download_if_exists(tmp_path, mocker: MockerFixture) -> None:
-    """Test preparer skips download when input file exists."""
-    import ml_playground.experiments.shakespeare.preparer as prep_mod
-
+def test_shakespeare_skip_download_if_exists(tmp_path) -> None:
+    """Test preparer skips download when input file exists without network call."""
     exp_dir = tmp_path / "experiments" / "shakespeare"
     ds_dir = exp_dir / "datasets"
     ds_dir.mkdir(parents=True, exist_ok=True)
     (ds_dir / "input.txt").write_text("Existing Shakespeare data.")
-    mocker.patch.object(prep_mod, "__file__", str(exp_dir / "preparer.py"))
 
-    # Patch requests.get and ensure it's NOT called
-    get_mock = mocker.patch(
-        "ml_playground.experiments.shakespeare.preparer.requests.get"
+    def _http_get(_url: str, timeout: int = 30):
+        raise AssertionError("http_get should not be called when input exists")
+
+    class _Tok:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def encode(self, s: str):
+            self.calls += 1
+            return list(range(len(s)))
+
+    tok = _Tok()
+    writer_called = {"n": 0}
+
+    def _writer(*a, **k):
+        writer_called["n"] += 1
+
+    cfg = PreparerConfig()
+    cfg.extras.update(
+        {
+            "base_dir": exp_dir,
+            "http_get": _http_get,
+            "tokenizer_factory": lambda: tok,
+            "writer_fn": _writer,
+        }
     )
 
-    # Minimal tokenizer
-    mock_tok = mocker.Mock()
-    mock_tok.encode.side_effect = lambda s: list(range(len(s)))
-    mocker.patch.object(prep_mod, "create_tokenizer", return_value=mock_tok)
-    writer_spy = mocker.patch.object(prep_mod, "write_bin_and_meta")
+    ShakespearePreparer().prepare(cfg)
 
-    ShakespearePreparer().prepare(PreparerConfig())
-
-    get_mock.assert_not_called()
-    writer_spy.assert_called_once()
-    assert mock_tok.encode.call_count == 2
+    assert writer_called["n"] == 1
+    assert tok.calls == 2
 
 
-def test_shakespeare_data_split_ratios(tmp_path, mocker: MockerFixture) -> None:
-    """Test that data is split into 90% train, 10% val before encoding."""
-    import ml_playground.experiments.shakespeare.preparer as prep_mod
-
+def test_shakespeare_data_split_ratios(tmp_path) -> None:
+    """Test that data is split into 90% train, 10% val before encoding without mocks."""
     exp_dir = tmp_path / "experiments" / "shakespeare"
     ds_dir = exp_dir / "datasets"
     ds_dir.mkdir(parents=True, exist_ok=True)
     test_text = "x" * 100
     (ds_dir / "input.txt").write_text(test_text)
-    mocker.patch.object(prep_mod, "__file__", str(exp_dir / "preparer.py"))
 
     captured: list[str] = []
-    mock_tok = mocker.Mock()
 
-    def _enc(s: str):
-        captured.append(s)
-        return list(range(len(s)))
+    class _Tok:
+        def encode(self, s: str):
+            captured.append(s)
+            return list(range(len(s)))
 
-    mock_tok.encode.side_effect = _enc
-    mocker.patch.object(prep_mod, "create_tokenizer", return_value=mock_tok)
-    mocker.patch.object(prep_mod, "write_bin_and_meta")
+    cfg = PreparerConfig()
+    cfg.extras.update(
+        {
+            "base_dir": exp_dir,
+            "tokenizer_factory": lambda: _Tok(),
+            "writer_fn": lambda *a, **k: None,
+        }
+    )
 
-    ShakespearePreparer().prepare(PreparerConfig())
+    ShakespearePreparer().prepare(cfg)
 
     assert len(captured) == 2
     train_text, val_text = captured
