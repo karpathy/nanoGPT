@@ -57,19 +57,15 @@ def test_read_toml_dict_reads_existing_file(tmp_path: Path) -> None:
     assert data == {"key": "value"}
 
 
-def test_read_toml_dict_rejects_non_mapping_root(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_read_toml_dict_rejects_non_mapping_root(tmp_path: Path) -> None:
     cfg_path = tmp_path / "cfg.toml"
     cfg_path.write_text("key = 'value'", encoding="utf-8")
 
     def fake_loads(_: str) -> list[int]:
         return [1, 2, 3]
 
-    monkeypatch.setattr("ml_playground.configuration.loading.tomllib.loads", fake_loads)
-
     with pytest.raises(TypeError, match="must be a mapping"):
-        config_loading.read_toml_dict(cfg_path)
+        config_loading.read_toml_dict(cfg_path, toml_loader=fake_loads)
 
 
 def test_full_loader_empty_config_raises(tmp_path: Path) -> None:

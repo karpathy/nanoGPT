@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Dict, Mapping, TypedDict, cast
+from typing import Any, Callable, Dict, Mapping, TypedDict, cast
 
 import tomllib
 
@@ -67,12 +67,17 @@ def _ensure_mapping(value: Any, context: str) -> TomlMapping:
     return dict(value)
 
 
-def read_toml_dict(path: Path) -> TomlMapping:
+def read_toml_dict(
+    path: Path,
+    *,
+    toml_loader: Callable[[str], Mapping[str, Any]] | None = None,
+) -> TomlMapping:
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {path}")
     text = path.read_text(encoding="utf-8")
     try:
-        data = tomllib.loads(text)
+        loader = toml_loader if toml_loader is not None else tomllib.loads
+        data = loader(text)
     except tomllib.TOMLDecodeError as exc:
         raise Exception(f"{path.name}: {exc}")
     if not isinstance(data, dict):
