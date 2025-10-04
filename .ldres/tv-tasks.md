@@ -146,17 +146,18 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
 - **References**: Branch `coverage-badge-rebase`; PR #35 (in review).
 - **Holding pattern**: Resume once the team approves the reproducibility plan captured in PR #35.
 - **PR status**: `<https://github.com/<org>/<repo>/pull/35>` (keep in Draft until reproducible-build epic lands).
-=======
-- Scope:
-  - In `Makefile`, replace indirections like `$(MAKE) pytest-core PYARGS="-m integration --no-cov"`
-with direct invocations using `$(RUN) pytest` and `$(PYTEST_BASE)`.
-  - Targets to simplify: `integration`, `e2e`, and any others using `pytest-core` where a single direct call is clearer.
-- Acceptance criteria:
-  - `make integration` and `make e2e` call `$(RUN) pytest $(PYTEST_BASE) ...` directly.
-  - `make test`, `make pytest-all`, and pre-commit continue to pass locally and in CI.
-- Commit guidance:
-  - Branch: `chore/makefile-simplify-test-targets`
-  - Commit: `chore(makefile): reduce test target indirections; invoke pytest directly`
+
+### Deferred · tv-2025-10-04:PR?? · Expand CI Python version matrix
+
+- **Summary**: Add optional GitHub Actions matrix to exercise supported Python versions beyond 3.13 once
+  runtime stability and coverage reach 100%.
+- **Priority**: P2
+- **Size**: S
+- **Meta?**: Yes — improves long-term compatibility validation.
+- **Dependencies**: Requires CI runtime optimizations (uv caching, artifact reuse) and stabilized coverage thresholds.
+- **References**: `.github/workflows/quality.yml` (current single-version job).
+- **Holding pattern**: Defer until coverage roadmap milestones complete and multi-version support becomes necessary.
+- **PR status**: Not yet created; future branch could be `ci/python-matrix`.
 
 ---
 

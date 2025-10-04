@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  quality:
+  lint-and-typecheck:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -20,13 +20,66 @@ jobs:
       - name: Setup uv
         uses: astral-sh/setup-uv@v4
 
+      - name: Cache uv virtualenv
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache/uv
+            .venv
+          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
+
       - name: Sync dependencies (dev + project)
         run: make sync
 
-      - name: Run quality gates
+      - name: Run coverage tests once
+        run: make coverage-test
+
+      - name: Run quality gates (no coverage regen)
+        env:
+          SKIP_COVERAGE_TESTS: '1'
         run: make quality
 
-      - name: Generate coverage badges
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-raw-${{ github.run_id }}
+          path: .cache/coverage
+
+  coverage:
+    needs: lint-and-typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Restore uv virtualenv
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache/uv
+            .venv
+          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+
+      - name: Download coverage data
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-raw-${{ github.run_id }}
+          path: .cache/coverage
+
+      - name: Generate coverage reports and badges
+        env:
+          SKIP_COVERAGE_TESTS: '1'
         run: |
           make coverage-report
           make coverage-badge
