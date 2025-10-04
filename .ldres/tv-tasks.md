@@ -36,32 +36,6 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
 </details>
 <!-- markdownlint-enable MD033 -->
 
-### Completed tasks (updated 2025-10-04)
-
-#### Completed · tv-2025-10-04:PR43 · Adopt PEP 420 import policy
-
-- **Summary**: Documented PEP 420 namespaces as the default, introduced TODO tracking for guideline divergences, and
-  updated tasks to reflect the new policy.
-- **Outcome**:
-  - Replaced `.dev-guidelines/IMPORT_GUIDELINES.md` with the namespace-first policy and TODO requirements.
-  - Added divergence documentation rules to `.dev-guidelines/DOCUMENTATION.md`.
-  - Updated `.ldres/tv-tasks.md` to align ongoing work with the new guidance.
-- **Validation**: `make quality`
-- **Branch/PR**: `docs/pep420-guidelines` → merged via PR #43 (`docs: adopt pep 420 import policy`).
-
-#### Completed · tv-2025-10-04:PR?? · Migrate packages to implicit namespaces
-
-- **Summary**: Eliminated redundant `__init__.py` files, moved version metadata to `pyproject.toml`, and
-  updated tooling to embrace PEP 420 namespaces.
-- **Outcome**:
-  - Deleted 20+ package-marker modules under `ml_playground/` and `tests/`, including root
-    `ml_playground/__init__.py` and `tests/support/__init__.py`.
-  - Added explicit exports in `tests/support/config_builders.py` to replace the removed facade.
-  - Configured Hatch wheel build (`pyproject.toml`) and mypy namespace settings; bumped package version to
-    `0.1.0` with matching `uv.lock` entry.
-- **Validation**: `make quality`; `uv run pytest -q`; `uv build`
-- **Branch/PR**: `refactor/pep420-migration` → PR pending (`refactor: migrate to pep 420 namespaces`).
-
 ### Open · tv-2025-10-03:PR?? · Establish regression test suite
 
 - **Summary**: Consolidate regression tests under `tests/regression/`, add a README, and articulate scope
@@ -129,6 +103,36 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
 - **PR**: Title `test: introduce mutation testing workflow`; body outlining configuration, validation, and
   follow-up tasks.
 
+### Open · tv-2025-10-05:PR?? · Integrate standalone units into canonical packages
+
+- **Summary**: Relocate legacy flat modules (`checkpoint.py`, `ema.py`, `estimator.py`, `lr_scheduler.py`,
+  `tokenizer_protocol.py`) into their canonical package homes and update all imports accordingly.
+- **Priority**: P0
+- **Size**: L
+- **Meta?**: Yes — completes the package normalization effort started by the namespace migration.
+- **Dependencies**: PEP 420 namespace migration (PR #44) merged; regression/coverage tasks may depend on
+  stabilized module paths.
+- **Next steps**:
+  1. Move `ml_playground/checkpoint.py` into `ml_playground/training/checkpointing/` and adjust imports/tests.
+  2. Move `ml_playground/ema.py` under `ml_playground/training/` (or `training/hooks/`) and update usage sites.
+  3. Relocate `ml_playground/estimator.py` into `ml_playground/models/utils/` and fix dependent modules/tests.
+  4. Port `ml_playground/lr_scheduler.py` into `ml_playground/training/optim/`; ensure CLI/config references
+     remain valid.
+  5. Integrate `ml_playground/tokenizer_protocol.py` into `ml_playground/core/` and drop any re-export facades.
+  6. Sweep for outdated imports, update docs/READMEs mentioning old paths, and clean up residual `__all__` exports.
+- **Validation**: `make quality`; `uv run pytest -q` (full suite); targeted smoke of affected CLI commands.
+- **Git plan**:
+  - Branch: `refactor/standalone-to-canonical`
+  - Commits:
+    - `refactor(training): move checkpoint helpers to training/checkpointing`
+    - `refactor(training): relocate ema module`
+    - `refactor(models): move estimator utilities`
+    - `refactor(training): reorganize lr scheduler`
+    - `refactor(core): integrate tokenizer protocol`
+    - `docs(project): refresh module path references`
+- **PR**: Title `refactor: integrate standalone units into canonical packages`; body covering Summary, Testing,
+  Checklist.
+
 ---
 
 ## Deferred tasks (updated 2025-10-03)
@@ -174,35 +178,6 @@ with direct invocations using `$(RUN) pytest` and `$(PYTEST_BASE)`.
 - Commit guidance:
   - Branch: `chore/makefile-simplify-test-targets`
   - Commit: `chore(makefile): reduce test target indirections; invoke pytest directly`
-
----
-
-## Task 2: Integrate standalone units into canonical packages
-
-- Target units:
-  - `ml_playground/checkpoint.py`
-  - `ml_playground/ema.py`
-  - `ml_playground/estimator.py`
-  - `ml_playground/lr_scheduler.py`
-  - `ml_playground/tokenizer_protocol.py`
-- Scope:
-  - Move or refactor these modules under their canonical package locations
-(`ml_playground/training/checkpointing/`, `ml_playground/training/`, `ml_playground/models/utils/`
-or `core/`, `ml_playground/training/optim/`, `ml_playground/core/`), aligned with prior restructurings.
-  - Update all imports across the codebase and tests to the new canonical paths.
-  - Ensure there are no re-export facades; comply with `IMPORT_GUIDELINES.md`.
-- Acceptance criteria:
-  - All imports reference canonical modules; no legacy paths remain.
-  - `make quality` and the full test suite pass.
-  - No circular imports introduced; `pyright` clean.
-- Commit guidance:
-  - Use small commits, one module at a time:
-    - `refactor(training): move checkpoint helpers to training/checkpointing`
-    - `refactor(training): move ema to training/ema`
-    - `refactor(models): move estimator to models/utils` (or agreed location)
-    - `refactor(training): move lr_scheduler to training/optim`
-    - `refactor(core): move tokenizer_protocol to core/`
-  - Follow up with `docs(...)` if READMEs or guides reference old paths.
 
 ---
 
