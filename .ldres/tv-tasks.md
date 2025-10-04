@@ -74,6 +74,8 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
   2. Classify gaps into deterministic vs stochastic segments; prioritize deterministic first.
   3. Draft incremental targets (e.g., 85%, 90%, 95%); codify acceptance criteria per milestone.
   4. Align CI dashboards to track milestones without flaking on stochastic components.
+  5. Enforce coverage baseline via `.githooks/.pre-commit-config.yaml` (currently 81.50% to account for CI variance);
+     raise threshold alongside improvements.
 - **Validation**: `make coverage-test`; `make quality`.
 - **Git plan**:
   - Branch: `docs/coverage-roadmap`
@@ -102,34 +104,6 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
     - `docs(testing): document mutation workflow` (`docs/testing/mutation.md`)
 - **PR**: Title `test: introduce mutation testing workflow`; body outlining configuration, validation, and
   follow-up tasks.
-
-### Open · tv-2025-10-05:PR45 · Integrate standalone units into canonical packages
-
-- **Summary**: Relocate legacy flat modules (`checkpoint.py`, `ema.py`, `estimator.py`, `lr_scheduler.py`,
-  `tokenizer_protocol.py`) into their canonical package homes and update all imports accordingly.
-- **Priority**: P0
-- **Size**: L
-- **Meta?**: Yes — completes the package normalization effort started by the namespace migration.
-- **Dependencies**: PEP 420 namespace migration (PR #44) merged; regression/coverage tasks may depend on
-  stabilized module paths.
-- **Next steps**:
-  1. Audit docs/READMEs for references to the removed shim modules and update language as needed.
-  2. Re-run targeted smoke validations once documentation edits land (`make quality`; `uv run pytest -q`).
-  3. Coordinate code review for PR #45 and prepare follow-up tasks if downstream teams surface additional import paths.
-- **Validation**: `make quality`; `uv run pytest -q` (full suite); targeted smoke of affected CLI commands.
-- **Git plan**:
-  - Branch: `refactor/standalone-to-canonical`
-  - Commits:
-    - `refactor(training): move checkpoint helpers to training/checkpointing`
-    - `refactor(training): relocate ema module`
-    - `refactor(models): move estimator utilities`
-    - `refactor(training): reorganize lr scheduler`
-    - `refactor(core): integrate tokenizer protocol`
-    - `docs(project): refresh module path references`
-- **PR**: [`refactor: integrate standalone units into canonical packages`](https://github.com/mehrmorgen/nanoGPT/pull/45)
-  (Summary, Testing, Checklist included).
-
----
 
 ## Deferred tasks (updated 2025-10-03)
 
