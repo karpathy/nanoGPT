@@ -4,139 +4,154 @@ description:
 globs:
 ---
 
-# Import Guidelines: Strict Policy and Rationale
+# Import Guidelines: PEP 420 Namespace Policy
 
-This is a prescriptive, low‑choice standard for all Python imports in the codebase. Follow as written.
+This repository adopts **PEP 420 implicit namespace packages** as the default. Package directories should **not**
+contain `__init__.py` unless the limited exception policy below applies. All engineers must follow this document as
+written; deviations require explicit approval.
 
 ## Core Principles
 
-- Single source of truth: import only from the definitive submodule that defines the symbol.
-- Zero ambiguity: one allowed way for each common scenario.
-- No hidden behavior: imports must be pure, cheap, and deterministic.
+- **Single, canonical source**: import symbols from the concrete module where they are defined.
+- **Namespace transparency**: rely on PEP 420 to compose packages; avoid artificial facades or re-exports.
+- **Predictable imports**: keep imports cheap, deterministic, and side-effect free.
+
+## PEP 420 Namespace Defaults
+
+- Every `ml_playground/`, `tests/`, and `tools/` sub-package is an implicit namespace by default.
+- Do **not** add `__init__.py` merely for package recognition; Python already discovers namespaces.
+- Directory layout alone defines the public API surface. Avoid hidden shims that obscure import paths.
 
 ## Mandatory Rules (No Exceptions Without Approval)
 
-1. **Absolute, submodule-level imports only**
-   - Use absolute project-rooted paths.
-   - Import directly from the concrete submodule that defines the symbol.
-   - Prohibited: relative imports, umbrella/facade imports, and re-exports.
+1. **Absolute, module-level imports only**
+   - Use absolute paths rooted at the repository package (e.g., `from ml_playground.core.foo import Bar`).
+   - Prohibited: relative imports, umbrella modules, or implicit re-exports.
 
 2. **No star imports**
-   - Prohibited: from module import *.
+   - `from module import *` is disallowed in all code and tests.
 
-3. **Import location**
-   - All imports at top-of-file, below the module docstring.
-   - Prohibited: local/function-scope imports, except for approved cycle breaks or optional deps (see rules 8–9).
+3. **Import placement**
+   - Place imports at module top level, beneath the docstring.
+   - Exceptions: documented cycle breaks or optional dependencies (see rules 8–9).
 
 4. **Ordering and grouping**
-   - Exactly three groups, in order, one blank line between groups:
-     1) Standard library
-     2) Third-party
-     3) Local/project
-   - Alphabetize within each group.
-   - Use the project's formatter/import organizer to enforce this automatically.
+   - Maintain three groups separated by single blank lines:
+     1. Standard library
+     2. Third-party
+     3. First-party (`ml_playground`, `tests`, `tools`)
+   - Alphabetize within each group. Allow the formatter/import organizer to enforce ordering.
 
 5. **Aliasing**
-   - Allowed only for the following well-known libraries:
-     - import numpy as np
-     - import pandas as pd
-   - Otherwise, no aliases. Use full module paths.
+   - Only the conventional aliases `import numpy as np` and `import pandas as pd` are allowed.
+   - Otherwise, import the module without aliases.
 
 6. **Re-exports and facades**
-   - Prohibited: exposing symbols via package-level **init**.py, "compat" modules, or import shims.
-   - Consumers must import from the canonical submodule.
+   - Prohibited: exposing symbols via shims, compatibility modules, or implicit public APIs.
+   - Consumers must import directly from the module that defines the symbol.
 
 7. **Side-effect free imports**
-   - Importing must not perform I/O, network calls, logging configuration, global registrations, or mutate global state.
-   - If unavoidable for a plugin mechanism, move side effects behind an explicit function that callers invoke manually.
+   - Importing a module must not trigger I/O, logging setup, network calls, or global mutations.
+   - If unavoidable, relocate the side effect behind an explicit function or command and document the rationale with a
+     nearby TODO comment following the repository format (`# TODO Remove <context>: <reason>`).
 
 8. **Optional dependencies**
-   - Import optional packages inside the narrowest function that needs them.
+   - Import optional packages in the narrowest scope that needs them.
    - On missing dependency, raise a clear error with installation guidance.
-   - Prohibited: optional deps at module top-level.
+   - Prohibited: optional dependencies at module top level.
 
 9. **Cycle handling**
-   - First choice: refactor to remove the cycle (extract shared code to a lower-level module).
-   - If refactor is not immediately feasible, a single, narrowly-scoped local import is permitted inside the function
-     that needs it, with a code comment "Cycle break: short rationale". Track a task to remove the cycle.
+   - Preferred fix: refactor to remove the cycle.
+   - Temporary escape hatch: a documented local import (`# TODO Remove cycle break: <reason>`) inside the dependent
+     function.
+     Track a follow-up task to remove the cycle.
 
 10. **Type-only imports**
-    - Use typing.TYPE_CHECKING guards for heavy or optional typing dependencies.
-    - Prefer postponed evaluation of annotations (default in modern Python) to avoid runtime import costs.
+    - Use `typing.TYPE_CHECKING` for heavy or optional typing dependencies.
+    - Prefer postponed annotations (enabled via `from __future__ import annotations` or Python ≥3.13 defaults).
 
 11. **Lazy imports**
-    - Not allowed by default.
-    - Allowed only when both conditions hold: breaks a hard import cycle or defers a large, cold-path dependency with
-      measurable startup benefit. Must be documented with a comment "Lazy import: <reason + expected impact>".
+    - Disallowed unless both apply: the import breaks a hard cycle or meaningfully reduces cold-start cost.
+    - Document with `# TODO Remove lazy import: <reason + impact>` and open a task to measure/remove when feasible.
 
-12. ****init**.py usage**
-    - May exist for package recognition or minimal metadata only.
-    - Prohibited: symbol re-exports, wildcard exports, or public API surfaces.
+12. **`__init__.py` exception policy**
+    - Default: omit `__init__.py` entirely.
+    - Allowed only when the file contains one of the following, and the rationale is documented near the file:
+      - Metadata required by packaging (`__version__`, entry-point registration) pending migration.
+      - Third-party compatibility that cannot yet consume namespace packages.
+      - Explicit plugin registration that cannot be moved behind a callable without breaking integration.
+    - Exception files must stay side-effect free, include a TODO comment describing the exception, and must not
+      re-export symbols.
 
 ## Canonical Patterns
 
-### Import few names from a concrete submodule
+### Import specific names from a concrete module
 
 ```python
-from project.module.submodule import Foo, Bar
+from ml_playground.core.optimizer import Optimizer
 ```
 
-### Import many names from one submodule
+### Import a module wholesale
 
 ```python
-import project.module.submodule as submodule  # avoid custom aliases
+import ml_playground.data_pipeline.sources.text as text_sources
 ```
 
-### Optional dependency (function-scoped)
+### Optional dependency (function scoped)
 
 ```python
 def export_to_parquet(df, path):
     try:
         import pyarrow.parquet as pq
-    except ImportError as e:
-        raise RuntimeError("Parquet export requires 'pyarrow'. Install it to use this feature.") from e
+    except ImportError as exc:
+        raise RuntimeError("Parquet export requires 'pyarrow'. Install it to use this feature.") from exc
     pq.write_table(df, path)
 ```
 
-### Type-only import for a heavy/optional type
+### Type-only import for heavy dependencies
 
 ```python
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
-    from heavy_lib import HugeType
+    from ml_playground.models.core.model import GPT
 ```
 
-### Temporary cycle break (documented)
+### Documented temporary cycle break
 
 ```python
-def compute():
-    # Cycle break: runtime imports runner, runner imports compute
-    from project.core.runner import run
-    return run()
+def compute_metrics():
+    # Cycle break: trainer.metrics imports compute_metrics during warm start
+    from ml_playground.training.metrics import aggregate
+
+    return aggregate()
 ```
+
+## Exception Handling Checklist
+
+- Document every surviving `__init__.py` with a `README` snippet or in-line comment that states the reason.
+- Open a tracking task for each exception to ensure eventual migration to pure namespaces.
+- Ensure no exception file performs imports that could create hidden re-export paths.
 
 ## Tooling Enforcement
 
-- Run the project's linter/formatter/import organizer before every commit to enforce ordering and grouping.
-- Type checkers must pass with type-only guards for heavy/optional types.
-- Changes to import structure should follow TDD and be committed with paired tests when behavior or public API surface
-  changes.
+- Run `make quality` (ruff + formatter) before every commit to enforce import style automatically.
+- Keep type checkers (`pyright`, `mypy`) green; use `TYPE_CHECKING` guards to avoid runtime imports.
+- Pair import-structure changes with relevant tests/documentation updates.
 
-## Review Checklist (Must Pass All)
+## Review Checklist
 
-- Are all imports absolute and from definitive submodules?
-- Any star imports, umbrella paths, or re-exports? (Must be none.)
-- Import groups in order: stdlib, third-party, local? Alphabetized?
-- Any top-level side effects or logging config triggered by import?
-- Any function-scope imports? If yes, only for optional deps or documented cycle break?
-- Optional deps imported only where needed with a clear error message?
-- Heavy/optional type imports guarded with TYPE_CHECKING?
+- **Namespace**: Does the change avoid introducing new `__init__.py` files or document approved exceptions?
+- **Imports**: Are all imports absolute and taken from canonical modules?
+- **Ordering**: Do import blocks follow stdlib / third-party / first-party grouping and alphabetical order?
+- **Side effects**: Does the diff introduce any top-level work beyond definitions? If so, is it justified?
+- **Cycles/optional deps**: Are local imports properly documented with follow-up tasks?
 
-## Rationale (Concise)
+## Rationale
 
-- Explicitness improves searchability, refactoring safety, and API stability.
-- Deterministic, side-effect-free imports yield faster startup and more reliable tests.
-- Reduced choice minimizes bikeshedding and accelerates reviews.
-- Tight rules prevent accidental public APIs and long-lived cycles.
+- PEP 420 namespaces eliminate boilerplate and make plugin/extensibility work straightforward.
+- Explicit imports improve searchability, refactoring safety, and API stability.
+- Deterministic, side-effect free imports yield faster startup time and more reliable tests.
+- Reduced choice limits bikeshedding in reviews and keeps the codebase consistent.
 
-Adhering to these rules ensures clarity, stability, and predictable behavior across the codebase.
+Adhering to these rules keeps the namespace flat, predictable, and ready for modular expansion.

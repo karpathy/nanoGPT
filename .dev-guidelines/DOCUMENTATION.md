@@ -61,6 +61,13 @@ ml_playground/experiments/shakespeare/
 - Avoid inline HTML where a Markdown alternative exists (MD033).
 - Ensure a single trailing newline (MD047).
 
+## Guideline Divergence Documentation
+
+- Any code or documentation that must temporarily diverge from repository guidelines **must** include a nearby TODO
+  comment in the format `# TODO Remove <context>: <reason>` (or language-appropriate equivalent).
+- The TODO comment must summarize the violating rule and the concrete exit criteria so IDEs and tooling can surface it.
+- Mention any linked task/PR when known, and remove the TODO as soon as the divergence is resolved.
+
 ## Cross-Referencing
 
 - Use relative links within the repository: `../../docs/framework_utilities.md` from experiment folders.

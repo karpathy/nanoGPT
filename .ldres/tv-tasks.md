@@ -36,53 +36,62 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
 </details>
 <!-- markdownlint-enable MD033 -->
 
-### Open · tv-2025-10-03:PR?? · Harmonize Python version requirements
+### Open · tv-2025-10-04:PR?? · Adopt PEP 420 import policy
 
-- **Priority**: P1
-- **Size**: S
-- **Meta?**: Yes — prevents environment drift.
-- **Dependencies**: None; coordinate with tooling owners if version pin changes are needed.
-- **Next steps**:
-  1. Python version target is 3.13.x (requirement `>=3.13`).
-  2. Update `pyproject.toml`, documentation, and tooling configs accordingly.
-  3. Run `make quality` and update CI matrices if required.
-- **Validation**: `make quality`; targeted CI run if matrix changes.
-- **Git plan**:
-  - Branch: `chore/python-version-alignment`
-{{ ... }}
-  - Commits:
-    - `chore(config): align python version requirements`
-      (`pyproject.toml`, `.dev-guidelines/SETUP.md`, `.github/workflows/quality.yml` if needed)
-- **PR**: Title `chore: align python version requirements`; body listing updated files and validation.
-
-### Open · tv-2025-10-03:PR?? · Fix import guideline violations
-
-- **Summary**: Resolve missing `from __future__ import annotations` declarations and relative imports.
+- **Summary**: Rewrite import guidelines and supporting docs to make implicit namespace packages
+  (`PEP 420`) the default while documenting rare exceptions.
 - **Priority**: P0
 - **Size**: M
-- **Meta?**: Yes — ensures consistency for downstream work.
-- **Dependencies**: Coordinate with module owners to avoid merge conflicts.
+- **Meta?**: Yes — policy shift precedes structural refactors.
+- **Dependencies**: Coordinate with tooling owners (lint, packaging) before rollout notes land.
 - **Next steps**:
-  1. Add future annotations import to `ml_playground/model.py`, `ml_playground/datasets/__init__.py`, and
-     `ml_playground/experiments/bundestag_qwen15b_lora_mps/__init__.py`.
-  2. Replace relative imports in `ml_playground/tokenizer.py` and `ml_playground/analysis/__init__.py` with
-     absolute paths per `IMPORT_GUIDELINES.md`.
-  3. Run `make quality` and ensure `pyright` stays green.
-- **Validation**: `make quality`.
+  1. Restructure `.dev-guidelines/IMPORT_GUIDELINES.md` around the PEP 420 policy (core principles,
+     exception policy, TODO tracking for divergences, transition FAQ).
+  2. Update cross-references in `.dev-guidelines/DEVELOPMENT.md`, documentation templates, and
+     agent prompts so the new guidance (incl. TODO requirement) is canonical.
+  3. Add a short "exception policy" section covering when `__init__.py` is still allowed (e.g.,
+     metadata shims) and how to document such cases with TODO comments.
+  4. Publish migration notes in `.ldres/` (or docs) so contributors know how to handle existing
+     packages during refactors and how to annotate temporary exceptions.
+- **Validation**: `make quality` (markdownlint, ruff, pyright on doc snippets).
 - **Git plan**:
-  - Branch: `fix/import-guidelines`
+  - Branch: `docs/import-policy-pep420`
   - Commits:
-    - `refactor(core): enforce import guidelines in tokenizer`
-      (`ml_playground/tokenizer.py`, dependent call sites)
-    - `refactor(analysis): replace relative import`
-      (`ml_playground/analysis/__init__.py`)
-    - `refactor(core): add future annotations import to model`
-      (`ml_playground/model.py`)
-    - `refactor(data): add future annotations import to datasets package`
-      (`ml_playground/datasets/__init__.py`)
-    - `refactor(experiments): add future annotations import to bundestag qwen package`
-      (`ml_playground/experiments/bundestag_qwen15b_lora_mps/__init__.py`)
-- **PR**: Title `refactor: enforce import guidelines`; body outlining files touched and validation.
+    - `docs(imports): adopt pep 420 namespace policy`
+      (`.dev-guidelines/IMPORT_GUIDELINES.md`)
+    - `docs(standards): sync development guidance`
+      (`.dev-guidelines/DEVELOPMENT.md`, `.ldres/` summaries)
+- **PR**: Title `docs: adopt pep 420 import policy`; body summarizing rationale, links, validation.
+
+### Open · tv-2025-10-04:PR?? · Migrate packages to implicit namespaces
+
+- **Summary**: Remove redundant `__init__.py` files, relocate version metadata, and ensure packaging,
+  tooling, and tests work with PEP 420 namespaces end-to-end.
+- **Priority**: P0
+- **Size**: L
+- **Meta?**: Yes — unblocks future package refactors and plugin-style extensions.
+- **Dependencies**: Complete "Adopt PEP 420 import policy" first; align with packaging/tooling owners.
+- **Next steps**:
+  1. Inventory every tracked `__init__.py`; classify must-keep (e.g., version shims) vs removable.
+  2. Introduce a replacement for `ml_playground/__version__` (e.g., `importlib.metadata`) and delete
+     the root `__init__.py` (add TODO comment only if temporary shim remains).
+  3. Drop docstring-only `__init__.py` files across `ml_playground/`, `tests/`, and `tools/` while
+     fixing any imports that referenced their re-exports; ensure any temporary holds include TODO
+     annotations.
+  4. Update packaging config (`pyproject.toml`, Hatch build target) and CI/test helpers to work with
+     namespace packages; confirm local `python -m ml_playground.cli` still resolves.
+  5. Run `make quality`, `pytest -q`, and a wheel build (`uv build`) to confirm zero regressions.
+- **Validation**: `make quality`; `pytest -q`; `uv build`.
+- **Git plan**:
+  - Branch: `refactor/pep420-migration`
+  - Commits:
+    - `refactor(namespace): remove redundant __init__ modules`
+      (deleted `__init__.py` files, updated imports)
+    - `build(package): configure hatch for pep 420`
+      (`pyproject.toml`, build scripts)
+    - `test(ci): verify namespace package compatibility`
+      (CI scripts, documentation snippets)
+- **PR**: Title `refactor: migrate to pep 420 namespaces`; body covering migration scope and validation.
 
 ### Open · tv-2025-10-03:PR?? · Establish regression test suite
 
