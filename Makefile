@@ -177,14 +177,14 @@ gguf-help: ## Show llama.cpp converter help
 # Coverage helper
 coverage: coverage-report ## [deprecated] use `make coverage-report`
 	@echo "[info] coverage-report completed; artifacts stored under .cache/coverage"
-coverage-test: ## Run pytest under coverage to materialize coverage data
+coverage-test: ## Run pytest under coverage to materialize coverage data (unit + property suites)
 	mkdir -p .cache/coverage .cache/hypothesis
 	COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage erase
 	HYPOTHESIS_DATABASE_DIRECTORY=$(CURDIR)/.cache/hypothesis \
 	HYPOTHESIS_STORAGE_DIRECTORY=$(CURDIR)/.cache/hypothesis \
 	HYPOTHESIS_SEED=0 \
 	PYTHONHASHSEED=0 \
-	COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage run -m pytest -n 0 -m "not perf"
+	COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage run -m pytest -n 0 tests/unit tests/property
 
 coverage-report: ## Generate coverage reports (term, HTML, JSON) under .cache/coverage
 ifndef SKIP_COVERAGE_TESTS

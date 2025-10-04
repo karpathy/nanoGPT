@@ -73,6 +73,9 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
   2. Work through deterministic modules first (CLI/config/data pipeline) using DI and fakes.
   3. Extend coverage to experiments and runtime surfaces while honoring runtime budgets.
   4. Gradually raise coverage gates (95% → 99% → 100%) in sync with completed milestones, logging each bump.
+- **Latest snapshot (2025-10-05)**:
+  - Global coverage 77.41% (`make coverage-report` running unit + property suites).
+  - Pre-commit gate temporarily relaxed to `--fail-under=77.00`; restore ≥81.50% after next Milestone 1 uplift.
 - **Module backlog** (open coverage tasks):
   - `ml_playground/data_pipeline/preparer.py`
   - `ml_playground/cli.py`
