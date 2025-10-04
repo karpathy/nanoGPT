@@ -62,29 +62,38 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
 
 ### Open · tv-2025-10-03:PR?? · Coverage roadmap towards ~100%
 
-- **Summary**: Define realistic milestones and guardrails to reach ~100% coverage while accounting for
-  stochastic tests.
-- **Priority**: P1
+- **Summary**: Chart a steady path toward 100% coverage with deterministic, guideline-compliant
+  tests. Roadmap lives in `docs/coverage/roadmap.md`.
 - **Size**: M
 - **Meta?**: Yes — strategy enables future coverage improvements.
 - **Dependencies**: Stabilized badge workflow (deferred `tv-2025-10-03:PR35`); reproducible-build epic
   (`tv-2025-10-03:PR??`).
 - **Next steps**:
-  1. Document current coverage gaps with module-level breakdown.
-  2. Classify gaps into deterministic vs stochastic segments; prioritize deterministic first.
-  3. Draft incremental targets (e.g., 85%, 90%, 95%); codify acceptance criteria per milestone.
-  4. Align CI dashboards to track milestones without flaking on stochastic components.
-  5. Enforce coverage baseline via `.githooks/.pre-commit-config.yaml` (currently 81.50% to account for CI variance);
-     raise threshold alongside improvements.
-- **Validation**: `make coverage-test`; `make quality`.
+  1. Generate a per-module coverage scoreboard and file tasks for gaps identified.
+  2. Work through deterministic modules first (CLI/config/data pipeline) using DI and fakes.
+  3. Extend coverage to experiments and runtime surfaces while honoring runtime budgets.
+  4. Gradually raise coverage gates (95% → 99% → 100%) in sync with completed milestones, logging each bump.
+- **Module backlog** (open coverage tasks):
+  - `ml_playground/data_pipeline/preparer.py`
+  - `ml_playground/cli.py`
+  - `ml_playground/configuration/loading.py`
+  - `ml_playground/models/core/inference.py`
+  - `ml_playground/training/ema.py`
+  - `ml_playground/experiments/bundestag_qwen15b_lora_mps/preparer.py`
+  - `ml_playground/experiments/bundestag_tiktoken/preparer.py`
+  - `ml_playground/experiments/bundestag_char/preparer.py`
+  - `ml_playground/experiments/speakger/preparer.py`
+  - `ml_playground/experiments/speakger/sampler.py`
+  - `ml_playground/training/hooks/logging.py`
+  - `ml_playground/training/hooks/runtime.py`
+  - `ml_playground/core/tokenizer_protocol.py`
+  - `ml_playground/core/logging_protocol.py`
 - **Git plan**:
   - Branch: `docs/coverage-roadmap`
   - Commits:
     - `docs(coverage): outline roadmap to ~100 percent coverage`
       (`docs/coverage/roadmap.md`, `.ldres/tv-tasks.md` cross-reference)
 - **PR**: Title `docs: define coverage roadmap`; body summarizing milestones, validation, and gating plan.
-
-### Open · tv-2025-10-03:PR?? · Mutation testing initiative
 
 - **Summary**: After coverage gating, introduce mutation-based testing (e.g., `cosmic-ray`) to measure test
   effectiveness.
