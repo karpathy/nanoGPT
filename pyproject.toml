@@ -138,6 +138,7 @@ exclude = '(^|.*/)(out/|data/|datasets/|checkpoints/|runs/|wandb/|lightning_logs
 
 explicit_package_bases = true
 mypy_path = ["."]
+namespace_packages = true
 
 # Speed up type checking by not following imports into third-party libraries
 follow_imports = "skip"
