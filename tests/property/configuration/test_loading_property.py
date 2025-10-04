@@ -119,6 +119,35 @@ train = "not-a-table"
         loading.load_train_config(bad_config, default_config_path=defaults_path)
 
 
+def test_load_sample_config_requires_sample_section(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text("", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"\[sample\]"):
+        loading.load_sample_config(config_path)
+
+
+def test_load_train_config_merges_defaults(tmp_path: Path) -> None:
+    defaults_path = _write_default_config(tmp_path)
+    config_path = tmp_path / "override.toml"
+    config_path.write_text(
+        """
+[train.model]
+n_layer = 3
+
+[train.runtime]
+out_dir = "./outputs"
+""",
+        encoding="utf-8",
+    )
+
+    cfg = loading.load_train_config(config_path, default_config_path=defaults_path)
+
+    assert cfg.model.n_layer == 3
+    assert cfg.model.n_head == 1  # inherited from defaults
+    assert cfg.runtime.out_dir == (config_path.parent / "outputs").resolve()
+
+
 @given(path_parts=_PATH_PARTS)
 @example(path_parts=["artifacts", "samples"])
 @settings(max_examples=20, deadline=None, derandomize=True)

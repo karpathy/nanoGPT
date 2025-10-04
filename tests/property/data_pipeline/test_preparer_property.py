@@ -133,3 +133,55 @@ def test_prepare_pipeline_invalid_split_extra(raw_split: object) -> None:
 
         with pytest.raises(DataError, match="split ratio"):
             pipeline.prepare_from_text("sample", create_tokenizer("char"))
+
+
+def test_pipeline_run_reads_raw_text_path(tmp_path: Path) -> None:
+    base = tmp_path
+    raw_dir = base / "raw"
+    raw_dir.mkdir()
+    raw_file = raw_dir / "input.txt"
+    raw_file.write_text("hello world", encoding="utf-8")
+
+    shared = _shared_config(base)
+    cfg = PreparerConfig(tokenizer_type="char", raw_text_path=raw_file)
+    pipeline = create_pipeline(cfg, shared)
+
+    outcome = pipeline.run()
+
+    assert outcome.metadata["train_tokens"] > 0
+    assert (shared.dataset_dir / "train.bin").exists()
+    assert (shared.dataset_dir / "val.bin").exists()
+    assert (shared.dataset_dir / "meta.pkl").exists()
+
+
+def test_pipeline_run_uses_tokenizer_factory(tmp_path: Path) -> None:
+    base = tmp_path
+    raw_file = base / "input.txt"
+    raw_file.write_text("abc", encoding="utf-8")
+
+    shared = _shared_config(base)
+    calls: list[object] = []
+
+    def _factory(kind: object) -> object:
+        calls.append(kind)
+        return create_tokenizer(kind)
+
+    cfg = PreparerConfig(
+        tokenizer_type="char",
+        raw_text_path=raw_file,
+        tokenizer_factory=_factory,
+    )
+    pipeline = create_pipeline(cfg, shared)
+    pipeline.run()
+
+    assert calls  # factory invoked
+    assert (shared.dataset_dir / "train.bin").exists()
+
+
+def test_pipeline_run_requires_raw_text_path(tmp_path: Path) -> None:
+    shared = _shared_config(tmp_path)
+    cfg = PreparerConfig(tokenizer_type="char")
+    pipeline = create_pipeline(cfg, shared)
+
+    with pytest.raises(DataError, match="No raw text path"):
+        pipeline.run()

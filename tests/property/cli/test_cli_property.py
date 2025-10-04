@@ -12,7 +12,12 @@ from hypothesis import example, given, settings
 from typer.testing import CliRunner
 
 import ml_playground.cli as cli
-from ml_playground.cli import CLIDependencies, override_cli_dependencies
+from ml_playground.cli import (
+    CLIDependencies,
+    _log_dir,
+    _run_prepare_impl,
+    override_cli_dependencies,
+)
 from ml_playground.configuration.models import (
     DataConfig,
     ExperimentConfig,
@@ -31,10 +36,29 @@ from ml_playground.configuration.models import (
 _EXCEPTION_TYPES = st.sampled_from([FileNotFoundError, ValueError, TypeError])
 _MESSAGES = st.text(min_size=1, max_size=32)
 _EXPERIMENT_NAMES = st.text(
-    alphabet=st.characters(min_codepoint=97, max_codepoint=122),
+    alphabet="abcdefghijklmnopqrstuvwxyz0123456789_",
     min_size=1,
     max_size=8,
 )
+
+
+def _make_shared(tmp_path: Path) -> SharedConfig:
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    train_dir = tmp_path / "train"
+    train_dir.mkdir()
+    sample_dir = tmp_path / "sample"
+    sample_dir.mkdir()
+    config_path = tmp_path / "config.toml"
+    config_path.write_text("{}", encoding="utf-8")
+    return SharedConfig(
+        experiment="demo",
+        config_path=config_path,
+        project_home=tmp_path,
+        dataset_dir=dataset_dir,
+        train_out_dir=train_dir,
+        sample_out_dir=sample_dir,
+    )
 
 
 def test_run_or_exit_keyboard_interrupt_logs_message(
@@ -64,6 +88,43 @@ def test_extract_exp_config_handles_missing_and_present_context() -> None:
 
     ctx.obj = {"exp_config": Path("/tmp/example.toml")}
     assert cli._extract_exp_config(ctx) == Path("/tmp/example.toml")
+
+
+def test_run_prepare_impl_executes_pipeline(tmp_path: Path) -> None:
+    shared = _make_shared(tmp_path)
+    raw_file = tmp_path / "raw.txt"
+    raw_file.write_text("hello world", encoding="utf-8")
+    cfg = PreparerConfig(tokenizer_type="char", raw_text_path=raw_file)
+
+    _run_prepare_impl("demo", cfg, shared.config_path, shared)
+
+    assert (shared.dataset_dir / "train.bin").exists()
+    assert (shared.dataset_dir / "val.bin").exists()
+    assert (shared.dataset_dir / "meta.pkl").exists()
+
+
+def test_log_dir_reports_states(tmp_path: Path) -> None:
+    class ListLogger:
+        def __init__(self) -> None:
+            self.infos: list[str] = []
+
+        def info(self, message: str) -> None:
+            self.infos.append(str(message))
+
+    logger = ListLogger()
+
+    _log_dir("tag", "unset", None, logger)
+    missing_path = tmp_path / "missing"
+    _log_dir("tag", "missing", missing_path, logger)
+
+    existing = tmp_path / "existing"
+    existing.mkdir()
+    (existing / "file.txt").write_text("data", encoding="utf-8")
+    _log_dir("tag", "existing", existing, logger)
+
+    assert any("<not set>" in msg for msg in logger.infos)
+    assert any("missing" in msg for msg in logger.infos)
+    assert any("Contents" in msg for msg in logger.infos)
 
 
 @given(exc_type=_EXCEPTION_TYPES, message=_MESSAGES, exit_code=st.integers(1, 32))
