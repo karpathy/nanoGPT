@@ -168,6 +168,46 @@ optimized for non-interactive or copy-paste workflows.
   gh pr view --web
   ```
 
+#### CI inspection shortcuts
+
+- **List recent runs for a branch**:
+
+  ```bash
+  gh run list --branch chore/python-version-alignment --limit 5 --json databaseId,headSha,status,conclusion,url
+  ```
+
+- **Surface failing runs only**:
+
+  ```bash
+  gh run list --branch chore/python-version-alignment --status failure --json databaseId,url
+  ```
+
+- **Inspect job-level status for a run**:
+
+  ```bash
+  gh api repos/mehrmorgen/nanoGPT/actions/runs/18234316534/jobs --jq '.jobs[] | {name,status,conclusion,log_url}'
+  ```
+
+#### PR management helpers
+
+- **One-shot PR status**:
+
+  ```bash
+  gh pr checks 41
+  ```
+
+- **Merge with rebase and clean branches**:
+
+  ```bash
+  gh pr merge 41 --rebase --delete-branch
+  ```
+
+- **Find PRs for the current branch**:
+
+  ```bash
+  gh pr list --head docs/dev-tooling
+  ```
+
 ### `fzf` helpers
 
 - **Interactive file picker feeding `rg`**:
@@ -200,6 +240,30 @@ optimized for non-interactive or copy-paste workflows.
 
   ```bash
   git -c pager.status=cat status --short --branch
+  ```
+
+- **Audit branch tracking info**:
+
+  ```bash
+  git branch -vv
+  ```
+
+- **List merged branches (safe to delete)**:
+
+  ```bash
+  git branch --merged
+  ```
+
+- **Prune local branches with no remote**:
+
+  ```bash
+  git remote prune origin
+  ```
+
+- **See commits not yet on master**:
+
+  ```bash
+  git rev-list refactor/p11-di-samplerconfig ^master
   ```
 
 ## Architecture Notes
