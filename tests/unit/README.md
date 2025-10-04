@@ -33,13 +33,8 @@ Standard unit tests that validate specific behaviors with hand-crafted examples.
 
 ### Property-Based Tests
 
-Property-based tests using Hypothesis to validate invariants across a wide range of generated inputs:
-
-- **Configuration System**: Tests dictionary merging, TOML serialization, and path computation with generated data
-  structures
-- **Data Loading Logic**: Tests batch sampling, memory mapping, and device placement with various array sizes and
-  configurations
-{{ ... }}
+Property-based tests using Hypothesis complement example-driven unit tests. They are organized separately under
+`tests/property/`; see that folder's `README.md` for structure and guidelines.
 
 ## Run Locally
 
@@ -53,7 +48,6 @@ Property-based tests using Hypothesis to validate invariants across a wide range
 tests/unit/
 ├── README.md                       - scope and rules for unit tests
 ├── analysis/                       - analysis-related unit tests
-│   └── analysis/                   - LIT integration, sample quality
 ├── configuration/                  - configuration models and loading
 ├── core/                           - core utilities (tokenizer, error handling)
 ├── data_pipeline/                  - data sources/transforms/sampling/preparer

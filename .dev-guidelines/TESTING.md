@@ -84,36 +84,39 @@ ml_playground/models/                     -> tests/unit/core/test_<module>.py
 
 **Rationale**: Tests document contracts and prevent regressions.
 
-### 4.1 Property-Based vs. Example Unit Tests
+### 4.1 Property-Based Testing First
 
-- **Framework**: Use Hypothesis for property-based testing.
-  Leverage `@example(...)` to encode canonical cases alongside generated data.
-- **When to favor properties**:
-  - Validate algebraic laws, round-trips, invariants, and metamorphic relations for pure, deterministic code paths.
-  - Explore broad input spaces for serializers, parsers, math/algorithmic utilities, and transformations.
-  - Capture bug reproductions: promote shrunk counterexamples into `@example(...)` inputs.
-- **Keep classic example/unit tests when**:
-  - Document named business rules or requirements.
-    (Keep `test_orders_over_100_get_free_shipping()` as a standalone example for clarity.)
-  - Guard regressions tied to a specific defect; the test name should reference the bug or issue.
-  - Exercise integration seams (HTTP, DB, time, concurrency) where properties lack a precise oracle.
-  - Assert protocol/state-machine flows or golden outputs where readability matters more than exhaustive exploration.
-- **Combining approaches**:
-  - Prefer a property plus a minimal set of named examples instead of parallel example tests covering the same logic.
-  - Stabilize CI by enabling `derandomize=true` (or fixed seeds).
-    Set explicit `@settings(max_examples=..., deadline=...)` to control runtime.
-  - Rotate seeds locally when hunting for new inputs; commit only deterministic seeds/examples.
-- **Placement**: Store property suites in files ending with `_property.py`
-  (e.g., `test_config_property.py`). Example-only suites remain in standard
-  `test_<module>.py` files.
-- **Performance**: Enforce strict time budgets. Tune `max_examples` and `deadline`
-  so each property completes comfortably within the unit-test thresholds.
-- **Determinism**: Property-based tests must run deterministically under CI seeds
-  and fail with the shrunk example in their assertion message.
+- **Default posture**: Start every new test effort with a Hypothesis property.
+  Only add example/unit tests when a property cannot adequately encode the oracle
+  or when readability of a named scenario is paramount.
+- **Framework**: Hypothesis is mandatory for properties.
+  Use `@example(...)` to pin canonical cases and previously discovered counterexamples.
+- **Design checklist before writing a property**:
+  - Identify invariants, round-trips, metamorphic relations, or conservation laws.
+  - Define the input strategy (custom `@st.composite` where needed) that reflects
+    production constraints.
+  - Set explicit `@settings(...)` for `max_examples`, `deadline`, and
+    `derandomize=True` to honor the runtime budgets in §2.
+- **When example/unit tests are acceptable**:
+  - Document an explicit business rule or regression where the name tells the
+    story (e.g., `test_orders_over_100_get_free_shipping`).
+  - Validate behavior that depends on opaque collaborators where crafting a
+    deterministic property would duplicate the implementation.
+  - Assert protocol/state-machine flows or golden outputs best expressed as a
+    short script.
+- **Hybrid approach**:
+  - Pair each property with the minimum set of named examples needed for clarity.
+  - Promote every shrunk counterexample to an `@example(...)` entry.
+  - Avoid parallel example tests that repeat the exact logic already covered by a
+    property.
+- **Organization**: Place property suites in files named `test_<subject>_property.py`.
+  Example-focused suites remain in `test_<module>.py`.
+- **Determinism & performance**: Properties must pass deterministically under CI
+  seeds. Tune strategies/settings so each property completes comfortably within
+  the <10 ms unit-test budget (or justify the overage in the test docstring).
 
-**Rationale**: Properties deliver broad coverage for pure logic, while focused
-example tests preserve readable specifications for business rules, regressions,
-and messy boundaries.
+**Rationale**: A property-first mindset maximizes behavioral exploration while
+retaining example tests for narrative requirements and hard-to-oracle seams.
 
 ### 5. Test Writing Style
 
@@ -195,14 +198,20 @@ patching.
 
 ### 11. Coverage Requirements (ULTRA-STRICT CI Gates)
 
-- **Global line coverage**: 100% (NO EXCEPTIONS)
-- **Per-module line coverage**: 100% for ALL `ml_playground/*` modules
-- **Branch coverage**: 100% for ALL modules (NO COMPROMISES)
-- **New/changed code**: Must achieve 100% coverage before merge
+- **Scope**: Coverage gates are enforced exclusively via the unit (`tests/unit/`) and
+  property-based (`tests/property/`) suites. Integration, E2E, acceptance, and perf
+  suites do **not** participate in coverage runs.
+- **Global line coverage**: 100% (NO EXCEPTIONS) across `ml_playground/*` when driven by
+  the unit + property suites.
+- **Per-module line coverage**: 100% for ALL `ml_playground/*` modules.
+- **Branch coverage**: 100% for ALL modules (NO COMPROMISES).
+- **New/changed code**: Must achieve 100% coverage (line + branch) under the unit +
+  property suites before merge.
 - **No pragma comments**: ABSOLUTELY FORBIDDEN except for impossible-to-test code (`if 0:`,
   `if __name__ == "__main__":`).
 
-**Rationale**: Complete test coverage ensures zero blind spots and maximum confidence in code quality.
+**Rationale**: Unit + property suites deliver exhaustive coverage for production code
+while keeping slower integration/E2E flows outside the gating path.
 
 **Badge workflow**:
 

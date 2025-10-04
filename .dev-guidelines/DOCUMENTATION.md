@@ -19,15 +19,11 @@ READMEs, tests READMEs, and tools.
 
 ## Required Sections per Experiment Readme
 
-- Overview (bulleted): dataset/model/method/pipeline at a glance.
-- Data (concise): point to relevant config keys (e.g., `[prepare]`, `[train.data]`).
-- Method/Model (concise): point to `[train.*]` keys; avoid restating defaults.
-- Environment Setup: the minimal commands (`make setup`, etc.).
-- How to Run: short, copy-pastable commands for prepare/train/sample/loop.
-- Configuration Highlights: only essential keys grouped by section; omit exhaustive TOML.
-- Outputs: brief list of important artifacts/paths.
-- Folder structure: include a tree with a short inline description after each entry.
-- Troubleshooting and Notes: concise, only experiment-specific items.
+- Follow the canonical blueprint documented in `ml_playground/experiments/Readme.md`.
+- Keep content focused on experiment-specific context; link back to shared docs for
+  general workflows, commands, or policies.
+- Include only the sections that add new information beyond the shared overview, trimming
+  any duplicated instructions.
 
 ## Folder Tree Standard
 
