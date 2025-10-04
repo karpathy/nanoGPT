@@ -36,62 +36,31 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
 </details>
 <!-- markdownlint-enable MD033 -->
 
-### Open · tv-2025-10-04:PR?? · Adopt PEP 420 import policy
+### Completed tasks (updated 2025-10-04)
 
-- **Summary**: Rewrite import guidelines and supporting docs to make implicit namespace packages
-  (`PEP 420`) the default while documenting rare exceptions.
-- **Priority**: P0
-- **Size**: M
-- **Meta?**: Yes — policy shift precedes structural refactors.
-- **Dependencies**: Coordinate with tooling owners (lint, packaging) before rollout notes land.
-- **Next steps**:
-  1. Restructure `.dev-guidelines/IMPORT_GUIDELINES.md` around the PEP 420 policy (core principles,
-     exception policy, TODO tracking for divergences, transition FAQ).
-  2. Update cross-references in `.dev-guidelines/DEVELOPMENT.md`, documentation templates, and
-     agent prompts so the new guidance (incl. TODO requirement) is canonical.
-  3. Add a short "exception policy" section covering when `__init__.py` is still allowed (e.g.,
-     metadata shims) and how to document such cases with TODO comments.
-  4. Publish migration notes in `.ldres/` (or docs) so contributors know how to handle existing
-     packages during refactors and how to annotate temporary exceptions.
-- **Validation**: `make quality` (markdownlint, ruff, pyright on doc snippets).
-- **Git plan**:
-  - Branch: `docs/import-policy-pep420`
-  - Commits:
-    - `docs(imports): adopt pep 420 namespace policy`
-      (`.dev-guidelines/IMPORT_GUIDELINES.md`)
-    - `docs(standards): sync development guidance`
-      (`.dev-guidelines/DEVELOPMENT.md`, `.ldres/` summaries)
-- **PR**: Title `docs: adopt pep 420 import policy`; body summarizing rationale, links, validation.
+#### Completed · tv-2025-10-04:PR43 · Adopt PEP 420 import policy
 
-### Open · tv-2025-10-04:PR?? · Migrate packages to implicit namespaces
+- **Summary**: Documented PEP 420 namespaces as the default, introduced TODO tracking for guideline divergences, and
+  updated tasks to reflect the new policy.
+- **Outcome**:
+  - Replaced `.dev-guidelines/IMPORT_GUIDELINES.md` with the namespace-first policy and TODO requirements.
+  - Added divergence documentation rules to `.dev-guidelines/DOCUMENTATION.md`.
+  - Updated `.ldres/tv-tasks.md` to align ongoing work with the new guidance.
+- **Validation**: `make quality`
+- **Branch/PR**: `docs/pep420-guidelines` → merged via PR #43 (`docs: adopt pep 420 import policy`).
 
-- **Summary**: Remove redundant `__init__.py` files, relocate version metadata, and ensure packaging,
-  tooling, and tests work with PEP 420 namespaces end-to-end.
-- **Priority**: P0
-- **Size**: L
-- **Meta?**: Yes — unblocks future package refactors and plugin-style extensions.
-- **Dependencies**: Complete "Adopt PEP 420 import policy" first; align with packaging/tooling owners.
-- **Next steps**:
-  1. Inventory every tracked `__init__.py`; classify must-keep (e.g., version shims) vs removable.
-  2. Introduce a replacement for `ml_playground/__version__` (e.g., `importlib.metadata`) and delete
-     the root `__init__.py` (add TODO comment only if temporary shim remains).
-  3. Drop docstring-only `__init__.py` files across `ml_playground/`, `tests/`, and `tools/` while
-     fixing any imports that referenced their re-exports; ensure any temporary holds include TODO
-     annotations.
-  4. Update packaging config (`pyproject.toml`, Hatch build target) and CI/test helpers to work with
-     namespace packages; confirm local `python -m ml_playground.cli` still resolves.
-  5. Run `make quality`, `pytest -q`, and a wheel build (`uv build`) to confirm zero regressions.
-- **Validation**: `make quality`; `pytest -q`; `uv build`.
-- **Git plan**:
-  - Branch: `refactor/pep420-migration`
-  - Commits:
-    - `refactor(namespace): remove redundant __init__ modules`
-      (deleted `__init__.py` files, updated imports)
-    - `build(package): configure hatch for pep 420`
-      (`pyproject.toml`, build scripts)
-    - `test(ci): verify namespace package compatibility`
-      (CI scripts, documentation snippets)
-- **PR**: Title `refactor: migrate to pep 420 namespaces`; body covering migration scope and validation.
+#### Completed · tv-2025-10-04:PR?? · Migrate packages to implicit namespaces
+
+- **Summary**: Eliminated redundant `__init__.py` files, moved version metadata to `pyproject.toml`, and
+  updated tooling to embrace PEP 420 namespaces.
+- **Outcome**:
+  - Deleted 20+ package-marker modules under `ml_playground/` and `tests/`, including root
+    `ml_playground/__init__.py` and `tests/support/__init__.py`.
+  - Added explicit exports in `tests/support/config_builders.py` to replace the removed facade.
+  - Configured Hatch wheel build (`pyproject.toml`) and mypy namespace settings; bumped package version to
+    `0.1.0` with matching `uv.lock` entry.
+- **Validation**: `make quality`; `uv run pytest -q`; `uv build`
+- **Branch/PR**: `refactor/pep420-migration` → PR pending (`refactor: migrate to pep 420 namespaces`).
 
 ### Open · tv-2025-10-03:PR?? · Establish regression test suite
 

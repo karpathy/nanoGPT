@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ml-playground"
-version = "0.0.0"
+version = "0.1.0"
 description = "A minimal GPT training repo (uv-integrated)"
 readme = "README.md"
 authors = [
@@ -56,7 +56,8 @@ package = true
 # allow system-specific torch wheels to be resolved from PyPI
 
 [tool.hatch.build.targets.wheel]
-packages = ["ml_playground"]
+packages = []
+include = ["ml_playground", "ml_playground/**"]
 
 
 [dependency-groups]
@@ -134,6 +135,9 @@ files = ["ml_playground"]
 # Additionally exclude analysis (LIT integration) to avoid pulling heavy third-party types
 # that slow down type checking and are not part of core runtime.
 exclude = '(^|.*/)(out/|data/|datasets/|checkpoints/|runs/|wandb/|lightning_logs/|artifacts/|mlruns/|htmlcov/|ml_playground/experiments/|ml_playground/analysis/|\\.idea/|\\.vscode/|\\.venv/|env/|\\.cache/|\\.git/)'
+
+explicit_package_bases = true
+mypy_path = ["."]
 
 # Speed up type checking by not following imports into third-party libraries
 follow_imports = "skip"
