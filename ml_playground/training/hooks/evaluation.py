@@ -8,7 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from ml_playground.configuration.models import TrainerConfig
 from ml_playground.data_pipeline.sampling.batches import SimpleBatches
-from ml_playground.estimator import estimate_loss
+from ml_playground.models.utils.estimator import estimate_loss
 from ml_playground.models.core.model import GPT
 
 

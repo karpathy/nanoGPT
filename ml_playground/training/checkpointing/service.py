@@ -6,7 +6,10 @@ import shutil
 from pathlib import Path
 from typing import Callable, Optional, cast
 
-from ml_playground.checkpoint import Checkpoint, CheckpointManager
+from ml_playground.training.checkpointing.checkpoint_manager import (
+    Checkpoint,
+    CheckpointManager,
+)
 from ml_playground.configuration.models import (
     TrainerConfig,
     SharedConfig,

@@ -18,7 +18,7 @@ from ml_playground.configuration.models import (
     SharedConfig,
     TrainerConfig,
 )
-from ml_playground.checkpoint import Checkpoint
+from ml_playground.training.checkpointing.checkpoint_manager import Checkpoint
 
 
 class _FakeBatches:

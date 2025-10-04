@@ -18,7 +18,7 @@ from ml_playground.configuration.models import (
     READ_POLICY_LATEST,
 )
 from ml_playground.core.error_handling import CheckpointError
-from ml_playground.checkpoint import Checkpoint
+from ml_playground.training.checkpointing.checkpoint_manager import Checkpoint
 from ml_playground.training.checkpointing import service
 
 

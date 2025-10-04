@@ -12,7 +12,10 @@ import logging
 import torch
 from torch import autocast
 
-from ml_playground.checkpoint import Checkpoint, CheckpointManager
+from ml_playground.training.checkpointing.checkpoint_manager import (
+    Checkpoint,
+    CheckpointManager,
+)
 from ml_playground.configuration.models import (
     ModelConfig,
     SamplerConfig,

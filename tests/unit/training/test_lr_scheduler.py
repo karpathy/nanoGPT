@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from ml_playground.lr_scheduler import get_lr
+from ml_playground.training.optim.lr_scheduler import get_lr
 
 
 def test_warmup_phase_linear_scaling() -> None:

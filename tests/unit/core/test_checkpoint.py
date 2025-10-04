@@ -9,7 +9,7 @@ from typing import Mapping
 import pytest
 import torch
 
-from ml_playground.checkpoint import (
+from ml_playground.training.checkpointing.checkpoint_manager import (
     Checkpoint,
     CheckpointManager,
     CheckpointDependencies,

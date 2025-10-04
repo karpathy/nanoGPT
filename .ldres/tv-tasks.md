@@ -103,7 +103,7 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
 - **PR**: Title `test: introduce mutation testing workflow`; body outlining configuration, validation, and
   follow-up tasks.
 
-### Open · tv-2025-10-05:PR?? · Integrate standalone units into canonical packages
+### Open · tv-2025-10-05:PR45 · Integrate standalone units into canonical packages
 
 - **Summary**: Relocate legacy flat modules (`checkpoint.py`, `ema.py`, `estimator.py`, `lr_scheduler.py`,
   `tokenizer_protocol.py`) into their canonical package homes and update all imports accordingly.
@@ -113,13 +113,9 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
 - **Dependencies**: PEP 420 namespace migration (PR #44) merged; regression/coverage tasks may depend on
   stabilized module paths.
 - **Next steps**:
-  1. Move `ml_playground/checkpoint.py` into `ml_playground/training/checkpointing/` and adjust imports/tests.
-  2. Move `ml_playground/ema.py` under `ml_playground/training/` (or `training/hooks/`) and update usage sites.
-  3. Relocate `ml_playground/estimator.py` into `ml_playground/models/utils/` and fix dependent modules/tests.
-  4. Port `ml_playground/lr_scheduler.py` into `ml_playground/training/optim/`; ensure CLI/config references
-     remain valid.
-  5. Integrate `ml_playground/tokenizer_protocol.py` into `ml_playground/core/` and drop any re-export facades.
-  6. Sweep for outdated imports, update docs/READMEs mentioning old paths, and clean up residual `__all__` exports.
+  1. Audit docs/READMEs for references to the removed shim modules and update language as needed.
+  2. Re-run targeted smoke validations once documentation edits land (`make quality`; `uv run pytest -q`).
+  3. Coordinate code review for PR #45 and prepare follow-up tasks if downstream teams surface additional import paths.
 - **Validation**: `make quality`; `uv run pytest -q` (full suite); targeted smoke of affected CLI commands.
 - **Git plan**:
   - Branch: `refactor/standalone-to-canonical`
@@ -130,8 +126,8 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
     - `refactor(training): reorganize lr scheduler`
     - `refactor(core): integrate tokenizer protocol`
     - `docs(project): refresh module path references`
-- **PR**: Title `refactor: integrate standalone units into canonical packages`; body covering Summary, Testing,
-  Checklist.
+- **PR**: [`refactor: integrate standalone units into canonical packages`](https://github.com/mehrmorgen/nanoGPT/pull/45)
+  (Summary, Testing, Checklist included).
 
 ---
 

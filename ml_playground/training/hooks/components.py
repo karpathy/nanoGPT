@@ -9,7 +9,7 @@ from torch.amp.grad_scaler import GradScaler
 from torch.utils.tensorboard import SummaryWriter
 
 from ml_playground.configuration.models import TrainerConfig
-from ml_playground.ema import EMA
+from ml_playground.training.ema import EMA
 from ml_playground.models.core.model import GPT
 from ml_playground.training.hooks.runtime import RuntimeContext
 

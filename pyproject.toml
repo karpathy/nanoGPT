@@ -171,6 +171,7 @@ norecursedirs = [
     "artifacts",
     "mlruns",
     ".cache",
+    ".hypothesis",
     "htmlcov",
 ]
 filterwarnings = [
@@ -235,7 +236,7 @@ precision = 2
 directory = ".cache/coverage/htmlcov"
 
 [cosmic-ray]
-module-path = "ml_playground/checkpoint.py"
+module-path = "ml_playground/training/checkpointing/checkpoint_manager.py"
 timeout = 3.0
 excluded-modules = [
   "ml_playground/core/tokenizer_protocol.py",

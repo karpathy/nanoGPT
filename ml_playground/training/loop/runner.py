@@ -17,7 +17,7 @@ from ml_playground.configuration.models import (
     LRSchedule,
     OptimConfig,
 )
-from ml_playground.ema import EMA
+from ml_playground.training.ema import EMA
 from ml_playground.models.core.model import GPT
 
 from ml_playground.core.error_handling import CheckpointError
