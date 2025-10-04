@@ -176,8 +176,13 @@ def _extract_exp_config(ctx: typer.Context) -> Path | None:
     """Extract the --exp-config path from the Typer context."""
     obj = getattr(ctx, "obj", None)
     if not isinstance(obj, dict):
+        logging.getLogger(__name__).debug(
+            "Context object missing or not a dict; no exp_config."
+        )
         return None
-    return obj.get("exp_config")
+    exp_config = obj.get("exp_config")
+    logging.getLogger(__name__).debug("Context exp_config resolved to %s", exp_config)
+    return exp_config
 
 
 def run_or_exit(
