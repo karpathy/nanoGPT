@@ -86,3 +86,28 @@ def test_run_evaluation_records_scalars() -> None:
     assert ("Loss/train", 0.5, 1) in writer.entries
     assert ("Loss/val", 0.4, 1) in writer.entries
     assert ("LR", 0.01, 1) in writer.entries
+
+
+def test_run_evaluation_without_writer() -> None:
+    """run_evaluation should work without a TensorBoard writer."""
+    cfg = _cfg()
+    logger = _Logger()
+
+    def fake_estimate(model, batches, eval_iters, ctx):
+        del model, batches, eval_iters, ctx
+        return {"train": 0.6, "val": 0.5}
+
+    losses = evaluation.run_evaluation(
+        cfg,
+        logger=logger,
+        iter_num=2,
+        lr=0.02,
+        raw_model=None,
+        batches=None,
+        ctx=None,
+        writer=None,
+        estimate_loss_fn=fake_estimate,
+    )
+
+    assert losses == {"train": 0.6, "val": 0.5}
+    assert any("train loss" in msg for msg in logger.messages)
