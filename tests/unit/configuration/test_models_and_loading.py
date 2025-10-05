@@ -19,6 +19,7 @@ from ml_playground.configuration.models import (
 )
 from ml_playground.configuration import cli as config_cli
 from ml_playground.configuration import loading as config_loading
+from ml_playground.configuration.merge_utils import merge_mappings
 from tests.conftest import minimal_full_experiment_toml
 
 
@@ -494,29 +495,29 @@ def test_runtimeconfig_defaults_and_checkpointing() -> None:
     assert runtime.ckpt_time_interval_minutes == 0
 
 
-def test_deep_merge_dicts_nested_and_replace() -> None:
+def test_merge_mappings_nested_and_replace() -> None:
     base = {"a": 1, "b": {"x": 1, "y": 2}, "c": {"k": 1}, "d": 4}
     override = {"b": {"y": 20, "z": 3}, "c": 5, "e": 6}
-    out = config_loading.deep_merge_dicts(base, override)
+    out = merge_mappings(base, override)
     assert out["b"] == {"x": 1, "y": 20, "z": 3}
     assert out["c"] == 5
     assert out["a"] == 1 and out["d"] == 4
     assert out["e"] == 6
 
 
-def test_deep_merge_numeric_replacements() -> None:
+def test_merge_mappings_numeric_replacements() -> None:
     base = {"a": {"x": 1, "y": -2}, "b": 10}
     override = {"a": {"x": 3}, "b": 0}
-    out = config_loading.deep_merge_dicts(base, override)
+    out = merge_mappings(base, override)
     assert out["a"]["x"] == 3
     assert out["a"]["y"] == -2
     assert out["b"] == 0
 
 
-def test_deep_merge_type_replacement() -> None:
+def test_merge_mappings_type_replacement() -> None:
     base = {"a": {"x": 1}, "b": {"y": 2}}
     override = {"b": 7}
-    out = config_loading.deep_merge_dicts(base, override)
+    out = merge_mappings(base, override)
     assert out["a"] == {"x": 1}
     assert out["b"] == 7
 

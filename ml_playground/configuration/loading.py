@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable, Dict, Mapping, TypedDict, cast
 
@@ -13,6 +12,7 @@ from ml_playground.configuration.models import (
     SamplerConfig,
     TrainerConfig,
 )
+from ml_playground.configuration.merge_utils import merge_mappings
 
 logger = logging.getLogger(__name__)
 
@@ -85,17 +85,6 @@ def read_toml_dict(
     return cast(TomlMapping, data)
 
 
-def deep_merge_dicts(base: TomlMapping, override: TomlMapping) -> TomlMapping:
-    out: TomlMapping = dict(base)
-    for key, value in override.items():
-        existing = out.get(key)
-        if isinstance(existing, dict) and isinstance(value, dict):
-            out[key] = deep_merge_dicts(existing, value)
-        else:
-            out[key] = deepcopy(value)
-    return out
-
-
 def _default_config_path_from_root(project_root: Path) -> Path:
     return project_root / "ml_playground" / "experiments" / "default_config.toml"
 
@@ -122,33 +111,9 @@ def _load_and_merge_configs(
     )
     ldres_raw = read_toml_dict(ldres_config) if ldres_config.exists() else {}
 
-    def _merge_present(
-        defaults_map: Mapping[str, Any], exp_map: Mapping[str, Any], ctx: str
-    ) -> TomlMapping:
-        defaults_dict = _ensure_mapping(defaults_map, f"defaults for {ctx}")
-        exp_dict = _ensure_mapping(exp_map, ctx)
-        out: TomlMapping = {}
-        for key, exp_val in exp_dict.items():
-            default_val = defaults_dict.get(key)
-            if isinstance(default_val, Mapping) and isinstance(exp_val, Mapping):
-                out[key] = _merge_present(
-                    default_val,
-                    exp_val,
-                    f"{ctx}.{key}" if ctx else key,
-                )
-            else:
-                out[key] = deepcopy(exp_val)
-        return out
+    merged = merge_mappings(defaults_raw, raw_exp, override_only=True)
 
-    merged: TomlMapping = {}
-    for key, value in raw_exp.items():
-        default_value = defaults_raw.get(key)
-        if isinstance(value, Mapping) and isinstance(default_value, Mapping):
-            merged[key] = _merge_present(default_value, value, f"experiment[{key}]")
-        else:
-            merged[key] = deepcopy(value)
-
-    merged_payload = deep_merge_dicts(merged, ldres_raw)
+    merged_payload = merge_mappings(merged, ldres_raw)
     return cast(ExperimentPayload, merged_payload)
 
 
@@ -183,7 +148,7 @@ def load_train_config(
     )
     defaults_raw = read_toml_dict(defaults_path) if defaults_path.exists() else {}
 
-    raw_merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
+    raw_merged = merge_mappings(defaults_raw, raw_exp)
 
     train_data = _ensure_mapping(raw_merged.get("train", {}), "[train] section")
 
@@ -203,7 +168,7 @@ def load_sample_config(
     defaults_path = _default_config_path_from_root(project_root)
     defaults_raw = read_toml_dict(defaults_path) if defaults_path.exists() else {}
 
-    raw_merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
+    raw_merged = merge_mappings(defaults_raw, raw_exp)
 
     if "sample" not in raw_exp:
         raise ValueError("Config must contain a [sample] section")
@@ -226,7 +191,7 @@ def load_prepare_config(
     defaults_path = _default_config_path_from_root(project_root)
     defaults_raw = read_toml_dict(defaults_path) if defaults_path.exists() else {}
 
-    raw_merged = deep_merge_dicts(deepcopy(defaults_raw), deepcopy(raw_exp))
+    raw_merged = merge_mappings(defaults_raw, raw_exp)
 
     if "prepare" not in raw_merged:
         raise ValueError("Config must contain a [prepare] section")
@@ -254,7 +219,7 @@ __all__ = [
     "get_default_config_path",
     "list_experiments_with_config",
     "read_toml_dict",
-    "deep_merge_dicts",
+    "merge_mappings",
     "load_full_experiment_config",
     "load_train_config",
     "load_sample_config",

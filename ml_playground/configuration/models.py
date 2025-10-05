@@ -43,21 +43,6 @@ ModelFactoryFn = _t.Callable[[Any, object], Any]
 CompileModelFn = _t.Callable[[Any], Any]
 
 
-def merge_configs(base_config: Any, override_config: Any) -> dict[str, Any]:
-    """Merge two configuration dictionaries with nested support."""
-
-    if not isinstance(base_config, dict) or not isinstance(override_config, dict):
-        return override_config if isinstance(override_config, dict) else base_config
-
-    merged = dict(base_config)
-    for key, value in override_config.items():
-        if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
-            merged[key] = merge_configs(merged[key], value)
-        else:
-            merged[key] = value
-    return merged
-
-
 def _resolve_path_strict(v: Path) -> Path:
     try:
         return v.resolve()
@@ -532,7 +517,6 @@ class SharedConfig(_FrozenStrictModel):
 
 
 __all__ = [
-    "merge_configs",
     "READ_POLICY_LATEST",
     "READ_POLICY_BEST",
     "DEFAULT_READ_POLICY",

@@ -13,6 +13,7 @@ import pytest
 import tomllib
 
 from ml_playground.configuration import loading as config_loading
+from ml_playground.configuration.merge_utils import merge_mappings
 
 
 @st.composite
@@ -88,15 +89,15 @@ def toml_dict_strategy(draw: st.DrawFn) -> dict[str, Any]:
     )
 
 
-class TestDeepMergeDicts:
-    """Property-based tests for `deep_merge_dicts`."""
+class TestMergeMappings:
+    """Property-based tests for `merge_mappings`."""
 
     @given(base=dict_strategy(), override=dict_strategy())
     @settings(max_examples=100)
     def test_merge_preserves_base_keys_not_in_override(
         self, base: dict[str, Any], override: dict[str, Any]
     ) -> None:
-        result = config_loading.deep_merge_dicts(base, override)
+        result = merge_mappings(base, override)
         for key in base:
             if key not in override:
                 assert key in result
@@ -107,12 +108,12 @@ class TestDeepMergeDicts:
     def test_merge_overrides_base_values(
         self, base: dict[str, Any], override: dict[str, Any]
     ) -> None:
-        result = config_loading.deep_merge_dicts(base, override)
+        result = merge_mappings(base, override)
         for key, value in override.items():
             if not isinstance(value, dict):
                 assert result[key] == value
             elif key in base and isinstance(base[key], dict):
-                assert result[key] == config_loading.deep_merge_dicts(base[key], value)
+                assert result[key] == merge_mappings(base[key], value)
 
     @given(d1=dict_strategy(), d2=dict_strategy(), d3=dict_strategy())
     @settings(max_examples=50)
@@ -120,12 +121,8 @@ class TestDeepMergeDicts:
         self, d1: dict[str, Any], d2: dict[str, Any], d3: dict[str, Any]
     ) -> None:
         try:
-            result1 = config_loading.deep_merge_dicts(
-                config_loading.deep_merge_dicts(d1, d2), d3
-            )
-            result2 = config_loading.deep_merge_dicts(
-                d1, config_loading.deep_merge_dicts(d2, d3)
-            )
+            result1 = merge_mappings(merge_mappings(d1, d2), d3)
+            result2 = merge_mappings(d1, merge_mappings(d2, d3))
             assert result1 == result2
         except Exception:
             pass
@@ -133,13 +130,13 @@ class TestDeepMergeDicts:
     @given(base=dict_strategy())
     @settings(max_examples=50)
     def test_merge_with_empty_override(self, base: dict[str, Any]) -> None:
-        result = config_loading.deep_merge_dicts(base, {})
+        result = merge_mappings(base, {})
         assert result == base
 
     @given(override=dict_strategy())
     @settings(max_examples=50)
     def test_merge_with_empty_base(self, override: dict[str, Any]) -> None:
-        result = config_loading.deep_merge_dicts({}, override)
+        result = merge_mappings({}, override)
         assert result == override
 
 
