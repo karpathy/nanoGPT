@@ -9,7 +9,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from pathlib import Path
 from textwrap import dedent
-from typing import Callable, Iterator
+from typing import Callable, ContextManager
 import random
 import numpy as np
 import pytest
@@ -116,11 +116,11 @@ def shared_config_factory() -> Callable[[Path], SharedConfig]:
 
 
 @pytest.fixture()
-def override_attr() -> Callable[[object, str, object], Iterator[None]]:
+def override_attr() -> Callable[[object, str, object], ContextManager[None]]:
     """Provide a context manager for temporarily overriding attributes on objects."""
 
     @contextmanager
-    def _override(target: object, attr: str, value: object) -> Iterator[None]:
+    def _override(target: object, attr: str, value: object) -> ContextManager[None]:
         original = getattr(target, attr)
         setattr(target, attr, value)
         try:

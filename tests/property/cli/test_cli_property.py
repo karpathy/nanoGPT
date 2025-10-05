@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from contextlib import ExitStack
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, ContextManager
 
 import hypothesis.strategies as st
 import pytest
@@ -183,7 +183,7 @@ def test_run_or_exit_handles_runtime_error() -> None:
 
 
 def test_global_device_setup_handles_runtime_error(
-    override_attr: Callable[[object, str, object], Iterator[None]],
+    override_attr: Callable[[object, str, object], ContextManager[None]],
 ) -> None:
     class BadTorch:
         def manual_seed(self, seed: int) -> None:  # pragma: no cover - invoked
@@ -195,7 +195,7 @@ def test_global_device_setup_handles_runtime_error(
 
 
 def test_global_device_setup_sets_cuda_state(
-    override_attr: Callable[[object, str, object], Iterator[None]],
+    override_attr: Callable[[object, str, object], ContextManager[None]],
 ) -> None:
     seed_calls: list[tuple[str, int]] = []
 
@@ -223,7 +223,7 @@ def test_global_device_setup_sets_cuda_state(
 def test_run_train_impl_invokes_trainer(
     tmp_path: Path,
     shared_config_factory: Callable[[Path], SharedConfig],
-    override_attr: Callable[[object, str, object], Iterator[None]],
+    override_attr: Callable[[object, str, object], ContextManager[None]],
 ) -> None:
     shared = shared_config_factory(tmp_path)
     log_calls: list[tuple[str, Path]] = []
@@ -271,7 +271,7 @@ def test_run_train_impl_invokes_trainer(
 def test_run_sample_impl_invokes_sampler(
     tmp_path: Path,
     shared_config_factory: Callable[[Path], SharedConfig],
-    override_attr: Callable[[object, str, object], Iterator[None]],
+    override_attr: Callable[[object, str, object], ContextManager[None]],
 ) -> None:
     shared = shared_config_factory(tmp_path)
     log_calls: list[tuple[str, Path]] = []

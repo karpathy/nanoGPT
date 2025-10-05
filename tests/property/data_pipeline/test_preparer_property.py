@@ -1,18 +1,18 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import hypothesis.strategies as st
-from hypothesis import HealthCheck, example, given, settings
 import numpy as np
 import pytest
+from hypothesis import HealthCheck, example, given, settings
 
 from ml_playground.configuration.models import DataConfig, PreparerConfig, SharedConfig
 from ml_playground.core.error_handling import DataError
 from ml_playground.core.tokenizer import create_tokenizer
 from ml_playground.data_pipeline.preparer import PreparationOutcome, create_pipeline
-
 
 _TEXT = st.text(alphabet="abcdefghijklmnopqrstuvwxyz \n", min_size=1, max_size=128)
 _SPLITS = st.floats(
@@ -28,35 +28,25 @@ _META_EXTRAS = st.dictionaries(
 )
 
 
-def _shared_config(base: Path) -> SharedConfig:
-    dataset_dir = base / "dataset"
-    dataset_dir.mkdir(exist_ok=True)
-    return SharedConfig(
-        experiment="pbt",
-        config_path=base / "config.toml",
-        project_home=base,
-        dataset_dir=dataset_dir,
-        train_out_dir=base / "train",
-        sample_out_dir=base / "sample",
-    )
-
-
 @given(text=_TEXT, split=_SPLITS, meta=_META_EXTRAS)
 @example(text="abc", split=0.5, meta={"mode": 1})
 @settings(
     max_examples=20,
     deadline=None,
     derandomize=True,
-    suppress_health_check=[HealthCheck.too_slow],
+    suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
 )
 def test_prepare_pipeline_creates_artifacts(
-    text: str, split: float, meta: dict[str, int]
+    text: str,
+    split: float,
+    meta: dict[str, int],
+    shared_config_factory: Callable[[Path], SharedConfig],
 ) -> None:
     """`create_pipeline().prepare_from_text` yields deterministic artifacts matching metadata expectations."""
 
     with TemporaryDirectory() as tmpdir:
         base = Path(tmpdir)
-        shared = _shared_config(base)
+        shared = shared_config_factory(base)
         cfg = PreparerConfig(tokenizer_type="char", extras={"split": split})
         pipeline = create_pipeline(cfg, shared)
 
@@ -86,12 +76,14 @@ def test_prepare_pipeline_creates_artifacts(
         assert val_arr.size == val_expected
 
 
-def test_prepare_pipeline_uses_data_config_paths() -> None:
+def test_prepare_pipeline_uses_data_config_paths(
+    shared_config_factory: Callable[[Path], SharedConfig],
+) -> None:
     """Custom `DataConfig` extras should control output artifact locations."""
 
     with TemporaryDirectory() as tmpdir:
         base = Path(tmpdir)
-        shared = _shared_config(base)
+        shared = shared_config_factory(base)
         data_cfg = DataConfig(
             train_bin="train_custom.bin",
             val_bin="val_custom.bin",
@@ -108,12 +100,14 @@ def test_prepare_pipeline_uses_data_config_paths() -> None:
         assert (shared.dataset_dir / "meta_custom.pkl").exists()
 
 
-def test_prepare_pipeline_rejects_non_dataconfig_extra() -> None:
+def test_prepare_pipeline_rejects_non_dataconfig_extra(
+    shared_config_factory: Callable[[Path], SharedConfig],
+) -> None:
     """Providing a non-`DataConfig` `data_config` extra must raise `DataError`."""
 
     with TemporaryDirectory() as tmpdir:
         base = Path(tmpdir)
-        shared = _shared_config(base)
+        shared = shared_config_factory(base)
         cfg = PreparerConfig(tokenizer_type="char", extras={"data_config": "invalid"})
         pipeline = create_pipeline(cfg, shared)
 
@@ -122,12 +116,15 @@ def test_prepare_pipeline_rejects_non_dataconfig_extra() -> None:
 
 
 @pytest.mark.parametrize("raw_split", ["bad", -0.1, 1.5])
-def test_prepare_pipeline_invalid_split_extra(raw_split: object) -> None:
+def test_prepare_pipeline_invalid_split_extra(
+    raw_split: object,
+    shared_config_factory: Callable[[Path], SharedConfig],
+) -> None:
     """Invalid `split` extras should raise `DataError` when no explicit split is provided."""
 
     with TemporaryDirectory() as tmpdir:
         base = Path(tmpdir)
-        shared = _shared_config(base)
+        shared = shared_config_factory(base)
         cfg = PreparerConfig(tokenizer_type="char", extras={"split": raw_split})
         pipeline = create_pipeline(cfg, shared)
 
@@ -135,14 +132,17 @@ def test_prepare_pipeline_invalid_split_extra(raw_split: object) -> None:
             pipeline.prepare_from_text("sample", create_tokenizer("char"))
 
 
-def test_pipeline_run_reads_raw_text_path(tmp_path: Path) -> None:
+def test_pipeline_run_reads_raw_text_path(
+    tmp_path: Path,
+    shared_config_factory: Callable[[Path], SharedConfig],
+) -> None:
     base = tmp_path
     raw_dir = base / "raw"
     raw_dir.mkdir()
     raw_file = raw_dir / "input.txt"
     raw_file.write_text("hello world", encoding="utf-8")
 
-    shared = _shared_config(base)
+    shared = shared_config_factory(base)
     cfg = PreparerConfig(tokenizer_type="char", raw_text_path=raw_file)
     pipeline = create_pipeline(cfg, shared)
 
@@ -154,12 +154,15 @@ def test_pipeline_run_reads_raw_text_path(tmp_path: Path) -> None:
     assert (shared.dataset_dir / "meta.pkl").exists()
 
 
-def test_pipeline_run_uses_tokenizer_factory(tmp_path: Path) -> None:
+def test_pipeline_run_uses_tokenizer_factory(
+    tmp_path: Path,
+    shared_config_factory: Callable[[Path], SharedConfig],
+) -> None:
     base = tmp_path
     raw_file = base / "input.txt"
     raw_file.write_text("abc", encoding="utf-8")
 
-    shared = _shared_config(base)
+    shared = shared_config_factory(base)
     calls: list[object] = []
 
     def _factory(kind: object) -> object:
@@ -175,11 +178,14 @@ def test_pipeline_run_uses_tokenizer_factory(tmp_path: Path) -> None:
     pipeline.run()
 
     assert calls  # factory invoked
-    assert (shared.dataset_dir / "train.bin").exists()
+    assert (shared.dataset_dir / "meta.pkl").exists()
 
 
-def test_pipeline_run_requires_raw_text_path(tmp_path: Path) -> None:
-    shared = _shared_config(tmp_path)
+def test_pipeline_run_requires_raw_text_path(
+    tmp_path: Path,
+    shared_config_factory: Callable[[Path], SharedConfig],
+) -> None:
+    shared = shared_config_factory(tmp_path)
     cfg = PreparerConfig(tokenizer_type="char")
     pipeline = create_pipeline(cfg, shared)
 
