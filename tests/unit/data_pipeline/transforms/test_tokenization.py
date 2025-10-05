@@ -77,3 +77,27 @@ def test_create_standardized_metadata_with_extras() -> None:
 
     assert meta["custom_field"] == "value"
     assert meta["another"] == 123
+
+
+def test_create_standardized_metadata_handles_attribute_errors() -> None:
+    """create_standardized_metadata should handle AttributeError gracefully."""
+
+    # Create a mock tokenizer without stoi attribute
+    class MockTokenizer:
+        name = "mock"
+        vocab_size = 10
+
+        def encode(self, text: str) -> list[int]:
+            return [1, 2, 3]
+
+        def decode(self, ids: list[int]) -> str:
+            return "test"
+
+    tokenizer = MockTokenizer()
+
+    # Should not raise, just skip the stoi/encoding_name additions
+    meta = create_standardized_metadata(tokenizer, 100, 20)
+
+    assert meta["tokenizer_type"] == "mock"
+    assert "stoi" not in meta
+    assert "encoding_name" not in meta
