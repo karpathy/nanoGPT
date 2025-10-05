@@ -11,7 +11,12 @@ from ml_playground.cli import main
 
 @pytest.fixture()
 def tmp_dataset(tmp_path: Path) -> Path:
-    # create a minimal dataset in a temporary directory
+    """Create the smallest dataset that still satisfies CLI expectations.
+
+    The char pipeline requires enough tokens to cover a 64-token block size and to
+    populate both `train.bin` and `val.bin`. A 512-token uint16 ramp meets those
+    constraints while keeping disk writes tiny and deterministic.
+    """
     ds = tmp_path / "dataset"
     ds.mkdir(parents=True, exist_ok=True)
     arr: npt.NDArray[np.uint16] = (
@@ -35,7 +40,18 @@ def tmp_dataset(tmp_path: Path) -> Path:
 
 
 def _write_exp_config(tmp_dir: Path, out_dir: Path, dataset_dir: Path) -> Path:
-    """Create a minimal, strict experiment config TOML pointing to tmp paths."""
+    """Emit a tiny-but-realistic config that exercises training + sampling.
+
+    The numeric knobs are intentionally at the minimum values that still trigger
+    checkpoint rotation, metrics logging, and sampler compatibility:
+
+    - Model: single layer/head (`n_layer=1`, `n_head=2`, `n_embd=64`) still matches
+      the 256-token vocab and 64-token block without hitting validation errors.
+    - Runtime: CPU-only, `max_iters=4`, `eval_interval=1`, and `keep.last/best = 1`
+      prove rotation logic while finishing in <0.1s.
+    - Sampling: reuse the same out_dir so the sample command consumes the fresh
+      checkpoint instead of rebuilding artifacts.
+    """
     # Ensure Windows paths are properly escaped for TOML
     dataset_dir_str = str(dataset_dir).replace("\\", "\\\\")
     out_dir_str = str(out_dir).replace("\\", "\\\\")

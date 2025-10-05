@@ -97,6 +97,13 @@ class DummyPeftModel:
 
 
 def _make_sampler_cfg(out_dir: Path) -> SamplerConfig:
+    """Return the leanest sampler config that still exercises analysis output.
+
+    The runtime stays on CPU with eager execution so no compilation overhead is
+    introduced. `max_new_tokens=5` and `num_samples=1` ensure only a single JSON
+    + text pair is generated, yet the injected `DummyTokenizer` still yields rich
+    enough content for header/line/n-gram analysis checks.
+    """
     rt = RuntimeConfig(
         out_dir=out_dir, device="cpu", dtype="float32", seed=1, compile=False
     )

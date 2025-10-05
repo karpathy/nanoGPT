@@ -4,107 +4,70 @@ Last updated: 2025-10-05
 
 ## Baseline snapshot
 
-- Overall line coverage (2025-10-05): **77.41%**
-  (`make coverage-report` under Python 3.13.5; unit + property suites only)
-- Pre-commit gate: `coverage report --fail-under=77.00`
-  (matches narrowed suite scope; restore 81.50% after next Milestone 1 bump)
-- Coverage data stored under `.cache/coverage/coverage.sqlite`
+- Overall line coverage (2025-10-05): **87.28%**\
+  (`make coverage-report` on Python 3.13.5; unit + property suites)
+- Pre-commit gate: `coverage report --fail-under=87.00`
+  (raise alongside completed milestones: 90 → 95 → 99 → 100)
+- Coverage artifacts stored under `.cache/coverage/coverage.sqlite`
 
 ## Policy alignment
 
-- `.dev-guidelines/TESTING.md` mandates **100% line and branch coverage per module** with
-  no exceptions or test-specific production code paths.
-- Transitional gating remains acceptable while deficits are being retired, but the
-  long-term goal is full compliance. Coverage rises should happen steadily without
-  compromising determinism or quality.
-- Testing must remain deterministic, mock-free, and within the runtime budgets defined
-  in the guidelines.
+- `.dev-guidelines/TESTING.md` targets **100% line and branch coverage per module** with deterministic, mock-free tests.
+- Transitional gates are acceptable while concrete gaps are being closed, but every milestone should tighten enforcement.
+- Tests must remain within documented runtime budgets and avoid test-only production branches.
 
-## Gap analysis
+## Remaining gaps
 
-- **High-impact deterministic gaps**
+- **Deterministic modules**
 
-  - `ml_playground/cli.py` (66.39%): CLI option error paths, dataset downloads,
-    and project scaffolding flows lack unit coverage.
-  - `ml_playground/configuration/loading.py` (81.21%): Config file fallbacks and
-    environment-variable overrides currently rely on ad-hoc experimentation.
-  - `ml_playground/data_pipeline/preparer.py` (76.24%): File IO and metadata
-    generation branches still need DI-based coverage for tokenizer factories and
-    split validation.
-  - Experiment preparers (`bundestag_qwen15b_lora_mps`, `bundestag_tiktoken`,
-    `speakger/preparer.py`): Deterministic validation branches are missing.
+  - `ml_playground/cli.py` (86.97%): cover CLI dispatch, option validation, and error messaging.
+  - `ml_playground/data_pipeline/transforms/tokenization.py` (92.96%): exercise exception and retry handlers.
+  - `ml_playground/training/checkpointing/service.py` (94.12%) & `checkpoint_manager.py` (93.17%): add defensive-path assertions.
 
-- **Moderate deterministic gaps**
+- **Protocols and shared interfaces**
 
-  - `ml_playground/sampling/runner.py` (80.31%): File-based prompt ingestion and
-    compile hooks need targeted mocks.
-  - `ml_playground/training/loop/runner.py` (79.46%): Best-checkpoint updates
-    and evaluation-only mode are partially covered; expand fake dependency tests.
+  - `ml_playground/core/tokenizer_protocol.py` (75.00%): expand contract tests through concrete implementations.
+  - `ml_playground/core/logging_protocol.py` (76.47%): validate adapters via fake sinks.
 
-- **Stochastic or hardware-sensitive gaps**
+- **Hardware-sensitive surfaces**
 
-  - `ml_playground/models/core/inference.py` (10.53%): GPU and AMP toggles need
-    deterministic seeds and CPU pathways.
-  - `ml_playground/training/ema.py` (40.00%): EMA decay on CUDA should be backed
+  - `ml_playground/training/hooks/runtime.py` (78.57%): isolate GPU-specific logic and document skip strategy.
+
+`.ldres/coverage-opportunities.md` tracks deeper notes and owners for any follow-up sub-tasks.
 
 ## Milestones
 
-1. **Coverage scoreboard & ownership**
+1. **Finish deterministic gaps**
 
-   - Generate a per-module summary from `.cache/coverage/coverage.json`.
-   - Current modules below 90% line coverage (needs task tracking):
-     - `ml_playground/experiments/bundestag_qwen15b_lora_mps/preparer.py` — 15.52%
-     - `ml_playground/experiments/bundestag_tiktoken/preparer.py` — 27.50%
-     - `ml_playground/data_pipeline/preparer.py` — 76.24%
-     - `ml_playground/training/ema.py` — 40.00%
-     - `ml_playground/experiments/speakger/preparer.py` — 53.85%
-     - `ml_playground/models/core/inference.py` — 10.53%
-     - `ml_playground/cli.py` — 66.39%
-     - `ml_playground/core/tokenizer_protocol.py` — 75.00%
-     - `ml_playground/experiments/bundestag_char/preparer.py` — 75.86%
-     - `ml_playground/core/logging_protocol.py` — 76.47%
-     - `ml_playground/training/hooks/logging.py` — 76.92%
-     - `ml_playground/training/hooks/runtime.py` — 78.57%
-     - `ml_playground/experiments/speakger/sampler.py` — 79.51%
-     - `ml_playground/configuration/loading.py` — 81.21%
-   - File tasks for each module below 100%, assigning owners and capturing required DI or
-     fixture work.
-   - Enforce that new/changed modules reach 100% before merge.
+   - Land additional unit/property coverage for CLI, tokenization transforms, and checkpoint services.
+   - Capture before/after metrics and raise `--fail-under` to 90 once merged.
 
-1. **Core deterministic modules**
+1. **Exercise protocol interfaces**
 
-   - Methodically close gaps in modules with deterministic logic (`ml_playground/cli.py`,
-     `configuration/loading.py`, `data_pipeline/preparer.py`).
-   - Lean on existing fakes/DI seams; avoid introducing test-only branches.
-     {{ ... }}
+   - Write contract-focused tests for tokenizer/logging protocols via their concrete implementations.
+   - Document patterns for future protocol additions.
+   - Raise `--fail-under` to 95 upon completion.
 
-1. **Experiment & runtime surfaces**
+1. **Tame hardware-dependent code**
 
-   - Cover experiment preparers, sampling runner branches, and training loop fallbacks using
-     deterministic fixtures, tmp resources, and dependency injection.
-   - Keep property-based suites within guideline runtime budgets while increasing branch coverage.
-   - Aim for ≥99% global coverage once these modules are addressed.
+   - Provide CPU-backed or stubbed tests for `training/hooks/runtime.py`, including GPU skip rationale.
+   - Record gating guidance for CI environments lacking accelerators.
+   - Increase coverage gate to 99%, leaving only residual edge cases.
 
-1. **Stretch modules & full compliance**
+1. **Ratcheting to 100%**
 
-   - Resolve remaining low-coverage areas (EMA, inference edge cases) via deterministic CPU
-     equivalence tests and seeded runs.
-   - Once per-module coverage reads 100%, raise all gates (pre-commit, CI, badges) accordingly.
-   - Maintain documentation/tests to keep coverage at 100% for all future changes.
+   - Open issues for any remaining \<100% modules, then close them out.
+   - Once every tracked module reports 100% line/branch coverage, set all gates (pre-commit, CI, badges) to 100% and keep them locked.
+   - Maintain historical coverage updates in `.ldres/tv-tasks.md` and announce milestones during stand-ups.
 
 ## Threshold management
 
-- When deterministic core modules are complete (Milestone 2), raise
-  `.githooks/.pre-commit-config.yaml` `--fail-under` to 95%.
-- After experiment/runtime modules reach near-complete coverage (Milestone 3), raise the
-  threshold to 99% and introduce per-module checks via `coverage json` analysis scripts.
-- Upon full compliance (Milestone 4), set all gates to 100% line and branch coverage and keep
-  them there for future work.
-- Record threshold changes and milestone status in `.ldres/tv-tasks.md` and share
-  progress during stand-ups.
+- Track gate adjustments in `.githooks/.pre-commit-config.yaml` and coordinate PR messaging.
+- Mirror threshold increases in CI workflows and update contributor docs to reflect new expectations.
+- Use `coverage json` outputs to spot regressions whenever thresholds are raised.
 
 ## Tracking & ownership
 
-- Primary DRI: Thomas (tv)
-- Status updates logged in `.ldres/tv-tasks.md` under `tv-2025-10-03:PR?? · Coverage roadmap towards ~100%`.
-- Related initiatives: Regression suite (tv-2025-10-03:PR??) and mutation testing (tv-2025-10-03:PR??).
+- DRI: Thomas (`tv`).
+- Status updates recorded in `.ldres/tv-tasks.md` under `tv-2025-10-03:PR?? · Coverage roadmap towards ~100%`.
+- Related initiatives: Regression suite (tv-2025-10-03:PR??), Mutation testing (tv-2025-10-05:mutation), Accelerate test execution (tv-2025-10-05:PR??).

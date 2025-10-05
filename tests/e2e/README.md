@@ -10,6 +10,25 @@ They validate wiring across modules, configuration loading/merging, logging, and
 - Filesystem writes go to temp dirs or `out_dir` under a temporary workspace.
 - Use the tiny test defaults; do not hit network or large downloads.
 
+## Configuration Guidelines
+
+- Keep datasets synthetic and reusable. `tests/e2e/ml_playground/experiments/bundestag_char/test_cli_bundestag_char.py`
+  writes a 512-token uint16 corpus so both `train.bin` and `val.bin` satisfy CLI preconditions while still
+  fitting in memory and keeping sampling deterministic.
+- Choose the smallest model/training knobs that still trigger the behavior under test. The bundestag-char
+  helper `_write_exp_config()` pins `n_layer=1`, `n_head=2`, `n_embd=64`, `block_size=64`, `batch_size=4`,
+  and `max_iters=4` so the CLI creates checkpoints (`keep.last=1`, `keep.best=1`) and emits `meta.pkl` in
+  under 0.1 seconds. Smaller values would fail runtime validation (e.g., `block_size` vs dataset length) or
+  skip checkpoint rotation, weakening coverage.
+- Reuse artifacts when chaining commands. `test_sample_bundestag_char_quick` trains once, then points the
+  sample command at the same out directory to avoid redundant work while verifying both CLI pathways.
+- Prefer dependency injection over heavyweight downloads. `tests/e2e/ml_playground/experiments/speakger/test_sampler_analysis.py`
+  supplies `DummyTokenizer`, `DummyBaseModel`, and `DummyPeftModel` factories so the sampler produces a
+  single JSON/text pair without touching external checkpoints. Its `SamplerConfig` limits work to
+  `num_samples=1` and `max_new_tokens=5`, enough to exercise formatting and analysis logic.
+- Document any special fixtures or magic numbers directly in the corresponding test helpers so future
+  contributors understand why those values were chosen and what regressions they guard against.
+
 ## Run Locally
 
 - Run all E2E tests: `make e2e`

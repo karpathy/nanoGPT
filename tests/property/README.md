@@ -28,6 +28,14 @@ tests/property/
 - Full property suite (with unit tests): `make coverage-report`
 - Specific property module: `uv run pytest tests/property/<path>/test_*.py`
 
+## Capturing Shrunk Examples as Regression Tests
+
+- **Trigger**: Let Hypothesis shrink a failing input (store is under `.cache/hypothesis/`).
+- **Inspect**: Run `uv run python -m hypothesis show <test-module>::<test-name>` to print the shrunken case if available, or open the cached JSON in `.cache/hypothesis/`.
+- **Codify**: Translate the minimal input into a deterministic check using `@example(...)` or an explicit unit/property test. Prefer fixtures/helpers over hard-coded globals.
+- **Verify**: Rerun the relevant module (`uv run pytest tests/property/<path>/test_*.py`) to ensure the new guardrails fail without the fix and pass with it.
+- **Document**: Leave a brief comment referencing the original failure or issue to aid future triage.
+
 ## Related Documentation
 
 - `.dev-guidelines/TESTING.md` – Hypothesis guidance, coverage gates, fixture rules.

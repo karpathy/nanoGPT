@@ -12,7 +12,9 @@ For detailed information about the centralized framework utilities, see [Framewo
 Documentation](../docs/framework_utilities.md).
 
 The pre-commit hook and CI both execute `make quality`. That target expands to ruff (lint + format),
-pyright, mypy (scoped to `ml_playground`), and the targeted pytest suite.
+pyright, mypy (scoped to `ml_playground`), and the targeted pytest suite. The command now runs
+pre-commit with `--jobs $(PRE_COMMIT_JOBS)`, defaulting to `min(os.cpu_count(), 8)`; override via
+`make quality PRE_COMMIT_JOBS=4` when you want to cap parallelism (e.g., inside containers).
 
 During active development you may run narrower commands to iterate quickly, for example:
 
@@ -22,17 +24,17 @@ uv run ruff check path/to/file.py
 ```
 
 When you want the convenience wrappers (parallelized pytest, cache-aware collection, etc.), use the
-Make targets directly:
+Make targets directly. During tight iteration, reach for `make quality-fast` to run only the
+formatting hooks (`ruff`, `ruff-format`, `mdformat`) with the same parallelism flags before kicking
+off the heavier type and test gates:
 
 ```bash
 make coverage-report      # run property + unit suites with coverage output
 make tests-property       # property-based suites only
 make tests-unit           # deterministic unit suites
+make quality-fast         # lint/format the whole tree quickly
 make lint                 # ruff lint+format without type checking
 ```
-
-Running `make quality` manually is optional. Use it when you want an early signal before committing or
-pushing, but rely on the hook for enforcement.
 
 ## Commit Standards
 
