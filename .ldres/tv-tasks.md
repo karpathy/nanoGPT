@@ -63,94 +63,60 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
 
 ### Open · tv-2025-10-03:PR?? · Coverage roadmap towards ~100%
 
-- **Summary**: Chart a steady path toward 100% coverage with deterministic, guideline-compliant
-  tests. Roadmap lives in `docs/coverage/roadmap.md`.
+- **Summary**: Deliver a lean roadmap for closing remaining coverage gaps and ratcheting gates to 100%. Source of truth: `docs/coverage/roadmap.md`.
 - **Size**: M
-- **Meta?**: Yes — strategy enables future coverage improvements.
-- **Dependencies**: Stabilized badge workflow (deferred `tv-2025-10-03:PR35`); reproducible-build epic
-  (`tv-2025-10-03:PR??`).
+- **Meta?**: Yes — enables future coverage improvements.
+- **Dependencies**: Stabilized badge workflow (deferred `tv-2025-10-03:PR35`); reproducible-build epic (`tv-2025-10-03:PR??`).
 - **Next steps**:
-  1. Generate a per-module coverage scoreboard and file tasks for gaps identified.
-  1. Work through deterministic modules first (CLI/config/data pipeline) using DI and fakes.
-  1. Extend coverage to experiments and runtime surfaces while honoring runtime budgets.
-  1. Gradually raise coverage gates (95% → 99% → 100%) in sync with completed milestones, logging each bump.
-  1. Migrate eligible deterministic unit tests to property-based suites with clear oracles.
-  1. Refactor property-based tests to reuse fixtures and shrink shared setup code.
+  1. Finish deterministic gaps:
+     - `ml_playground/cli.py` (86.97%): cover CLI dispatch and error paths.
+     - `ml_playground/data_pipeline/transforms/tokenization.py` (92.96%): exercise exception handlers.
+     - `ml_playground/training/checkpointing/{service.py, checkpoint_manager.py}` (~94%): test defensive branches.
+  1. Address protocol and hardware bottlenecks:
+     - `ml_playground/core/tokenizer_protocol.py` and `core/logging_protocol.py`: add interface contract tests via implementations.
+     - `ml_playground/training/hooks/runtime.py`: isolate GPU-only logic and document skip strategy.
+  1. Record milestones in `docs/coverage/roadmap.md`, raising `--fail-under` with each completed cluster (90% → 95% → 99% → 100%).
+  1. Backfill roadmap issues for any residual \<100% modules before the final gate raise.
 - **Latest snapshot (2025-10-05)**:
-  - Global coverage **87.28%** (`make coverage-report` running unit + property suites).
-  - Pre-commit gate **raised to `--fail-under=87.00`** (was 79.00%).
-  - **PR #49**: Coverage improvements complete (30 commits, **+6.55% global coverage**)
-  - See `.ldres/coverage-opportunities.md` for detailed roadmap to 90%+
-- **Completed modules (100% coverage)** - 11 total:
-  - ✅ `ml_playground/data_pipeline/preparer.py` (93.07% → 100%)
-  - ✅ `ml_playground/configuration/loading.py` (81.21% → 100%)
-  - ✅ `ml_playground/training/hooks/evaluation.py` (95.00% → 100%)
-  - ✅ `ml_playground/training/ema.py` (40.00% → 100%)
-  - ✅ `ml_playground/training/hooks/components.py` (39.29% → 100%)
-  - ✅ `ml_playground/experiments/bundestag_tiktoken/preparer.py` (27.50% → 100%)
-  - ✅ `ml_playground/training/hooks/logging.py` (76.92% → 100%)
-  - ✅ `ml_playground/experiments/speakger/preparer.py` (53.85% → 100%)
-  - ✅ `ml_playground/experiments/bundestag_char/preparer.py` (75.86% → 100%)
-- **Significantly improved modules**:
-  - ⬆️ `ml_playground/cli.py` (81.51% → 86.97%, +5.46%)
-  - ⬆️ `ml_playground/models/core/inference.py` (10.53% → 92.98%, +82.45%)
-  - ⬆️ `ml_playground/experiments/bundestag_qwen15b_lora_mps/preparer.py` (15.52% → 87.93%, +72.41%)
-  - ⬆️ `ml_playground/training/checkpointing/service.py` (91.76% → 94.12%, +2.36%)
-  - ⬆️ `ml_playground/training/checkpointing/checkpoint_manager.py` (92.55% → 93.17%, +0.62%)
-  - ⬆️ `ml_playground/data_pipeline/transforms/tokenization.py` (90.14% → 92.96%, +2.82%)
-- **Module backlog** (remaining gaps):
-  - **Medium gaps (50-80%)** - All complete except hardware-dependent:
-    - `ml_playground/training/hooks/runtime.py` (78.57% - CUDA lines require GPU hardware)
-    - `ml_playground/core/tokenizer_protocol.py` (75.00% - Protocol class, tested via implementations)
-  - **Near complete (>80%)** - Mostly complete:
-    - `ml_playground/training/checkpointing/service.py` (94.12% - defensive code paths)
-    - `ml_playground/training/checkpointing/checkpoint_manager.py` (93.17% - initialization edge cases)
-    - `ml_playground/data_pipeline/transforms/tokenization.py` (92.96% - exception handlers)
-    - `ml_playground/cli.py` (86.97% - 26 missing, mostly CLI integration paths)
-  - **Other modules**: `ml_playground/core/logging_protocol.py` (Protocol class)
+  - Global coverage **87.28%** (`make coverage-report`).
+  - Pre-commit gate `--fail-under=87.00`.
+  - `.ldres/coverage-opportunities.md` holds module-level notes.
 - **Git plan**:
   - Commits:
-    - `docs(coverage): outline roadmap to ~100 percent coverage`
-      (`docs/coverage/roadmap.md`, `.ldres/tv-tasks.md` cross-reference)
-- **PR**: Title `docs: define coverage roadmap`; body summarizing milestones, validation, and gating plan.
+    - `docs(coverage): update roadmap with remaining coverage milestones`
+- **PR**: Title `docs: refine coverage roadmap`; body summarizing remaining deltas and gating plan.
 
-### Open · tv-2025-10-05:PR?? · Markdown formatting via mdformat
+### Open · tv-2025-10-05:PR?? · Accelerate test execution
 
-- **Summary**: Standardize Markdown formatting with `mdformat` configured in `pyproject.toml`, replacing
-  the `markdownlint-cli2` hook while keeping formatting policy centralized.
+- **Summary**: Profile the performance of every automated test suite and implement improvements so local and CI feedback loops stay fast.
 - **Priority**: P1
-- **Size**: S
-- **Meta?**: Yes — removes a recurring exception to the tooling policy.
+- **Size**: M
+- **Meta?**: Yes — speeds up developer feedback.
 - **Dependencies**: None.
+- **Latest baseline (2025-10-05)**:
+  - `uv run pytest tests/unit -n 0 --maxfail=1 --durations=20` → 2.26s
+    - Slowest cases: `tests/unit/data_pipeline/test_memmap.py::TestMemmapReader::test_memmap_reader_creation` (~0.13s) and related memmap sampling tests (~0.05–0.11s). `test_initialize_components_with_compile` is now <0.01s and CLI exit-path tests remain sub-0.01s.
+  - `uv run pytest tests/property -n 0 --maxfail=1 --durations=10` → 4.34s
+    - Slowest cases: `TestMergeMappings` methods (0.25–0.90s) after trimming Hypothesis workloads; `mdformat` adjustments keep docs stable.
+  - `uv run pytest tests/integration -n 0 --maxfail=1 --durations=20` → 0.08s
+    - No standout slowcases; Shakespeare dataset setup tops at 0.02s.
+  - `uv run pytest tests/acceptance -n 0 --maxfail=1 --durations=20` → 0.93s
+    - `tests/acceptance/steps/test_checkpointing_steps.py::test_keep_policy_enforcement_for_last_checkpoints` ~0.05s remains the peak.
+  - `uv run pytest tests/e2e -n 0 --maxfail=1 --durations=10` → 2.88s
+    - `test_train_bundestag_char_quick` dominates at 0.10s; configs stay minimal and documented.
+  - `make quality` (pre-commit bundle) → 23.39s wall-clock (clean tree).
+  - `make quality-fast` (format-only hooks) → 1.38s wall-clock after format passes clean.
 - **Next steps**:
-  1. Finalize documentation updates referencing `mdformat` (developer guidelines, contributor docs).
-  2. Verify CI and local contributor workflows reflect the new formatter (update `make quality`
-     messaging if needed).
-  3. Open PR showcasing formatting diffs and summarize tooling migration for reviewers.
-- **Validation**: `make quality`; targeted `uv run mdformat <file.md>` verification on sample docs.
+  1. Investigate memmap-heavy tests (`tests/unit/data_pipeline/test_memmap.py`, `tests/unit/data_pipeline/test_sampling.py`) for fixture reuse or lighter data to shave remaining 0.1–0.2s hotspots.
+  1. Explore smaller `max_examples` or strategy caching for `TestMergeMappings` if further property-suite savings are required; ensure assertions still meaningful.
+  1. Track additional optimizations (e.g., memmap fixture changes) and rerun `pytest --durations=20` after each iteration; update this log with new baselines.
+- **Validation**: `make quality`; targeted `pytest --durations=20` reruns on affected suites.
 - **Git plan**:
-  - Branch: `build/markdownlint-pyproject`
+  - Branch: `ci/test-speedup`
   - Commits:
-    - `build(pre-commit): replace markdownlint with mdformat`
-    - `docs(guidelines): document mdformat workflow`
-    - `chore(docs): apply mdformat formatting sweep`
-- **PR**: Title `build: harmonize markdown formatting with mdformat`; include comparison runs and rollout notes.
-
-### Completed · tv-2025-10-05:fixtures · Property suite fixture consolidation
-
-- **Summary**: Move shared helpers (config factories, attribute overrides) into
-  `tests/conftest.py` and refactor property/unit suites to consume them.
-- **Size**: S
-- **Meta?**: No
-- **Dependencies**: None.
-- **Outcomes**:
-  - `tests/conftest.py` exposes `shared_config_factory` and `override_attr` for reuse.
-  - CLI and data pipeline property suites consume the shared fixtures; Hypothesis health checks updated.
-- **Validation**:
-  - `uv run pytest tests/property/cli/test_cli_property.py`
-  - `uv run pytest tests/property/data_pipeline/test_preparer_property.py`
-  - `uv run pytest tests/property`
-- **Git summary**: `tests/conftest.py`, `tests/property/cli/test_cli_property.py`, `tests/property/data_pipeline/test_preparer_property.py` updated.
+    - `ci(pytest): profile test runtimes and document hotspots`
+    - `ci(pytest): apply performance optimizations`
+- **PR**: Title `ci: accelerate test execution`; body covering baseline, optimizations, and measured wins.
 
 ### In progress · tv-2025-10-05:mutation · Introduce mutation testing
 

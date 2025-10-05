@@ -23,7 +23,7 @@ __pycache__/
 *.gguf
 *.ggml
 *.weights
-**/.venv*/
+**/.venv*
 
 # Project artifacts
 out/

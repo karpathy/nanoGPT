@@ -86,21 +86,21 @@ integration: ## Run integration tests only
 e2e: ## Run end-to-end tests only
 	$(PYTEST_CMD) tests/e2e
 
-acceptance: ## Run acceptance tests only (quiet)
-	$(PYTEST_CMD) tests/acceptance
-
 # Quality gates
 
 # Run type checking/lint/format (and tests) via pre-commit using repo hook config
 quality: ## Run pre-commit (ruff, format, type checks, deadcode, tests) with .githooks config
 	$(RUN) pre-commit run --config .githooks/.pre-commit-config.yaml --all-files
 
+quality-fast: ## Run formatting + lint hooks only (fast path for local iteration)
+	$(RUN) pre-commit run --config .githooks/.pre-commit-config.yaml --all-files ruff
+	$(RUN) pre-commit run --config .githooks/.pre-commit-config.yaml --all-files ruff-format
+	$(RUN) pre-commit run --config .githooks/.pre-commit-config.yaml --all-files mdformat
+
 # Extended quality: core quality + mutation testing (non-fatal)
 quality-ext: quality mutation ## Extended quality: vulture + quality + mutation tests (non-fatal)
 	
 mutation: ## Mutation tests (non-fatal). Rely on pyproject.toml [cosmic-ray] configuration.
-	@set +e; \
-	mkdir -p .cache/cosmic-ray; \
 	$(RUN) cosmic-ray init pyproject.toml .cache/cosmic-ray/session.sqlite >/dev/null 2>&1 || true; \
 	$(RUN) cosmic-ray exec pyproject.toml .cache/cosmic-ray/session.sqlite || echo "[warning] Cosmic Ray returned non-zero; proceeding"
 
