@@ -446,3 +446,23 @@ def test_propagate_metadata_logs_copy_failure(tmp_path: Path) -> None:
     service.propagate_metadata(cfg, shared, logger=logger, copy_fn=failing_copy)
 
     assert any("cannot copy" in msg for msg in logger.warnings)
+
+
+def test_checkpoint_manager_handles_non_mapping_payload(tmp_path: Path) -> None:
+    """CheckpointManager should raise error when checkpoint file doesn't contain a mapping."""
+    from ml_playground.training.checkpointing.checkpoint_manager import (
+        CheckpointManager,
+    )
+
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+
+    # Create a checkpoint file with non-mapping payload
+    ckpt_path = out_dir / "ckpt_best_00000001_1.0.pt"
+    torch.save([1, 2, 3], ckpt_path)  # Save a list instead of dict
+
+    mgr = CheckpointManager(out_dir, atomic=False, keep_last=1, keep_best=1)
+    logger = _StubLogger()
+
+    with pytest.raises(CheckpointError, match="does not contain a mapping payload"):
+        mgr.load_best_checkpoint("cpu", logger)
