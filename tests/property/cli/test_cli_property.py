@@ -14,6 +14,7 @@ from typer.testing import CliRunner
 import ml_playground.cli as cli
 from ml_playground.cli import (
     CLIDependencies,
+    _log_command_status,
     _log_dir,
     _run_prepare_impl,
     override_cli_dependencies,
@@ -125,6 +126,55 @@ def test_log_dir_reports_states(tmp_path: Path) -> None:
     assert any("<not set>" in msg for msg in logger.infos)
     assert any("missing" in msg for msg in logger.infos)
     assert any("Contents" in msg for msg in logger.infos)
+
+
+def test_log_command_status_handles_missing_directory(tmp_path: Path) -> None:
+    class DummyShared:
+        dataset_dir = Path("/tmp")
+
+    class ListLogger:
+        def __init__(self) -> None:
+            self.messages: list[str] = []
+
+        def info(self, message: str) -> None:
+            self.messages.append(str(message))
+
+    logger = ListLogger()
+    _log_command_status("tag", DummyShared(), None, logger)
+
+    assert any("<not set>" in message for message in logger.messages)
+
+
+def test_log_command_status_handles_missing_path(tmp_path: Path) -> None:
+    class ListLogger:
+        def __init__(self) -> None:
+            self.messages: list[str] = []
+
+        def info(self, message: str) -> None:
+            self.messages.append(str(message))
+
+    logger = ListLogger()
+    missing = tmp_path / "missing"
+
+    _log_command_status("tag", _make_shared(tmp_path), missing, logger)
+
+    assert any("missing" in message for message in logger.messages)
+
+
+def test_run_train_impl_requires_runtime(tmp_path: Path) -> None:
+    shared = _make_shared(tmp_path)
+    cfg = SimpleNamespace(runtime=None, logger=logging.getLogger("ml_playground.cli"))
+
+    with pytest.raises(typer.Exit):
+        cli._run_train_impl("demo", cfg, shared.config_path, shared)
+
+
+def test_run_sample_impl_requires_runtime(tmp_path: Path) -> None:
+    shared = _make_shared(tmp_path)
+    cfg = SimpleNamespace(runtime=None, logger=logging.getLogger("ml_playground.cli"))
+
+    with pytest.raises(typer.Exit):
+        cli._run_sample_impl("demo", cfg, shared.config_path, shared)
 
 
 @given(exc_type=_EXCEPTION_TYPES, message=_MESSAGES, exit_code=st.integers(1, 32))
