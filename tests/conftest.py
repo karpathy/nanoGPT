@@ -6,14 +6,17 @@ to all tests in the ml_playground test suite.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from pathlib import Path
 from textwrap import dedent
-from typing import Callable
+from typing import Callable, Iterator
 import random
 import numpy as np
 import pytest
 from hypothesis import settings
 from hypothesis.database import DirectoryBasedExampleDatabase
+
+from ml_playground.configuration.models import SharedConfig
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -80,6 +83,52 @@ def out_dir(tmp_path: Path) -> Path:
     p = tmp_path / "out"
     p.mkdir(parents=True, exist_ok=True)
     return p
+
+
+# ----------------------------------------------------------------------------
+# Shared helpers for CLI/config property and unit tests
+# ----------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def shared_config_factory() -> Callable[[Path], SharedConfig]:
+    """Return a factory that builds a `SharedConfig` rooted at the provided path."""
+
+    def _factory(base_dir: Path) -> SharedConfig:
+        dataset_dir = base_dir / "dataset"
+        dataset_dir.mkdir(exist_ok=True)
+        train_dir = base_dir / "train"
+        train_dir.mkdir(exist_ok=True)
+        sample_dir = base_dir / "sample"
+        sample_dir.mkdir(exist_ok=True)
+        config_path = base_dir / "config.toml"
+        config_path.write_text("{}", encoding="utf-8")
+        return SharedConfig(
+            experiment="demo",
+            config_path=config_path,
+            project_home=base_dir,
+            dataset_dir=dataset_dir,
+            train_out_dir=train_dir,
+            sample_out_dir=sample_dir,
+        )
+
+    return _factory
+
+
+@pytest.fixture()
+def override_attr() -> Callable[[object, str, object], Iterator[None]]:
+    """Provide a context manager for temporarily overriding attributes on objects."""
+
+    @contextmanager
+    def _override(target: object, attr: str, value: object) -> Iterator[None]:
+        original = getattr(target, attr)
+        setattr(target, attr, value)
+        try:
+            yield
+        finally:
+            setattr(target, attr, original)
+
+    return _override
 
 
 # ----------------------------------------------------------------------------

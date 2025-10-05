@@ -116,7 +116,29 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
 - **Git plan**:
   - Branch: `build/markdownlint-pyproject`
   - Commit: `build(markdownlint): adopt pyproject-based lint runner`
+  - **Status**: Pending research
 - **PR**: Title `build: harmonize markdownlint with pyproject tooling`; include comparison runs and rollout notes.
+
+### In flight · tv-2025-10-05:fixtures · Property suite fixture consolidation
+
+- **Summary**: Move shared helpers (config factories, attribute overrides) into
+  `tests/conftest.py` and refactor property/unit suites to consume them.
+- **Priority**: P1
+- **Size**: S
+- **Meta?**: No
+- **Dependencies**: None.
+- **Next steps**:
+  1. Apply `shared_config_factory` and `override_attr` to remaining property suites (configuration, data pipeline, etc.).
+  2. Extract any repetitive Hypothesis strategies into reusable helpers.
+  3. Follow up with unit suites once property suites converge on shared fixtures.
+- **Validation**: `uv run pytest tests/property` and targeted unit suites after refactor.
+- **Git plan**:
+  - Branch: `test/fixtures-unification`
+  - Commit: `test(fixtures): centralize property helpers`
+  - **Status**: Shared fixtures added; CLI property suite migrated.
+- **PR**: Title `test: consolidate shared fixtures across property suites`; include before/after duplication metrics.
+
+### In progress · tv-2025-10-05:mutation · Introduce mutation testing
 
 - **Summary**: After coverage gating, introduce mutation-based testing (e.g., `cosmic-ray`) to measure test
   effectiveness.
