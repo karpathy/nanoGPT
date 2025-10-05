@@ -1,15 +1,17 @@
 repos:
+
 - repo: https://github.com/astral-sh/ruff-pre-commit
   rev: v0.9.6
   hooks:
   - id: ruff
     args: [--fix]
   - id: ruff-format
-- repo: https://github.com/DavidAnson/markdownlint-cli2
-  rev: v0.15.0
+- repo: https://github.com/executablebooks/mdformat
+  rev: 0.7.17
   hooks:
-  - id: markdownlint-cli2
-    args: ["--config", ".markdownlint-cli2.jsonc"]
+  - id: mdformat
+    additional_dependencies:
+      - mdformat-gfm
     files: '(README|CONTRIBUTING|LICENSE|CHANGELOG)\.md$|^(docs|tests|\.dev-guidelines)/.*\.md$'
 - repo: https://github.com/checkmake/checkmake.git
   # Or another commit hash or version
@@ -19,22 +21,6 @@ repos:
   - id: checkmake
 - repo: local
   hooks:
-  # TODO(mock-free-refactor): re-enable coverage badge hook after coverage branch lands
-  # - id: coverage-badge
-  #   name: coverage badge
-  #   entry: bash
-  #   args:
-  #     - -c
-  #     - |
-  #       set -e
-  #       if ! compgen -G ".cache/coverage/coverage.sqlite*" > /dev/null; then
-  #         COVERAGE_FILE=.cache/coverage/coverage.sqlite make coverage-test
-  #       fi
-  #       make coverage-badge SKIP_COVERAGE_TESTS=1
-  #       git add docs/assets/coverage.svg docs/assets/coverage-lines.svg docs/assets/coverage-branches.svg
-  #   language: system
-  #   pass_filenames: false
-  #   stages: [pre-commit]
   - id: coverage-threshold
     name: coverage threshold (>=87.00%)
     entry: bash
@@ -74,4 +60,3 @@ repos:
     entry: uv run vulture ml_playground --min-confidence 90
     language: system
     pass_filenames: false
-
