@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import logging
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
+from typing import Any
 
 import hypothesis.strategies as st
 import pytest
@@ -79,6 +81,16 @@ def test_run_or_exit_keyboard_interrupt_logs_message(
 
     assert result is None
     assert "Interrupted" in caplog.messages
+
+
+@contextmanager
+def _override_attr(target: object, attr: str, value: object):
+    original = getattr(target, attr)
+    setattr(target, attr, value)
+    try:
+        yield
+    finally:
+        setattr(target, attr, original)
 
 
 def test_extract_exp_config_handles_missing_and_present_context() -> None:
@@ -175,6 +187,136 @@ def test_run_sample_impl_requires_runtime(tmp_path: Path) -> None:
 
     with pytest.raises(typer.Exit):
         cli._run_sample_impl("demo", cfg, shared.config_path, shared)
+
+
+def test_run_or_exit_handles_runtime_error() -> None:
+    def _raise() -> None:
+        raise RuntimeError("boom")
+
+    with pytest.raises(typer.Exit) as exc:
+        cli.run_or_exit(_raise, exception_exit_code=9)
+
+    assert exc.value.exit_code == 9
+
+
+def test_global_device_setup_handles_runtime_error() -> None:
+    class BadTorch:
+        def manual_seed(self, seed: int) -> None:  # pragma: no cover - invoked
+            raise RuntimeError("fail")
+
+    # Should not raise even though torch operations fail
+    with _override_attr(cli, "torch", BadTorch()):
+        cli._global_device_setup("cpu", "float32", 123)
+
+
+def test_global_device_setup_sets_cuda_state() -> None:
+    seed_calls: list[tuple[str, int]] = []
+
+    fake_torch = SimpleNamespace(
+        manual_seed=lambda seed: seed_calls.append(("cpu", seed)),
+        cuda=SimpleNamespace(
+            manual_seed=lambda seed: seed_calls.append(("cuda", seed)),
+            is_available=lambda: True,
+        ),
+        backends=SimpleNamespace(
+            cuda=SimpleNamespace(matmul=SimpleNamespace(allow_tf32=False)),
+            cudnn=SimpleNamespace(allow_tf32=False),
+        ),
+    )
+
+    with _override_attr(cli, "torch", fake_torch):
+        cli._global_device_setup("cuda", "float16", 7, cuda_is_available=lambda: True)
+
+    assert ("cpu", 7) in seed_calls
+    assert ("cuda", 7) in seed_calls
+    assert fake_torch.backends.cuda.matmul.allow_tf32 is True
+    assert fake_torch.backends.cudnn.allow_tf32 is True
+
+
+def test_run_train_impl_invokes_trainer(tmp_path: Path) -> None:
+    shared = _make_shared(tmp_path)
+    log_calls: list[tuple[str, Path]] = []
+    trainer_called: dict[str, Any] = {}
+
+    class FakeTrainer:
+        def __init__(self, cfg: object, shared_cfg: object) -> None:
+            trainer_called["cfg"] = cfg
+            trainer_called["shared"] = shared_cfg
+
+        def run(self) -> None:
+            trainer_called["ran"] = True
+
+    def fake_global(
+        device: str, dtype: str, seed: int, *, cuda_is_available=None
+    ) -> None:
+        trainer_called["global_setup"] = (device, dtype, seed)
+
+    logger = logging.getLogger("ml_playground.cli")
+    runtime = SimpleNamespace(device="cpu", dtype="float32", seed=11)
+    train_cfg = SimpleNamespace(runtime=runtime, logger=logger)
+
+    with ExitStack() as stack:
+        stack.enter_context(_override_attr(cli, "CoreTrainer", FakeTrainer))
+        stack.enter_context(
+            _override_attr(
+                cli,
+                "_log_command_status",
+                lambda tag, shared_cfg, out_dir, logger: log_calls.append(
+                    (tag, out_dir)
+                ),
+            )
+        )
+        stack.enter_context(_override_attr(cli, "_global_device_setup", fake_global))
+        cli._run_train_impl("demo", train_cfg, shared.config_path, shared)
+
+    assert trainer_called["cfg"] is train_cfg
+    assert trainer_called["shared"] is shared
+    assert trainer_called.get("ran") is True
+    assert trainer_called["global_setup"] == ("cpu", "float32", 11)
+    assert ("pre-train", shared.train_out_dir) in log_calls
+    assert ("post-train", shared.train_out_dir) in log_calls
+
+
+def test_run_sample_impl_invokes_sampler(tmp_path: Path) -> None:
+    shared = _make_shared(tmp_path)
+    log_calls: list[tuple[str, Path]] = []
+    sampler_called: dict[str, Any] = {}
+
+    class FakeSampler:
+        def __init__(self, cfg: object, shared_cfg: object) -> None:
+            sampler_called["cfg"] = cfg
+            sampler_called["shared"] = shared_cfg
+
+        def run(self) -> None:
+            sampler_called["ran"] = True
+
+    def fake_global(
+        device: str, dtype: str, seed: int, *, cuda_is_available=None
+    ) -> None:
+        sampler_called["global_setup"] = (device, dtype, seed)
+
+    logger = logging.getLogger("ml_playground.cli")
+    runtime = SimpleNamespace(device="cpu", dtype="float32", seed=5)
+    sample_cfg = SimpleNamespace(runtime=runtime, logger=logger)
+
+    with ExitStack() as stack:
+        stack.enter_context(_override_attr(cli, "Sampler", FakeSampler))
+        stack.enter_context(
+            _override_attr(
+                cli,
+                "_log_command_status",
+                lambda tag, shared_cfg, out_dir, logger: log_calls.append(
+                    (tag, out_dir)
+                ),
+            )
+        )
+        stack.enter_context(_override_attr(cli, "_global_device_setup", fake_global))
+        cli._run_sample_impl("demo", sample_cfg, shared.config_path, shared)
+    assert sampler_called["shared"] is shared
+    assert sampler_called.get("ran") is True
+    assert sampler_called["global_setup"] == ("cpu", "float32", 5)
+    assert ("pre-sample", shared.sample_out_dir) in log_calls
+    assert ("post-sample", shared.sample_out_dir) in log_calls
 
 
 @given(exc_type=_EXCEPTION_TYPES, message=_MESSAGES, exit_code=st.integers(1, 32))
