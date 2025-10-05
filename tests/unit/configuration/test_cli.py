@@ -759,3 +759,177 @@ def test_sample_routes_to_injected_sampler(
         cli.main(["sample", "speakger"])
 
     assert calls["run_sample"] == 1
+
+
+def test_complete_experiments_delegates_to_loader():
+    """_complete_experiments should delegate to config_loading.list_experiments_with_config."""
+    from types import SimpleNamespace
+
+    calls: list[str] = []
+
+    def fake_list_experiments(incomplete: str) -> list[str]:
+        calls.append(incomplete)
+        return ["exp1", "exp2"]
+
+    fake_config_loading = SimpleNamespace(
+        list_experiments_with_config=fake_list_experiments
+    )
+    original = cli.config_loading
+
+    cli.config_loading = fake_config_loading  # type: ignore[misc]
+    try:
+        result = cli._complete_experiments(SimpleNamespace(), "test")  # type: ignore[arg-type]
+        assert calls == ["test"]
+        assert result == ["exp1", "exp2"]
+    finally:
+        cli.config_loading = original  # type: ignore[misc]
+
+
+def test_log_dir_handles_permission_error(tmp_path: Path):
+    """_log_dir should handle PermissionError when listing directory contents."""
+
+    class ListLogger:
+        def __init__(self) -> None:
+            self.infos: list[str] = []
+
+        def info(self, message: str) -> None:
+            self.infos.append(str(message))
+
+    logger = ListLogger()
+    existing = tmp_path / "restricted"
+    existing.mkdir()
+
+    class RestrictedPath(type(existing)):  # type: ignore[misc]
+        def iterdir(self):  # type: ignore[override]
+            raise PermissionError("Access denied")
+
+    restricted_path = RestrictedPath(existing)
+    cli._log_dir("tag", "restricted", restricted_path, logger)  # type: ignore[arg-type]
+    assert any("exists" in msg for msg in logger.infos)
+    assert not any("Contents" in msg for msg in logger.infos)
+
+
+def test_log_dir_handles_os_error(tmp_path: Path):
+    """_log_dir should handle OSError when listing directory contents."""
+
+    class ListLogger:
+        def __init__(self) -> None:
+            self.infos: list[str] = []
+
+        def info(self, message: str) -> None:
+            self.infos.append(str(message))
+
+    logger = ListLogger()
+    existing = tmp_path / "broken"
+    existing.mkdir()
+
+    class BrokenPath(type(existing)):  # type: ignore[misc]
+        def iterdir(self):  # type: ignore[override]
+            raise OSError("Disk error")
+
+    broken_path = BrokenPath(existing)
+    cli._log_dir("tag", "broken", broken_path, logger)  # type: ignore[arg-type]
+    assert any("exists" in msg for msg in logger.infos)
+
+
+def test_log_command_status_handles_exceptions(tmp_path: Path):
+    """_log_command_status should handle OSError/ValueError/TypeError gracefully."""
+
+    class ListLogger:
+        def __init__(self) -> None:
+            self.messages: list[str] = []
+
+        def info(self, message: str) -> None:
+            self.messages.append(str(message))
+
+    logger = ListLogger()
+    shared = SharedConfig(
+        experiment="test",
+        config_path=tmp_path / "config.toml",
+        project_home=tmp_path,
+        dataset_dir=tmp_path / "dataset",
+        train_out_dir=tmp_path / "train",
+        sample_out_dir=tmp_path / "sample",
+    )
+
+    original_log_dir = cli._log_dir
+
+    for exc_type in [OSError, ValueError, TypeError]:
+
+        def mock_log_dir(*args: Any, **kwargs: Any) -> None:
+            raise exc_type("Simulated error")
+
+        cli._log_dir = mock_log_dir  # type: ignore[assignment]
+        try:
+            cli._log_command_status("tag", shared, tmp_path, logger)
+        finally:
+            cli._log_dir = original_log_dir  # type: ignore[assignment]
+
+
+def test_run_analyze_bundestag_char_logs_message(caplog: pytest.LogCaptureFixture):
+    """_run_analyze for bundestag_char should log a not-implemented message."""
+    with caplog.at_level(logging.INFO, logger="ml_playground.cli"):
+        cli._run_analyze("bundestag_char", "localhost", 8050, True)
+
+    assert any("not implemented" in msg.lower() for msg in caplog.messages)
+
+
+def test_analyze_command_invokes_run_analyze():
+    """analyze CLI command should invoke _run_analyze."""
+    calls: list[tuple[str, str, int, bool]] = []
+
+    def fake_run_analyze(
+        experiment: str, host: str, port: int, open_browser: bool
+    ) -> None:
+        calls.append((experiment, host, port, open_browser))
+
+    original = cli._run_analyze
+    cli._run_analyze = fake_run_analyze  # type: ignore[assignment]
+    try:
+        result = runner.invoke(cli.app, ["analyze", "bundestag_char"])
+        assert result.exit_code == 0
+        assert calls == [("bundestag_char", "127.0.0.1", 8050, True)]
+    finally:
+        cli._run_analyze = original  # type: ignore[assignment]
+
+
+def test_run_train_cmd_uses_default_deps(shared_factory: Callable[[str], SharedConfig]):
+    """_run_train_cmd should use get_cli_dependencies when deps=None."""
+    shared = shared_factory("demo")
+    exp = _make_full_experiment(shared)
+
+    deps_called: dict[str, int] = {"get_cli_dependencies": 0}
+
+    def fake_get_deps() -> CLIDependencies:
+        deps_called["get_cli_dependencies"] += 1
+        return _make_deps(load_experiment=lambda name, path: exp)
+
+    original = cli.get_cli_dependencies
+    cli.get_cli_dependencies = fake_get_deps  # type: ignore[assignment]
+    try:
+        cli._run_train_cmd("demo", None, deps=None)
+        assert deps_called["get_cli_dependencies"] == 1
+    finally:
+        cli.get_cli_dependencies = original  # type: ignore[assignment]
+
+
+def test_run_sample_cmd_uses_default_deps(
+    shared_factory: Callable[[str], SharedConfig],
+):
+    """_run_sample_cmd should use get_cli_dependencies when deps=None."""
+    shared = shared_factory("demo")
+    exp = _make_full_experiment(shared)
+
+    deps_called: dict[str, int] = {"get_cli_dependencies": 0}
+
+    def fake_get_deps() -> CLIDependencies:
+        deps_called["get_cli_dependencies"] += 1
+        return _make_deps(load_experiment=lambda name, path: exp)
+
+    original = cli.get_cli_dependencies
+    cli.get_cli_dependencies = fake_get_deps  # type: ignore[assignment]
+    try:
+        cli._run_sample_cmd("demo", None, deps=None)
+        assert deps_called["get_cli_dependencies"] == 1
+    finally:
+        cli.get_cli_dependencies = original  # type: ignore[assignment]
