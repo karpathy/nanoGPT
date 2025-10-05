@@ -76,10 +76,10 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
   5. Migrate eligible deterministic unit tests to property-based suites with clear oracles.
   6. Refactor property-based tests to reuse fixtures and shrink shared setup code.
 - **Latest snapshot (2025-10-05)**:
-  - Global coverage **86.53%** (`make coverage-report` running unit + property suites).
+  - Global coverage **87.15%** (`make coverage-report` running unit + property suites).
   - Pre-commit gate set to `--fail-under=79.00`; **exceeded target** - ready to raise threshold.
-  - **PR #49**: Coverage improvements complete (20 commits, **+5.80% global coverage**)
-- **Completed modules (100% coverage)** - 9 total:
+  - **PR #49**: Coverage improvements complete (24 commits, **+6.42% global coverage**)
+- **Completed modules (100% coverage)** - 11 total:
   - ✅ `ml_playground/data_pipeline/preparer.py` (93.07% → 100%)
   - ✅ `ml_playground/configuration/loading.py` (81.21% → 100%)
   - ✅ `ml_playground/training/hooks/evaluation.py` (95.00% → 100%)
@@ -87,17 +87,17 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
   - ✅ `ml_playground/training/hooks/components.py` (39.29% → 100%)
   - ✅ `ml_playground/experiments/bundestag_tiktoken/preparer.py` (27.50% → 100%)
   - ✅ `ml_playground/training/hooks/logging.py` (76.92% → 100%)
+  - ✅ `ml_playground/experiments/speakger/preparer.py` (53.85% → 100%)
+  - ✅ `ml_playground/experiments/bundestag_char/preparer.py` (75.86% → 100%)
 - **Significantly improved modules**:
   - ⬆️ `ml_playground/cli.py` (81.51% → 86.97%, +5.46%)
   - ⬆️ `ml_playground/models/core/inference.py` (10.53% → 92.98%, +82.45%)
   - ⬆️ `ml_playground/experiments/bundestag_qwen15b_lora_mps/preparer.py` (15.52% → 87.93%, +72.41%)
   - ⬆️ `ml_playground/training/checkpointing/checkpoint_manager.py` (92.55% → 92.97%)
 - **Module backlog** (remaining gaps):
-  - **Medium gaps (50-80%)**:
-    - `ml_playground/experiments/speakger/preparer.py` (53.85% - 6 missing)
-    - `ml_playground/experiments/bundestag_char/preparer.py` (75.86% - 7 missing)
-    - `ml_playground/training/hooks/runtime.py` (78.57% - CUDA lines require GPU)
-    - `ml_playground/core/tokenizer_protocol.py` (75.00% - Protocol, tested via implementations)
+  - **Medium gaps (50-80%)** - All complete except hardware-dependent:
+    - `ml_playground/training/hooks/runtime.py` (78.57% - CUDA lines require GPU hardware)
+    - `ml_playground/core/tokenizer_protocol.py` (75.00% - Protocol class, tested via implementations)
   - **Near complete (>80%)**:
     - `ml_playground/cli.py` (86.97% - 26 missing)
     - `ml_playground/training/checkpointing/checkpoint_manager.py` (92.97% - 16 missing)
