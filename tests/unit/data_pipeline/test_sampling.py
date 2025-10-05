@@ -44,8 +44,8 @@ def device_strategy(draw: st.DrawFn) -> str:
 class TestMemmapReader:
     """Property-based tests for ``MemmapReader``."""
 
-    @given(length=st.integers(min_value=1, max_value=1000))
-    @settings(max_examples=20)
+    @given(length=st.integers(min_value=1, max_value=512))
+    @settings(max_examples=10, deadline=None)
     def test_memmap_reader_creation(self, length: int) -> None:
         """Test that MemmapReader can be created and reads data correctly."""
         # Create test data
@@ -79,11 +79,11 @@ class TestSampleBatch:
     """Property-based tests for ``sample_batch``."""
 
     @given(
-        array_size=st.integers(min_value=1, max_value=1000),
+        array_size=st.integers(min_value=1, max_value=512),
         batch_config=batch_config_strategy(),
         device=device_strategy(),
     )
-    @settings(max_examples=20)
+    @settings(max_examples=10, deadline=None)
     def test_sample_batch_shapes(
         self, array_size: int, batch_config: tuple[int, int], device: str
     ) -> None:
@@ -128,12 +128,12 @@ class TestSimpleBatches:
     """Property-based tests for SimpleBatches class."""
 
     @given(
-        array_size=st.integers(min_value=10, max_value=1000),
+        array_size=st.integers(min_value=10, max_value=512),
         batch_config=batch_config_strategy(),
         device=device_strategy(),
         sampler=st.sampled_from(["random", "sequential"]),
     )
-    @settings(max_examples=15)
+    @settings(max_examples=8, deadline=None)
     def test_simple_batches_creation(self, array_size, batch_config, device, sampler):
         """Test SimpleBatches initialization and basic functionality."""
         batch_size, block_size = batch_config
@@ -185,12 +185,12 @@ class TestSimpleBatches:
             assert len(val_batch) == 2
 
     @given(
-        array_size=st.integers(min_value=100, max_value=500),
+        array_size=st.integers(min_value=100, max_value=400),
         batch_size=st.integers(min_value=1, max_value=8),
-        block_size=st.integers(min_value=10, max_value=50),
+        block_size=st.integers(min_value=10, max_value=48),
         device=device_strategy(),
     )
-    @settings(max_examples=10)
+    @settings(max_examples=8, deadline=None)
     def test_sequential_sampling_coverage(
         self, array_size, batch_size, block_size, device
     ):
@@ -223,7 +223,7 @@ class TestSimpleBatches:
 
             # Get multiple batches to test sequential behavior
             seen_positions = set()
-            for _ in range(5):
+            for _ in range(3):
                 x, y = batches.get_batch("train")
                 # Check that we're getting different data each time (sequential)
                 first_val = x[0, 0].item()

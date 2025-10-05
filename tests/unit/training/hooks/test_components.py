@@ -194,9 +194,17 @@ def test_initialize_components_with_compile(tmp_path: Path) -> None:
     cfg = _make_config(compile=True)
     runtime = RuntimeContext(device_type="cpu", autocast_context=nullcontext())
 
+    compiled_calls: list[object] = []
+
+    def _fake_compile(module: GPT) -> GPT:
+        compiled_calls.append(module)
+        return module
+
     compiled_model, scaler, ema, writer = initialize_components(
-        model, cfg, runtime, log_dir=str(tmp_path)
+        model, cfg, runtime, log_dir=str(tmp_path), compile_fn=_fake_compile
     )
 
     # Model should be returned (compiled or not, depending on torch version)
     assert compiled_model is not None
+    # Should have attempted compilation exactly once
+    assert compiled_calls == [model]

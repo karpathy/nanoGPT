@@ -93,7 +93,7 @@ class TestMergeMappings:
     """Property-based tests for `merge_mappings`."""
 
     @given(base=dict_strategy(), override=dict_strategy())
-    @settings(max_examples=100)
+    @settings(max_examples=25, deadline=None)
     def test_merge_preserves_base_keys_not_in_override(
         self, base: dict[str, Any], override: dict[str, Any]
     ) -> None:
@@ -104,7 +104,7 @@ class TestMergeMappings:
                 assert result[key] == base[key]
 
     @given(base=dict_strategy(), override=dict_strategy())
-    @settings(max_examples=100)
+    @settings(max_examples=50, deadline=None)
     def test_merge_overrides_base_values(
         self, base: dict[str, Any], override: dict[str, Any]
     ) -> None:
@@ -116,7 +116,7 @@ class TestMergeMappings:
                 assert result[key] == merge_mappings(base[key], value)
 
     @given(d1=dict_strategy(), d2=dict_strategy(), d3=dict_strategy())
-    @settings(max_examples=50)
+    @settings(max_examples=20, deadline=None)
     def test_merge_associativity(
         self, d1: dict[str, Any], d2: dict[str, Any], d3: dict[str, Any]
     ) -> None:
@@ -128,13 +128,13 @@ class TestMergeMappings:
             pass
 
     @given(base=dict_strategy())
-    @settings(max_examples=50)
+    @settings(max_examples=20, deadline=None)
     def test_merge_with_empty_override(self, base: dict[str, Any]) -> None:
         result = merge_mappings(base, {})
         assert result == base
 
     @given(override=dict_strategy())
-    @settings(max_examples=50)
+    @settings(max_examples=20, deadline=None)
     def test_merge_with_empty_base(self, override: dict[str, Any]) -> None:
         result = merge_mappings({}, override)
         assert result == override

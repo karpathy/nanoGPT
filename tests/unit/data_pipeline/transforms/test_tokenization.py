@@ -11,6 +11,28 @@ from ml_playground.data_pipeline.transforms.tokenization import (
 )
 
 
+class _FakeTiktokenModule:
+    """Lightweight stand-in for the real `tiktoken` module used in unit tests."""
+
+    class _Encoding:
+        def __init__(self, name: str) -> None:
+            self.name = name
+            self.n_vocab = 16
+            self._mergeable_ranks = {"token": 0}
+
+        def encode(
+            self, text: str, allowed_special: set[str] | None = None
+        ) -> list[int]:
+            # Deterministic encoding for tests; mirrors interface only.
+            return list(range(min(len(text), 3))) or [0]
+
+        def decode(self, token_ids: list[int]) -> str:
+            return "".join(str(i) for i in token_ids)
+
+    def get_encoding(self, name: str) -> "_FakeTiktokenModule._Encoding":
+        return self._Encoding(name)
+
+
 def test_coerce_tokenizer_type_raises_on_invalid() -> None:
     """coerce_tokenizer_type should raise DataError for invalid types."""
     with pytest.raises(DataError, match="Unsupported tokenizer type"):
@@ -59,7 +81,9 @@ def test_create_standardized_metadata_with_word_tokenizer() -> None:
 
 def test_create_standardized_metadata_with_tiktoken() -> None:
     """create_standardized_metadata should include encoding_name for tiktoken."""
-    tokenizer = TiktokenTokenizer(encoding_name="gpt2")
+    tokenizer = TiktokenTokenizer(
+        encoding_name="gpt2", loader=lambda: _FakeTiktokenModule()
+    )
 
     meta = create_standardized_metadata(tokenizer, 100, 20)
 

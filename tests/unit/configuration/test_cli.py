@@ -8,8 +8,6 @@ from typer.testing import CliRunner
 
 # Additional imports for consolidated CLI tests
 import logging
-import subprocess
-import sys
 
 import typer
 
@@ -682,7 +680,7 @@ def test_load_config_error_branches(tmp_path: Path):
 @pytest.mark.parametrize(
     "args, expect",
     [
-        (["--help"], "usage:"),
+        (["--help"], "usage"),
         (["prepare", "--help"], "prepare"),
         (["train", "--help"], "train"),
         (["sample", "--help"], "sample"),
@@ -690,41 +688,31 @@ def test_load_config_error_branches(tmp_path: Path):
     ],
 )
 def test_cli_help_and_version(args, expect):
-    # Run via python -m to exercise entry-point wiring without performing heavy work
-    cmd = [sys.executable, "-m", "ml_playground.cli"] + args
-    cp = subprocess.run(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-    out = cp.stdout
-    if args == ["--help"]:
-        assert "usage" in out.lower()
-    else:
-        assert expect in out.lower()
-    assert cp.returncode == 0
+    """CLI help text should surface command summaries quickly via Typer runner."""
+
+    result = runner.invoke(app, args)
+    assert result.exit_code == 0
+    out = (result.stdout or "").lower()
+    assert expect in out
 
 
-def test_cli_global_exp_config_missing_exits(tmp_path):
+def test_cli_global_exp_config_missing_exits(tmp_path, caplog):
     # Point to a definitely missing path
     missing = tmp_path / "nope.toml"
-    # Use a real subcommand to ensure the callback runs (help short-circuits)
-    cmd = [
-        sys.executable,
-        "-m",
-        "ml_playground.cli",
-        "--exp-config",
-        str(missing),
-        "prepare",
-        "shakespeare",
-    ]
-    cp = subprocess.run(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
-    )
+
+    deps = _make_deps(load_experiment=lambda _exp, _path: None)
+
+    with (
+        override_cli_dependencies(deps),
+        caplog.at_level(logging.ERROR, logger="ml_playground.cli"),
+    ):
+        result = runner.invoke(
+            app, ["--exp-config", str(missing), "prepare", "shakespeare"]
+        )
+
     # Typer exits with code 2 for callback-triggered validation failures
-    assert cp.returncode == 2
-    assert "config file not found" in cp.stdout.lower()
+    assert result.exit_code == 2
+    assert any("config file not found" in msg.lower() for msg in caplog.messages)
 
 
 def test_sample_routes_to_injected_sampler(
