@@ -466,3 +466,85 @@ def test_checkpoint_manager_handles_non_mapping_payload(tmp_path: Path) -> None:
 
     with pytest.raises(CheckpointError, match="does not contain a mapping payload"):
         mgr.load_best_checkpoint("cpu", logger)
+
+
+def test_apply_checkpoint_with_ema() -> None:
+    """apply_checkpoint should apply EMA shadow weights when available."""
+    from ml_playground.training.ema import EMA
+    from ml_playground.models.core.model import GPT
+    import logging
+
+    # Create a minimal model
+    cfg = ModelConfig(
+        n_layer=1, n_head=1, n_embd=4, block_size=4, dropout=0.0, vocab_size=50
+    )
+    logger = logging.getLogger(__name__)
+    model = GPT(cfg, logger)
+
+    # Create EMA
+    ema = EMA(model, decay=0.999, device="cpu")
+
+    # Create checkpoint with EMA shadow
+    checkpoint = Checkpoint(
+        model=model.state_dict(),
+        optimizer={},
+        model_args=cfg.model_dump(),
+        iter_num=100,
+        best_val_loss=0.5,
+        config={},
+        ema={"test_param": torch.tensor([1.0, 2.0, 3.0])},
+    )
+
+    optimizer = _StubOptimizer()
+
+    # Apply checkpoint
+    iter_num, best_val_loss = service.apply_checkpoint(
+        checkpoint, model=model, optimizer=optimizer, ema=ema
+    )
+
+    # EMA shadow should be updated
+    assert "test_param" in ema.shadow
+    assert iter_num == 100
+    assert best_val_loss == 0.5
+
+
+def test_propagate_metadata_with_nonexistent_meta(tmp_path: Path) -> None:
+    """propagate_metadata should handle nonexistent meta file gracefully."""
+    cfg = _make_cfg(tmp_path)
+    shared = _make_shared(tmp_path, cfg)
+    logger = _StubLogger()
+
+    # Call with nonexistent meta file
+    service.propagate_metadata(cfg, shared, logger=logger)
+
+    # Should not raise, just return
+    assert len(logger.warnings) == 0  # No warnings for missing meta
+
+
+def test_propagate_metadata_copies_to_multiple_dirs(tmp_path: Path) -> None:
+    """propagate_metadata should copy meta to train and sample dirs."""
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    meta_src = dataset_dir / "meta.pkl"
+    meta_src.write_bytes(b"meta content")
+
+    train_dir = tmp_path / "train"
+    train_dir.mkdir()
+    sample_dir = tmp_path / "sample"
+
+    cfg = _make_cfg(tmp_path)
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=tmp_path / "cfg.toml",
+        project_home=tmp_path,
+        dataset_dir=dataset_dir,
+        train_out_dir=train_dir,
+        sample_out_dir=sample_dir,
+    )
+    logger = _StubLogger()
+
+    service.propagate_metadata(cfg, shared, logger=logger)
+
+    # Both directories should have the meta file
+    assert (train_dir / "meta.pkl").exists()
+    assert (sample_dir / "meta.pkl").exists()
