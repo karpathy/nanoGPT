@@ -1,8 +1,6 @@
----
-trigger: always_on
-description:
-globs:
----
+______________________________________________________________________
+
+## trigger: always_on description: globs:
 
 # Import Guidelines: PEP 420 Namespace Policy
 
@@ -25,63 +23,75 @@ written; deviations require explicit approval.
 ## Mandatory Rules (No Exceptions Without Approval)
 
 1. **Absolute, module-level imports only**
+
    - Use absolute paths rooted at the repository package (e.g., `from ml_playground.core.foo import Bar`).
    - Prohibited: relative imports, umbrella modules, or implicit re-exports.
 
-2. **No star imports**
+1. **No star imports**
+
    - `from module import *` is disallowed in all code and tests.
 
-3. **Import placement**
+1. **Import placement**
+
    - Place imports at module top level, beneath the docstring.
    - Exceptions: documented cycle breaks or optional dependencies (see rules 8–9).
 
-4. **Ordering and grouping**
+1. **Ordering and grouping**
+
    - Maintain three groups separated by single blank lines:
      1. Standard library
-     2. Third-party
-     3. First-party (`ml_playground`, `tests`, `tools`)
+     1. Third-party
+     1. First-party (`ml_playground`, `tests`, `tools`)
    - Alphabetize within each group. Allow the formatter/import organizer to enforce ordering.
 
-5. **Aliasing**
+1. **Aliasing**
+
    - Only the conventional aliases `import numpy as np` and `import pandas as pd` are allowed.
    - Otherwise, import the module without aliases.
 
-6. **Re-exports and facades**
+1. **Re-exports and facades**
+
    - Prohibited: exposing symbols via shims, compatibility modules, or implicit public APIs.
    - Consumers must import directly from the module that defines the symbol.
 
-7. **Side-effect free imports**
+1. **Side-effect free imports**
+
    - Importing a module must not trigger I/O, logging setup, network calls, or global mutations.
    - If unavoidable, relocate the side effect behind an explicit function or command and document the rationale with a
      nearby TODO comment following the repository format (`# TODO Remove <context>: <reason>`).
 
-8. **Optional dependencies**
+1. **Optional dependencies**
+
    - Import optional packages in the narrowest scope that needs them.
    - On missing dependency, raise a clear error with installation guidance.
    - Prohibited: optional dependencies at module top level.
 
-9. **Cycle handling**
+1. **Cycle handling**
+
    - Preferred fix: refactor to remove the cycle.
    - Temporary escape hatch: a documented local import (`# TODO Remove cycle break: <reason>`) inside the dependent
      function.
      Track a follow-up task to remove the cycle.
 
-10. **Type-only imports**
-    - Use `typing.TYPE_CHECKING` for heavy or optional typing dependencies.
-    - Prefer postponed annotations (enabled via `from __future__ import annotations` or Python ≥3.13 defaults).
+1. **Type-only imports**
 
-11. **Lazy imports**
-    - Disallowed unless both apply: the import breaks a hard cycle or meaningfully reduces cold-start cost.
-    - Document with `# TODO Remove lazy import: <reason + impact>` and open a task to measure/remove when feasible.
+   - Use `typing.TYPE_CHECKING` for heavy or optional typing dependencies.
+   - Prefer postponed annotations (enabled via `from __future__ import annotations` or Python ≥3.13 defaults).
 
-12. **`__init__.py` exception policy**
-    - Default: omit `__init__.py` entirely.
-    - Allowed only when the file contains one of the following, and the rationale is documented near the file:
-      - Metadata required by packaging (`__version__`, entry-point registration) pending migration.
-      - Third-party compatibility that cannot yet consume namespace packages.
-      - Explicit plugin registration that cannot be moved behind a callable without breaking integration.
-    - Exception files must stay side-effect free, include a TODO comment describing the exception, and must not
-      re-export symbols.
+1. **Lazy imports**
+
+   - Disallowed unless both apply: the import breaks a hard cycle or meaningfully reduces cold-start cost.
+   - Document with `# TODO Remove lazy import: <reason + impact>` and open a task to measure/remove when feasible.
+
+1. **`__init__.py` exception policy**
+
+   - Default: omit `__init__.py` entirely.
+   - Allowed only when the file contains one of the following, and the rationale is documented near the file:
+     - Metadata required by packaging (`__version__`, entry-point registration) pending migration.
+     - Third-party compatibility that cannot yet consume namespace packages.
+     - Explicit plugin registration that cannot be moved behind a callable without breaking integration.
+   - Exception files must stay side-effect free, include a TODO comment describing the exception, and must not
+     re-export symbols.
 
 ## Canonical Patterns
 

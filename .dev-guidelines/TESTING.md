@@ -5,8 +5,8 @@
 We practice strict TDD for all functional changes:
 
 1. Write a failing test that specifies the intended behavior (unit or integration).
-2. Implement the minimal production code to make the test pass.
-3. Refactor safely with tests green.
+1. Implement the minimal production code to make the test pass.
+1. Refactor safely with tests green.
 
 Commit strategy under TDD:
 
@@ -44,10 +44,10 @@ Testing Docs
 
 ### 2. Test Levels (ULTRA-STRICT Performance Requirements)
 
-- **Unit tests** (required): LIGHTNING FAST (<10ms each), isolated, no network, no filesystem writes. One spec per
+- **Unit tests** (required): LIGHTNING FAST (\<10ms each), isolated, no network, no filesystem writes. One spec per
   behavior. MUST achieve 100% success rate.
 - **Integration tests** (allowed/required): Minimal real integration across 2–3 components, no live external services.
-  Use in-memory or ephemeral resources. Must complete in <100ms each.
+  Use in-memory or ephemeral resources. Must complete in \<100ms each.
 - **End-to-end tests** (discouraged): Only when explicitly approved; must run in CI under 30s total with
   recorded/replayed I/O.
 
@@ -113,7 +113,7 @@ ml_playground/models/                     -> tests/unit/core/test_<module>.py
   Example-focused suites remain in `test_<module>.py`.
 - **Determinism & performance**: Properties must pass deterministically under CI
   seeds. Tune strategies/settings so each property completes comfortably within
-  the <10 ms unit-test budget (or justify the overage in the test docstring).
+  the \<10 ms unit-test budget (or justify the overage in the test docstring).
 
 **Rationale**: A property-first mindset maximizes behavioral exploration while
 retaining example tests for narrative requirements and hard-to-oracle seams.

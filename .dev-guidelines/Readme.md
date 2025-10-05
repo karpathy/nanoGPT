@@ -1,6 +1,6 @@
----
-trigger: always_on
----
+______________________________________________________________________
+
+## trigger: always_on
 
 # ml_playground Developer Guidelines
 
@@ -79,8 +79,7 @@ All documentation in this repo must adhere to [DOCUMENTATION.md](DOCUMENTATION.m
 **Granular Commits**: Make small, focused commits with conventional commit messages. Run quality gates before each
 commit, not just before PR.
 
-**Runnable Commits**: Every commit must be in a runnable state when checked out. Do not land commits that break `make
-quality`, CLI entry points, or docs builds. Never bypass verification (avoid `--no-verify`).
+**Runnable Commits**: Every commit must be in a runnable state when checked out. Do not land commits that break `make quality`, CLI entry points, or docs builds. Never bypass verification (avoid `--no-verify`).
 
 **Feature Branches Only**: All work happens on short‑lived feature branches; no direct commits to `main`. Use kebab-case
 names like `feat/<scope>-<short-desc>`, `fix/<scope>-<short-desc>`. Keep branches focused and prefer multiple small PRs.
@@ -144,7 +143,7 @@ make loop bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
   - Use explicit tiny defaults for E2E CLI runs:
     `--exp-config tests/e2e/ml_playground/experiments/test_default_config.toml`
 
----
+______________________________________________________________________
 
 *This guideline system ensures consistent, high-quality development practices across the ml_playground module. Each
 document focuses on a specific aspect while maintaining coherent overall standards.*

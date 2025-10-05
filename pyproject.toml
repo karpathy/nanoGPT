@@ -80,7 +80,15 @@ dev = [
     "tomli-w>=1.0.0",
     "pre-commit>=4.3.0",
     "coverage-badge>=1.1.0",
+    "mdformat>=0.7.17",
+    "mdformat-gfm>=0.3.5",
 ]
+
+
+
+[tool.mdformat]
+wrap = 120
+number = false
 
 
 

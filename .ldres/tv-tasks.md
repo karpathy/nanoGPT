@@ -11,6 +11,7 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
 ## Open tasks (updated 2025-10-03)
 
 <!-- markdownlint-disable MD033 -->
+
 <details>
 <summary>Open task template (populate with existing PR)</summary>
 
@@ -47,10 +48,10 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
   spread across `tests/integration/` and `tests/unit/`.
 - **Next steps**:
   1. Inventory existing regression-style tests; identify move/mirror targets.
-  2. Create `tests/regression/README.md` following documentation guidelines and describe anti-regression
+  1. Create `tests/regression/README.md` following documentation guidelines and describe anti-regression
      policy.
-  3. Relocate or re-export regression tests; adjust imports/fixtures as needed.
-  4. Update `Makefile`/pytest configuration to include the new suite; ensure CI jobs reference it.
+  1. Relocate or re-export regression tests; adjust imports/fixtures as needed.
+  1. Update `Makefile`/pytest configuration to include the new suite; ensure CI jobs reference it.
 - **Validation**: `make quality`; `pytest tests/regression -q`.
 - **Git plan**:
   - Branch: `test/regression-suite`
@@ -70,11 +71,11 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
   (`tv-2025-10-03:PR??`).
 - **Next steps**:
   1. Generate a per-module coverage scoreboard and file tasks for gaps identified.
-  2. Work through deterministic modules first (CLI/config/data pipeline) using DI and fakes.
-  3. Extend coverage to experiments and runtime surfaces while honoring runtime budgets.
-  4. Gradually raise coverage gates (95% → 99% → 100%) in sync with completed milestones, logging each bump.
-  5. Migrate eligible deterministic unit tests to property-based suites with clear oracles.
-  6. Refactor property-based tests to reuse fixtures and shrink shared setup code.
+  1. Work through deterministic modules first (CLI/config/data pipeline) using DI and fakes.
+  1. Extend coverage to experiments and runtime surfaces while honoring runtime budgets.
+  1. Gradually raise coverage gates (95% → 99% → 100%) in sync with completed milestones, logging each bump.
+  1. Migrate eligible deterministic unit tests to property-based suites with clear oracles.
+  1. Refactor property-based tests to reuse fixtures and shrink shared setup code.
 - **Latest snapshot (2025-10-05)**:
   - Global coverage **87.28%** (`make coverage-report` running unit + property suites).
   - Pre-commit gate **raised to `--fail-under=87.00`** (was 79.00%).
@@ -108,36 +109,37 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
     - `ml_playground/cli.py` (86.97% - 26 missing, mostly CLI integration paths)
   - **Other modules**: `ml_playground/core/logging_protocol.py` (Protocol class)
 - **Git plan**:
-  - Branch: `docs/coverage-roadmap`
   - Commits:
     - `docs(coverage): outline roadmap to ~100 percent coverage`
       (`docs/coverage/roadmap.md`, `.ldres/tv-tasks.md` cross-reference)
 - **PR**: Title `docs: define coverage roadmap`; body summarizing milestones, validation, and gating plan.
 
-### Open · tv-2025-10-05:PR?? · Markdownlint tooling harmonization
+### Open · tv-2025-10-05:PR?? · Markdown formatting via mdformat
 
-- **Summary**: Align markdownlint execution with the pyproject.toml-only configuration policy. Replace the
-  current `markdownlint-cli2` hook with a solution that respects centralized configuration.
+- **Summary**: Standardize Markdown formatting with `mdformat` configured in `pyproject.toml`, replacing
+  the `markdownlint-cli2` hook while keeping formatting policy centralized.
 - **Priority**: P1
 - **Size**: S
 - **Meta?**: Yes — removes a recurring exception to the tooling policy.
 - **Dependencies**: None.
 - **Next steps**:
-  1. Research markdown lint tools that read settings from `pyproject.toml` (or can be wrapped to do so).
-  2. Prototype the replacement hook locally and document migration steps.
-  3. Update `.githooks/.pre-commit-config.yaml` and supporting docs; ensure CI parity.
-- **Validation**: `make docs-lint` (or equivalent new target) once introduced.
+  1. Finalize documentation updates referencing `mdformat` (developer guidelines, contributor docs).
+  2. Verify CI and local contributor workflows reflect the new formatter (update `make quality`
+     messaging if needed).
+  3. Open PR showcasing formatting diffs and summarize tooling migration for reviewers.
+- **Validation**: `make quality`; targeted `uv run mdformat <file.md>` verification on sample docs.
 - **Git plan**:
   - Branch: `build/markdownlint-pyproject`
-  - Commit: `build(markdownlint): adopt pyproject-based lint runner`
-  - **Status**: Pending research
-- **PR**: Title `build: harmonize markdownlint with pyproject tooling`; include comparison runs and rollout notes.
+  - Commits:
+    - `build(pre-commit): replace markdownlint with mdformat`
+    - `docs(guidelines): document mdformat workflow`
+    - `chore(docs): apply mdformat formatting sweep`
+- **PR**: Title `build: harmonize markdown formatting with mdformat`; include comparison runs and rollout notes.
 
 ### Completed · tv-2025-10-05:fixtures · Property suite fixture consolidation
 
 - **Summary**: Move shared helpers (config factories, attribute overrides) into
   `tests/conftest.py` and refactor property/unit suites to consume them.
-- **Priority**: P1
 - **Size**: S
 - **Meta?**: No
 - **Dependencies**: None.
@@ -160,8 +162,8 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
 - **Dependencies**: Coverage roadmap task; reproducible-build epic for tool integration.
 - **Next steps**:
   1. Audit current mutation tool configs (remove `mutmut` residuals; align with `cosmic-ray`).
-  2. Define initial mutation targets (critical modules) and thresholds for pass/fail.
-  3. Integrate mutation runs into CI (nightly or gated) with summarized reporting.
+  1. Define initial mutation targets (critical modules) and thresholds for pass/fail.
+  1. Integrate mutation runs into CI (nightly or gated) with summarized reporting.
 - **Validation**: `make quality`; targeted `cosmic-ray` run.
 - **Git plan**:
   - Branch: `test/mutation-suite`
@@ -174,6 +176,7 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
 ## Deferred tasks (updated 2025-10-03)
 
 <!-- markdownlint-disable MD033 -->
+
 <details>
 <summary>Deferred task template (populate with existing PR)</summary>
 
@@ -216,16 +219,16 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
 - **Holding pattern**: Defer until coverage roadmap milestones complete and multi-version support becomes necessary.
 - **PR status**: Not yet created; future branch could be `ci/python-matrix`.
 
----
+______________________________________________________________________
 
 ## Notes
 
 - `make quality` is the canonical gate and already runs pre-commit hooks
-(ruff, format, checkmake, pyright, mypy, vulture,pytest).
-No separate test run in the Make target is necessary.
+  (ruff, format, checkmake, pyright, mypy, vulture,pytest).
+  No separate test run in the Make target is necessary.
 - When the "remove mocks" effort is complete, enforce no mock usage via Ruff banned-modules and a CI grep sweep.
 
----
+______________________________________________________________________
 
 ## Agent-Ready, Granular Refactoring Prompts (Copy/Paste)
 
@@ -248,4 +251,4 @@ follow Conventional Commits, and always pair behavioral changes with tests. Neve
 - **Run quality gates**: Execute `make quality` (or stricter slices) locally before each commit and before opening the PR.
 - **Open focused PR**: Push the branch, open a PR summarizing the change, list validation commands, and request review.
 - **Merge cleanly into `main`**: After CI passes and review approval,
-use fast-forward or rebase-merge so the branch lands on `main` (a.k.a. master); delete the feature branch afterward.
+  use fast-forward or rebase-merge so the branch lands on `main` (a.k.a. master); delete the feature branch afterward.

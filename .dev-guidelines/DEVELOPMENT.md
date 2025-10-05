@@ -1,8 +1,6 @@
----
-trigger: always_on
-description:
-globs:
----
+______________________________________________________________________
+
+## trigger: always_on description: globs:
 
 # ml_playground Development Practices
 
@@ -283,7 +281,7 @@ optimized for non-interactive or copy-paste workflows.
 
 ### Checkpointing and Resume
 
- Checkpoints are strictly rotated-only.
+Checkpoints are strictly rotated-only.
 
 - Last checkpoints are saved with a timestamped suffix, e.g., `ckpt_last_XXXXXXXX.pt`.
 - Best checkpoints are saved with a timestamped suffix and metric, e.g., `ckpt_best_XXXXXXXX_<metric>.pt`.

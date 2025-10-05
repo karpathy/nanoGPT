@@ -23,6 +23,7 @@ Last updated: 2025-10-05
 ## Gap analysis
 
 - **High-impact deterministic gaps**
+
   - `ml_playground/cli.py` (66.39%): CLI option error paths, dataset downloads,
     and project scaffolding flows lack unit coverage.
   - `ml_playground/configuration/loading.py` (81.21%): Config file fallbacks and
@@ -34,12 +35,14 @@ Last updated: 2025-10-05
     `speakger/preparer.py`): Deterministic validation branches are missing.
 
 - **Moderate deterministic gaps**
+
   - `ml_playground/sampling/runner.py` (80.31%): File-based prompt ingestion and
     compile hooks need targeted mocks.
   - `ml_playground/training/loop/runner.py` (79.46%): Best-checkpoint updates
     and evaluation-only mode are partially covered; expand fake dependency tests.
 
 - **Stochastic or hardware-sensitive gaps**
+
   - `ml_playground/models/core/inference.py` (10.53%): GPU and AMP toggles need
     deterministic seeds and CPU pathways.
   - `ml_playground/training/ema.py` (40.00%): EMA decay on CUDA should be backed
@@ -47,6 +50,7 @@ Last updated: 2025-10-05
 ## Milestones
 
 1. **Coverage scoreboard & ownership**
+
    - Generate a per-module summary from `.cache/coverage/coverage.json`.
    - Current modules below 90% line coverage (needs task tracking):
      - `ml_playground/experiments/bundestag_qwen15b_lora_mps/preparer.py` — 15.52%
@@ -67,19 +71,22 @@ Last updated: 2025-10-05
      fixture work.
    - Enforce that new/changed modules reach 100% before merge.
 
-2. **Core deterministic modules**
+1. **Core deterministic modules**
+
    - Methodically close gaps in modules with deterministic logic (`ml_playground/cli.py`,
      `configuration/loading.py`, `data_pipeline/preparer.py`).
    - Lean on existing fakes/DI seams; avoid introducing test-only branches.
-{{ ... }}
+     {{ ... }}
 
-3. **Experiment & runtime surfaces**
+1. **Experiment & runtime surfaces**
+
    - Cover experiment preparers, sampling runner branches, and training loop fallbacks using
      deterministic fixtures, tmp resources, and dependency injection.
    - Keep property-based suites within guideline runtime budgets while increasing branch coverage.
    - Aim for ≥99% global coverage once these modules are addressed.
 
-4. **Stretch modules & full compliance**
+1. **Stretch modules & full compliance**
+
    - Resolve remaining low-coverage areas (EMA, inference edge cases) via deterministic CPU
      equivalence tests and seeded runs.
    - Once per-module coverage reads 100%, raise all gates (pre-commit, CI, badges) accordingly.

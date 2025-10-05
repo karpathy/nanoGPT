@@ -1,8 +1,6 @@
----
-trigger: always_on
-description: 
-globs: 
----
+______________________________________________________________________
+
+## trigger: always_on description: globs:
 
 # ml_playground Setup Guide
 
@@ -115,8 +113,8 @@ make quality-ext
 ## TDD Workflow (Required)
 
 1. Write a failing test specifying the behavior (unit or integration).
-2. Implement the minimal production code to make the test pass.
-3. Refactor with tests green.
+1. Implement the minimal production code to make the test pass.
+1. Refactor with tests green.
 
 Commit pairing rule (required): each functional change MUST include its tests in the same commit (unit/integration).
 Exceptions: documentation-only, test-only refactors (no behavior change), mechanical formatting.

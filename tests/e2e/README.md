@@ -5,7 +5,7 @@ They validate wiring across modules, configuration loading/merging, logging, and
 
 ## Principles
 
-- Small, deterministic, fast (< seconds per test).
+- Small, deterministic, fast (\< seconds per test).
 - No test-only branches in production code.
 - Filesystem writes go to temp dirs or `out_dir` under a temporary workspace.
 - Use the tiny test defaults; do not hit network or large downloads.

@@ -1,7 +1,6 @@
----
-trigger: always_on
-description: documentation standards for nanoGPT/ml_playground
----
+______________________________________________________________________
+
+## trigger: always_on description: documentation standards for nanoGPT/ml_playground
 
 # Documentation Guidelines
 
@@ -49,13 +48,14 @@ ml_playground/experiments/shakespeare/
   explanations.
 - Example line: “For framework utilities, see `docs/framework_utilities.md`.”
 
-## Markdown Style (markdownlint)
+## Markdown Style (mdformat)
 
-- Headings (MD022): surround with one blank line above and below.
-- Lists (MD032): one blank line before and after lists.
-- Fenced code blocks (MD031): one blank line before and after; specify a language when possible (MD040).
-- Avoid inline HTML where a Markdown alternative exists (MD033).
-- Ensure a single trailing newline (MD047).
+- Run `uv run mdformat <file.md>` (or rely on `make quality`) to format Markdown consistently.
+- Maintain one blank line above and below headings.
+- Ensure a blank line before and after lists; mdformat enforces indentation automatically.
+- Add a blank line before and after fenced code blocks and specify a language when possible.
+- Prefer Markdown constructs over inline HTML.
+- Files must end with a single trailing newline.
 
 ## Guideline Divergence Documentation
 

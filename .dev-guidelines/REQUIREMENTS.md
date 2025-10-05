@@ -1,8 +1,6 @@
----
-trigger: model_decision
-description: when talking about requirements (checkpointing behavior)
-globs: *.py, *.md, *.toml
----
+______________________________________________________________________
+
+## trigger: model_decision description: when talking about requirements (checkpointing behavior) globs: \*.py, \*.md, \*.toml
 
 # Checkpointing System Requirements
 
