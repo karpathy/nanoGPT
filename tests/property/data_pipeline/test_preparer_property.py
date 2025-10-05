@@ -191,3 +191,90 @@ def test_pipeline_run_requires_raw_text_path(
 
     with pytest.raises(DataError, match="No raw text path"):
         pipeline.run()
+
+
+def test_pipeline_run_uses_custom_read_text_fn(
+    tmp_path: Path,
+    shared_config_factory: Callable[[Path], SharedConfig],
+) -> None:
+    """Pipeline should use custom `read_text_fn` when provided."""
+    base = tmp_path
+    raw_file = base / "input.txt"
+    raw_file.write_text("original content", encoding="utf-8")
+
+    shared = shared_config_factory(base)
+    calls: list[Path] = []
+
+    def _custom_reader(path: Path) -> str:
+        calls.append(path)
+        return "custom content"
+
+    cfg = PreparerConfig(
+        tokenizer_type="char",
+        raw_text_path=raw_file,
+        read_text_fn=_custom_reader,
+    )
+    pipeline = create_pipeline(cfg, shared)
+    outcome = pipeline.run()
+
+    assert calls  # custom reader invoked
+    assert outcome.metadata["train_tokens"] > 0
+
+
+def test_pipeline_cfg_property(
+    tmp_path: Path,
+    shared_config_factory: Callable[[Path], SharedConfig],
+) -> None:
+    """Pipeline `cfg` property should return the preparer config."""
+    shared = shared_config_factory(tmp_path)
+    cfg = PreparerConfig(tokenizer_type="char")
+    pipeline = create_pipeline(cfg, shared)
+
+    assert pipeline.cfg is cfg
+
+
+def test_pipeline_shared_property(
+    tmp_path: Path,
+    shared_config_factory: Callable[[Path], SharedConfig],
+) -> None:
+    """Pipeline `shared` property should return the shared config."""
+    shared = shared_config_factory(tmp_path)
+    cfg = PreparerConfig(tokenizer_type="char")
+    pipeline = create_pipeline(cfg, shared)
+
+    assert pipeline.shared is shared
+
+
+def test_pipeline_output_snapshot(
+    tmp_path: Path,
+    shared_config_factory: Callable[[Path], SharedConfig],
+) -> None:
+    """Pipeline `output_snapshot` should capture file states."""
+    shared = shared_config_factory(tmp_path)
+    cfg = PreparerConfig(tokenizer_type="char")
+    pipeline = create_pipeline(cfg, shared)
+
+    test_file = tmp_path / "test.txt"
+    test_file.write_text("data", encoding="utf-8")
+
+    snapshot = pipeline.output_snapshot([test_file])
+    assert test_file in snapshot
+    assert snapshot[test_file] is not None
+
+
+@pytest.mark.parametrize("split_value", [0.0, 0.5, 1.0])
+def test_pipeline_default_split_valid_range(
+    split_value: float,
+    tmp_path: Path,
+    shared_config_factory: Callable[[Path], SharedConfig],
+) -> None:
+    """Pipeline should accept valid split ratios in [0.0, 1.0]."""
+    shared = shared_config_factory(tmp_path)
+    cfg = PreparerConfig(tokenizer_type="char", extras={"split": split_value})
+    pipeline = create_pipeline(cfg, shared)
+
+    # Accessing _default_split indirectly via prepare_from_text
+    tokenizer = create_tokenizer("char")
+    outcome = pipeline.prepare_from_text("test data", tokenizer)
+
+    assert isinstance(outcome, PreparationOutcome)
