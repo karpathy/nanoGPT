@@ -77,8 +77,9 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
   6. Refactor property-based tests to reuse fixtures and shrink shared setup code.
 - **Latest snapshot (2025-10-05)**:
   - Global coverage **87.28%** (`make coverage-report` running unit + property suites).
-  - Pre-commit gate set to `--fail-under=79.00`; **exceeded target** - ready to raise threshold.
-  - **PR #49**: Coverage improvements complete (28 commits, **+6.55% global coverage**)
+  - Pre-commit gate **raised to `--fail-under=87.00`** (was 79.00%).
+  - **PR #49**: Coverage improvements complete (30 commits, **+6.55% global coverage**)
+  - See `.ldres/coverage-opportunities.md` for detailed roadmap to 90%+
 - **Completed modules (100% coverage)** - 11 total:
   - ✅ `ml_playground/data_pipeline/preparer.py` (93.07% → 100%)
   - ✅ `ml_playground/configuration/loading.py` (81.21% → 100%)
