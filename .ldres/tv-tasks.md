@@ -76,35 +76,34 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
   5. Migrate eligible deterministic unit tests to property-based suites with clear oracles.
   6. Refactor property-based tests to reuse fixtures and shrink shared setup code.
 - **Latest snapshot (2025-10-05)**:
-  - Global coverage 80.73% (`make coverage-report` running unit + property suites).
-  - Pre-commit gate set to `--fail-under=79.00`; raise ≥81.50% after the next Milestone 1 uplift.
-  - **PR #49**: Coverage improvements in progress (7 commits, +1.67% global coverage)
-- **Completed modules (100% coverage)**:
+  - Global coverage **86.53%** (`make coverage-report` running unit + property suites).
+  - Pre-commit gate set to `--fail-under=79.00`; **exceeded target** - ready to raise threshold.
+  - **PR #49**: Coverage improvements complete (20 commits, **+5.80% global coverage**)
+- **Completed modules (100% coverage)** - 9 total:
   - ✅ `ml_playground/data_pipeline/preparer.py` (93.07% → 100%)
   - ✅ `ml_playground/configuration/loading.py` (81.21% → 100%)
   - ✅ `ml_playground/training/hooks/evaluation.py` (95.00% → 100%)
-- **Improved modules**:
-  - ⬆️ `ml_playground/cli.py` (81.51% → 86.97%)
+  - ✅ `ml_playground/training/ema.py` (40.00% → 100%)
+  - ✅ `ml_playground/training/hooks/components.py` (39.29% → 100%)
+  - ✅ `ml_playground/experiments/bundestag_tiktoken/preparer.py` (27.50% → 100%)
+  - ✅ `ml_playground/training/hooks/logging.py` (76.92% → 100%)
+- **Significantly improved modules**:
+  - ⬆️ `ml_playground/cli.py` (81.51% → 86.97%, +5.46%)
+  - ⬆️ `ml_playground/models/core/inference.py` (10.53% → 92.98%, +82.45%)
+  - ⬆️ `ml_playground/experiments/bundestag_qwen15b_lora_mps/preparer.py` (15.52% → 87.93%, +72.41%)
   - ⬆️ `ml_playground/training/checkpointing/checkpoint_manager.py` (92.55% → 92.97%)
-- **Module backlog** (prioritized by lowest coverage first):
-  - **Critical gaps (<50%)**:
-    - `ml_playground/models/core/inference.py` (10.53% - 37 missing statements)
-    - `ml_playground/experiments/bundestag_qwen15b_lora_mps/preparer.py` (15.52% - 35 missing)
-    - `ml_playground/experiments/bundestag_tiktoken/preparer.py` (27.50% - 29 missing)
-    - `ml_playground/training/hooks/components.py` (39.29% - 11 missing)
-    - `ml_playground/training/ema.py` (40.00% - 8 missing)
+- **Module backlog** (remaining gaps):
   - **Medium gaps (50-80%)**:
     - `ml_playground/experiments/speakger/preparer.py` (53.85% - 6 missing)
-    - `ml_playground/core/tokenizer_protocol.py` (75.00% - 2 missing)
     - `ml_playground/experiments/bundestag_char/preparer.py` (75.86% - 7 missing)
-    - `ml_playground/training/hooks/logging.py` (76.92% - 2 missing)
-    - `ml_playground/training/hooks/runtime.py` (78.57% - 5 missing)
+    - `ml_playground/training/hooks/runtime.py` (78.57% - CUDA lines require GPU)
+    - `ml_playground/core/tokenizer_protocol.py` (75.00% - Protocol, tested via implementations)
   - **Near complete (>80%)**:
-    - `ml_playground/cli.py` (86.97% - 26 missing) - in progress
+    - `ml_playground/cli.py` (86.97% - 26 missing)
     - `ml_playground/training/checkpointing/checkpoint_manager.py` (92.97% - 16 missing)
     - `ml_playground/training/checkpointing/service.py` (91.76% - 2 missing)
     - `ml_playground/data_pipeline/transforms/tokenization.py` (90.14% - 3 missing)
-  - **Other modules**: `ml_playground/core/logging_protocol.py` (coverage TBD)
+  - **Other modules**: `ml_playground/core/logging_protocol.py` (Protocol class)
 - **Git plan**:
   - Branch: `docs/coverage-roadmap`
   - Commits:
