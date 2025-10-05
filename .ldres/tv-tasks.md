@@ -86,18 +86,25 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
 - **Improved modules**:
   - ⬆️ `ml_playground/cli.py` (81.51% → 86.97%)
   - ⬆️ `ml_playground/training/checkpointing/checkpoint_manager.py` (92.55% → 92.97%)
-- **Module backlog** (open coverage tasks):
-  - `ml_playground/models/core/inference.py` (10.53%)
-  - `ml_playground/training/ema.py` (40.00%)
-  - `ml_playground/experiments/bundestag_qwen15b_lora_mps/preparer.py` (15.52%)
-  - `ml_playground/experiments/bundestag_tiktoken/preparer.py` (27.50%)
-  - `ml_playground/experiments/bundestag_char/preparer.py` (75.86%)
-  - `ml_playground/experiments/speakger/preparer.py` (53.85%)
-  - `ml_playground/training/hooks/logging.py` (76.92%)
-  - `ml_playground/training/hooks/runtime.py` (78.57%)
-  - `ml_playground/training/hooks/components.py` (39.29%)
-  - `ml_playground/core/tokenizer_protocol.py` (75.00%)
-  - `ml_playground/core/logging_protocol.py`
+- **Module backlog** (prioritized by lowest coverage first):
+  - **Critical gaps (<50%)**:
+    - `ml_playground/models/core/inference.py` (10.53% - 37 missing statements)
+    - `ml_playground/experiments/bundestag_qwen15b_lora_mps/preparer.py` (15.52% - 35 missing)
+    - `ml_playground/experiments/bundestag_tiktoken/preparer.py` (27.50% - 29 missing)
+    - `ml_playground/training/hooks/components.py` (39.29% - 11 missing)
+    - `ml_playground/training/ema.py` (40.00% - 8 missing)
+  - **Medium gaps (50-80%)**:
+    - `ml_playground/experiments/speakger/preparer.py` (53.85% - 6 missing)
+    - `ml_playground/core/tokenizer_protocol.py` (75.00% - 2 missing)
+    - `ml_playground/experiments/bundestag_char/preparer.py` (75.86% - 7 missing)
+    - `ml_playground/training/hooks/logging.py` (76.92% - 2 missing)
+    - `ml_playground/training/hooks/runtime.py` (78.57% - 5 missing)
+  - **Near complete (>80%)**:
+    - `ml_playground/cli.py` (86.97% - 26 missing) - in progress
+    - `ml_playground/training/checkpointing/checkpoint_manager.py` (92.97% - 16 missing)
+    - `ml_playground/training/checkpointing/service.py` (91.76% - 2 missing)
+    - `ml_playground/data_pipeline/transforms/tokenization.py` (90.14% - 3 missing)
+  - **Other modules**: `ml_playground/core/logging_protocol.py` (coverage TBD)
 - **Git plan**:
   - Branch: `docs/coverage-roadmap`
   - Commits:
