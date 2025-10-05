@@ -32,6 +32,24 @@ Examples:
 - `test(trainer): add tests for checkpoint sidecar schema and behavior`
 - `chore(config): centralize tooling settings in pyproject.toml`
 
+### Meaningful subjects required
+
+- Subject lines must describe *what* changed and, when useful, *why*.
+- Avoid vague rollups such as "update tests" or "misc fixes".
+- Mention the affected component so reviewers can infer impact quickly.
+
+Good examples:
+
+- `test(cli): add cuda device seeding property`
+- `docs(workflow): clarify optional make quality usage`
+- `fix(loader): guard against missing override file`
+
+Poor examples (do not use):
+
+- `expand cli and data pipeline coverage`
+- `more tweaks`
+- `update stuff`
+
 ## Linear History & Rebasing
 
 - Maintain a linear history for your work: rebase on top of the target branch; avoid merge commits; fast‑forward only.

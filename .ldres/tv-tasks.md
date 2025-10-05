@@ -73,9 +73,11 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
   2. Work through deterministic modules first (CLI/config/data pipeline) using DI and fakes.
   3. Extend coverage to experiments and runtime surfaces while honoring runtime budgets.
   4. Gradually raise coverage gates (95% → 99% → 100%) in sync with completed milestones, logging each bump.
+  5. Migrate eligible deterministic unit tests to property-based suites with clear oracles.
+  6. Refactor property-based tests to reuse fixtures and shrink shared setup code.
 - **Latest snapshot (2025-10-05)**:
-  - Global coverage 77.41% (`make coverage-report` running unit + property suites).
-  - Pre-commit gate temporarily relaxed to `--fail-under=77.00`; restore ≥81.50% after next Milestone 1 uplift.
+  - Global coverage 79.06% (`make coverage-report` running unit + property suites).
+  - Pre-commit gate set to `--fail-under=79.00`; raise ≥81.50% after the next Milestone 1 uplift.
 - **Module backlog** (open coverage tasks):
   - `ml_playground/data_pipeline/preparer.py`
   - `ml_playground/cli.py`
@@ -97,6 +99,24 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
     - `docs(coverage): outline roadmap to ~100 percent coverage`
       (`docs/coverage/roadmap.md`, `.ldres/tv-tasks.md` cross-reference)
 - **PR**: Title `docs: define coverage roadmap`; body summarizing milestones, validation, and gating plan.
+
+### Open · tv-2025-10-05:PR?? · Markdownlint tooling harmonization
+
+- **Summary**: Align markdownlint execution with the pyproject.toml-only configuration policy. Replace the
+  current `markdownlint-cli2` hook with a solution that respects centralized configuration.
+- **Priority**: P1
+- **Size**: S
+- **Meta?**: Yes — removes a recurring exception to the tooling policy.
+- **Dependencies**: None.
+- **Next steps**:
+  1. Research markdown lint tools that read settings from `pyproject.toml` (or can be wrapped to do so).
+  2. Prototype the replacement hook locally and document migration steps.
+  3. Update `.githooks/.pre-commit-config.yaml` and supporting docs; ensure CI parity.
+- **Validation**: `make docs-lint` (or equivalent new target) once introduced.
+- **Git plan**:
+  - Branch: `build/markdownlint-pyproject`
+  - Commit: `build(markdownlint): adopt pyproject-based lint runner`
+- **PR**: Title `build: harmonize markdownlint with pyproject tooling`; include comparison runs and rollout notes.
 
 - **Summary**: After coverage gating, introduce mutation-based testing (e.g., `cosmic-ray`) to measure test
   effectiveness.

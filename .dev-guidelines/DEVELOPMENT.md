@@ -13,15 +13,28 @@ Core development practices, quality standards, and workflow for ml_playground co
 For detailed information about the centralized framework utilities, see [Framework Utilities
 Documentation](../docs/framework_utilities.md).
 
-Run this Make target before every commit (same commands under the hood):
+The pre-commit hook and CI both execute `make quality`. That target expands to ruff (lint + format),
+pyright, mypy (scoped to `ml_playground`), and the targeted pytest suite.
+
+During active development you may run narrower commands to iterate quickly, for example:
 
 ```bash
-make quality
+uv run pytest tests/property/cli/test_cli_property.py
+uv run ruff check path/to/file.py
 ```
 
-This runs: ruff (lint+format), pyright, mypy (ml_playground), and pytest with strict settings.
+When you want the convenience wrappers (parallelized pytest, cache-aware collection, etc.), use the
+Make targets directly:
 
-CI and pre-commit both invoke `make quality` as the core gate.
+```bash
+make coverage-report      # run property + unit suites with coverage output
+make tests-property       # property-based suites only
+make tests-unit           # deterministic unit suites
+make lint                 # ruff lint+format without type checking
+```
+
+Running `make quality` manually is optional. Use it when you want an early signal before committing or
+pushing, but rely on the hook for enforcement.
 
 ## Commit Standards
 
@@ -29,7 +42,7 @@ CI and pre-commit both invoke `make quality` as the core gate.
 
 - **One logical change per commit** (e.g., fix a test, adjust a config, refactor a function)
 - **Keep commits under ~200 lines** unless unavoidable
-- **Run quality gates before each commit**, not just before PR
+- **Ensure quality gates pass before the commit is recorded** (the pre-commit hook enforces this automatically)
 - **Pairing rule (REQUIRED)**: Each functional or behavioral change MUST include its tests in the same commit (unit
   and/or integration). Creating new files (untracked) is expected when adding tests—stage them together with the
   production change.
@@ -51,7 +64,7 @@ CI and pre-commit both invoke `make quality` as the core gate.
 
 - Every commit MUST be in a runnable state when checked out.
 - Runnable means:
-  - `make quality` passes locally (same as pre-commit/CI gate).
+  - Pre-commit (and therefore `make quality`) passes when the commit is created. Do not bypass hooks or suppress failures.
   - No partially applied migrations or broken CLI entry points.
   - Documentation build (if modified) is not broken.
 - Do not commit code that knowingly breaks the build with intent to "fix later". Split work into smaller, independently

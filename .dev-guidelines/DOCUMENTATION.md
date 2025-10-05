@@ -85,7 +85,8 @@ ml_playground/experiments/shakespeare/
 
 ## Commit and Review Expectations
 
-- Docs must pass `make quality` (markdownlint part of our checks) before commit.
+- Docs must pass the markdownlint portion of our quality gates. The pre-commit hook runs `make quality`,
+  so avoid bypassing it.
 - Prefer granular commits with clear `docs(<area>): <subject>` messages.
 - When documenting functional changes to code, ensure the associated commit pairs production code and tests in the same
   change per TDD policy (see `DEVELOPMENT.md`).
