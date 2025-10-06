@@ -43,7 +43,11 @@ int main(int argc, char* argv[]) {
     }
     int gpu_id = std::stoi(argv[2]);
 
-    const unsigned int UTILIZATION_THRESHOLD = 25;
+    // --- FIX IS HERE: New Threshold in Watts ---
+    // This is the main tuning parameter. The controller will activate the
+    // secondary workload if the GPU's power draw drops below this value.
+    const unsigned int POWER_THRESHOLD_WATTS = 400; // 400 Watts
+
     const unsigned int POLLING_INTERVAL_US = 50000;
 
     // --- Setup Signal Handler for graceful exit ---
@@ -80,10 +84,7 @@ int main(int argc, char* argv[]) {
     }
 
     nvmlDevice_t device;
-    // --- FIX IS HERE ---
-    // When CUDA_VISIBLE_DEVICES is set to a single GPU, that GPU always appears
-    // as device index 0 to the program. We use the gpu_id argument only for IPC.
-    result = nvmlDeviceGetHandleByIndex(0, &device);
+    result = nvmlDeviceGetHandleByIndex(0, &device); 
     if (result != NVML_SUCCESS) {
         std::cerr << "Failed to get handle for GPU " << gpu_id << " (logical index 0): " << nvmlErrorString(result) << std::endl;
         nvmlShutdown();
@@ -91,25 +92,31 @@ int main(int argc, char* argv[]) {
     }
     
     // --- Main Control Loop ---
-    std::cout << "Monitoring physical GPU " << gpu_id << ". Press Ctrl+C to exit." << std::endl;
+    std::cout << "Monitoring power on physical GPU " << gpu_id << ". Press Ctrl+C to exit." << std::endl;
     while (true) {
-        nvmlUtilization_t util;
-        result = nvmlDeviceGetUtilizationRates(device, &util);
+
+        unsigned int power_milliwatts;
+        result = nvmlDeviceGetPowerUsage(device, &power_milliwatts);
 
         if (result == NVML_SUCCESS) {
-            if (util.gpu < UTILIZATION_THRESHOLD) {
+            // Convert milliwatts to watts for the comparison
+            unsigned int power_watts = power_milliwatts / 1000;
+
+            if (power_watts < POWER_THRESHOLD_WATTS) {
                 *shared_flag = 1; // Signal RUN
             } else {
                 *shared_flag = 0; // Signal STOP
             }
         } else {
-            std::cerr << "Failed to get utilization for GPU " << gpu_id << ": " << nvmlErrorString(result) << std::endl;
+            std::cerr << "Failed to get power usage for GPU " << gpu_id << ": " << nvmlErrorString(result) << std::endl;
             *shared_flag = 0; 
         }
 
+        // Wait for the next polling interval
         usleep(POLLING_INTERVAL_US);
     }
 
     signalHandler(0);
     return 0;
 }
+
