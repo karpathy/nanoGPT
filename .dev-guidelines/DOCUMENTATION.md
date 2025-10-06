@@ -71,6 +71,25 @@ ml_playground/experiments/shakespeare/
 - When linking to another folder, link to that folder's `Readme.md` (single entry point) instead of deep files. Deep
   documents should be discovered from that folder's `Readme.md`.
 
+## Cross-Document Details Blocks
+
+- Place a `<details>` block titled `Related documentation` near the top of READMEs that reference other guidelines.
+- Each list item inside the block must be a relative Markdown link whose summary sentence is derived from the first
+  paragraph or block of text immediately following the referenced document's top-level heading.
+- Keep the list minimal—link only to documents that provide indispensable context.
+- Update the referenced document summary if its opening paragraph changes.
+
+### Template
+
+```markdown
+<details>
+<summary>Related documentation</summary>
+
+- [Document Title](./DOCUMENTATION.md) – First-paragraph summary from the referenced document.
+
+</details>
+```
+
 ## DRY Documentation
 
 - Avoid repeating extensive “what each file does” prose—lean on the annotated folder tree.

@@ -112,32 +112,51 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
   1. Track additional optimizations (e.g., memmap fixture changes) and rerun `pytest --durations=20` after each iteration; update this log with new baselines.
 - **Validation**: `make quality`; targeted `pytest --durations=20` reruns on affected suites.
 - **Git plan**:
-  - Branch: `ci/test-speedup`
   - Commits:
     - `ci(pytest): profile test runtimes and document hotspots`
     - `ci(pytest): apply performance optimizations`
 - **PR**: Title `ci: accelerate test execution`; body covering baseline, optimizations, and measured wins.
 
-### In progress · tv-2025-10-05:mutation · Introduce mutation testing
-
-- **Summary**: After coverage gating, introduce mutation-based testing (e.g., `cosmic-ray`) to measure test
-  effectiveness.
-- **Priority**: P1
-- **Size**: M
-- **Meta?**: Yes — improves future test quality.
 - **Dependencies**: Coverage roadmap task; reproducible-build epic for tool integration.
+- **Latest baseline (2025-10-06)**:
+  - `make mutation` (module-path `ml_playground/`, timeout 1 s) processed **5 314** mutants (killed: 5 312,
+    incompetent: 2) in ~**1 h 31 m** wall clock.
 - **Next steps**:
-  1. Audit current mutation tool configs (remove `mutmut` residuals; align with `cosmic-ray`).
-  1. Define initial mutation targets (critical modules) and thresholds for pass/fail.
-  1. Integrate mutation runs into CI (nightly or gated) with summarized reporting.
-- **Validation**: `make quality`; targeted `cosmic-ray` run.
+  1. Ship an automation pipeline that ingests `cosmic-ray` survivors and opens draft PRs with proposed fixes
+     after long-running CI jobs (script + workflow).
+  1. Triage surviving mutants by module and harden tests iteratively:
+     - `ml_playground/training/checkpointing/`
+     - `ml_playground/core/`
+     - `ml_playground/models/`
+     - `ml_playground/data_pipeline/`
+     - `ml_playground/sampling/`
+  1. Track survivor counts per module after each run and update this task with progress metrics.
+- **Validation**: `make mutation`; targeted survivor-specific pytest slices.
 - **Git plan**:
-  - Branch: `test/mutation-suite`
+  - Branch: `test/mutation-hardening`
   - Commits:
-    - `chore(cosmic-ray): configure mutation testing targets` (`pyproject.toml`, `.github/workflows/mutation.yml`)
-    - `docs(testing): document mutation workflow` (`docs/testing/mutation.md`)
-- **PR**: Title `test: introduce mutation testing workflow`; body outlining configuration, validation, and
-  follow-up tasks.
+    - `chore(cosmic-ray): automate survivor extraction` (`tools/`, `.github/workflows/`)
+    - `test(<module>): strengthen tests against survivor diff`
+    - `docs(testing): update mutation workflow guidance`
+- **PR**: Title `test: harden mutation workflow`; body covering automation, survivor stats, and validation.
+
+### Open · tv-2025-10-06:PR?? · Align READMEs with cross-doc details policy
+
+- **Summary**: Apply the new `Related documentation` details-block template across remaining README files so cross-links stay consistent and summarized.
+- **Priority**: P2
+- **Size**: S
+- **Meta?**: Yes — enforces documentation guidelines.
+- **Dependencies**: New policy in `.dev-guidelines/DOCUMENTATION.md`.
+- **Next steps**:
+  1. Audit README files beyond `tests/unit/` and `tests/property/` for related-doc references.
+  1. Insert or update `<details>` blocks with relative links and first-paragraph summaries per the template.
+  1. Note any documents lacking clear intro paragraphs and schedule follow-up edits if needed.
+- **Validation**: `make quality` (mdformat + lint).
+- **Git plan**:
+  - Branch: `docs/related-details-rollout`
+  - Commits:
+    - `docs(guidelines): apply related-document template across READMEs`
+- **PR**: Title `docs: align READMEs with related documentation template`; body summarizing updated files and guideline compliance.
 
 ## Deferred tasks (updated 2025-10-03)
 

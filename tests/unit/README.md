@@ -1,5 +1,14 @@
 # Unit Tests
 
+<details>
+<summary>Related documentation</summary>
+
+- [Documentation Guidelines](../../.dev-guidelines/DOCUMENTATION.md) – Unified standards for all repository docs, covering top-level, module, test, and tool content.
+- [Testing Standards](../../.dev-guidelines/TESTING.md) – Strict TDD workflow: write a failing test, implement the minimal fix, then refactor safely with green builds.
+- [Property-Based Tests README](../property/README.md) – Property-based tests validate invariants across large input spaces in a dedicated suite.
+
+</details>
+
 Unit tests validate individual functions, classes, and small modules in isolation. They should be trivial to read and fast
 to run.
 
@@ -57,3 +66,8 @@ tests/unit/
 ├── test_public_api_policy.py       - enforcement of public API policy
 └── conftest.py                     - unit pytest fixtures and helpers
 ```
+
+## Documentation
+
+- **\[Guidelines\]** Follow `.dev-guidelines/DOCUMENTATION.md` when editing this README or adding explanatory files.
+- **\[Testing alignment\]** Cross-check `.dev-guidelines/TESTING.md` to keep principles and fixture guidance in sync.

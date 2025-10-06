@@ -229,17 +229,19 @@ exceptions. NO second chances.
 
 ## Mutation Testing (Optional)
 
-- We use Cosmic Ray for mutation testing; configuration lives in `pyproject.toml` under `[tool.cosmic-ray]`.
-- Run manually when desired:
-
-```bash
-make quality-ext
-```
-
-- This initializes (if needed) and executes Cosmic Ray sessions at `.cache/cosmic-ray/session.sqlite`. The step is
-  non-fatal and not part of CI or pre-commit by default.
-- The `.cache/cosmic-ray/` directory is treated like other build artifacts: never commit it, clean it with `make clean`
-  if needed.
+- **Tooling**: Cosmic Ray configuration lives in `pyproject.toml` under `[cosmic-ray]`.
+- **Primary command**:
+  ```bash
+  make mutation
+  ```
+  This target resets `.cache/cosmic-ray/session.sqlite`, prints the active configuration via `tools/mutation_summary.py`,
+  runs `cosmic-ray init/exec`, and finishes with `tools/mutation_report.py` to display survivor counts.
+- **Default scope**: `module-path = "ml_playground"`, exercising the entire package with
+  `pytest -q -n auto tests/unit` and a 1 s timeout per mutant/test run.
+- **Latest baseline (2025-10-06)**: `make mutation` processed **5 314** mutants (killed: **5 312**, incompetent: **2**)
+  in approximately **1 h 31 m** wall-clock time.
+- **Session hygiene**: The Make target deletes the session DB on every run; do not commit `.cache/cosmic-ray/`.
+- **Follow-up**: Survivor automation and module-specific hardening tasks are tracked in `.ldres/tv-tasks.md`.
 
 ## Running Tests
 
