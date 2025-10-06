@@ -1,0 +1,58 @@
+name: Mutation Suite
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 1 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mutation-suite
+  cancel-in-progress: false
+
+jobs:
+  mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Cache uv virtualenv
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache/uv
+            .venv
+          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
+
+      - name: Sync dependencies (dev + project)
+        run: make sync
+
+      - name: Run mutation suite
+        run: make mutation
+
+      - name: Capture mutation report
+        run: |
+          uv run python tools/mutation_report.py --config pyproject.toml | tee mutation-report.txt
+
+      - name: Upload mutation artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-results-${{ github.run_id }}
+          path: |
+            mutation-report.txt
+            .cache/cosmic-ray/session.sqlite

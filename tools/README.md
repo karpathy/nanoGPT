@@ -13,6 +13,8 @@ used for convenience during development. (No raw pip, no manual venv activation)
 - `port_kill.py` — kill a process bound to a TCP port (Mac/Linux).
 - `cleanup_ignored_tracked.py` — remove accidentally tracked files that should be ignored.
 - `setup_ai_guidelines.py`: Configures symlinks for AI pair-programming workflow per guideline docs.
+- `mutation_summary.py` — prints the active Cosmic Ray configuration before `make mutation`.
+- `mutation_report.py` — summarizes mutant outcomes after a Cosmic Ray run.
 - `llama_cpp/` — vendor instructions and helpers for GGUF conversion.
 
 ## Usage
@@ -33,6 +35,12 @@ uv run python tools/cleanup_ignored_tracked.py --apply
 # (Optional) LLaMA GGUF conversion steps
 # See vendor README inside the directory for exact commands.
 open tools/llama_cpp/README.md
+
+# Mutation summary (pre-run expectations)
+uv run python tools/mutation_summary.py --config pyproject.toml
+
+# Mutation report (post-run survivor counts)
+uv run python tools/mutation_report.py --config pyproject.toml
 ```
 
 ## Examples
@@ -56,3 +64,4 @@ uv run python tools/cleanup_ignored_tracked.py --apply
 - UV-only: invoke tools with `uv run python ...` to use the project environment.
 - Keep scripts self-contained, documented, and under 200 LOC where practical.
 - Prefer clear CLI flags and `--help` text; avoid hidden behavior.
+- Align documentation with `.dev-guidelines/DOCUMENTATION.md` when editing this file or adding tool docs; keep mutation workflow notes in `.dev-guidelines/TESTING.md`.

@@ -7,7 +7,8 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 .SILENT:
 
-.PHONY: all help test unit unit-cov integration e2e acceptance test-file coverage quality quality-ext quality-ci lint format pyright mypy typecheck setup sync verify clean prepare train sample loop tensorboard deadcode gguf-help pytest-core pytest-all check-exp check-exp-config check-tool ai-guidelines venv312-lit-setup venv312-lit-run venv312-lit-stop coverage-badge
+.PHONY: all help test unit unit-cov property integration tests-integration e2e tests-e2e acceptance tests-acceptance test-file coverage quality quality-ext quality-ci lint lint-check format pyright mypy typecheck setup sync verify clean prepare train sample loop tensorboard deadcode gguf-help pytest-core pytest-all check-exp check-exp-config check-tool ai-guidelines venv312-lit-setup venv312-lit-run venv312-lit-stop coverage-badge
+.PHONY: mutation mutation-reset mutation-summary mutation-init mutation-exec mutation-report
 
 all: quality
 
@@ -77,6 +78,9 @@ test: ## Run full test suite
 unit: ## Run unit tests only
 	$(PYTEST_CMD) tests/unit
 
+property: ## Run property-based tests only
+	$(PYTEST_CMD) tests/property
+
 unit-cov: ## Run unit tests with coverage for $(PKG)
 	$(PYTEST_CMD) --cov=$(PKG) --cov-report=term-missing tests/unit
 
@@ -85,6 +89,9 @@ integration: ## Run integration tests only
 
 e2e: ## Run end-to-end tests only
 	$(PYTEST_CMD) tests/e2e
+
+acceptance: ## Run acceptance tests only
+	$(PYTEST_CMD) tests/acceptance
 
 # Quality gates
 
@@ -99,17 +106,41 @@ quality-fast: ## Run formatting + lint hooks only (fast path for local iteration
 
 # Extended quality: core quality + mutation testing (non-fatal)
 quality-ext: quality mutation ## Extended quality: vulture + quality + mutation tests (non-fatal)
-	
-mutation: ## Mutation tests (non-fatal). Rely on pyproject.toml [cosmic-ray] configuration.
-	$(RUN) cosmic-ray init pyproject.toml .cache/cosmic-ray/session.sqlite >/dev/null 2>&1 || true; \
-	$(RUN) cosmic-ray exec pyproject.toml .cache/cosmic-ray/session.sqlite || echo "[warning] Cosmic Ray returned non-zero; proceeding"
+
+mutation: ## Mutation tests (non-fatal). cosmic-ray reuses existing .cache/cosmic-ray/session.sqlite by default per pyproject.toml [cosmic-ray] config.
+	$(MAKE) mutation-reset
+	$(MAKE) mutation-summary
+	$(MAKE) mutation-init
+	$(MAKE) mutation-exec
+	$(MAKE) mutation-report
+
+mutation-reset:
+	rm -f .cache/cosmic-ray/session.sqlite
+
+mutation-summary:
+	$(RUN) python tools/mutation_summary.py --config pyproject.toml
+
+mutation-init:
+	@if $(RUN) cosmic-ray init pyproject.toml .cache/cosmic-ray/session.sqlite >/dev/null 2>&1; then \
+		echo "[mutation] init complete"; \
+	else \
+		echo "[mutation] init skipped (reusing existing session)"; \
+	fi
+
+mutation-exec:
+	@echo "[mutation] starting exec"
+	@$(RUN) cosmic-ray exec pyproject.toml .cache/cosmic-ray/session.sqlite || { status=$$?; echo "[warning] Cosmic Ray returned $$status"; exit $$status; }
+
+mutation-report:
+	$(RUN) python tools/mutation_report.py --config pyproject.toml
 
 # Linting
 lint: ## Lint with Ruff
 	$(RUN) ruff check .
-
-format: ## Auto-fix with Ruff and format code
 	$(RUN) ruff check --fix . && $(RUN) ruff format .
+
+lint-check:
+	$(RUN) ruff check .
 
 # Dead code scanning
 deadcode: ## Scan for dead code with vulture
@@ -179,21 +210,21 @@ coverage: coverage-report ## [deprecated] use `make coverage-report`
 	@echo "[info] coverage-report completed; artifacts stored under .cache/coverage"
 coverage-test: ## Run pytest under coverage to materialize coverage data (unit + property suites)
 	mkdir -p .cache/coverage .cache/hypothesis
-	COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage erase
+	dest_cov="$(CURDIR)/.cache/coverage/coverage.sqlite"
+	find "$(CURDIR)/.cache/coverage" -maxdepth 1 -name 'coverage.sqlite*' -delete
 	HYPOTHESIS_DATABASE_DIRECTORY=$(CURDIR)/.cache/hypothesis \
 	HYPOTHESIS_STORAGE_DIRECTORY=$(CURDIR)/.cache/hypothesis \
 	HYPOTHESIS_SEED=0 \
 	PYTHONHASHSEED=0 \
-	COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage run -m pytest -n 0 tests/unit tests/property
+	COVERAGE_FILE="$$dest_cov" $(RUN) coverage run -m pytest -n 0 tests/unit tests/property
+	COVERAGE_FILE="$$dest_cov" $(RUN) coverage combine
+	find "$(CURDIR)/.cache/coverage" -maxdepth 1 -name 'coverage.sqlite.*' -delete
+
 
 coverage-report: ## Generate coverage reports (term, HTML, JSON) under .cache/coverage
-ifndef SKIP_COVERAGE_TESTS
-	$(MAKE) coverage-test
-else
 	@if ! compgen -G "$(CURDIR)/.cache/coverage/coverage.sqlite*" > /dev/null; then \
-		echo "[error] No coverage data found. Run 'make coverage-test' first."; exit 2; \
+		$(MAKE) coverage-test; \
 	fi
-endif
 	@if compgen -G "$(CURDIR)/.cache/coverage/coverage.sqlite.*" > /dev/null; then \
 		COVERAGE_FILE=$(CURDIR)/.cache/coverage/coverage.sqlite $(RUN) coverage combine; \
 	fi

@@ -63,7 +63,10 @@ def _make_cfg(tmp_path: Path, *, read_policy: str = READ_POLICY_BEST) -> Trainer
         data=DataConfig(batch_size=2, block_size=4, grad_accum_steps=1),
         optim=OptimConfig(learning_rate=0.01),
         schedule=LRSchedule(
-            decay_lr=False, warmup_iters=0, lr_decay_iters=0, min_lr=0.0
+            decay_lr=False,
+            warmup_iters=0,
+            lr_decay_iters=1,
+            min_lr=0.0,
         ),
         runtime=RuntimeConfig(
             out_dir=out_dir,

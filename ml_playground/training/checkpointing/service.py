@@ -15,7 +15,7 @@ from ml_playground.configuration.models import (
     SharedConfig,
     READ_POLICY_BEST,
 )
-from ml_playground.core.error_handling import CheckpointError
+from ml_playground.core.error_handling import CheckpointError, LoggerLike
 from ml_playground.models.core.model import GPT
 
 
@@ -46,7 +46,7 @@ def load_checkpoint(
     manager: CheckpointManager,
     cfg: TrainerConfig,
     *,
-    logger,
+    logger: LoggerLike,
 ) -> Optional[Checkpoint]:
     """Load the latest or best checkpoint according to the read policy."""
     # DI override if provided
@@ -102,7 +102,7 @@ def save_checkpoint(
     ema,
     iter_num: int,
     best_val_loss: float,
-    logger,
+    logger: LoggerLike,
     is_best: bool,
 ) -> None:
     """Persist the current training state via the checkpoint manager."""
@@ -149,7 +149,7 @@ def propagate_metadata(
     cfg: TrainerConfig,
     shared: SharedConfig,
     *,
-    logger,
+    logger: LoggerLike,
     copy_fn: Callable[[Path, Path], None] = DEFAULT_COPY_FN,
 ) -> None:
     """Copy dataset metadata into train and sample output directories when available."""

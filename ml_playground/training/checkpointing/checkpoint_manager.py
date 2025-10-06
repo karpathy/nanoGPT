@@ -311,7 +311,7 @@ class CheckpointManager:
         ckpt_info = _CkptInfo(path, metric, iter_num, time.time())
 
         # Manage last checkpoints
-        if self.keep_last > 0 and not is_best:
+        if self.keep_last > -1 and not is_best:
             # Track the new last checkpoint and prune oldest beyond the retention window
             self.last_checkpoints = [
                 ckpt for ckpt in self.last_checkpoints if ckpt.path != path

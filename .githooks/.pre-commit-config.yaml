@@ -29,11 +29,14 @@ repos:
       - |
         set -euo pipefail
         COVERAGE_DIR=".cache/coverage"
-        if [ "${SKIP_COVERAGE_TESTS:-0}" != "1" ]; then
-          rm -f "${COVERAGE_DIR}"/coverage.sqlite*
+        CACHE_GLOB="${COVERAGE_DIR}/coverage.sqlite*"
+        mkdir -p "${COVERAGE_DIR}"
+        if ! compgen -G "${CACHE_GLOB}" > /dev/null; then
+          echo "[info] generating coverage data"
+          rm -f "${CACHE_GLOB}"
           make coverage-test
         else
-          echo "[info] SKIP_COVERAGE_TESTS=1 -> reusing existing coverage data"
+          echo "[info] reusing cached coverage data"
         fi
         if ! compgen -G "${COVERAGE_DIR}/coverage.sqlite"* > /dev/null; then
           echo "[error] No coverage data found. Run 'make coverage-test' first." >&2

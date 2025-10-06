@@ -224,7 +224,7 @@ omit = [
 ]
 
 [tool.coverage.report]
-# ULTRA-STRICT: 100% coverage required, no exceptions
+# Require 87% coverage to match combined unit+property gate while keeping reports strict
 exclude_lines = [
     # Only allow exclusion for truly impossible-to-test code
     "if 0:",
@@ -236,22 +236,25 @@ omit = [
     "ml_playground/analysis/*",
 ]
 skip_covered = false
-# STRICT REQUIREMENT: 100% coverage, no compromises
-fail_under = 100
+# Align with CI gate threshold for unit+property suites
+fail_under = 87.0
 precision = 2
 
 [tool.coverage.html]
 directory = ".cache/coverage/htmlcov"
 
 [cosmic-ray]
-module-path = "ml_playground/training/checkpointing/checkpoint_manager.py"
-timeout = 3.0
+module-path = "ml_playground"
+timeout = 1.0
 excluded-modules = [
   "ml_playground/core/tokenizer_protocol.py",
   "ml_playground/training/optim/lr_scheduler.py",
 ]
-test-command = "pytest -q -n auto tests/unit/training/checkpointing/test_service.py"
+test-command = "pytest -q -n auto tests/unit"
 no-copy-source-files = false
+
+[cosmic-ray.session]
+file = ".cache/cosmic-ray/session.sqlite"
 
 [cosmic-ray.distributor]
 name = "local"

@@ -19,7 +19,7 @@ def estimate_model_mfu(
     Q = cfg.n_embd // cfg.n_head
     T = cfg.block_size
 
-    flops_per_token = 6 * n_params + 12 * L * H * Q + T
+    flops_per_token = 6 * n_params + 12 * L * H * Q * T
     flops_per_fwdbwd = flops_per_token * T
     flops_per_iter = flops_per_fwdbwd * fwdbwd_per_iter
     flops_achieved = flops_per_iter / dt

@@ -229,9 +229,10 @@ class ProgressReporter:
         if self.total_steps and self.total_steps > 0:
             ratio = self.current_step / self.total_steps
             clamped_ratio = max(0.0, min(ratio, 1.0))
-            percent = int(clamped_ratio * 100)
+            percent = int(round(clamped_ratio * 100))
             # Only report every 10% (or when complete) to avoid spam
             if percent >= 100 or percent >= self.last_reported_percent + 10:
+                percent = min(percent, 100)
                 self.last_reported_percent = percent
                 displayed_step = min(self.current_step, self.total_steps)
                 msg = f"Progress: {percent}% ({displayed_step}/{self.total_steps})"
