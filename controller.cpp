@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
     // The duration to keep the workload active.
     const unsigned int ACTIVATION_DURATION_US = 50000; // 50ms
     // The total period for the cycle.
-    const unsigned int PERIOD_SECONDS = 10;
+    const unsigned int PERIOD_SECONDS = 300;
     // The remaining time to sleep to maintain the 10-second period.
     const unsigned int SLEEP_DURATION_US = (PERIOD_SECONDS * 1000000) - ACTIVATION_DURATION_US;
 
