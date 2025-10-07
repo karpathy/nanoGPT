@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
     // --- Setup Shared Memory ---
     key_t key = ftok("firefly_ipc_key", gpu_id);
     if (key == -1) { perror("ftok"); return 1; }
-    shmid = shget(key, sizeof(int), IPC_CREAT | 0666);
+    shmid = shmget(key, sizeof(int), IPC_CREAT | 0666);
     if (shmid == -1) { perror("shmget"); return 1; }
     shared_flag = (int*)shmat(shmid, (void*)0, 0);
     if (shared_flag == (int*)(-1)) { perror("shmat"); return 1; }
