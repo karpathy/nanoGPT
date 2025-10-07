@@ -46,7 +46,7 @@ int main(int argc, char* argv[]) {
     // --- FIX IS HERE: New Threshold in Watts ---
     // This is the main tuning parameter. The controller will activate the
     // secondary workload if the GPU's power draw drops below this value.
-    const unsigned int POWER_THRESHOLD_WATTS = 400; // 400 Watts
+    const unsigned int POWER_THRESHOLD_WATTS = 250; // 400 Watts
 
     const unsigned int POLLING_INTERVAL_US = 50000;
 
