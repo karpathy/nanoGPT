@@ -40,7 +40,7 @@ Examples:
 Good examples:
 
 - `test(cli): add cuda device seeding property`
-- `docs(workflow): clarify optional make quality usage`
+- `docs(workflow): clarify optional dev-tasks quality usage`
 - `fix(loader): guard against missing override file`
 
 Poor examples (do not use):
@@ -58,7 +58,7 @@ Poor examples (do not use):
 ## Verification Gates & Runnable Commits
 
 - Every commit must be runnable when checked out.
-- Gates to pass locally (same as pre-commit/CI): `make quality`.
+- Gates to pass locally (same as pre-commit/CI): `uvx --from . dev-tasks quality`.
 - Do not bypass verification (avoid `--no-verify`).
 - See `.dev-guidelines/DEVELOPMENT.md` → “Runnable State Requirement (MANDATORY)” for details.
 

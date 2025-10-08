@@ -12,9 +12,9 @@ them exactly.
 Get up and running immediately:
 
 ```bash
-make setup
-make verify
-make quality   # ruff+format+pyright+mypy+pytest
+uvx --from . dev-tasks setup
+uvx --from . dev-tasks verify
+uvx --from . dev-tasks quality   # ruff+format+pyright+mypy+pytest
 ```
 
 ## Documentation Structure
@@ -79,7 +79,7 @@ All documentation in this repo must adhere to [DOCUMENTATION.md](DOCUMENTATION.m
 **Granular Commits**: Make small, focused commits with conventional commit messages. Run quality gates before each
 commit, not just before PR.
 
-**Runnable Commits**: Every commit must be in a runnable state when checked out. Do not land commits that break `make quality`, CLI entry points, or docs builds. Never bypass verification (avoid `--no-verify`).
+**Runnable Commits**: Every commit must be in a runnable state when checked out. Do not land commits that break `uvx --from . dev-tasks quality`, CLI entry points, or docs builds. Never bypass verification (avoid `--no-verify`).
 
 **Feature Branches Only**: All work happens on short‑lived feature branches; no direct commits to `main`. Use kebab-case
 names like `feat/<scope>-<short-desc>`, `fix/<scope>-<short-desc>`. Keep branches focused and prefer multiple small PRs.
@@ -101,31 +101,31 @@ names like `feat/<scope>-<short-desc>`, `fix/<scope>-<short-desc>`. Keep branche
 **Environment Setup**:
 
 ```bash
-make setup
-make verify
+uvx --from . dev-tasks setup
+uvx --from . dev-tasks verify
 ```
 
 **Quality Gates** (run before each commit):
 
 ```bash
-make quality
+uvx --from . dev-tasks quality
 ```
 
 **Runtime Entry Points**:
 
 ```bash
 # Prepare datasets
-make prepare shakespeare
-make prepare bundestag_char
+uvx --from . dev-tasks prepare shakespeare
+uvx --from . dev-tasks prepare bundestag_char
 
 # Train (select config path explicitly)
-make train shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml
+uvx --from . dev-tasks train shakespeare --config ml_playground/configs/shakespeare_cpu.toml
 
 # Sample from trained model
-make sample shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml
+uvx --from . dev-tasks sample shakespeare --config ml_playground/configs/shakespeare_cpu.toml
 
 # End-to-end pipeline
-make loop bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
+uvx --from . dev-tasks loop bundestag_char --config ml_playground/configs/bundestag_char_cpu.toml
 ```
 
 ## Need Help?

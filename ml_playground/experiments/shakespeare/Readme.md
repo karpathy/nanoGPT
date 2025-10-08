@@ -27,16 +27,16 @@ For framework utilities, see [../../docs/framework_utilities.md](../../docs/fram
 
 ```bash
 # Environment setup (once)
-make setup
-make verify
+uvx --from . dev-tasks setup
+uvx --from . dev-tasks verify
 
 # Prepare → Train → Sample (separate)
-make prepare shakespeare
-make train shakespeare CONFIG=ml_playground/experiments/shakespeare/config.toml
-make sample shakespeare CONFIG=ml_playground/experiments/shakespeare/config.toml
+uvx --from . dev-tasks prepare shakespeare
+uvx --from . dev-tasks train shakespeare --config ml_playground/experiments/shakespeare/config.toml
+uvx --from . dev-tasks sample shakespeare --config ml_playground/experiments/shakespeare/config.toml
 
 # Or end-to-end
-make loop shakespeare CONFIG=ml_playground/experiments/shakespeare/config.toml
+uvx --from . dev-tasks loop shakespeare --config ml_playground/experiments/shakespeare/config.toml
 ```
 
 ## Configuration Highlights

@@ -145,7 +145,7 @@ def compute_metrics():
 
 ## Tooling Enforcement
 
-- Run `make quality` (ruff + formatter) before every commit to enforce import style automatically.
+- Run `uvx --from . dev-tasks quality` (ruff + formatter) before every commit to enforce import style automatically.
 - Keep type checkers (`pyright`, `mypy`) green; use `TYPE_CHECKING` guards to avoid runtime imports.
 - Pair import-structure changes with relevant tests/documentation updates.
 

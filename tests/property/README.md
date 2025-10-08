@@ -34,7 +34,7 @@ tests/property/
 
 ## Running
 
-- Full property suite (with unit tests): `make coverage-report`
+- Full property suite (with unit tests): `uvx --from . dev-tasks coverage-report`
 - Specific property module: `uv run pytest tests/property/<path>/test_*.py`
 
 ## Capturing Shrunk Examples as Regression Tests

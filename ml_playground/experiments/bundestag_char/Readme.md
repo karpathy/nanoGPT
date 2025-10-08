@@ -42,25 +42,25 @@ uv run setup
 Prepare:
 
 ```bash
-make prepare bundestag_char
+uvx --from . dev-tasks prepare bundestag_char
 ```
 
 Train:
 
 ```bash
-make train bundestag_char CONFIG=ml_playground/experiments/bundestag_char/config.toml
+uvx --from . dev-tasks train bundestag_char --config ml_playground/experiments/bundestag_char/config.toml
 ```
 
 Sample:
 
 ```bash
-make sample bundestag_char CONFIG=ml_playground/experiments/bundestag_char/config.toml
+uvx --from . dev-tasks sample bundestag_char --config ml_playground/experiments/bundestag_char/config.toml
 ```
 
 End-to-end loop:
 
 ```bash
-make loop bundestag_char CONFIG=ml_playground/experiments/bundestag_char/config.toml
+uvx --from . dev-tasks loop bundestag_char --config ml_playground/experiments/bundestag_char/config.toml
 ```
 
 ## Configuration Highlights

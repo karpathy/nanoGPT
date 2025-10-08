@@ -23,7 +23,7 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 │   ├── analysis/              # analysis tools (e.g., LIT integration)
 │   ├── datasets/              # optional package; experiments can run without it
 │   ├── experiments/           # self-contained experiments (mid-level docs)
-│   └── configs/               # example configs referenced by README/Makefile
+│   └── configs/               # example configs referenced by docs/CLI examples
 ├── tests/                     # test suite (see per-folder README for scope)
 │   ├── unit/                  # low-level API tests
 │   ├── integration/           # multi-module tests via Python APIs
@@ -33,13 +33,13 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 │   └── llama_cpp/             # GGUF conversion helper (vendored instructions)
 ├── docs/                      # supplementary docs (framework utilities, LIT, etc.)
 ├── lit_nlp/                   # optional LIT integration
-├── Makefile                   # entrypoints for setup, quality gates, runtime
+├── tools/dev_tasks.py         # uv-backed CLI for setup, quality gates, runtime
 ├── pyproject.toml             # strict typing/linting/testing configuration
 └── README.md                  # this file (top-level, high abstraction)
 
 ## Policy
 
-- Use Make targets for all workflows (env setup, quality, tests, runtime). Under the hood, they run via uv.
+- Use the `dev-tasks` CLI (e.g., `uvx --from . dev-tasks <command>`) for environment setup, quality gates, tests, and runtime.
 - Never set PYTHONPATH. Running inside the project venv ensures `ml_playground` is importable.
 - Quality tooling is mandatory before commit (ruff, mypy, pyright), and tests must pass.
 - Linear history for own work: rebase your branches and avoid merge commits; fast-forward only. See `.dev-guidelines/Readme.md` for developer policies.
@@ -58,7 +58,7 @@ Datasets
 
 Workflows (high-level)
 
-- Prepare/train/sample workflows are driven by Make targets. For exact commands, refer to each experiment's `Readme.md` and `.dev-guidelines/Readme.md`.
+- Prepare/train/sample workflows are driven by the `dev-tasks` CLI. For exact commands, refer to each experiment's `Readme.md` and `.dev-guidelines/Readme.md`.
 - Universal meta policy: the data directory must contain a `meta.pkl` file used by training and sampling. The `prepare` step is responsible for writing `meta.pkl`.
 
 Notes

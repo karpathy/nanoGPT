@@ -1,7 +1,7 @@
 # tv-tasks
 
 This document tracks Thomas's prioritized refactoring and infrastructure work. Keep entries concise,
-reviewable, and compliant with our UV-first workflow (`make quality`). Reference
+reviewable, and compliant with our UV-first workflow (`uvx --from . dev-tasks quality`). Reference
 `.dev-guidelines/GIT_VERSIONING.md` for branch naming, Conventional Commits, and linear history, and
 `.dev-guidelines/DOCUMENTATION.md` for documentation tone and formatting.
 
@@ -51,14 +51,14 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
   1. Create `tests/regression/README.md` following documentation guidelines and describe anti-regression
      policy.
   1. Relocate or re-export regression tests; adjust imports/fixtures as needed.
-  1. Update `Makefile`/pytest configuration to include the new suite; ensure CI jobs reference it.
-- **Validation**: `make quality`; `pytest tests/regression -q`.
+  1. Update the `dev-tasks` CLI/pytest configuration to include the new suite; ensure CI jobs reference it.
+- **Validation**: `uvx --from . dev-tasks quality`; `pytest tests/regression -q`.
 - **Git plan**:
   - Branch: `test/regression-suite`
   - Commits:
     - `docs(tests): add regression suite readme` (`tests/regression/README.md`)
     - `test(regression): reorganize regression tests` (moved test files, `tests/__init__.py` updates)
-    - `ci(makefile): add regression target` (`Makefile`, `.github/workflows/quality.yml`)
+    - `ci(dev-tasks): add regression target` (`tools/dev_tasks.py`, `.github/workflows/quality.yml`)
 - **PR**: Title `test: establish regression suite`; body covering Summary, Testing, Checklist.
 
 ### Open · tv-2025-10-03:PR?? · Coverage roadmap towards ~100%
@@ -78,7 +78,7 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
   1. Record milestones in `docs/coverage/roadmap.md`, raising `--fail-under` with each completed cluster (90% → 95% → 99% → 100%).
   1. Backfill roadmap issues for any residual \<100% modules before the final gate raise.
 - **Latest snapshot (2025-10-05)**:
-  - Global coverage **87.28%** (`make coverage-report`).
+  - Global coverage **87.28%** (`uvx --from . dev-tasks coverage-report`).
   - Pre-commit gate `--fail-under=87.00`.
   - `.ldres/coverage-opportunities.md` holds module-level notes.
 - **Git plan**:
@@ -90,16 +90,27 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
 
 - **Summary**: Maintain the full-suite Cosmic Ray automation landed in PR #55 + #56, ensuring survivors are triaged quickly and reports feed future hardening work.
 - **Priority**: P1
-- **Size**: S
-- **Meta?**: Yes — enables ongoing test quality improvements.
+- **Size**: M
+- **Meta?**: Yes — speeds up developer feedback.
 - **Dependencies**: Depends on the merged `test/mutation-suite` automation workflow.
 - **Latest baseline (2025-10-06)**:
-  - `make mutation` (module-path `ml_playground/`, timeout 1 s) processed **5 314** mutants (killed: 5 314, survivors: 0, incompetent: 2) in ~**1 h 31 m** wall clock.
+  - `uvx --from . dev-tasks mutation run` (module-path `ml_playground/`, timeout 1 s) processed **5 314** mutants (killed: 5 312, incompetent: 2) in ~**1 h 31 m** wall clock.
+  - `make mutation` (same configuration) remains available as a fallback driver and recently recorded a clean pass (killed: 5 314, survivors: 0, incompetent: 2).
+  - Representative suite timings (2025-10-05 reference):
+    - `uv run pytest tests/unit -n 0 --maxfail=1 --durations=20` → 2.26 s (memmap fixtures around 0.13 s dominate).
+    - `uv run pytest tests/property -n 0 --maxfail=1 --durations=10` → 4.34 s (post-Hypothesis tuning, `TestMergeMappings` spans 0.25–0.90 s).
+    - `uv run pytest tests/integration -n 0 --maxfail=1 --durations=20` → 0.08 s (Shakespeare dataset setup tops at 0.02 s).
+    - `uv run pytest tests/acceptance -n 0 --maxfail=1 --durations=20` → 0.93 s (`test_keep_policy_enforcement_for_last_checkpoints` remains ~0.05 s).
+    - `uv run pytest tests/e2e -n 0 --maxfail=1 --durations=10` → 2.88 s (`test_train_bundestag_char_quick` at 0.10 s).
+    - `uvx --from . dev-tasks quality` (pre-commit bundle) → 23.39 s; `uvx --from . dev-tasks quality-fast` → 1.38 s.
 - **Next steps**:
-  1. Keep nightly CI run enabled and capture survivor summaries as build artifacts.
-  1. When survivors appear, file targeted follow-up PRs per module (`ml_playground/{checkpointing,core,models,data_pipeline,sampling}`).
-  1. Refresh `.dev-guidelines/TESTING.md` metrics after significant mutation runs.
-- **Validation**: `make mutation`; targeted pytest slices for any survivor-driven patches.
+  1. Keep nightly automation producing survivor summaries and curate artifacts for rapid triage.
+  1. Harden modules when survivors appear, prioritizing `ml_playground/{training/checkpointing,core,models,data_pipeline,sampling}`.
+  1. Investigate memmap-heavy and property-based pytest hotspots; document updated timings after each optimization.
+  1. Ship automation that ingests Cosmic Ray survivors and opens draft PRs after long-running CI jobs.
+  1. Track survivor counts per module after each run and update this task with progress metrics.
+- **Validation**: `uvx --from . dev-tasks mutation run`; `make mutation`; targeted survivor-specific pytest slices.
+
 - **Git plan**:
   - Branch: `test/mutation-hardening`
   - Commits:
@@ -119,7 +130,7 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
   1. Audit README files beyond `tests/unit/` and `tests/property/` for related-doc references.
   1. Insert or update `<details>` blocks with relative links and first-paragraph summaries per the template.
   1. Note any documents lacking clear intro paragraphs and schedule follow-up edits if needed.
-- **Validation**: `make quality` (mdformat + lint).
+- **Validation**: `uvx --from . dev-tasks quality` (mdformat + lint).
 - **Git plan**:
   - Branch: `docs/related-details-rollout`
   - Commits:
@@ -176,7 +187,7 @@ ______________________________________________________________________
 
 ## Notes
 
-- `make quality` is the canonical gate and already runs pre-commit hooks
+- `uvx --from . dev-tasks quality` is the canonical gate and already runs pre-commit hooks
   (ruff, format, checkmake, pyright, mypy, vulture,pytest).
   No separate test run in the Make target is necessary.
 - When the "remove mocks" effort is complete, enforce no mock usage via Ruff banned-modules and a CI grep sweep.
@@ -193,7 +204,7 @@ These prompts are self-contained and aligned with:
 - `.dev-guidelines/TESTING.md`
 - `docs/framework_utilities.md`
 
-Pre-commit hooks automatically run `make quality` during commits,
+Pre-commit hooks automatically run `uvx --from . dev-tasks quality` during commits,
 so manual invocations are optional if you want faster feedback. Use short-lived feature branches,
 follow Conventional Commits, and always pair behavioral changes with tests. Never bypass verification (`--no-verify` is prohibited).
 
@@ -201,7 +212,7 @@ follow Conventional Commits, and always pair behavioral changes with tests. Neve
 
 - **Create feature branch**: Update `main`, then create a kebab-case feature branch (`git switch -c <type>/<scope>-<desc>`).
 - **Keep changesets tiny**: Implement the minimal behavior in ≤200 touched lines per commit, pairing tests and code.
-- **Run quality gates**: Execute `make quality` (or stricter slices) locally before each commit and before opening the PR.
+- **Run quality gates**: Execute `uvx --from . dev-tasks quality` (or stricter slices) locally before each commit and before opening the PR.
 - **Open focused PR**: Push the branch, open a PR summarizing the change, list validation commands, and request review.
 - **Merge cleanly into `main`**: After CI passes and review approval,
   use fast-forward or rebase-merge so the branch lands on `main` (a.k.a. master); delete the feature branch afterward.

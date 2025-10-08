@@ -69,7 +69,7 @@ def run_server_bundestag_char(
             "  uv run --no-project --python 3.12 --with 'lit-nlp>=1.3.1' --with 'numpy<2' -- python -m ml_playground.analysis.lit_integration\n"
             "Alternatively, add the extra directly to your project with:\n"
             "  uv add lit-nlp\n"
-            "Or use the Make targets: 'make lit-ephemeral-312' or 'make lit-venv-312-setup && make lit-venv-312'.\n"
+            "Or use the dev-tasks CLI: 'uvx --from . dev-tasks lit setup' followed by 'uvx --from . dev-tasks lit run'.\n"
             "See docs/LIT.md for details."
         ) from e
 

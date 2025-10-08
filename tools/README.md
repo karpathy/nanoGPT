@@ -23,7 +23,7 @@ used for convenience during development. (No raw pip, no manual venv activation)
 - `port_kill.py` — kill a process bound to a TCP port (Mac/Linux).
 - `cleanup_ignored_tracked.py` — remove accidentally tracked files that should be ignored.
 - `setup_ai_guidelines.py`: Configures symlinks for AI pair-programming workflow per guideline docs.
-- `mutation_summary.py` — prints the active Cosmic Ray configuration before `make mutation`.
+- `mutation_summary.py` — prints the active Cosmic Ray configuration before running `uvx --from . dev-tasks mutation run`.
 - `mutation_report.py` — summarizes mutant outcomes after a Cosmic Ray run.
 - `llama_cpp/` — vendor instructions and helpers for GGUF conversion.
 
@@ -59,7 +59,7 @@ uv run python tools/mutation_report.py --config pyproject.toml
 
 ```bash
 uv run python tools/port_kill.py 6006
-make tensorboard LOGDIR=out/<run>/logs/tb
+uvx --from . dev-tasks tensorboard --logdir out/<run>/logs/tb
 ```
 
 - Clean up noisy artifacts that slipped into Git:

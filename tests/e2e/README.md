@@ -43,9 +43,9 @@ They validate wiring across modules, configuration loading/merging, logging, and
 
 ## Run Locally
 
-- Run all E2E tests: `make e2e`
-- Single file: `make test-file FILE=tests/e2e/path/to/test_*.py`
-- Verbose logs: append `-s -vv` via `PYTEST_ADDOPTS`, e.g., `PYTEST_ADDOPTS="-s -vv" make e2e`.
+- Run all E2E tests: `uvx --from . dev-tasks e2e`
+- Single file: `uv run pytest tests/e2e/path/to/test_*.py`
+- Verbose logs: append `-s -vv` via `PYTEST_ADDOPTS`, e.g., `PYTEST_ADDOPTS="-s -vv" uvx --from . dev-tasks e2e`.
 
 ## Folder structure
 

@@ -54,10 +54,10 @@ Important: Strict configuration injection
 
 Common CLI patterns
 
-- Prepare: `make prepare <name> [CONFIG=path]` (e.g., `make prepare shakespeare`).
-- Train: `make train <name> CONFIG=path` (e.g., `make train shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml`).
-- Sample: `make sample <name> CONFIG=path` (e.g., `make sample shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml`).
-- End‑to‑end: `make loop <name> CONFIG=path` (e.g., `make loop bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml`).
+- Prepare: `uvx --from . dev-tasks prepare <name> [--config path]` (e.g., `uvx --from . dev-tasks prepare shakespeare`).
+- Train: `uvx --from . dev-tasks train <name> --config path` (e.g., `uvx --from . dev-tasks train shakespeare --config ml_playground/configs/shakespeare_cpu.toml`).
+- Sample: `uvx --from . dev-tasks sample <name> --config path` (e.g., `uvx --from . dev-tasks sample shakespeare --config ml_playground/configs/shakespeare_cpu.toml`).
+- End‑to‑end: `uvx --from . dev-tasks loop <name> --config path` (e.g., `uvx --from . dev-tasks loop bundestag_char --config ml_playground/configs/bundestag_char_cpu.toml`).
 
 Implemented experiments (current)
 
@@ -140,8 +140,8 @@ Paste the following into `ml_playground/experiments/<name>/Readme.md` and replac
 ## Environment Setup (preferred)
 
 ```bash
-make setup
-make verify
+uvx --from . dev-tasks setup
+uvx --from . dev-tasks verify
 ```
 
 ## How to Run
@@ -151,25 +151,25 @@ make verify
 Prepare dataset:
 
 ```bash
-make prepare <name>
+uvx --from . dev-tasks prepare <name>
 ```
 
 Train:
 
 ```bash
-make train <name> CONFIG=ml_playground/experiments/<name>/config.toml
+uvx --from . dev-tasks train <name> --config ml_playground/experiments/<name>/config.toml
 ```
 
 Sample:
 
 ```bash
-make sample <name> CONFIG=ml_playground/experiments/<name>/config.toml
+uvx --from . dev-tasks sample <name> --config ml_playground/experiments/<name>/config.toml
 ```
 
 End-to-end loop:
 
 ```bash
-make loop <name> CONFIG=ml_playground/experiments/<name>/config.toml
+uvx --from . dev-tasks loop <name> --config ml_playground/experiments/<name>/config.toml
 ```
 
 ## Configuration

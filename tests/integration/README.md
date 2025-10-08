@@ -24,8 +24,8 @@ They use real code paths and small in-memory or tiny on-disk data.
 
 ## Run Locally
 
-- Run all integration tests: `make integration`
-- Single file: `make test-file FILE=tests/integration/test_*.py`
+- Run all integration tests: `uvx --from . dev-tasks integration`
+- Single file: `uv run pytest tests/integration/test_*.py`
 
 ## Folder structure
 

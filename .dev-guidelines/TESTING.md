@@ -33,8 +33,8 @@ Testing Docs
 ### 1. Test Framework and Runner
 
 - **Framework**: pytest only. Do not use unittest or nose.
-- **Runner**: `make test` (invokes pytest under the hood)
-- **Coverage**: `make coverage-badge`
+- **Runner**: `uvx --from . dev-tasks test` (invokes pytest under the hood)
+- **Coverage**: `uvx --from . dev-tasks coverage-badge`
   (generates reports under `.cache/coverage` and refreshes
   `docs/assets/coverage.svg`, `docs/assets/coverage-lines.svg`, and
   `docs/assets/coverage-branches.svg`)
@@ -215,7 +215,7 @@ while keeping slower integration/E2E flows outside the gating path.
 
 **Badge workflow**:
 
-- Pre-commit automatically runs `make coverage-badge` and stages the refreshed line and branch badges.
+- Pre-commit automatically runs `uvx --from . dev-tasks coverage-badge` and stages the refreshed line and branch badges.
 - CI re-runs the same target and fails if any of the coverage badge SVGs differ from the committed versions.
 
 ### 12. Flaky Test Policy (IMMEDIATE ACTION REQUIRED)
@@ -232,19 +232,19 @@ exceptions. NO second chances.
 - **Tooling**: Cosmic Ray configuration lives in `pyproject.toml` under `[cosmic-ray]`.
 - **Primary local command**:
   ```bash
-  make mutation
+  uvx --from . dev-tasks mutation run
   ```
   This target resets `.cache/cosmic-ray/session.sqlite`, prints the active configuration via `tools/mutation_summary.py`,
   runs `cosmic-ray init/exec`, and finishes with `tools/mutation_report.py` to display survivor counts.
-- **Alternative local command**: `make quality-ext` executes the broader quality suite, including mutation if desired.
+- **Alternative local command**: `uvx --from . dev-tasks quality-ext` executes the broader quality suite, including mutation if desired.
 - **Default scope**: `module-path = "ml_playground"`, exercising the entire package with
   `pytest -q -n auto tests/unit` and a 1 s timeout per mutant/test run.
-- **Latest baseline (2025-10-06)**: `make mutation` processed **5 314** mutants (killed: **5 312**, incompetent: **2**)
+- **Latest baseline (2025-10-06)**: `uvx --from . dev-tasks mutation run` processed **5 314** mutants (killed: **5 312**, incompetent: **2**)
   in approximately **1 h 31 m** wall-clock time.
 - **Session hygiene**: Both targets delete the session DB on every run; do not commit `.cache/cosmic-ray/`.
 - **Follow-up**: Survivor automation and module-specific hardening tasks are tracked in `.ldres/tv-tasks.md`.
 - **CI workflow**: Trigger the long-running mutation suite via GitHub Actions → *Mutation Suite* workflow. It runs weekly on Mondays at 01:00 UTC and is available on-demand through the *Run workflow* button.
-- The `.cache/cosmic-ray/` directory is treated like other build artifacts: never commit it; clean with `make clean` if needed.
+- The `.cache/cosmic-ray/` directory is treated like other build artifacts: never commit it; clean with `uvx --from . dev-tasks clean` if needed.
 
 ## Running Tests
 
@@ -252,20 +252,20 @@ exceptions. NO second chances.
 
 ```bash
 # Fast check
-make pytest-core PYARGS="-q"
+uvx --from . dev-tasks pytest -- -q
 
 # With markers (exclude slow/perf)
-make pytest-core PYARGS='-m "not slow and not perf" -q'
+uvx --from . dev-tasks pytest -- -m "not slow and not perf" -q
 
 # Full suite with coverage
-make coverage
+uvx --from . dev-tasks coverage-report
 ```
 
 ### CI Commands
 
 ```bash
 # Coverage check (CI)
-make coverage
+uvx --from . dev-tasks coverage-report
 ```
 
 ## Example Test Patterns

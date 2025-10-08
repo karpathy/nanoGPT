@@ -47,9 +47,9 @@ Property-based tests using Hypothesis complement example-driven unit tests. They
 
 ## Run Locally
 
-- Run all unit tests: `make unit`
-- Unit with coverage: `make unit-cov`
-- Single file: `make test-file FILE=tests/unit/path/to/test_*.py`
+- Run all unit tests: `uvx --from . dev-tasks unit`
+- Unit with coverage: `uvx --from . dev-tasks unit-cov`
+- Single file: `uv run pytest tests/unit/path/to/test_*.py`
 
 ## Folder structure
 

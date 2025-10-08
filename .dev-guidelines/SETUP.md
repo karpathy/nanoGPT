@@ -16,13 +16,13 @@ Quick start guide for setting up the ml_playground development environment.
 ### 1. Create Virtual Environment
 
 ```bash
-make setup
+uvx --from . dev-tasks setup
 ```
 
 ### 2. Verify Installation
 
 ```bash
-make verify
+uvx --from . dev-tasks verify
 ```
 
 ## Basic Workflow Commands
@@ -30,8 +30,8 @@ make verify
 ### Dataset Preparation
 
 ```bash
-make prepare shakespeare
-make prepare bundestag_char
+uvx --from . dev-tasks prepare shakespeare
+uvx --from . dev-tasks prepare bundestag_char
 ```
 
 Notes:
@@ -44,8 +44,8 @@ Notes:
 ### Training
 
 ```bash
-make train shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml
-make train bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
+uvx --from . dev-tasks train shakespeare --config ml_playground/configs/shakespeare_cpu.toml
+uvx --from . dev-tasks train bundestag_char --config ml_playground/configs/bundestag_char_cpu.toml
 ```
 
 Notes:
@@ -57,8 +57,8 @@ Notes:
 ### Sampling
 
 ```bash
-make sample shakespeare CONFIG=ml_playground/configs/shakespeare_cpu.toml
-make sample bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
+uvx --from . dev-tasks sample shakespeare --config ml_playground/configs/shakespeare_cpu.toml
+uvx --from . dev-tasks sample bundestag_char --config ml_playground/configs/bundestag_char_cpu.toml
 ```
 
 Notes:
@@ -70,7 +70,7 @@ Notes:
 ### End-to-End Loop
 
 ```bash
-make loop bundestag_char CONFIG=ml_playground/configs/bundestag_char_cpu.toml
+uvx --from . dev-tasks loop bundestag_char --config ml_playground/configs/bundestag_char_cpu.toml
 ```
 
 Make output is intentionally quieter by default via a global `.SILENT:` directive; only explicit messages are printed.
@@ -104,10 +104,10 @@ Make output is intentionally quieter by default via a global `.SILENT:` directiv
 
 ```bash
 # Full gate: ruff (lint+format), pyright, mypy, pytest
-make quality
+uvx --from . dev-tasks quality
 
 # Extended: optional mutation testing (Cosmic Ray)
-make quality-ext
+uvx --from . dev-tasks quality-ext
 ```
 
 ## TDD Workflow (Required)

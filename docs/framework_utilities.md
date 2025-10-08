@@ -100,23 +100,23 @@ structure for defining and running commands.
 
 ### Usage
 
-Run subcommands via Make targets (preferred):
+Run subcommands via the UVX-backed `dev-tasks` CLI:
 
 ```bash
 # Prepare data for an experiment
-make prepare <experiment> [CONFIG=/path/to/config.toml]
+uvx --from . dev-tasks prepare <experiment> [--config /path/to/config.toml]
 
 # Train a model for an experiment
-make train <experiment> CONFIG=/path/to/config.toml
+uvx --from . dev-tasks train <experiment> --config /path/to/config.toml
 
 # Sample from a trained model
-make sample <experiment> CONFIG=/path/to/config.toml
+uvx --from . dev-tasks sample <experiment> --config /path/to/config.toml
 
 # Run prepare -> train -> sample in one go
-make loop <experiment> CONFIG=/path/to/config.toml
+uvx --from . dev-tasks loop <experiment> --config /path/to/config.toml
 ```
 
-Output is quieter by default due to a global `.SILENT:` in the Makefile; only explicit messages are printed.
+All commands are also available via the executable script `./tools/dev_tasks.py` if you prefer a local runner.
 
 ## Configuration System
 

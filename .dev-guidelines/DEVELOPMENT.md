@@ -11,10 +11,10 @@ Core development practices, quality standards, and workflow for ml_playground co
 For detailed information about the centralized framework utilities, see [Framework Utilities
 Documentation](../docs/framework_utilities.md).
 
-The pre-commit hook and CI both execute `make quality`. That target expands to ruff (lint + format),
+The pre-commit hook and CI both execute `uvx --from . dev-tasks quality`. That target expands to ruff (lint + format),
 pyright, mypy (scoped to `ml_playground`), and the targeted pytest suite. The command now runs
 pre-commit with `--jobs $(PRE_COMMIT_JOBS)`, defaulting to `min(os.cpu_count(), 8)`; override via
-`make quality PRE_COMMIT_JOBS=4` when you want to cap parallelism (e.g., inside containers).
+`uvx --from . dev-tasks quality PRE_COMMIT_JOBS=4` when you want to cap parallelism (e.g., inside containers).
 
 During active development you may run narrower commands to iterate quickly, for example:
 
@@ -24,16 +24,16 @@ uv run ruff check path/to/file.py
 ```
 
 When you want the convenience wrappers (parallelized pytest, cache-aware collection, etc.), use the
-Make targets directly. During tight iteration, reach for `make quality-fast` to run only the
+`dev-tasks` commands directly. During tight iteration, reach for `uvx --from . dev-tasks quality-fast` to run only the
 formatting hooks (`ruff`, `ruff-format`, `mdformat`) with the same parallelism flags before kicking
 off the heavier type and test gates:
 
 ```bash
-make coverage-report      # run property + unit suites with coverage output
-make tests-property       # property-based suites only
-make tests-unit           # deterministic unit suites
-make quality-fast         # lint/format the whole tree quickly
-make lint                 # ruff lint+format without type checking
+uvx --from . dev-tasks coverage-report      # run property + unit suites with coverage output
+uvx --from . dev-tasks property             # property-based suites only
+uvx --from . dev-tasks unit                 # deterministic unit suites
+uvx --from . dev-tasks quality-fast         # lint/format the whole tree quickly
+uvx --from . dev-tasks lint                 # ruff lint+format without type checking
 ```
 
 ## Commit Standards
@@ -64,7 +64,7 @@ make lint                 # ruff lint+format without type checking
 
 - Every commit MUST be in a runnable state when checked out.
 - Runnable means:
-  - Pre-commit (and therefore `make quality`) passes when the commit is created. Do not bypass hooks or suppress failures.
+  - Pre-commit (and therefore `uvx --from . dev-tasks quality`) passes when the commit is created. Do not bypass hooks or suppress failures.
   - No partially applied migrations or broken CLI entry points.
   - Documentation build (if modified) is not broken.
 - Do not commit code that knowingly breaks the build with intent to "fix later". Split work into smaller, independently
@@ -158,7 +158,7 @@ optimized for non-interactive or copy-paste workflows.
 - **Search tests only**:
 
   ```bash
-  rg --glob 'tests/**' "make quality"
+  rg --glob 'tests/**' "dev-tasks"
   ```
 
 ### GitHub CLI (`gh`)
@@ -232,7 +232,7 @@ optimized for non-interactive or copy-paste workflows.
 - **Pick Make targets**:
 
   ```bash
-  awk -F: '/^[a-zA-Z0-9_-]+:/ {print $1}' Makefile | sort -u | fzf | xargs -r make
+  ./tools/dev_tasks.py --help
   ```
 
 ### Non-interactive status & logs

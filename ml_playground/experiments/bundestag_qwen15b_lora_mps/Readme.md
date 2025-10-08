@@ -28,9 +28,9 @@ For framework utilities, see [../../docs/framework_utilities.md](../../docs/fram
 ## Environment Setup (UV-only)
 
 ```bash
-make setup
+uvx --from . dev-tasks setup
 # If needed, add runtime packages
-make verify
+uvx --from . dev-tasks verify
 ```
 
 ## How to Run
@@ -40,20 +40,20 @@ This preset uses the `bundestag_finetuning_mps` integration under the hood.
 End‑to‑end loop:
 
 ```bash
-make loop bundestag_qwen15b_lora_mps CONFIG=ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+uvx --from . dev-tasks loop bundestag_qwen15b_lora_mps --config ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 ```
 
 Individual steps:
 
 ```bash
 # Prepare
-make prepare bundestag_qwen15b_lora_mps
+uvx --from . dev-tasks prepare bundestag_qwen15b_lora_mps
 
 # Train
-make train bundestag_qwen15b_lora_mps CONFIG=ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+uvx --from . dev-tasks train bundestag_qwen15b_lora_mps --config ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 
 # Sample
-make sample bundestag_qwen15b_lora_mps CONFIG=ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+uvx --from . dev-tasks sample bundestag_qwen15b_lora_mps --config ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 ```
 
 ## Configuration Highlights
