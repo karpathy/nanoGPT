@@ -86,59 +86,27 @@ reviewable, and compliant with our UV-first workflow (`make quality`). Reference
     - `docs(coverage): update roadmap with remaining coverage milestones`
 - **PR**: Title `docs: refine coverage roadmap`; body summarizing remaining deltas and gating plan.
 
-### Open · tv-2025-10-05:PR?? · Accelerate test execution
+### Open · tv-2025-10-06:PR?? · Mutation automation follow-up
 
-- **Summary**: Profile the performance of every automated test suite and implement improvements so local and CI feedback loops stay fast.
+- **Summary**: Maintain the full-suite Cosmic Ray automation landed in PR #55 + #56, ensuring survivors are triaged quickly and reports feed future hardening work.
 - **Priority**: P1
-- **Size**: M
-- **Meta?**: Yes — speeds up developer feedback.
-- **Dependencies**: None.
-- **Latest baseline (2025-10-05)**:
-  - `uv run pytest tests/unit -n 0 --maxfail=1 --durations=20` → 2.26s
-    - Slowest cases: `tests/unit/data_pipeline/test_memmap.py::TestMemmapReader::test_memmap_reader_creation` (~0.13s) and related memmap sampling tests (~0.05–0.11s). `test_initialize_components_with_compile` is now <0.01s and CLI exit-path tests remain sub-0.01s.
-  - `uv run pytest tests/property -n 0 --maxfail=1 --durations=10` → 4.34s
-    - Slowest cases: `TestMergeMappings` methods (0.25–0.90s) after trimming Hypothesis workloads; `mdformat` adjustments keep docs stable.
-  - `uv run pytest tests/integration -n 0 --maxfail=1 --durations=20` → 0.08s
-    - No standout slowcases; Shakespeare dataset setup tops at 0.02s.
-  - `uv run pytest tests/acceptance -n 0 --maxfail=1 --durations=20` → 0.93s
-    - `tests/acceptance/steps/test_checkpointing_steps.py::test_keep_policy_enforcement_for_last_checkpoints` ~0.05s remains the peak.
-  - `uv run pytest tests/e2e -n 0 --maxfail=1 --durations=10` → 2.88s
-    - `test_train_bundestag_char_quick` dominates at 0.10s; configs stay minimal and documented.
-  - `make quality` (pre-commit bundle) → 23.39s wall-clock (clean tree).
-  - `make quality-fast` (format-only hooks) → 1.38s wall-clock after format passes clean.
-- **Next steps**:
-  1. Investigate memmap-heavy tests (`tests/unit/data_pipeline/test_memmap.py`, `tests/unit/data_pipeline/test_sampling.py`) for fixture reuse or lighter data to shave remaining 0.1–0.2s hotspots.
-  1. Explore smaller `max_examples` or strategy caching for `TestMergeMappings` if further property-suite savings are required; ensure assertions still meaningful.
-  1. Track additional optimizations (e.g., memmap fixture changes) and rerun `pytest --durations=20` after each iteration; update this log with new baselines.
-- **Validation**: `make quality`; targeted `pytest --durations=20` reruns on affected suites.
-- **Git plan**:
-  - Commits:
-    - `ci(pytest): profile test runtimes and document hotspots`
-    - `ci(pytest): apply performance optimizations`
-- **PR**: Title `ci: accelerate test execution`; body covering baseline, optimizations, and measured wins.
-
-- **Dependencies**: Coverage roadmap task; reproducible-build epic for tool integration.
+- **Size**: S
+- **Meta?**: Yes — enables ongoing test quality improvements.
+- **Dependencies**: Depends on the merged `test/mutation-suite` automation workflow.
 - **Latest baseline (2025-10-06)**:
-  - `make mutation` (module-path `ml_playground/`, timeout 1 s) processed **5 314** mutants (killed: 5 312,
-    incompetent: 2) in ~**1 h 31 m** wall clock.
+  - `make mutation` (module-path `ml_playground/`, timeout 1 s) processed **5 314** mutants (killed: 5 314, survivors: 0, incompetent: 2) in ~**1 h 31 m** wall clock.
 - **Next steps**:
-  1. Ship an automation pipeline that ingests `cosmic-ray` survivors and opens draft PRs with proposed fixes
-     after long-running CI jobs (script + workflow).
-  1. Triage surviving mutants by module and harden tests iteratively:
-     - `ml_playground/training/checkpointing/`
-     - `ml_playground/core/`
-     - `ml_playground/models/`
-     - `ml_playground/data_pipeline/`
-     - `ml_playground/sampling/`
-  1. Track survivor counts per module after each run and update this task with progress metrics.
-- **Validation**: `make mutation`; targeted survivor-specific pytest slices.
+  1. Keep nightly CI run enabled and capture survivor summaries as build artifacts.
+  1. When survivors appear, file targeted follow-up PRs per module (`ml_playground/{checkpointing,core,models,data_pipeline,sampling}`).
+  1. Refresh `.dev-guidelines/TESTING.md` metrics after significant mutation runs.
+- **Validation**: `make mutation`; targeted pytest slices for any survivor-driven patches.
 - **Git plan**:
   - Branch: `test/mutation-hardening`
   - Commits:
-    - `chore(cosmic-ray): automate survivor extraction` (`tools/`, `.github/workflows/`)
-    - `test(<module>): strengthen tests against survivor diff`
-    - `docs(testing): update mutation workflow guidance`
-- **PR**: Title `test: harden mutation workflow`; body covering automation, survivor stats, and validation.
+    - `chore(cosmic-ray): curate survivor artifacts`
+    - `test(<module>): harden against mutation survivor`
+    - `docs(testing): update mutation workflow metrics`
+- **PR**: Title `test: sustain mutation automation`; body summarizing survivor triage, metrics, and validation.
 
 ### Open · tv-2025-10-06:PR?? · Align READMEs with cross-doc details policy
 

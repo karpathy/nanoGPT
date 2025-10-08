@@ -1,5 +1,17 @@
 # Test Suites
 
+<details>
+<summary>Related documentation</summary>
+
+- [Documentation Guidelines](../.dev-guidelines/DOCUMENTATION.md) – Unified standards for all documentation in this repository, covering top-level, module, experiment, test, and tool content.
+- [Testing Standards](../.dev-guidelines/TESTING.md) – Strict TDD workflow for all functional changes with 100% success requirements across suites.
+- [Unit Tests README](unit/README.md) – Unit tests validate individual functions, classes, and small modules in isolation.
+- [Property-Based Tests README](property/README.md) – Property-based tests validate invariants across large input spaces using Hypothesis.
+- [Integration Tests README](integration/README.md) – Integration tests verify that multiple components work together via Python APIs using real code paths and tiny data.
+- [E2E Tests README](e2e/README.md) – E2E tests exercise the application via public entry points in realistic, tiny environments.
+
+</details>
+
 The `tests/` directory hosts all automated checks. Each subfolder documents its own
 scope; this top-level README provides the high-level testing policy and entry points.
 

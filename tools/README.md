@@ -1,5 +1,15 @@
 # tools/
 
+<details>
+<summary>Related documentation</summary>
+
+- [Documentation Guidelines](../.dev-guidelines/DOCUMENTATION.md) – Unified standards for all repository docs, covering top-level, module, experiment, test, and tool content.
+- [Development Practices](../.dev-guidelines/DEVELOPMENT.md) – Core development workflow, quality gates, and commit standards for contributors.
+- [Testing Standards](../.dev-guidelines/TESTING.md) – Strict TDD workflow and mandatory testing policy that tool-assisted workflows must respect.
+- [Top-level README](../README.md) – High-level orientation to repository structure and entry points, including the tools directory.
+
+</details>
+
 Centralized developer utilities and helper scripts that support the `ml_playground` project. These are optional, mostly
 used for convenience during development. (No raw pip, no manual venv activation).
 

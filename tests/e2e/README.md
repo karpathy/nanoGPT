@@ -1,5 +1,17 @@
 # End-to-End (E2E) Tests
 
+<details>
+<summary>Related documentation</summary>
+
+- [Documentation Guidelines](../../.dev-guidelines/DOCUMENTATION.md) – Unified standards for all repository docs, covering top-level, module, experiment, test, and tool content.
+- [Testing Standards](../../.dev-guidelines/TESTING.md) – Strict TDD workflow and ultra-strict testing policy for every suite.
+- [Unit Tests README](../unit/README.md) – Unit tests validate individual functions, classes, and small modules in isolation.
+- [Property-Based Tests README](../property/README.md) – Property-based tests validate invariants across large input spaces using Hypothesis.
+- [Integration Tests README](../integration/README.md) – Integration tests verify multi-component interactions via Python APIs.
+- [Top-level Tests README](../README.md) – High-level overview of the testing tree, policies, and entry points.
+
+</details>
+
 E2E tests exercise the application via public entry points (usually the CLI) in a realistic, but tiny, environment.
 They validate wiring across modules, configuration loading/merging, logging, and basic I/O.
 
