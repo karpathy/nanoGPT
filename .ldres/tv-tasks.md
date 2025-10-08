@@ -106,11 +106,10 @@ reviewable, and compliant with our UV-first workflow (`uvx --from . dev-tasks qu
 - **Next steps**:
   1. Keep nightly automation producing survivor summaries and curate artifacts for rapid triage.
   1. Harden modules when survivors appear, prioritizing `ml_playground/{training/checkpointing,core,models,data_pipeline,sampling}`.
-  1. Investigate memmap-heavy and property-based pytest hotspots; document updated timings after each optimization.
+  1. Continue profiling pytest hotspots (memmap-heavy tests, property workloads), documenting timings after each optimization.
   1. Ship automation that ingests Cosmic Ray survivors and opens draft PRs after long-running CI jobs.
   1. Track survivor counts per module after each run and update this task with progress metrics.
 - **Validation**: `uvx --from . dev-tasks mutation run`; `make mutation`; targeted survivor-specific pytest slices.
-
 - **Git plan**:
   - Branch: `test/mutation-hardening`
   - Commits:
