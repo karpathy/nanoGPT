@@ -22,7 +22,30 @@ from typing import List, Optional
 
 import typer
 
-ROOT = Path(__file__).resolve().parents[1]
+
+def _discover_root() -> Path:
+    """Find the repository root by locating pyproject.toml."""
+
+    def expand_chain(start: Path, seen: set[Path], order: list[Path]) -> None:
+        for path in (start, *start.parents):
+            if path in seen:
+                continue
+            seen.add(path)
+            order.append(path)
+
+    seen: set[Path] = set()
+    ordered: list[Path] = []
+    expand_chain(Path(__file__).resolve(), seen, ordered)
+    expand_chain(Path.cwd(), seen, ordered)
+
+    for path in ordered:
+        if (path / "pyproject.toml").exists():
+            return path
+
+    return Path(__file__).resolve().parents[1]
+
+
+ROOT = _discover_root()
 PKG = "ml_playground"
 PYTEST_BASE = ["-q", "-n", "auto", "-W", "error", "--strict-markers", "--strict-config"]
 PRE_COMMIT_CONFIG = ROOT / ".githooks" / ".pre-commit-config.yaml"
@@ -30,7 +53,9 @@ CACHE_DIR = ROOT / ".cache"
 LIT_VENV = ROOT / ".venv312"
 LIT_REQUIREMENTS = ROOT / "ml_playground" / "analysis" / "lit" / "requirements.txt"
 
-app = typer.Typer(help="Developer utility commands executed via uvx.", no_args_is_help=True)
+app = typer.Typer(
+    help="Developer utility commands executed via uvx.", no_args_is_help=True
+)
 mutation_app = typer.Typer(help="Mutation testing helpers")
 lit_app = typer.Typer(help="Manage the optional LIT demo environment")
 app.add_typer(mutation_app, name="mutation")
@@ -57,7 +82,9 @@ def _run(
     return result
 
 
-def uv(*args: str, env: Optional[dict[str, str]] = None, check: bool = True) -> subprocess.CompletedProcess:
+def uv(
+    *args: str, env: Optional[dict[str, str]] = None, check: bool = True
+) -> subprocess.CompletedProcess:
     return _run(["uv", *args], env=env, check=check)
 
 
@@ -70,10 +97,9 @@ def uv_run(
     no_project: bool = False,
 ) -> subprocess.CompletedProcess:
     command: List[str] = ["uv", "run"]
+    command.extend(["--project", str(ROOT)])
     if python:
         command.extend(["--python", python])
-    if group_dev:
-        command.extend(["--group", "dev"])
     if no_project:
         command.append("--no-project")
     command.extend(args)
@@ -124,7 +150,9 @@ def verify() -> None:
 
 @app.command("pytest")
 def pytest_core(
-    args: Optional[List[str]] = typer.Argument(None, help="Additional pytest arguments", metavar="PYTEST_ARGS"),
+    args: Optional[List[str]] = typer.Argument(
+        None, help="Additional pytest arguments", metavar="PYTEST_ARGS"
+    ),
 ) -> None:
     """Invoke pytest with the shared configuration."""
     uv_run(*_pytest(_forwarded_args(args)))
@@ -132,7 +160,9 @@ def pytest_core(
 
 @app.command()
 def test(
-    args: Optional[List[str]] = typer.Argument(None, help="Additional pytest arguments", metavar="PYTEST_ARGS"),
+    args: Optional[List[str]] = typer.Argument(
+        None, help="Additional pytest arguments", metavar="PYTEST_ARGS"
+    ),
 ) -> None:
     """Run the full test suite."""
     uv_run(*_pytest(["tests", *_forwarded_args(args)]))
@@ -140,7 +170,9 @@ def test(
 
 @app.command()
 def unit(
-    args: Optional[List[str]] = typer.Argument(None, help="Additional pytest arguments", metavar="PYTEST_ARGS"),
+    args: Optional[List[str]] = typer.Argument(
+        None, help="Additional pytest arguments", metavar="PYTEST_ARGS"
+    ),
 ) -> None:
     """Run unit tests."""
     uv_run(*_pytest(["tests/unit", *_forwarded_args(args)]))
@@ -148,7 +180,9 @@ def unit(
 
 @app.command("property")
 def property_tests(
-    args: Optional[List[str]] = typer.Argument(None, help="Additional pytest arguments", metavar="PYTEST_ARGS"),
+    args: Optional[List[str]] = typer.Argument(
+        None, help="Additional pytest arguments", metavar="PYTEST_ARGS"
+    ),
 ) -> None:
     """Run property-based tests."""
     uv_run(*_pytest(["tests/property", *_forwarded_args(args)]))
@@ -156,7 +190,9 @@ def property_tests(
 
 @app.command("unit-cov")
 def unit_cov(
-    args: Optional[List[str]] = typer.Argument(None, help="Additional pytest arguments", metavar="PYTEST_ARGS"),
+    args: Optional[List[str]] = typer.Argument(
+        None, help="Additional pytest arguments", metavar="PYTEST_ARGS"
+    ),
 ) -> None:
     """Run unit tests with coverage reporting."""
     uv_run(
@@ -173,7 +209,9 @@ def unit_cov(
 
 @app.command()
 def integration(
-    args: Optional[List[str]] = typer.Argument(None, help="Additional pytest arguments", metavar="PYTEST_ARGS"),
+    args: Optional[List[str]] = typer.Argument(
+        None, help="Additional pytest arguments", metavar="PYTEST_ARGS"
+    ),
 ) -> None:
     """Run integration tests."""
     uv_run(*_pytest(["-m", "integration", "--no-cov", *_forwarded_args(args)]))
@@ -181,7 +219,9 @@ def integration(
 
 @app.command()
 def e2e(
-    args: Optional[List[str]] = typer.Argument(None, help="Additional pytest arguments", metavar="PYTEST_ARGS"),
+    args: Optional[List[str]] = typer.Argument(
+        None, help="Additional pytest arguments", metavar="PYTEST_ARGS"
+    ),
 ) -> None:
     """Run end-to-end tests."""
     uv_run(*_pytest(["tests/e2e", *_forwarded_args(args)]))
@@ -189,7 +229,9 @@ def e2e(
 
 @app.command()
 def acceptance(
-    args: Optional[List[str]] = typer.Argument(None, help="Additional pytest arguments", metavar="PYTEST_ARGS"),
+    args: Optional[List[str]] = typer.Argument(
+        None, help="Additional pytest arguments", metavar="PYTEST_ARGS"
+    ),
 ) -> None:
     """Run acceptance tests."""
     uv_run(*_pytest(["tests/acceptance", *_forwarded_args(args)]))
@@ -204,9 +246,25 @@ def quality() -> None:
 @app.command("quality-fast")
 def quality_fast() -> None:
     """Run lint- and format-only pre-commit hooks."""
-    uv_run("pre-commit", "run", "--config", str(PRE_COMMIT_CONFIG), "--all-files", "ruff")
-    uv_run("pre-commit", "run", "--config", str(PRE_COMMIT_CONFIG), "--all-files", "ruff-format")
-    uv_run("pre-commit", "run", "--config", str(PRE_COMMIT_CONFIG), "--all-files", "mdformat")
+    uv_run(
+        "pre-commit", "run", "--config", str(PRE_COMMIT_CONFIG), "--all-files", "ruff"
+    )
+    uv_run(
+        "pre-commit",
+        "run",
+        "--config",
+        str(PRE_COMMIT_CONFIG),
+        "--all-files",
+        "ruff-format",
+    )
+    uv_run(
+        "pre-commit",
+        "run",
+        "--config",
+        str(PRE_COMMIT_CONFIG),
+        "--all-files",
+        "mdformat",
+    )
 
 
 @app.command()
@@ -279,8 +337,15 @@ def _cli_command(subcommand: str, exp: str, config: Optional[Path]) -> List[str]
 @app.command()
 def prepare(
     exp: str = typer.Argument(..., help="Experiment name"),
-    config: Optional[Path] = typer.Option(None, "--config", exists=True, file_okay=True, dir_okay=False, readable=True,
-                                         help="Optional TOML config path"),
+    config: Optional[Path] = typer.Option(
+        None,
+        "--config",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="Optional TOML config path",
+    ),
 ) -> None:
     """Prepare dataset artifacts for an experiment."""
     uv_run(*_cli_command("prepare", exp, config), group_dev=False)
@@ -289,8 +354,15 @@ def prepare(
 @app.command()
 def train(
     exp: str = typer.Argument(..., help="Experiment name"),
-    config: Optional[Path] = typer.Option(None, "--config", exists=True, file_okay=True, dir_okay=False, readable=True,
-                                         help="Optional TOML config path"),
+    config: Optional[Path] = typer.Option(
+        None,
+        "--config",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="Optional TOML config path",
+    ),
 ) -> None:
     """Train a model for the specified experiment."""
     uv_run(*_cli_command("train", exp, config), group_dev=False)
@@ -299,8 +371,15 @@ def train(
 @app.command()
 def sample(
     exp: str = typer.Argument(..., help="Experiment name"),
-    config: Optional[Path] = typer.Option(None, "--config", exists=True, file_okay=True, dir_okay=False, readable=True,
-                                         help="Optional TOML config path"),
+    config: Optional[Path] = typer.Option(
+        None,
+        "--config",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="Optional TOML config path",
+    ),
 ) -> None:
     """Sample from a trained model."""
     uv_run(*_cli_command("sample", exp, config), group_dev=False)
@@ -309,8 +388,15 @@ def sample(
 @app.command()
 def loop(
     exp: str = typer.Argument(..., help="Experiment name"),
-    config: Optional[Path] = typer.Option(None, "--config", exists=True, file_okay=True, dir_okay=False, readable=True,
-                                         help="Optional TOML config path"),
+    config: Optional[Path] = typer.Option(
+        None,
+        "--config",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="Optional TOML config path",
+    ),
 ) -> None:
     """Execute the full prepare/train/sample loop."""
     uv_run(*_cli_command("loop", exp, config), group_dev=False)
@@ -319,7 +405,9 @@ def loop(
 @app.command("ai-guidelines")
 def ai_guidelines(
     tool: str = typer.Argument(..., help="Target tool name"),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Preview actions without modifying files"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Preview actions without modifying files"
+    ),
 ) -> None:
     """Set up AI guidelines symlinks for the requested tool."""
     command = ["python", "tools/setup_ai_guidelines.py", tool]
@@ -330,8 +418,15 @@ def ai_guidelines(
 
 @app.command()
 def tensorboard(
-    logdir: Path = typer.Option(..., "--logdir", exists=True, file_okay=False, dir_okay=True, readable=True,
-                                help="TensorBoard log directory"),
+    logdir: Path = typer.Option(
+        ...,
+        "--logdir",
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        readable=True,
+        help="TensorBoard log directory",
+    ),
     port: int = typer.Option(6006, "--port", help="Port to bind"),
 ) -> None:
     """Launch TensorBoard for the given log directory."""
@@ -342,7 +437,9 @@ def tensorboard(
 def gguf_help() -> None:
     """Show llama.cpp GGUF conversion help."""
     try:
-        uv_run("python", "tools/llama_cpp/convert-hf-to-gguf.py", "--help", group_dev=False)
+        uv_run(
+            "python", "tools/llama_cpp/convert-hf-to-gguf.py", "--help", group_dev=False
+        )
     except CommandError:
         typer.echo("[info] GGUF converter exited with a non-zero status", err=True)
 
@@ -370,7 +467,17 @@ def coverage_test() -> None:
             "COVERAGE_FILE": str(dest_cov),
         }
     )
-    uv_run("coverage", "run", "-m", "pytest", "-n", "0", "tests/unit", "tests/property", env=env)
+    uv_run(
+        "coverage",
+        "run",
+        "-m",
+        "pytest",
+        "-n",
+        "0",
+        "tests/unit",
+        "tests/property",
+        env=env,
+    )
     uv_run("coverage", "combine", env=env)
     for path in dest_cov.parent.glob("coverage.sqlite.*"):
         path.unlink(missing_ok=True)  # type: ignore[arg-type]
@@ -378,7 +485,9 @@ def coverage_test() -> None:
 
 @app.command("coverage-report")
 def coverage_report(
-    verbose: bool = typer.Option(False, "--verbose", help="Print discovered coverage artifacts"),
+    verbose: bool = typer.Option(
+        False, "--verbose", help="Print discovered coverage artifacts"
+    ),
 ) -> None:
     """Generate coverage reports under .cache/coverage."""
     dest_cov = _coverage_file()
@@ -496,8 +605,12 @@ def quality_ext() -> None:
 
 @lit_app.command("setup")
 def lit_setup(
-    python_version: str = typer.Option("3.12", "--python-version", help="Python version for the isolated venv"),
-    recreate: bool = typer.Option(False, "--recreate", help="Recreate the LIT virtual environment"),
+    python_version: str = typer.Option(
+        "3.12", "--python-version", help="Python version for the isolated venv"
+    ),
+    recreate: bool = typer.Option(
+        False, "--recreate", help="Recreate the LIT virtual environment"
+    ),
 ) -> None:
     """Create a dedicated Python 3.12 environment for the LIT demo."""
     if recreate and LIT_VENV.exists():
@@ -518,7 +631,9 @@ def lit_setup(
 def lit_run(
     port: int = typer.Option(5432, "--port", help="Port to bind the LIT server"),
     host: str = typer.Option("127.0.0.1", "--host", help="Host to bind"),
-    open_browser: bool = typer.Option(False, "--open-browser", help="Open the browser automatically"),
+    open_browser: bool = typer.Option(
+        False, "--open-browser", help="Open the browser automatically"
+    ),
 ) -> None:
     """Start the minimal LIT demo server."""
     python_bin = _lit_python()
@@ -541,7 +656,9 @@ def lit_run(
 @lit_app.command("stop")
 def lit_stop(
     port: int = typer.Option(5432, "--port", help="Port to terminate"),
-    graceful: bool = typer.Option(True, "--graceful/--force", help="Attempt graceful shutdown"),
+    graceful: bool = typer.Option(
+        True, "--graceful/--force", help="Attempt graceful shutdown"
+    ),
 ) -> None:
     """Stop the LIT demo server bound to the given port."""
     python_bin = _lit_python()
