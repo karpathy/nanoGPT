@@ -80,29 +80,16 @@ reviewable, and compliant with our UV-first workflow (`uvx --from . dev-tasks qu
 - **Latest snapshot (2025-10-05)**:
   - Global coverage **87.28%** (`uvx --from . dev-tasks coverage-report`).
   - Pre-commit gate `--fail-under=87.00`.
-  - `.ldres/coverage-opportunities.md` holds module-level notes.
-- **Git plan**:
-  - Commits:
-    - `docs(coverage): update roadmap with remaining coverage milestones`
-- **PR**: Title `docs: refine coverage roadmap`; body summarizing remaining deltas and gating plan.
-
 ### Open · tv-2025-10-06:PR?? · Mutation automation follow-up
 
 - **Summary**: Maintain the full-suite Cosmic Ray automation landed in PR #55 + #56, ensuring survivors are triaged quickly and reports feed future hardening work.
 - **Priority**: P1
 - **Size**: M
-- **Meta?**: Yes — speeds up developer feedback.
+- **Meta?**: No.
 - **Dependencies**: Depends on the merged `test/mutation-suite` automation workflow.
 - **Latest baseline (2025-10-06)**:
   - `uvx --from . dev-tasks mutation run` (module-path `ml_playground/`, timeout 1 s) processed **5 314** mutants (killed: 5 312, incompetent: 2) in ~**1 h 31 m** wall clock.
   - `make mutation` (same configuration) remains available as a fallback driver and recently recorded a clean pass (killed: 5 314, survivors: 0, incompetent: 2).
-  - Representative suite timings (2025-10-05 reference):
-    - `uv run pytest tests/unit -n 0 --maxfail=1 --durations=20` → 2.26 s (memmap fixtures around 0.13 s dominate).
-    - `uv run pytest tests/property -n 0 --maxfail=1 --durations=10` → 4.34 s (post-Hypothesis tuning, `TestMergeMappings` spans 0.25–0.90 s).
-    - `uv run pytest tests/integration -n 0 --maxfail=1 --durations=20` → 0.08 s (Shakespeare dataset setup tops at 0.02 s).
-    - `uv run pytest tests/acceptance -n 0 --maxfail=1 --durations=20` → 0.93 s (`test_keep_policy_enforcement_for_last_checkpoints` remains ~0.05 s).
-    - `uv run pytest tests/e2e -n 0 --maxfail=1 --durations=10` → 2.88 s (`test_train_bundestag_char_quick` at 0.10 s).
-    - `uvx --from . dev-tasks quality` (pre-commit bundle) → 23.39 s; `uvx --from . dev-tasks quality-fast` → 1.38 s.
 - **Next steps**:
   1. Keep nightly automation producing survivor summaries and curate artifacts for rapid triage.
   1. Harden modules when survivors appear, prioritizing `ml_playground/{training/checkpointing,core,models,data_pipeline,sampling}`.
@@ -117,57 +104,6 @@ reviewable, and compliant with our UV-first workflow (`uvx --from . dev-tasks qu
     - `test(<module>): harden against mutation survivor`
     - `docs(testing): update mutation workflow metrics`
 - **PR**: Title `test: sustain mutation automation`; body summarizing survivor triage, metrics, and validation.
-
-### Open · tv-2025-10-06:PR?? · Align READMEs with cross-doc details policy
-
-- **Summary**: Apply the new `Related documentation` details-block template across remaining README files so cross-links stay consistent and summarized.
-- **Priority**: P2
-- **Size**: S
-- **Meta?**: Yes — enforces documentation guidelines.
-- **Dependencies**: New policy in `.dev-guidelines/DOCUMENTATION.md`.
-- **Next steps**:
-  1. Audit README files beyond `tests/unit/` and `tests/property/` for related-doc references.
-  1. Insert or update `<details>` blocks with relative links and first-paragraph summaries per the template.
-  1. Note any documents lacking clear intro paragraphs and schedule follow-up edits if needed.
-- **Validation**: `uvx --from . dev-tasks quality` (mdformat + lint).
-- **Git plan**:
-  - Branch: `docs/related-details-rollout`
-  - Commits:
-    - `docs(guidelines): apply related-document template across READMEs`
-- **PR**: Title `docs: align READMEs with related documentation template`; body summarizing updated files and guideline compliance.
-
-## Deferred tasks (updated 2025-10-03)
-
-<!-- markdownlint-disable MD033 -->
-
-<details>
-<summary>Deferred task template (populate with existing PR)</summary>
-
-```markdown
-## Deferred · tv-YYYY-MM-DD:PR### · <Short title>
-
-- **Summary**: Purpose and current status.
-- **Priority**: P0/P1/P2/P3.
-- **Size**: XS/S/M/L.
-- **Meta?**: Yes/No — meta tasks unblock or shrink downstream work.
-- **Dependencies**: Blockers or related initiatives.
-- **References**: PRs, issues, or docs capturing detailed context.
-- **Holding pattern**: Note what is awaited before resuming.
-- **PR status**: Link and ensure it remains in Draft until ready to resume.
-```
-
-</details>
-
-### Deferred · tv-2025-10-03:PR35 · Stabilize coverage badge workflow
-
-- **Summary**: Badge generation differs between macOS and GitHub Actions because CI exercises an extra
-  branch in `sample_batch()`. Investigation lives in PR #35.
-- **Priority**: P0
-- **Size**: M
-- **Meta?**: No.
-- **Dependencies**: Blocked on open task `tv-2025-10-03:PR??` (reproducible builds epic) before re-enabling the badge gate.
-- **References**: Branch `coverage-badge-rebase`; PR #35 (in review).
-- **Holding pattern**: Resume once the team approves the reproducibility plan captured in PR #35.
 - **PR status**: `<https://github.com/<org>/<repo>/pull/35>` (keep in Draft until reproducible-build epic lands).
 
 ### Deferred · tv-2025-10-04:PR?? · Expand CI Python version matrix
