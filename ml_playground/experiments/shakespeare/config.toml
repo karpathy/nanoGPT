@@ -6,6 +6,13 @@
 # - If [train.schedule].decay_lr = false, warmup/decay/min_lr are ignored.
 # - Paths (dataset_dir, out_dir) are used exactly as configured (absolute or relative), no rewriting.
 
+[prepare]
+dataset_dir = "./datasets"
+raw_dir = "./raw"
+raw_text_path = "./datasets/input.txt"
+tokenizer_type = "char"
+doc_separator = "\n\n"
+
 [train.model]
 # Number of Transformer blocks; increases capacity and compute/memory cost.
 n_layer = 2
@@ -19,6 +26,7 @@ block_size = 64
 dropout = 0.0
 # Whether to include bias terms in linear/LayerNorm layers; false is common for GPT-style models.
 bias = false
+vocab_size = 50257
 
 [train.data]
 # Micro-batch size per optimization step; memory ~ batch_size * block_size^2.
@@ -45,16 +53,18 @@ grad_clip = 1.0
 # Enable learning-rate schedule (warmup + decay). If false, other fields are ignored.
 decay_lr = true
 # Number of warmup iterations from 0 -> learning_rate.
-warmup_iters = 100
+warmup_iters = 20
 # Iterations over which LR decays from learning_rate down toward min_lr.
 # Interplay with [train.runtime].max_iters: if much smaller, LR stays at min for long.
-lr_decay_iters = 2000
+lr_decay_iters = 200
 # Lower bound (floor) for the learning rate during decay.
 min_lr = 0.00006
 
 [train.runtime]
+# Output directory for logs, checkpoints, and metadata for this training run.
+out_dir = "./out"
 # Total number of optimizer iterations to run (across all accumulation steps).
-max_iters = 10000
+max_iters = 200
 # How often (in iterations) to run evaluation/checkpoint logic.
 eval_interval = 20
 # Number of evaluation batches to average per evaluation; higher reduces noise but takes longer.
@@ -71,34 +81,16 @@ device = "cpu"
 dtype = "float32"
 # If true, compile/optimize the model/graph (when supported); speeds up but increases startup time.
 compile = false
-
-[train.runtime.checkpointing]
-# Checkpoint policy
-# Filename for the most recent checkpoint snapshot saved (rolling "last" save).
-ckpt_last_filename = "ckpt_last.pt"
-# Filename for the best-scoring checkpoint according to ckpt_metric.
-ckpt_best_filename = "ckpt_best.pt"
-# Metric key to select "best" (e.g., "val_loss"); must match what evaluation reports.
-ckpt_metric = "val_loss"
-# Whether higher metric values are better (true) or lower are better (false); false for "val_loss".
-ckpt_greater_is_better = false
-# Atomic write of checkpoint files to avoid partial files on crashes.
-ckpt_atomic = true
-# If true, write extra metadata (e.g., config, metrics) alongside checkpoints for reproducibility.
-ckpt_write_metadata = true
-# Minimum time between time-based checkpoint saves; 0 disables time-based saves.
-ckpt_time_interval_minutes = 0
-# New checkpointing structure
-[train.runtime.checkpointing.keep]
-last = 1
-best = 1
-
 # Exponential smoothing coefficient for the metric used to decide "best"; 0.0 disables smoothing.
 best_smoothing_alpha = 0.0
 # Early stopping patience in number of evaluations without improvement; 0 disables early stopping.
 early_stop_patience = 0
 # Exponential Moving Average (EMA) decay for model weights; 0.0 disables.
 ema_decay = 0.0
+
+[train.runtime.checkpointing.keep]
+last = 1
+best = 1
 
 [sample.runtime]
 # Output directory to read checkpoints from (and optionally write samples/logs to).
@@ -136,3 +128,11 @@ max_new_tokens = 64
 temperature = 0.8
 # Sample only from the top-K most likely tokens at each step; lower K increases coherence, higher K increases diversity.
 top_k = 200
+
+[shared]
+experiment = "shakespeare"
+config_path = "config.toml"
+project_home = "."
+dataset_dir = "./datasets"
+train_out_dir = "./out"
+sample_out_dir = "./out"

@@ -9,8 +9,6 @@
 # - Paths (prepare.raw_dir, prepare.dataset_dir, train.runtime.out_dir, sample.runtime.out_dir) are used exactly as configured (absolute or relative), no rewriting.
 
 [prepare]
-# Name of the dataset pipeline to use.
-dataset = "bundestag_qwen15b_lora_mps"
 # Path to a folder of raw .txt files (recursively scanned) or a single input.txt in this folder.
 raw_dir = "ml_playground/experiments/bundestag_qwen15b_lora_mps/raw/plenarprotokolle"
 # Directory where the prepared dataset artifacts are written (tokenizer, train.jsonl, val.jsonl, meta.json).
@@ -20,6 +18,9 @@ add_structure_tokens = true
 # Token string used to separate concatenated documents during packing; ensure it’s present if you depend on it.
 doc_separator = "<DOC_SEP>"
 
+[prepare.extras]
+dataset = "bundestag_qwen15b_lora_mps"
+
 [train.hf_model]
 # Hugging Face base model to fine-tune with LoRA.
 model_name = "Qwen/Qwen2.5-1.5B"
@@ -27,6 +28,16 @@ model_name = "Qwen/Qwen2.5-1.5B"
 gradient_checkpointing = true
 # Logical sequence length for data packing/truncation during training (tokens per training block).
 block_size = 256
+
+[train.model]
+# Mirror the base transformer dimensions for compatibility with TrainerConfig.
+n_layer = 24
+n_head = 24
+n_embd = 2048
+block_size = 256
+dropout = 0.0
+bias = false
+vocab_size = 151936
 
 [train.peft]
 # Toggle LoRA training. If false, trains full model (not recommended on consumer hardware).
@@ -109,9 +120,9 @@ best_smoothing_alpha = 0.0
 early_stop_patience = 5
 # Exponential moving average decay for model parameters (0 disables EMA).
 ema_decay = 0.0
-# If true, save a fully merged model when achieving best validation (in addition to adapters).
+
+[train.extras]
 save_merged_on_best = true
-# Keep only the latest N iter_* checkpoints (0 disables pruning).
 keep_last_n = 3
 
 [sample.runtime]
@@ -126,6 +137,9 @@ compile = false
 # Random seed applied before sampling to make runs reproducible (when do_sample=true).
 seed = 1337
 
+[sample.extras]
+require_adapters = true
+
 [sample.sample]
 # Prompt text to start generation; can also be "FILE:/path/to/prompt.txt".
 start = "\nNächste Rednerin ist die Vorsitzende der AfD-Fraktion, Dr. Alice Weidel.\n(Beifall bei der AfD)\n  Dr. Alice Weidel (AfD): \n"
@@ -139,3 +153,11 @@ temperature = 0.8
 top_k = 200
 # Nucleus sampling: restrict to smallest set of tokens whose cumulative prob >= top_p (1.0 disables).
 top_p = 0.9
+
+[shared]
+experiment = "bundestag_qwen15b_lora_mps"
+config_path = "config.toml"
+project_home = "."
+dataset_dir = "ml_playground/experiments/bundestag_qwen15b_lora_mps/datasets"
+train_out_dir = "ml_playground/experiments/bundestag_qwen15b_lora_mps/out/bundestag_qwen15b_lora_mps"
+sample_out_dir = "ml_playground/experiments/bundestag_qwen15b_lora_mps/out/bundestag_qwen15b_lora_mps"

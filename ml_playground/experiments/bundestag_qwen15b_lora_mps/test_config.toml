@@ -1,11 +1,13 @@
 # Minimal test configuration for bundestag_qwen15b_lora_mps to keep CLI tests fast.
 
 [prepare]
-dataset = "bundestag_qwen15b_lora_mps"
 raw_dir = "./experiments/bundestag_qwen15b_lora_mps/raw/test_data"
 dataset_dir = "./experiments/bundestag_qwen15b_lora_mps/datasets"
 add_structure_tokens = false
 doc_separator = "<DOC_SEP>"
+
+[prepare.extras]
+dataset = "bundestag_qwen15b_lora_mps"
 
 [train.hf_model]
 model_name = "Qwen/Qwen2.5-1.5B"
@@ -22,7 +24,6 @@ target_modules = ["q_proj","v_proj"]
 extend_mlp_targets = false
 
 [train.data]
-dataset_dir = "./experiments/bundestag_qwen15b_lora_mps/datasets"
 batch_size = 1
 grad_accum_steps = 1
 block_size = 32
@@ -58,6 +59,12 @@ ckpt_atomic = true
 best_smoothing_alpha = 0.0
 early_stop_patience = 0
 ema_decay = 0.0
+
+[train.runtime.checkpointing.keep]
+last = 1
+best = 1
+
+[train.extras]
 save_merged_on_best = false
 keep_last_n = 0
 
@@ -68,6 +75,9 @@ dtype = "float32"
 compile = false
 seed = 42
 
+[sample.extras]
+require_adapters = true
+
 [sample.sample]
 start = ""
 num_samples = 1
@@ -75,3 +85,11 @@ max_new_tokens = 4
 temperature = 0.8
 top_k = 0
 top_p = 0.9
+
+[shared]
+experiment = "bundestag_qwen15b_lora_mps"
+config_path = "test_config.toml"
+project_home = "."
+dataset_dir = "./experiments/bundestag_qwen15b_lora_mps/datasets"
+train_out_dir = "./experiments/bundestag_qwen15b_lora_mps/out/test_run"
+sample_out_dir = "./experiments/bundestag_qwen15b_lora_mps/out/test_run"

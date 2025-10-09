@@ -68,6 +68,8 @@ class Sampler:
 
         self.model = self._load_checkpoint_and_model()
         self.tokenizer = self._setup_tokenizer()
+        self._prompt_tensor: torch.Tensor | None = None
+        self._cached_prompt_ids: tuple[int, ...] | None = None
 
     def _setup_torch_env(self) -> None:
         """Seed global torch RNG state and prepare autocast context."""
@@ -170,9 +172,18 @@ class Sampler:
         if not start_ids:
             return
 
-        x = torch.tensor(start_ids, dtype=torch.long, device=self.runtime_cfg.device)[
-            None, ...
-        ]
+        prompt_ids = tuple(start_ids)
+        if (
+            self._prompt_tensor is None
+            or self._cached_prompt_ids != prompt_ids
+            or self._prompt_tensor.device != torch.device(self.runtime_cfg.device)
+        ):
+            self._prompt_tensor = torch.as_tensor(
+                start_ids, dtype=torch.long, device=self.runtime_cfg.device
+            ).unsqueeze(0)
+            self._cached_prompt_ids = prompt_ids
+
+        x = self._prompt_tensor
 
         self.logger.info("Sampling...")
         with torch.no_grad():
@@ -184,27 +195,14 @@ class Sampler:
                         temperature=self.sample_cfg.temperature,
                         top_k=self.sample_cfg.top_k,
                     )
-                    output = self.tokenizer.decode(y[0].tolist())
+                    output_ids = y[0].detach().cpu().tolist()
+                    output = self.tokenizer.decode(output_ids)
                     self.logger.info(output)
                     self.logger.info("---------------")
 
 
-def sample(cfg: SamplerConfig, shared: SharedConfig | None = None) -> None:
-    """Run sampling with optional shared configuration fallback."""
-
-    if shared is None:
-        runtime = cfg.runtime
-        if runtime is None:
-            raise ValueError("Runtime configuration is missing")
-        out_dir = runtime.out_dir
-        shared = SharedConfig(
-            experiment="unknown",
-            config_path=out_dir / "config.toml",
-            project_home=out_dir.parent if out_dir.parent else out_dir,
-            dataset_dir=out_dir,
-            train_out_dir=out_dir,
-            sample_out_dir=out_dir,
-        )
+def sample(cfg: SamplerConfig, shared: SharedConfig) -> None:
+    """Run sampling with a required `SharedConfig` produced by the CLI."""
 
     sampler_instance = Sampler(cfg, shared)
     sampler_instance.run()

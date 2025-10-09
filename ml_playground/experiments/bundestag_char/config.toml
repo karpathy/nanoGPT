@@ -12,6 +12,7 @@ dataset_dir = "./datasets"
 raw_dir = "./raw"
 raw_text_path = "./raw/input.txt"
 tokenizer_type = "char"
+doc_separator = "\n\n"
 
 [train.model]
 # mid-size model tuned for Apple Silicon (M2 Pro) with fp16 on MPS
@@ -134,3 +135,11 @@ top_k = 100
 
 
 # Export config is not supported by the strict schema at the top level; removed for compatibility
+
+[shared]
+experiment = "bundestag_char"
+config_path = "config.toml"
+project_home = "."
+dataset_dir = "./datasets"
+train_out_dir = "./out"
+sample_out_dir = "./out"

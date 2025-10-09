@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import numpy.typing as npt
 import torch
+from numpy.lib.stride_tricks import sliding_window_view
 
 from ml_playground.configuration.models import DataConfig, DeviceKind
 from ml_playground.data_pipeline.sources.memmap import MemmapReader
@@ -30,36 +31,25 @@ def sample_batch(
             "Dataset is empty: no tokens available. Ensure the dataset preparation wrote non-empty train/val bins."
         )
 
+    base: npt.NDArray[np.int64] = np.asarray(reader.arr, dtype=np.int64)
+    steps: npt.NDArray[np.int64] = np.arange(block_size, dtype=np.int64)
+
     if L <= block_size:
-        idx = np.random.randint(0, L, size=(batch_size,), dtype=np.int64)
-        base = np.asarray(reader.arr)
-
-        def _take_seq(start: int, length: int) -> np.ndarray:
-            offs: npt.NDArray[np.int64] = (
-                start + np.arange(length, dtype=np.int64)
-            ) % L
-            return base[offs]
-
-        x_np = np.stack(
-            [_take_seq(int(i), block_size).astype(np.int64, copy=False) for i in idx]
+        idx: npt.NDArray[np.int64] = np.random.randint(
+            0, L, size=(batch_size,), dtype=np.int64
         )
-        y_np = np.stack(
-            [
-                _take_seq(int((i + 1) % L), block_size).astype(np.int64, copy=True)
-                for i in idx
-            ]
-        )
+        x_indices = (idx[:, None] + steps) % L
+        y_indices = (idx[:, None] + 1 + steps) % L
+        x_np = base[x_indices]
+        y_np = base[y_indices]
     else:
         idx = np.random.randint(0, L - block_size, size=(batch_size,), dtype=np.int64)
-        x_np = np.stack(
-            [reader.arr[i : i + block_size].astype(np.int64, copy=False) for i in idx]
-        )
-        y_np = np.stack(
-            [
-                reader.arr[i + 1 : i + 1 + block_size].astype(np.int64, copy=False)
-                for i in idx
-            ]
-        )
+        windows: npt.NDArray[np.int64] = sliding_window_view(base, block_size)
+        x_np = windows[idx]
+        y_np = windows[idx + 1]
+
+    x_np = np.asarray(x_np, dtype=np.int64)
+    y_np = np.asarray(y_np, dtype=np.int64)
 
     x = torch.from_numpy(x_np).to(device)
     y = torch.from_numpy(y_np).to(device)
@@ -133,42 +123,18 @@ class SimpleBatches:
         bsz = int(self.data.batch_size)
         T = int(self.data.block_size)
         cur = self._cursor[split]
-        base = np.asarray(reader.arr)
-        x_list: list[np.ndarray] = []
-        y_list: list[np.ndarray] = []
-        for _ in range(bsz):
-            s = cur
-            if L <= T:
-                offs: npt.NDArray[np.int64] = (s + np.arange(T, dtype=np.int64)) % L
-                x_seq = base[offs].astype(np.int64, copy=False)
-                offs_y: npt.NDArray[np.int64] = (
-                    (s + 1) + np.arange(T, dtype=np.int64)
-                ) % L
-                y_seq = base[offs_y].astype(np.int64, copy=False)
-                cur = (cur + T) % L
-            else:
-                si = int(s)
-                if si + T <= L:
-                    x_seq = base[si : si + T].astype(np.int64, copy=False)
-                    if si + 1 + T <= L:
-                        y_seq = base[si + 1 : si + 1 + T].astype(np.int64, copy=False)
-                    else:
-                        y_first = base[si + 1 : L].astype(np.int64, copy=False)
-                        y_rem = T - int(y_first.shape[0])
-                        rem = base[0:y_rem].astype(np.int64, copy=False)
-                        y_seq = np.concatenate((y_first, rem))
-                else:
-                    offs_x: npt.NDArray[np.int64] = (
-                        si + np.arange(T, dtype=np.int64)
-                    ) % L
-                    x_seq = base[offs_x].astype(np.int64, copy=False)
-                    offs_y = (si + 1 + np.arange(T, dtype=np.int64)) % L
-                    y_seq = base[offs_y].astype(np.int64, copy=False)
-                cur = (cur + T) % L
-            x_list.append(x_seq)
-            y_list.append(y_seq)
+        base: npt.NDArray[np.int64] = np.asarray(reader.arr, dtype=np.int64)
+        starts: npt.NDArray[np.int64] = (cur + np.arange(bsz, dtype=np.int64) * T) % L
+        steps: npt.NDArray[np.int64] = np.arange(T, dtype=np.int64)
+        x_indices = (starts[:, None] + steps) % L
+        y_indices = (starts[:, None] + 1 + steps) % L
 
-        self._cursor[split] = cur
-        x = torch.from_numpy(np.stack(x_list)).to(self.device)
-        y = torch.from_numpy(np.stack(y_list)).to(self.device)
+        self._cursor[split] = int((cur + bsz * T) % L)
+
+        x = torch.from_numpy(base[x_indices].astype(np.int64, copy=False)).to(
+            self.device
+        )
+        y = torch.from_numpy(base[y_indices].astype(np.int64, copy=False)).to(
+            self.device
+        )
         return x, y

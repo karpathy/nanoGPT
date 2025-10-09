@@ -15,6 +15,7 @@ from ml_playground.configuration.models import (
     SamplerConfig,
     DataConfig,
     READ_POLICY_BEST,
+    READ_POLICY_LATEST,
     SharedConfig,
 )
 from ml_playground.sampling.runner import Sampler, sample
@@ -419,6 +420,86 @@ def test_sample_with_compile_flag_uses_compiled_model(
     assert called["compiled"] == 1
 
 
+def test_sampler_run_returns_early_for_empty_prompt(tmp_path: Path) -> None:
+    """Sampler.run should exit before generation when tokenizer encodes no tokens."""
+    out_dir = tmp_path / "empty_prompt"
+    out_dir.mkdir()
+    _write_char_meta(out_dir / "meta.pkl")
+
+    model = _make_minimal_model()
+    _rotated_best(out_dir, model)
+
+    base_cfg = _sampler_cfg(out_dir)
+    cfg = base_cfg.model_copy(
+        update={
+            "sample": SampleConfig(
+                start="",
+                num_samples=1,
+                max_new_tokens=1,
+                temperature=1.0,
+                top_k=0,
+            )
+        }
+    )
+
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=out_dir / "cfg.toml",
+        project_home=out_dir,
+        dataset_dir=out_dir,
+        train_out_dir=out_dir,
+        sample_out_dir=out_dir,
+    )
+
+    sampler = Sampler(cfg, shared)
+    sampler.run()
+
+    assert sampler._prompt_tensor is None
+
+
+def test_sampler_uses_latest_checkpoint_when_configured(tmp_path: Path) -> None:
+    """Sampler should load the latest checkpoint when runtime read policy is 'latest'."""
+    out_dir = tmp_path / "latest_policy"
+    out_dir.mkdir()
+    _write_char_meta(out_dir / "meta.pkl")
+
+    model = _make_minimal_model()
+    torch.save(
+        {
+            "model": model.state_dict(),
+            "optimizer": {},
+            "model_args": {
+                "n_layer": 1,
+                "n_head": 1,
+                "n_embd": 32,
+                "block_size": 16,
+                "bias": False,
+                "vocab_size": 256,
+                "dropout": 0.0,
+            },
+            "iter_num": 42,
+            "best_val_loss": 0.0,
+            "config": {},
+        },
+        out_dir / "ckpt_last_00000001.pt",
+    )
+
+    cfg = _sampler_cfg(out_dir, read_policy=READ_POLICY_LATEST)
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=out_dir / "cfg.toml",
+        project_home=out_dir,
+        dataset_dir=out_dir,
+        train_out_dir=out_dir,
+        sample_out_dir=out_dir,
+    )
+
+    sampler = Sampler(cfg, shared)
+    sampler.run()
+
+    assert sampler._cached_prompt_ids is not None
+
+
 # ---------------------------
 # Strict-mode enforcement tests (merged from test_strict_mode_enforcement.py)
 # ---------------------------
@@ -463,7 +544,7 @@ def _rotated_best(out_dir: Path, model: GPT) -> Path:
     return p
 
 
-def _sampler_cfg(out_dir: Path) -> SamplerConfig:
+def _sampler_cfg(out_dir: Path, read_policy: str = READ_POLICY_BEST) -> SamplerConfig:
     return SamplerConfig(
         runtime=RuntimeConfig(
             out_dir=out_dir,
@@ -474,7 +555,7 @@ def _sampler_cfg(out_dir: Path) -> SamplerConfig:
             eval_only=False,
             checkpointing=RuntimeConfig.Checkpointing(
                 keep=RuntimeConfig.Checkpointing.Keep(last=1, best=1),
-                read_policy=READ_POLICY_BEST,
+                read_policy=read_policy,
             ),
             seed=123,
             device="cpu",

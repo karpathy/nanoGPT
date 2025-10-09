@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Literal
 from types import MappingProxyType
+import numpy as np
+import numpy.typing as npt
 from ml_playground.core.tokenizer_protocol import Tokenizer
 
 
@@ -16,10 +18,12 @@ class CharTokenizer:
         if vocab is not None:
             self.stoi = vocab
             self.itos = {i: s for s, i in vocab.items()}
+            self._itos_array: npt.NDArray[np.object_] = self._build_lookup_array()
         else:
             # Default character-level vocabulary will be built during training
             self.stoi = {}
             self.itos = {}
+            self._itos_array = np.empty(0, dtype=object)
 
     @property
     def name(self) -> str:
@@ -37,7 +41,31 @@ class CharTokenizer:
         return [self.stoi.get(ch, 0) for ch in text]
 
     def decode(self, token_ids: Sequence[int]) -> str:
-        return "".join(self.itos.get(int(i), "") for i in token_ids)
+        if not self.itos:
+            return ""
+        lookup: npt.NDArray[np.object_] = self._ensure_lookup_array()
+        arr = np.atleast_1d(np.asarray(token_ids, dtype=np.int64))
+        mask = (arr >= 0) & (arr < lookup.shape[0])
+        if not np.any(mask):
+            return ""
+        return "".join(lookup[arr[mask]])
+
+    def _build_lookup_array(self) -> npt.NDArray[np.object_]:
+        if not self.itos:
+            return np.empty(0, dtype=object)
+        size = max(self.itos.keys()) + 1
+        lookup: npt.NDArray[np.object_] = np.full(size, "", dtype=object)
+        for idx, token in self.itos.items():
+            if 0 <= idx < size:
+                lookup[idx] = token
+        return lookup
+
+    def _ensure_lookup_array(self) -> npt.NDArray[np.object_]:
+        if getattr(self, "_itos_array", None) is None or (
+            self._itos_array.shape[0] < (max(self.itos.keys()) + 1 if self.itos else 0)
+        ):
+            self._itos_array = self._build_lookup_array()
+        return self._itos_array
 
 
 class WordTokenizer:
@@ -48,10 +76,12 @@ class WordTokenizer:
         if vocab is not None:
             self.stoi = vocab
             self.itos = {i: s for s, i in vocab.items()}
+            self._itos_array: npt.NDArray[np.object_] = self._build_lookup_array()
         else:
             # Default word-level vocabulary will be built during training
             self.stoi = {}
             self.itos = {}
+            self._itos_array = np.empty(0, dtype=object)
 
     @property
     def name(self) -> str:
@@ -65,7 +95,32 @@ class WordTokenizer:
         return [self.stoi.get(word, 0) for word in words]
 
     def decode(self, token_ids: Sequence[int]) -> str:
-        return " ".join(self.itos.get(int(i), "") for i in token_ids)
+        if not self.itos:
+            return ""
+        lookup: npt.NDArray[np.object_] = self._ensure_lookup_array()
+        arr = np.atleast_1d(np.asarray(token_ids, dtype=np.int64))
+        mask = (arr >= 0) & (arr < lookup.shape[0])
+        if not np.any(mask):
+            return ""
+        tokens = lookup[arr[mask]]
+        return " ".join(tokens)
+
+    def _build_lookup_array(self) -> npt.NDArray[np.object_]:
+        if not self.itos:
+            return np.empty(0, dtype=object)
+        size = max(self.itos.keys()) + 1
+        lookup: npt.NDArray[np.object_] = np.full(size, "", dtype=object)
+        for idx, token in self.itos.items():
+            if 0 <= idx < size:
+                lookup[idx] = token
+        return lookup
+
+    def _ensure_lookup_array(self) -> npt.NDArray[np.object_]:
+        if getattr(self, "_itos_array", None) is None or (
+            self._itos_array.shape[0] < (max(self.itos.keys()) + 1 if self.itos else 0)
+        ):
+            self._itos_array = self._build_lookup_array()
+        return self._itos_array
 
     @property
     def vocab_size(self) -> int:

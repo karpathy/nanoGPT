@@ -44,13 +44,21 @@ def prepare_with_tokenizer(
     if isinstance(tokenizer, (CharTokenizer, WordTokenizer)):
         all_text = train_text + val_text
         if isinstance(tokenizer, CharTokenizer):
-            chars = sorted(set(all_text))
-            vocab = {ch: i for i, ch in enumerate(chars)}
+            if all_text:
+                char_array = np.fromiter(all_text, dtype="<U1")
+                unique_chars = np.unique(char_array)
+                vocab = {ch: i for i, ch in enumerate(unique_chars)}
+            else:
+                vocab = {}
             tokenizer = create_tokenizer("char", vocab=vocab)
         elif isinstance(tokenizer, WordTokenizer):
             words = re.findall(r"\w+|[^\w\s]", all_text)
-            unique_words = sorted(set(words))
-            vocab = {word: i for i, word in enumerate(unique_words)}
+            if words:
+                words_array = np.asarray(words, dtype=object)
+                unique_words = np.unique(words_array)
+                vocab = {word: i for i, word in enumerate(unique_words.tolist())}
+            else:
+                vocab = {}
             tokenizer = create_tokenizer("word", vocab=vocab)
 
     train_ids = tokenizer.encode(train_text)

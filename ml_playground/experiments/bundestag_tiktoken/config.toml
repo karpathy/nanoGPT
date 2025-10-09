@@ -6,6 +6,16 @@
 # - If [train.schedule].decay_lr = false, warmup/decay/min_lr are ignored.
 # - Paths (dataset_dir, out_dir) are used exactly as configured (absolute or relative), no rewriting.
 
+[prepare]
+dataset_dir = "./datasets"
+raw_dir = "./raw"
+add_structure_tokens = false
+tokenizer_type = "tiktoken"
+doc_separator = "\n\n"
+
+[prepare.extras]
+dataset = "bundestag_tiktoken"
+
 [train.model]
 # token-level / tiktoken workflow - small model for fast experiments
 # n_layer: number of Transformer blocks. More layers => more capacity and memory/compute.
@@ -69,6 +79,8 @@ lr_decay_iters = 200_000
 min_lr = 1e-4
 
 [train.runtime]
+# Output directory for training artifacts.
+out_dir = "./out"
 # max_iters: total optimizer steps (after accumulation) to run.
 max_iters = 200_000
 # eval_interval: run validation/checkpoint logic every this many iterations.
@@ -104,7 +116,13 @@ best_smoothing_alpha = 0.9
 # early_stop_patience: number of evals without improvement before early stopping; 0 disables.
 early_stop_patience = 0
 
+[train.runtime.checkpointing.keep]
+last = 1
+best = 1
+
 [sample.runtime]
+# Output directory for sampling artifacts (typically same as training out_dir).
+out_dir = "./out"
 # max_iters, eval_interval, eval_iters: retained for symmetry with training interface; often unused during pure sampling.
 max_iters = 0
 eval_interval = 1
@@ -135,3 +153,11 @@ max_new_tokens = 512
 temperature = 0.8
 # Sample only from the top-K most likely tokens at each step; lower K increases coherence, higher K increases diversity.
 top_k = 10
+
+[shared]
+experiment = "bundestag_tiktoken"
+config_path = "config.toml"
+project_home = "."
+dataset_dir = "./datasets"
+train_out_dir = "./out"
+sample_out_dir = "./out"

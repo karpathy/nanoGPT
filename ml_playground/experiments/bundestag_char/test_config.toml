@@ -4,24 +4,6 @@
 n_layer = 1
 n_head = 2
 n_embd = 32
-block_size = 32
-dropout = 0.0
-bias = false
-
-[train.data]
-dataset_dir = "./datasets"
-train_bin = "train.bin"
-val_bin = "val.bin"
-meta_pkl = "meta.pkl"
-batch_size = 1
-block_size = 32
-grad_accum_steps = 1
-ngram_size = 1
-sampler = "sequential"
-
-[train.optim]
-learning_rate = 0.001
-weight_decay = 0.0
 beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0
@@ -45,6 +27,16 @@ device = "cpu"
 dtype = "float32"
 compile = false
 tensorboard_enabled = false
+ckpt_time_interval_minutes = 0
+best_smoothing_alpha = 0.0
+early_stop_patience = 0
+ema_decay = 0.0
+
+[train.runtime.checkpointing.keep]
+last = 1
+best = 1
+
+[train.extras]
 ckpt_last_filename = "ckpt_last.pt"
 ckpt_best_filename = "ckpt_best.pt"
 ckpt_top_k = 0
@@ -52,10 +44,6 @@ ckpt_metric = "val_loss"
 ckpt_greater_is_better = false
 ckpt_atomic = true
 ckpt_write_metadata = false
-ckpt_time_interval_minutes = 0
-best_smoothing_alpha = 0.0
-early_stop_patience = 0
-ema_decay = 0.0
 
 [sample.runtime]
 out_dir = "./out/test_run"
@@ -64,9 +52,20 @@ dtype = "float32"
 compile = false
 seed = 42
 
+[sample.extras]
+require_adapters = false
+
 [sample.sample]
 start = ""
 num_samples = 1
 max_new_tokens = 4
 temperature = 0.8
 top_k = 0
+
+[shared]
+experiment = "bundestag_char"
+config_path = "test_config.toml"
+project_home = "."
+dataset_dir = "./datasets"
+train_out_dir = "./out/test_run"
+sample_out_dir = "./out/test_run"
