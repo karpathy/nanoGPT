@@ -25,7 +25,7 @@ jobs:
             .venv
           key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
       - run: uv sync --all-groups --frozen
-      - run: make lint-check
+      - run: uvx --from . ci-tasks lint
 
   unit:
     name: Unit Tests
@@ -43,7 +43,7 @@ jobs:
             .venv
           key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
       - run: uv sync --all-groups --frozen
-      - run: make unit
+      - run: uvx --from . ci-tasks unit
 
   property:
     name: Property Tests
@@ -61,7 +61,7 @@ jobs:
             .venv
           key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
       - run: uv sync --all-groups --frozen
-      - run: make property
+      - run: uvx --from . ci-tasks property
 
   integration:
     name: Integration Tests
@@ -79,7 +79,7 @@ jobs:
             .venv
           key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
       - run: uv sync --all-groups --frozen
-      - run: make integration
+      - run: uvx --from . ci-tasks integration
 
   e2e:
     name: End-to-End Tests
@@ -97,7 +97,7 @@ jobs:
             .venv
           key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
       - run: uv sync --all-groups --frozen
-      - run: make e2e
+      - run: uvx --from . ci-tasks e2e
 
   acceptance:
     name: Acceptance Tests
@@ -115,7 +115,7 @@ jobs:
             .venv
           key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
       - run: uv sync --all-groups --frozen
-      - run: make acceptance
+      - run: uvx --from . ci-tasks acceptance
 
   coverage:
     name: Coverage (Unit + Property)
@@ -134,9 +134,8 @@ jobs:
             .venv
           key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
       - run: uv sync --all-groups --frozen
-      - run: make coverage-test
-      - run: COVERAGE_FILE=$(pwd)/.cache/coverage/coverage.sqlite uv run coverage report -m --fail-under=87.00
-      - run: make coverage-report
+      - run: uvx --from . ci-tasks coverage-test
+      - run: uvx --from . ci-tasks coverage-report --fail-under 87
       - uses: actions/upload-artifact@v4
         if: always()
         with:

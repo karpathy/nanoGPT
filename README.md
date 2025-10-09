@@ -33,13 +33,18 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 │   └── llama_cpp/             # GGUF conversion helper (vendored instructions)
 ├── docs/                      # supplementary docs (framework utilities, LIT, etc.)
 ├── lit_nlp/                   # optional LIT integration
-├── tools/dev_tasks.py         # uv-backed CLI for setup, quality gates, runtime
+├── tools/env_tasks.py         # uv-backed CLI for environment workflows
+├── tools/test_tasks.py        # uv-backed CLI for pytest orchestration
+├── tools/ci_tasks.py          # uv-backed CLI for CI and coverage flows
 ├── pyproject.toml             # strict typing/linting/testing configuration
 └── README.md                  # this file (top-level, high abstraction)
 
 ## Policy
 
-- Use the `dev-tasks` CLI (e.g., `uvx --from . dev-tasks <command>`) for environment setup, quality gates, tests, and runtime.
+- Use the Typer CLIs published via UV entry points:
+  - `uvx --from . env-tasks <command>` for environment setup, lint/type checks, and runtime helpers.
+  - `uvx --from . test-tasks <command>` for pytest suites and local coverage.
+  - `uvx --from . ci-tasks <command>` for running the full quality gates, coverage, and Cosmic Ray flows (mirrors CI).
 - Never set PYTHONPATH. Running inside the project venv ensures `ml_playground` is importable.
 - Quality tooling is mandatory before commit (ruff, mypy, pyright), and tests must pass.
 - Linear history for own work: rebase your branches and avoid merge commits; fast-forward only. See `.dev-guidelines/Readme.md` for developer policies.
@@ -58,7 +63,7 @@ Datasets
 
 Workflows (high-level)
 
-- Prepare/train/sample workflows are driven by the `dev-tasks` CLI. For exact commands, refer to each experiment's `Readme.md` and `.dev-guidelines/Readme.md`.
+- Prepare/train/sample workflows are driven by the built-in Typer CLI: `uv run python -m ml_playground.cli <command>`. See each experiment's `Readme.md` and `.dev-guidelines/Readme.md` for examples.
 - Universal meta policy: the data directory must contain a `meta.pkl` file used by training and sampling. The `prepare` step is responsible for writing `meta.pkl`.
 
 Notes

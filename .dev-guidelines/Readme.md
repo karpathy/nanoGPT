@@ -12,9 +12,9 @@ them exactly.
 Get up and running immediately:
 
 ```bash
-uvx --from . dev-tasks setup
-uvx --from . dev-tasks verify
-uvx --from . dev-tasks quality   # ruff+format+pyright+mypy+pytest
+uvx --from . env-tasks setup
+uvx --from . env-tasks verify
+uvx --from . ci-tasks quality   # ruff+format+pyright+mypy+pytest
 ```
 
 ## Documentation Structure
@@ -79,7 +79,7 @@ All documentation in this repo must adhere to [DOCUMENTATION.md](DOCUMENTATION.m
 **Granular Commits**: Make small, focused commits with conventional commit messages. Run quality gates before each
 commit, not just before PR.
 
-**Runnable Commits**: Every commit must be in a runnable state when checked out. Do not land commits that break `uvx --from . dev-tasks quality`, CLI entry points, or docs builds. Never bypass verification (avoid `--no-verify`).
+**Runnable Commits**: Every commit must be in a runnable state when checked out. Do not land commits that break `uvx --from . ci-tasks quality`, CLI entry points, or docs builds. Never bypass verification (avoid `--no-verify`).
 
 **Feature Branches Only**: All work happens on short‑lived feature branches; no direct commits to `main`. Use kebab-case
 names like `feat/<scope>-<short-desc>`, `fix/<scope>-<short-desc>`. Keep branches focused and prefer multiple small PRs.
@@ -101,31 +101,31 @@ names like `feat/<scope>-<short-desc>`, `fix/<scope>-<short-desc>`. Keep branche
 **Environment Setup**:
 
 ```bash
-uvx --from . dev-tasks setup
-uvx --from . dev-tasks verify
+uvx --from . env-tasks setup
+uvx --from . env-tasks verify
 ```
 
 **Quality Gates** (run before each commit):
 
 ```bash
-uvx --from . dev-tasks quality
+uvx --from . ci-tasks quality
 ```
 
 **Runtime Entry Points**:
 
 ```bash
 # Prepare datasets
-uvx --from . dev-tasks prepare shakespeare
-uvx --from . dev-tasks prepare bundestag_char
+uv run python -m ml_playground.cli prepare shakespeare
+uv run python -m ml_playground.cli prepare bundestag_char
 
 # Train (select config path explicitly)
-uvx --from . dev-tasks train shakespeare --config ml_playground/configs/shakespeare_cpu.toml
+uv run python -m ml_playground.cli train shakespeare --exp-config ml_playground/configs/shakespeare_cpu.toml
 
 # Sample from trained model
-uvx --from . dev-tasks sample shakespeare --config ml_playground/configs/shakespeare_cpu.toml
+uv run python -m ml_playground.cli sample shakespeare --exp-config ml_playground/configs/shakespeare_cpu.toml
 
 # End-to-end pipeline
-uvx --from . dev-tasks loop bundestag_char --config ml_playground/configs/bundestag_char_cpu.toml
+uv run python -m ml_playground.cli loop bundestag_char --exp-config ml_playground/configs/bundestag_char_cpu.toml
 ```
 
 ## Need Help?

@@ -39,10 +39,10 @@ jobs:
             ${{ runner.os }}-uv-
 
       - name: Sync dependencies (dev + project)
-        run: make sync
+        run: uvx --from . env-tasks sync
 
       - name: Run mutation suite
-        run: make mutation
+        run: uvx --from . ci-tasks mutation run
 
       - name: Capture mutation report
         run: |

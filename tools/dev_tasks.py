@@ -22,7 +22,29 @@ from typing import List, Optional
 
 import typer
 
-ROOT = Path(__file__).resolve().parents[1]
+def _discover_root() -> Path:
+    """Find the repository root by locating pyproject.toml."""
+
+    def expand_chain(start: Path, seen: set[Path], order: list[Path]) -> None:
+        for path in (start, *start.parents):
+            if path in seen:
+                continue
+            seen.add(path)
+            order.append(path)
+
+    seen: set[Path] = set()
+    ordered: list[Path] = []
+    expand_chain(Path(__file__).resolve(), seen, ordered)
+    expand_chain(Path.cwd(), seen, ordered)
+
+    for path in ordered:
+        if (path / "pyproject.toml").exists():
+            return path
+
+    return Path(__file__).resolve().parents[1]
+
+
+ROOT = _discover_root()
 PKG = "ml_playground"
 PYTEST_BASE = ["-q", "-n", "auto", "-W", "error", "--strict-markers", "--strict-config"]
 PRE_COMMIT_CONFIG = ROOT / ".githooks" / ".pre-commit-config.yaml"
