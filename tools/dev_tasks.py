@@ -448,15 +448,20 @@ def _coverage_file() -> Path:
     return CACHE_DIR / "coverage" / "coverage.sqlite"
 
 
+def _coverage_fragments(dest: Path) -> list[Path]:
+    return [
+        path for path in dest.parent.glob("coverage.sqlite.*") if path.name != dest.name
+    ]
+
+
 @app.command("coverage-test")
 def coverage_test() -> None:
     """Run targeted tests under coverage to collect data."""
     _ensure_cache_dirs()
     dest_cov = _coverage_file()
     dest_cov.parent.mkdir(parents=True, exist_ok=True)
-    for path in dest_cov.parent.glob("coverage.sqlite*"):
-        if path != dest_cov:
-            path.unlink(missing_ok=True)  # type: ignore[arg-type]
+    for path in _coverage_fragments(dest_cov):
+        path.unlink(missing_ok=True)  # type: ignore[arg-type]
     env = os.environ.copy()
     env.update(
         {
@@ -478,9 +483,11 @@ def coverage_test() -> None:
         "tests/property",
         env=env,
     )
-    uv_run("coverage", "combine", env=env)
-    for path in dest_cov.parent.glob("coverage.sqlite.*"):
-        path.unlink(missing_ok=True)  # type: ignore[arg-type]
+    fragments = _coverage_fragments(dest_cov)
+    if fragments:
+        uv_run("coverage", "combine", env=env, check=False)
+        for path in fragments:
+            path.unlink(missing_ok=True)  # type: ignore[arg-type]
 
 
 @app.command("coverage-report")
@@ -491,11 +498,18 @@ def coverage_report(
 ) -> None:
     """Generate coverage reports under .cache/coverage."""
     dest_cov = _coverage_file()
-    if not any(dest_cov.parent.glob("coverage.sqlite*")):
+    if not dest_cov.exists():
         coverage_test()
     else:
-        uv_run("coverage", "combine", env={"COVERAGE_FILE": str(dest_cov)})
-    env = {"COVERAGE_FILE": str(dest_cov)}
+        fragments = _coverage_fragments(dest_cov)
+        if fragments:
+            env_combine = os.environ.copy()
+            env_combine["COVERAGE_FILE"] = str(dest_cov)
+            uv_run("coverage", "combine", env=env_combine, check=False)
+            for path in fragments:
+                path.unlink(missing_ok=True)  # type: ignore[arg-type]
+    env = os.environ.copy()
+    env["COVERAGE_FILE"] = str(dest_cov)
     uv_run("coverage", "report", "-m", "--fail-under=0", env=env)
     uv_run(
         "coverage",
