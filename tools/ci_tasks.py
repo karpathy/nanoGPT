@@ -172,35 +172,18 @@ def coverage_report(
 
     env = os.environ.copy()
     env["COVERAGE_FILE"] = str(dest_cov)
-    fail_arg = ["--fail-under", f"{fail_under:.2f}"] if fail_under else []
-    utils.uv_run("coverage", "report", "-m", *fail_arg, env=env)
-    utils.uv_run(
-        "coverage",
-        "html",
-        "-d",
-        str(dest_cov.parent / "htmlcov"),
-        "--fail-under",
-        "0",
-        env=env,
-    )
-    utils.uv_run(
-        "coverage",
-        "json",
-        "-o",
-        str(dest_cov.parent / "coverage.json"),
-        "--fail-under",
-        "0",
-        env=env,
-    )
-    utils.uv_run(
-        "coverage",
-        "xml",
-        "-o",
-        str(dest_cov.parent / "coverage.xml"),
-        "--fail-under",
-        "0",
-        env=env,
-    )
+    fail_arg = ["--fail-under", f"{fail_under:.2f}"]
+    coverage_dir = dest_cov.parent
+    commands: list[tuple[str, list[str]]] = [
+        ("report", ["-m", *fail_arg]),
+        ("html", ["-d", str(coverage_dir / "htmlcov")]),
+        ("json", ["-o", str(coverage_dir / "coverage.json")]),
+        ("xml", ["-o", str(coverage_dir / "coverage.xml")]),
+    ]
+
+    for subcommand, args in commands:
+        utils.uv_run("coverage", subcommand, *args, env=env)
+
     if verbose:
         typer.echo("[coverage] artifacts:")
         for path in sorted(dest_cov.parent.iterdir()):
