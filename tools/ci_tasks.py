@@ -9,7 +9,8 @@
 from __future__ import annotations
 
 import os
-from typing import List, Optional
+from pathlib import Path
+from typing import List, Literal, Optional
 
 import typer
 
@@ -18,6 +19,91 @@ from tools import task_utils as utils
 app = typer.Typer(help="CI-oriented commands executed via uvx.", no_args_is_help=True)
 mutation_app = typer.Typer(help="Mutation testing helpers")
 app.add_typer(mutation_app, name="mutation")
+
+
+CoverageFragment = Literal["unit", "property"]
+
+_COVERAGE_TARGETS: dict[CoverageFragment, list[str]] = {
+    "unit": ["tests/unit"],
+    "property": ["tests/property"],
+}
+
+
+def _coverage_fragment_path(fragment: CoverageFragment) -> Path:
+    dest_cov = utils.coverage_file()
+    return dest_cov.with_name(f"{dest_cov.name}.{fragment}")
+
+
+def _coverage_run_env(coverage_file: Path) -> dict[str, str]:
+    utils.ensure_cache_dirs("coverage", "hypothesis")
+    coverage_file.parent.mkdir(parents=True, exist_ok=True)
+    env = os.environ.copy()
+    env.update(
+        {
+            "HYPOTHESIS_DATABASE_DIRECTORY": str(utils.CACHE_DIR / "hypothesis"),
+            "HYPOTHESIS_STORAGE_DIRECTORY": str(utils.CACHE_DIR / "hypothesis"),
+            "HYPOTHESIS_SEED": "0",
+            "PYTHONHASHSEED": "0",
+            "COVERAGE_FILE": str(coverage_file),
+        }
+    )
+    return env
+
+
+def _coverage_file_env(coverage_file: Path) -> dict[str, str]:
+    env = os.environ.copy()
+    env["COVERAGE_FILE"] = str(coverage_file)
+    return env
+
+
+def _combine_fragments(
+    dest_cov: Path, fragments: list[Path], *, ci_strict: bool
+) -> None:
+    if not fragments:
+        return
+    dest_cov.parent.mkdir(parents=True, exist_ok=True)
+    if dest_cov.exists():
+        utils.remove_path(dest_cov)
+    env_combine = _coverage_file_env(dest_cov)
+    result = utils.uv_run(
+        "coverage",
+        "combine",
+        *(str(fragment) for fragment in fragments),
+        env=env_combine,
+        check=False,
+    )
+    if result.returncode != 0:
+        message = "[coverage] failed to combine coverage fragments"
+        if ci_strict:
+            typer.echo(message, err=True)
+            raise typer.Exit(result.returncode or 1)
+        raise typer.Exit(result.returncode)
+    for fragment in fragments:
+        utils.remove_path(fragment)
+
+
+def _coverage_pytest_args(
+    fragment: CoverageFragment, args: Optional[List[str]] = None
+) -> list[str]:
+    extra = utils.forwarded_args(args)
+    pytest_args = utils.pytest_command(_COVERAGE_TARGETS[fragment] + extra)
+    try:
+        n_index = pytest_args.index("-n")
+        pytest_args[n_index + 1] = "0"
+    except ValueError:
+        pass
+    return pytest_args
+
+
+def _run_coverage_fragment(
+    fragment: CoverageFragment, args: Optional[List[str]] = None
+) -> Path:
+    fragment_path = _coverage_fragment_path(fragment)
+    utils.remove_path(fragment_path)
+    env = _coverage_run_env(fragment_path)
+    command = _coverage_pytest_args(fragment, args)
+    utils.uv_run("coverage", "run", "-m", *command, env=env)
+    return fragment_path
 
 
 @app.command()
@@ -53,7 +139,10 @@ def unit(
     ),
 ) -> None:
     """Run unit tests."""
-    _pytest(["tests/unit", *utils.forwarded_args(args)])
+    if os.environ.get("CI_COVERAGE_FRAGMENT") == "unit":
+        _run_coverage_fragment("unit", args)
+    else:
+        _pytest(["tests/unit", *utils.forwarded_args(args)])
 
 
 @app.command("property")
@@ -63,7 +152,10 @@ def property_tests(
     ),
 ) -> None:
     """Run property-based tests."""
-    _pytest(["tests/property", *utils.forwarded_args(args)])
+    if os.environ.get("CI_COVERAGE_FRAGMENT") == "property":
+        _run_coverage_fragment("property", args)
+    else:
+        _pytest(["tests/property", *utils.forwarded_args(args)])
 
 
 @app.command()
@@ -99,37 +191,13 @@ def acceptance(
 @app.command("coverage-test")
 def coverage_test() -> None:
     """Run targeted tests under coverage to collect data."""
-    utils.ensure_cache_dirs("coverage", "hypothesis")
     dest_cov = utils.coverage_file()
-    dest_cov.parent.mkdir(parents=True, exist_ok=True)
-    for fragment in utils.coverage_fragments(dest_cov):
-        utils.remove_path(fragment)
-    env = os.environ.copy()
-    env.update(
-        {
-            "HYPOTHESIS_DATABASE_DIRECTORY": str(utils.CACHE_DIR / "hypothesis"),
-            "HYPOTHESIS_STORAGE_DIRECTORY": str(utils.CACHE_DIR / "hypothesis"),
-            "HYPOTHESIS_SEED": "0",
-            "PYTHONHASHSEED": "0",
-            "COVERAGE_FILE": str(dest_cov),
-        }
-    )
-    utils.uv_run(
-        "coverage",
-        "run",
-        "-m",
-        "pytest",
-        "-n",
-        "0",
-        "tests/unit",
-        "tests/property",
-        env=env,
-    )
-    fragments = utils.coverage_fragments(dest_cov)
-    if fragments:
-        utils.uv_run("coverage", "combine", env=env, check=False)
-        for fragment in fragments:
-            utils.remove_path(fragment)
+    utils.remove_path(dest_cov)
+    fragments = [
+        _run_coverage_fragment("unit"),
+        _run_coverage_fragment("property"),
+    ]
+    _combine_fragments(dest_cov, fragments, ci_strict=False)
 
 
 @app.command("coverage-report")
@@ -146,32 +214,23 @@ def coverage_report(
     """Generate coverage reports under .cache/coverage."""
     dest_cov = utils.coverage_file()
     ci_strict = os.environ.get("CI", "").lower() == "true"
-    if not dest_cov.exists():
-        if ci_strict:
-            typer.echo(
-                f"[coverage] expected existing data at {dest_cov} but none was found",
-                err=True,
-            )
-            raise typer.Exit(1)
-        coverage_test()
-
     fragments = utils.coverage_fragments(dest_cov)
+
     if fragments:
-        env_combine = os.environ.copy()
-        env_combine["COVERAGE_FILE"] = str(dest_cov)
-        result = utils.uv_run("coverage", "combine", env=env_combine, check=False)
-        if ci_strict and result.returncode != 0:
-            typer.echo("[coverage] failed to combine coverage shard", err=True)
-            raise typer.Exit(result.returncode or 1)
-        for fragment in fragments:
-            utils.remove_path(fragment)
+        _combine_fragments(dest_cov, fragments, ci_strict=ci_strict)
+
+    if not dest_cov.exists():
+        typer.echo(
+            "[coverage] coverage data file is missing; run `uvx --from . ci-tasks coverage-test` or provide coverage fragments",
+            err=True,
+        )
+        raise typer.Exit(1)
 
     if ci_strict and dest_cov.stat().st_size == 0:
         typer.echo("[coverage] coverage data file is empty", err=True)
         raise typer.Exit(1)
 
-    env = os.environ.copy()
-    env["COVERAGE_FILE"] = str(dest_cov)
+    env = _coverage_file_env(dest_cov)
     fail_arg = ["--fail-under", f"{fail_under:.2f}"]
     coverage_dir = dest_cov.parent
     commands: list[tuple[str, list[str]]] = [

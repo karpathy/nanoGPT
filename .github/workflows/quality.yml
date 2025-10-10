@@ -43,7 +43,14 @@ jobs:
             .venv
           key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
       - run: uv sync --all-groups --frozen
-      - run: uvx --from . ci-tasks unit
+      - env:
+          CI_COVERAGE_FRAGMENT: unit
+        run: uvx --from . ci-tasks unit
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-fragment-unit
+          path: .cache/coverage/coverage.sqlite.unit
+          if-no-files-found: error
 
   property:
     name: Property Tests
@@ -61,7 +68,14 @@ jobs:
             .venv
           key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
       - run: uv sync --all-groups --frozen
-      - run: uvx --from . ci-tasks property
+      - env:
+          CI_COVERAGE_FRAGMENT: property
+        run: uvx --from . ci-tasks property
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-fragment-property
+          path: .cache/coverage/coverage.sqlite.property
+          if-no-files-found: error
 
   integration:
     name: Integration Tests
@@ -134,7 +148,14 @@ jobs:
             .venv
           key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
       - run: uv sync --all-groups --frozen
-      - run: uvx --from . ci-tasks coverage-test
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-fragment-unit
+          path: .cache/coverage
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-fragment-property
+          path: .cache/coverage
       - run: uvx --from . ci-tasks coverage-report --fail-under 87
       - uses: actions/upload-artifact@v4
         if: always()
