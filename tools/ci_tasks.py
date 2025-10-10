@@ -145,16 +145,31 @@ def coverage_report(
 ) -> None:
     """Generate coverage reports under .cache/coverage."""
     dest_cov = utils.coverage_file()
+    ci_strict = os.environ.get("CI", "").lower() == "true"
     if not dest_cov.exists():
+        if ci_strict:
+            typer.echo(
+                f"[coverage] expected existing data at {dest_cov} but none was found",
+                err=True,
+            )
+            raise typer.Exit(1)
         coverage_test()
-    else:
-        fragments = utils.coverage_fragments(dest_cov)
-        if fragments:
-            env_combine = os.environ.copy()
-            env_combine["COVERAGE_FILE"] = str(dest_cov)
-            utils.uv_run("coverage", "combine", env=env_combine, check=False)
-            for fragment in fragments:
-                utils.remove_path(fragment)
+
+    fragments = utils.coverage_fragments(dest_cov)
+    if fragments:
+        env_combine = os.environ.copy()
+        env_combine["COVERAGE_FILE"] = str(dest_cov)
+        result = utils.uv_run("coverage", "combine", env=env_combine, check=False)
+        if ci_strict and result.returncode != 0:
+            typer.echo("[coverage] failed to combine coverage shard", err=True)
+            raise typer.Exit(result.returncode or 1)
+        for fragment in fragments:
+            utils.remove_path(fragment)
+
+    if ci_strict and dest_cov.stat().st_size == 0:
+        typer.echo("[coverage] coverage data file is empty", err=True)
+        raise typer.Exit(1)
+
     env = os.environ.copy()
     env["COVERAGE_FILE"] = str(dest_cov)
     fail_arg = ["--fail-under", f"{fail_under:.2f}"] if fail_under else []
