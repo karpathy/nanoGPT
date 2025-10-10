@@ -23,11 +23,6 @@ app.add_typer(mutation_app, name="mutation")
 
 CoverageFragment = Literal["unit", "property"]
 
-_COVERAGE_TARGETS: dict[CoverageFragment, list[str]] = {
-    "unit": ["tests/unit"],
-    "property": ["tests/property"],
-}
-
 
 def _coverage_fragment_path(fragment: CoverageFragment) -> Path:
     dest_cov = utils.coverage_file()
@@ -82,27 +77,41 @@ def _combine_fragments(
         utils.remove_path(fragment)
 
 
-def _coverage_pytest_args(
-    fragment: CoverageFragment, args: Optional[List[str]] = None
-) -> list[str]:
-    extra = utils.forwarded_args(args)
-    pytest_args = utils.pytest_command(_COVERAGE_TARGETS[fragment] + extra)
-    try:
-        n_index = pytest_args.index("-n")
-        pytest_args[n_index + 1] = "0"
-    except ValueError:
-        pass
-    return pytest_args
-
-
 def _run_coverage_fragment(
     fragment: CoverageFragment, args: Optional[List[str]] = None
 ) -> Path:
     fragment_path = _coverage_fragment_path(fragment)
     utils.remove_path(fragment_path)
     env = _coverage_run_env(fragment_path)
-    command = _coverage_pytest_args(fragment, args)
-    utils.uv_run("coverage", "run", "-m", *command, env=env)
+    targets = {
+        "unit": ["tests/unit"],
+        "property": ["tests/property"],
+    }[fragment]
+    extra = utils.forwarded_args(args)
+    command = utils.pytest_command(targets + extra)
+    try:
+        n_index = command.index("-n")
+        command[n_index + 1] = "0"
+    except ValueError:
+        pass
+    utils.uv_run(
+        "coverage",
+        "run",
+        f"--data-file={fragment_path}",
+        "-m",
+        *command,
+        env=env,
+    )
+    shards = utils.coverage_fragments(fragment_path)
+    if shards:
+        _combine_fragments(fragment_path, shards, ci_strict=False)
+
+    if not fragment_path.exists():
+        typer.echo(
+            f"[coverage] fragment generation produced no data for {fragment}",
+            err=True,
+        )
+        raise typer.Exit(1)
     return fragment_path
 
 
@@ -139,14 +148,7 @@ def unit(
     ),
 ) -> None:
     """Run unit tests."""
-    if os.environ.get("CI_COVERAGE_FRAGMENT") == "unit":
-        _run_coverage_fragment("unit", args)
-        return
-
     _pytest(["tests/unit", *utils.forwarded_args(args)])
-    fragment_env = os.environ.copy()
-    fragment_env["CI_COVERAGE_FRAGMENT"] = "unit"
-    utils.uv_run("ci-tasks", "unit", env=fragment_env)
 
 
 @app.command("property")
@@ -156,14 +158,7 @@ def property_tests(
     ),
 ) -> None:
     """Run property-based tests."""
-    if os.environ.get("CI_COVERAGE_FRAGMENT") == "property":
-        _run_coverage_fragment("property", args)
-        return
-
     _pytest(["tests/property", *utils.forwarded_args(args)])
-    fragment_env = os.environ.copy()
-    fragment_env["CI_COVERAGE_FRAGMENT"] = "property"
-    utils.uv_run("ci-tasks", "property", env=fragment_env)
 
 
 @app.command()

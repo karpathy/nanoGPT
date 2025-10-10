@@ -43,9 +43,11 @@ jobs:
             .venv
           key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
       - run: uv sync --all-groups --frozen
-      - env:
-          CI_COVERAGE_FRAGMENT: unit
-        run: uvx --from . ci-tasks unit
+      - run: |
+          mkdir -p .cache/coverage
+          uvx --from . coverage run \
+            --data-file=.cache/coverage/coverage.sqlite.unit \
+            -m pytest -q -n 0 -W error --strict-markers --strict-config tests/unit
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-fragment-unit
@@ -68,9 +70,11 @@ jobs:
             .venv
           key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
       - run: uv sync --all-groups --frozen
-      - env:
-          CI_COVERAGE_FRAGMENT: property
-        run: uvx --from . ci-tasks property
+      - run: |
+          mkdir -p .cache/coverage
+          uvx --from . coverage run \
+            --data-file=.cache/coverage/coverage.sqlite.property \
+            -m pytest -q -n 0 -W error --strict-markers --strict-config tests/property
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-fragment-property
