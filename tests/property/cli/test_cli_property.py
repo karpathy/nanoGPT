@@ -112,6 +112,10 @@ def test_log_dir_reports_states(tmp_path: Path) -> None:
     assert any("<not set>" in msg for msg in logger.infos)
     assert any("missing" in msg for msg in logger.infos)
     assert any("Contents" in msg for msg in logger.infos)
+    # Non-Path inputs should be ignored silently
+    logger.infos.clear()
+    _log_dir("tag", "not_path", "/tmp/example", logger)
+    assert logger.infos == []
 
 
 def test_log_command_status_handles_missing_directory(tmp_path: Path) -> None:
@@ -150,6 +154,68 @@ def test_log_command_status_handles_missing_path(
     assert any("missing" in message for message in logger.messages)
 
 
+def test_log_dir_ignores_non_path() -> None:
+    class ListLogger:
+        def __init__(self) -> None:
+            self.messages: list[str] = []
+
+        def info(self, message: str) -> None:
+            self.messages.append(str(message))
+
+    logger = ListLogger()
+    cli._log_dir("tag", "name", "/tmp/example", logger)
+
+    assert logger.messages == []
+
+
+def test_log_command_status_swallows_exceptions(
+    tmp_path: Path,
+    shared_config_factory: Callable[[Path], SharedConfig],
+    override_attr: Callable[[object, str, object], ContextManager[None]],
+) -> None:
+    shared = shared_config_factory(tmp_path)
+
+    class ListLogger:
+        def __init__(self) -> None:
+            self.messages: list[str] = []
+
+        def info(self, message: str) -> None:
+            self.messages.append(str(message))
+
+    logger = ListLogger()
+
+    def boom(*_args: object, **_kwargs: object) -> None:
+        raise OSError("boom")
+
+    with override_attr(cli, "_log_dir", boom):
+        cli._log_command_status("tag", shared, shared.dataset_dir, logger)
+
+    assert logger.messages == []
+
+
+def test_run_prepare_executes_pipeline(
+    tmp_path: Path,
+    shared_config_factory: Callable[[Path], SharedConfig],
+    override_attr: Callable[[object, str, object], ContextManager[None]],
+) -> None:
+    shared = shared_config_factory(tmp_path)
+    calls: dict[str, Any] = {}
+
+    class FakePipeline:
+        def __init__(self) -> None:
+            calls["init"] = True
+
+        def run(self) -> None:
+            calls["ran"] = True
+
+    prepare_cfg = SimpleNamespace(logger=logging.getLogger("ml_playground.cli"))
+
+    with override_attr(cli, "create_pipeline", lambda cfg, shared_cfg: FakePipeline()):
+        cli._run_prepare("demo", prepare_cfg, shared.config_path, shared)
+
+    assert calls == {"init": True, "ran": True}
+
+
 def test_run_train_impl_requires_runtime(
     tmp_path: Path,
     shared_config_factory: Callable[[Path], SharedConfig],
@@ -170,6 +236,174 @@ def test_run_sample_impl_requires_runtime(
 
     with pytest.raises(typer.Exit):
         cli._run_sample_impl("demo", cfg, shared.config_path, shared)
+
+
+def test_run_train_requires_runtime(
+    tmp_path: Path,
+    shared_config_factory: Callable[[Path], SharedConfig],
+) -> None:
+    shared = shared_config_factory(tmp_path)
+    cfg = SimpleNamespace(runtime=None, logger=logging.getLogger("ml_playground.cli"))
+
+    with pytest.raises(typer.Exit) as excinfo:
+        cli._run_train("demo", cfg, shared.config_path, shared)
+
+    assert excinfo.value.exit_code == 1
+
+
+def test_run_train_executes_flow(
+    tmp_path: Path,
+    shared_config_factory: Callable[[Path], SharedConfig],
+    override_attr: Callable[[object, str, object], ContextManager[None]],
+) -> None:
+    shared = shared_config_factory(tmp_path)
+    log_calls: list[tuple[str, Path]] = []
+    trainer_called: dict[str, Any] = {}
+
+    class FakeTrainer:
+        def __init__(self, cfg: object, shared_cfg: object) -> None:
+            trainer_called["cfg"] = cfg
+            trainer_called["shared"] = shared_cfg
+
+        def run(self) -> None:
+            trainer_called["ran"] = True
+
+    def fake_global(device: str, dtype: str, seed: int) -> None:
+        trainer_called["global"] = (device, dtype, seed)
+
+    logger = logging.getLogger("ml_playground.cli")
+    runtime = SimpleNamespace(device="cpu", dtype="float32", seed=42)
+    cfg = SimpleNamespace(runtime=runtime, logger=logger)
+
+    with ExitStack() as stack:
+        stack.enter_context(override_attr(cli, "CoreTrainer", FakeTrainer))
+        stack.enter_context(
+            override_attr(
+                cli,
+                "_log_command_status",
+                lambda tag, shared_cfg, out_dir, _logger: log_calls.append(
+                    (tag, out_dir)
+                ),
+            )
+        )
+        stack.enter_context(override_attr(cli, "_global_device_setup", fake_global))
+        cli._run_train("demo", cfg, shared.config_path, shared)
+
+    assert trainer_called["cfg"] is cfg
+    assert trainer_called["shared"] is shared
+    assert trainer_called.get("ran") is True
+    assert trainer_called["global"] == ("cpu", "float32", 42)
+    assert ("pre-train", shared.train_out_dir) in log_calls
+    assert ("post-train", shared.train_out_dir) in log_calls
+
+
+def test_run_train_logs_status(
+    tmp_path: Path,
+    shared_config_factory: Callable[[Path], SharedConfig],
+    override_attr: Callable[[object, str, object], ContextManager[None]],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    shared = shared_config_factory(tmp_path)
+
+    class FakeTrainer:
+        def __init__(self, cfg: object, shared_cfg: object) -> None:  # noqa: D401
+            self.cfg = cfg
+            self.shared_cfg = shared_cfg
+
+        def run(self) -> None:
+            pass
+
+    runtime = SimpleNamespace(device="cpu", dtype="float32", seed=21)
+    logger_name = "ml_playground.cli.run_train_logs"
+    train_cfg = SimpleNamespace(runtime=runtime, logger=logging.getLogger(logger_name))
+
+    caplog.set_level(logging.INFO, logger=logger_name)
+
+    with ExitStack() as stack:
+        stack.enter_context(override_attr(cli, "CoreTrainer", FakeTrainer))
+        stack.enter_context(
+            override_attr(cli, "_global_device_setup", lambda *args, **kwargs: None)
+        )
+        cli._run_train("demo", train_cfg, shared.config_path, shared)
+
+    text = "\n".join(caplog.messages)
+    assert "Running trainer for experiment" in text
+    assert "Trainer for demo finished" in text
+    assert "[pre-train]" in text
+    assert "[post-train]" in text
+
+
+def test_run_sample_requires_runtime(
+    tmp_path: Path,
+    shared_config_factory: Callable[[Path], SharedConfig],
+) -> None:
+    shared = shared_config_factory(tmp_path)
+    cfg = SimpleNamespace(runtime=None, logger=logging.getLogger("ml_playground.cli"))
+
+    with pytest.raises(typer.Exit) as excinfo:
+        cli._run_sample("demo", cfg, shared.config_path, shared)
+
+    assert excinfo.value.exit_code == 1
+
+
+def test_run_sample_executes_flow(
+    tmp_path: Path,
+    shared_config_factory: Callable[[Path], SharedConfig],
+    override_attr: Callable[[object, str, object], ContextManager[None]],
+) -> None:
+    shared = shared_config_factory(tmp_path)
+    log_calls: list[tuple[str, Path]] = []
+    sampler_called: dict[str, Any] = {}
+
+    class FakeSampler:
+        def __init__(self, cfg: object, shared_cfg: object) -> None:
+            sampler_called["cfg"] = cfg
+            sampler_called["shared"] = shared_cfg
+
+        def run(self) -> None:
+            sampler_called["ran"] = True
+
+    def fake_global(device: str, dtype: str, seed: int) -> None:
+        sampler_called["global"] = (device, dtype, seed)
+
+    logger = logging.getLogger("ml_playground.cli")
+    runtime = SimpleNamespace(device="cpu", dtype="float32", seed=24)
+    cfg = SimpleNamespace(runtime=runtime, logger=logger)
+
+    with ExitStack() as stack:
+        stack.enter_context(override_attr(cli, "Sampler", FakeSampler))
+        stack.enter_context(
+            override_attr(
+                cli,
+                "_log_command_status",
+                lambda tag, shared_cfg, out_dir, _logger: log_calls.append(
+                    (tag, out_dir)
+                ),
+            )
+        )
+        stack.enter_context(override_attr(cli, "_global_device_setup", fake_global))
+        cli._run_sample("demo", cfg, shared.config_path, shared)
+
+    assert sampler_called["cfg"] is cfg
+    assert sampler_called["shared"] is shared
+    assert sampler_called.get("ran") is True
+    assert sampler_called["global"] == ("cpu", "float32", 24)
+    assert ("pre-sample", shared.sample_out_dir) in log_calls
+    assert ("post-sample", shared.sample_out_dir) in log_calls
+
+
+def test_global_options_handles_ensure_object_errors() -> None:
+    class BadContext:
+        def __init__(self) -> None:
+            self.obj: dict[str, object] | None = None
+
+        def ensure_object(self, *_args: object, **_kwargs: object) -> None:
+            raise TypeError("boom")
+
+    ctx = BadContext()
+    cli.global_options(ctx)
+
+    assert ctx.obj is None
 
 
 def test_run_or_exit_handles_runtime_error() -> None:

@@ -467,7 +467,7 @@ def main(argv: list[str] | None = None) -> int | None:
     registry.load_preparers()
 
     cmd = get_command(app)
-    return cmd.main(args=argv or [], standalone_mode=False)
+    return cmd.main(args=argv, standalone_mode=False)
 
 
 # ---------------------------------------------------------------------------

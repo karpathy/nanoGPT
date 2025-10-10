@@ -38,6 +38,9 @@ dependencies = [
 env-tasks = "tools.env_tasks:main"
 test-tasks = "tools.test_tasks:main"
 ci-tasks = "tools.ci_tasks:main"
+lint-tasks = "tools.lint_tasks:main"
+lit-tasks = "tools.lit_tasks:main"
+ml-playground = "ml_playground.cli:main"
 
 [project.optional-dependencies]
 

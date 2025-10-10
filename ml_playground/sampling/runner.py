@@ -98,15 +98,12 @@ class Sampler:
         checkpoint = self._load_checkpoint()
         model = self._init_model_from_checkpoint(checkpoint)
         if getattr(self.runtime_cfg, "compile", False):
-            # Prefer DI-provided compile hook if available; otherwise use torch.compile if present.
             compile_fn = getattr(self.cfg, "compile_model_fn", None)
-            if compile_fn is not None:
-                model = cast(GPT, compile_fn(model))  # type: ignore[call-arg]
-            else:
-                try:
-                    model = cast(GPT, torch.compile(model))  # type: ignore[attr-defined]
-                except AttributeError:
-                    pass
+            if compile_fn is None:
+                raise ValueError(
+                    "SamplerConfig.compile_model_fn must be provided when runtime.compile is True"
+                )
+            model = cast(GPT, compile_fn(model))  # type: ignore[call-arg]
         return model
 
     def _load_checkpoint(self) -> Checkpoint:

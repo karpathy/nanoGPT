@@ -19,7 +19,11 @@ from ml_playground.configuration.models import (
     SharedConfig,
 )
 from ml_playground.sampling.runner import Sampler, sample
-from ml_playground.core.error_handling import DataError, CheckpointError
+from ml_playground.core.error_handling import (
+    DataError,
+    CheckpointError,
+    FileOperationError,
+)
 from ml_playground.training.checkpointing.checkpoint_manager import CheckpointManager
 from ml_playground.data_pipeline.sampling.batches import SimpleBatches
 from ml_playground.models.core.config import GPTConfig
@@ -418,6 +422,168 @@ def test_sample_with_compile_flag_uses_compiled_model(
     )
     sample(exp, shared)
     assert called["compiled"] == 1
+
+
+def test_sampler_compile_requires_compile_fn(out_dir: Path) -> None:
+    """Sampler should raise when runtime.compile is true but no compile_model_fn provided."""
+
+    _write_char_meta(out_dir / "meta.pkl")
+    model = _make_minimal_model()
+    _rotated_best(out_dir, model)
+
+    base_cfg = _sampler_cfg(out_dir)
+    cfg = base_cfg.model_copy(
+        update={
+            "runtime": base_cfg.runtime.model_copy(update={"compile": True}),
+        }
+    )
+
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=out_dir / "cfg.toml",
+        project_home=out_dir,
+        dataset_dir=out_dir,
+        train_out_dir=out_dir,
+        sample_out_dir=out_dir,
+    )
+
+    with pytest.raises(ValueError) as excinfo:
+        Sampler(cfg, shared)
+
+    assert "compile_model_fn" in str(excinfo.value)
+
+
+def test_sampler_file_prompt_read_error(out_dir: Path) -> None:
+    """Sampler.run should raise `FileOperationError` when `FILE:` prompt cannot be read."""
+
+    _write_char_meta(out_dir / "meta.pkl")
+
+    class _MiniCkpt:
+        def __init__(self) -> None:
+            self.model: dict[str, Any] = {}
+            self.model_args: dict[str, int] = {
+                "block_size": 4,
+                "vocab_size": 16,
+                "n_layer": 1,
+                "n_head": 1,
+                "n_embd": 8,
+            }
+
+    def _load_ckpt(**_: Any) -> Any:
+        return _MiniCkpt()
+
+    class _Model(_DummyModel):
+        def load_state_dict(self, sd: dict[str, Any], strict: bool = False) -> None:  # type: ignore[override]
+            super().load_state_dict(sd)
+
+    def _model_factory(cfg: Any, logger: Any) -> Any:  # noqa: ARG001
+        return _Model()
+
+    missing = out_dir / "prompt.txt"
+
+    base_cfg = _sampler_cfg(out_dir)
+    cfg = base_cfg.model_copy(
+        update={
+            "checkpoint_load_fn": _load_ckpt,
+            "model_factory": _model_factory,
+            "sample": base_cfg.sample.model_copy(
+                update={
+                    "start": f"FILE:{missing}",
+                    "num_samples": 1,
+                    "max_new_tokens": 1,
+                }
+            ),
+        }
+    )
+
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=out_dir / "cfg.toml",
+        project_home=out_dir,
+        dataset_dir=out_dir,
+        train_out_dir=out_dir,
+        sample_out_dir=out_dir,
+    )
+
+    sampler = Sampler(cfg, shared)
+    with pytest.raises(FileOperationError):
+        sampler.run()
+
+
+def test_sampler_prompt_tensor_cached_between_runs(
+    out_dir: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Sampler should reuse cached prompt tensor when prompt and device stay the same."""
+
+    _write_char_meta(out_dir / "meta.pkl")
+
+    class _MiniCkpt:
+        def __init__(self) -> None:
+            self.model: dict[str, Any] = {}
+            self.model_args: dict[str, int] = {
+                "block_size": 4,
+                "vocab_size": 16,
+                "n_layer": 1,
+                "n_head": 1,
+                "n_embd": 8,
+            }
+
+    def _load_ckpt(**_: Any) -> Any:
+        return _MiniCkpt()
+
+    generate_calls: list[int] = []
+
+    class _CountingModel(_DummyModel):
+        def load_state_dict(self, sd: dict[str, Any], strict: bool = False) -> None:  # type: ignore[override]
+            super().load_state_dict(sd)
+
+        def generate(self, *args: Any, **kwargs: Any) -> torch.Tensor:  # type: ignore[override]
+            generate_calls.append(1)
+            return super().generate(*args, **kwargs)
+
+    def _model_factory(cfg: Any, logger: Any) -> Any:  # noqa: ARG001
+        return _CountingModel()
+
+    base_cfg = _sampler_cfg(out_dir)
+    cfg = base_cfg.model_copy(
+        update={
+            "checkpoint_load_fn": _load_ckpt,
+            "model_factory": _model_factory,
+            "sample": base_cfg.sample.model_copy(
+                update={
+                    "start": "Hello",
+                    "num_samples": 2,
+                    "max_new_tokens": 2,
+                }
+            ),
+        }
+    )
+
+    shared = SharedConfig(
+        experiment="unit",
+        config_path=out_dir / "cfg.toml",
+        project_home=out_dir,
+        dataset_dir=out_dir,
+        train_out_dir=out_dir,
+        sample_out_dir=out_dir,
+    )
+
+    sampler = Sampler(cfg, shared)
+    caplog.set_level("INFO", logger="ml_playground.sampler")
+    caplog.clear()
+    sampler.run()
+    first_tensor_id = id(sampler._prompt_tensor)
+    first_log_count = sum(1 for msg in caplog.messages if msg == "Sampling...")
+
+    caplog.clear()
+    sampler.run()
+    second_tensor_id = id(sampler._prompt_tensor)
+    second_log_count = sum(1 for msg in caplog.messages if msg == "Sampling...")
+
+    assert first_tensor_id == second_tensor_id
+    assert len(generate_calls) == 4  # 2 runs * num_samples (2)
+    assert first_log_count == 1
+    assert second_log_count == 1
 
 
 def test_sampler_run_returns_early_for_empty_prompt(tmp_path: Path) -> None:
