@@ -45,8 +45,9 @@ jobs:
       - run: uv sync --all-groups --frozen
       - run: |
           mkdir -p .cache/coverage
+          export COVERAGE_FILE=.cache/coverage/coverage.sqlite.unit
           uv run --project . coverage run \
-            --data-file=.cache/coverage/coverage.sqlite.unit \
+            --data-file="$COVERAGE_FILE" \
             -m pytest -q -n 0 -W error --strict-markers --strict-config tests/unit
       - uses: actions/upload-artifact@v4
         with:
@@ -72,8 +73,9 @@ jobs:
       - run: uv sync --all-groups --frozen
       - run: |
           mkdir -p .cache/coverage
+          export COVERAGE_FILE=.cache/coverage/coverage.sqlite.property
           uv run --project . coverage run \
-            --data-file=.cache/coverage/coverage.sqlite.property \
+            --data-file="$COVERAGE_FILE" \
             -m pytest -q -n 0 -W error --strict-markers --strict-config tests/property
       - uses: actions/upload-artifact@v4
         with:
