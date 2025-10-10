@@ -49,6 +49,10 @@ jobs:
           uv run --project . coverage run \
             --data-file="$COVERAGE_FILE" \
             -m pytest -q -n 0 -W error --strict-markers --strict-config tests/unit
+          # In case coverage emitted host-suffixed shards, combine into target
+          uv run --project . coverage combine "$COVERAGE_FILE"* || true
+          ls -la .cache/coverage || true
+          test -f "$COVERAGE_FILE"
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-fragment-unit
@@ -77,6 +81,10 @@ jobs:
           uv run --project . coverage run \
             --data-file="$COVERAGE_FILE" \
             -m pytest -q -n 0 -W error --strict-markers --strict-config tests/property
+          # In case coverage emitted host-suffixed shards, combine into target
+          uv run --project . coverage combine "$COVERAGE_FILE"* || true
+          ls -la .cache/coverage || true
+          test -f "$COVERAGE_FILE"
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-fragment-property
