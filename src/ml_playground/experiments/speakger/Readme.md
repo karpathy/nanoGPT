@@ -40,16 +40,25 @@ uv add peft transformers torch tensorboard
 
 ## How to Run
 
-- Config: `ml_playground/experiments/speakger/config.toml`
+- Config: `src/ml_playground/experiments/speakger/config.toml`
 
 ```bash
 # Prepare → Train → Sample (separate)
+<<<<<<< HEAD:ml_playground/experiments/speakger/Readme.md
 uvx --from . dev-tasks prepare speakger
 uvx --from . dev-tasks train speakger --config ml_playground/experiments/speakger/config.toml
 uvx --from . dev-tasks sample speakger --config ml_playground/experiments/speakger/config.toml
 
 # Or end-to-end
 uvx --from . dev-tasks loop speakger --config ml_playground/experiments/speakger/config.toml
+=======
+make prepare speakger
+make train speakger CONFIG=src/ml_playground/experiments/speakger/config.toml
+make sample speakger CONFIG=src/ml_playground/experiments/speakger/config.toml
+
+# Or end-to-end
+make loop speakger CONFIG=src/ml_playground/experiments/speakger/config.toml
+>>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/speakger/Readme.md
 ```
 
 ## Configuration Highlights
@@ -107,7 +116,7 @@ out/speakger_gemma3_270m_lora_mps/
 ## Folder structure
 
 ```bash
-ml_playground/experiments/speakger/
+src/ml_playground/experiments/speakger/
 ├── Readme.md           # experiment documentation (this file)
 ├── config.toml         # sample/preset config for real runs
 ├── test_config.toml    # tiny defaults for tests
@@ -127,7 +136,7 @@ ml_playground/experiments/speakger/
 ## Notes
 
 - The CLI recognizes this integration when `dataset == "gemma_finetuning_mps"` or the TOML contains the integration block.
-- See `ml_playground/experiments/bundestag_finetuning_mps` for a generic HF+PEFT integration usable with other base models.
+- See `src/ml_playground/experiments/bundestag_finetuning_mps` for a generic HF+PEFT integration usable with other base models.
 
 ## Checklist
 

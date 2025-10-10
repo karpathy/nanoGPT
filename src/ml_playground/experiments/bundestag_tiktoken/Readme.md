@@ -11,7 +11,7 @@ Byte-Pair Encoding (BPE) experiment using tiktoken to tokenize Bundestag speeche
 
 ## Data
 
-- Input: ml_playground/experiments/bundestag_tiktoken/datasets/input.txt
+- Input: src/ml_playground/experiments/bundestag_tiktoken/datasets/input.txt
   - If missing, you may place a sample input.txt there manually (the preparer can also seed from a bundled resource if present).
 - Outputs (prepared):
   - train.bin, val.bin (uint32 arrays)
@@ -37,7 +37,7 @@ uv run setup
 
 ## How to Run
 
-- Config example: ml_playground/experiments/bundestag_tiktoken/config.toml
+- Config example: src/ml_playground/experiments/bundestag_tiktoken/config.toml
 
 Prepare dataset:
 
@@ -48,43 +48,55 @@ uvx --from . dev-tasks prepare bundestag_tiktoken
 Train:
 
 ```bash
+<<<<<<< HEAD:ml_playground/experiments/bundestag_tiktoken/Readme.md
 uvx --from . dev-tasks train bundestag_tiktoken --config ml_playground/experiments/bundestag_tiktoken/config.toml
+=======
+make train bundestag_tiktoken CONFIG=src/ml_playground/experiments/bundestag_tiktoken/config.toml
+>>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/bundestag_tiktoken/Readme.md
 ```
 
 Sample:
 
 ```bash
+<<<<<<< HEAD:ml_playground/experiments/bundestag_tiktoken/Readme.md
 uvx --from . dev-tasks sample bundestag_tiktoken --config ml_playground/experiments/bundestag_tiktoken/config.toml
+=======
+make sample bundestag_tiktoken CONFIG=src/ml_playground/experiments/bundestag_tiktoken/config.toml
+>>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/bundestag_tiktoken/Readme.md
 ```
 
 End-to-end loop:
 
 ```bash
+<<<<<<< HEAD:ml_playground/experiments/bundestag_tiktoken/Readme.md
 uvx --from . dev-tasks loop bundestag_tiktoken --config ml_playground/experiments/bundestag_tiktoken/config.toml
+=======
+make loop bundestag_tiktoken CONFIG=src/ml_playground/experiments/bundestag_tiktoken/config.toml
+>>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/bundestag_tiktoken/Readme.md
 ```
 
 ## Configuration Highlights
 
 - [train.data]
-  - dataset_dir = "ml_playground/experiments/bundestag_tiktoken/datasets"
+  - dataset_dir = "src/ml_playground/experiments/bundestag_tiktoken/datasets"
   - train_bin, val_bin, meta_pkl
   - batch_size, block_size, grad_accum_steps
 - [train.runtime]
-  - out_dir = "ml_playground/experiments/bundestag_tiktoken/out/bundestag_tiktoken"
+  - out_dir = "src/ml_playground/experiments/bundestag_tiktoken/out/bundestag_tiktoken"
   - device = "mps" (or "cpu"/"cuda")
 - [sample.runtime]
   - out_dir should match train.runtime.out_dir
 
 ## Outputs
 
-- Data artifacts: ml_playground/experiments/bundestag_tiktoken/datasets/{train.bin,val.bin,meta.pkl}
+- Data artifacts: src/ml_playground/experiments/bundestag_tiktoken/datasets/{train.bin,val.bin,meta.pkl}
 - Training: out_dir contains checkpoints and logs/tb
 
 ## Folder structure
 
 ```bash
 # experiment documentation (this file)
-ml_playground/experiments/bundestag_tiktoken/
+src/ml_playground/experiments/bundestag_tiktoken/
 ├── Readme.md        
 # sample/preset config for real runs
 ├── config.toml      

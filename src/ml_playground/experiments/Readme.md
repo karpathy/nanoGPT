@@ -35,7 +35,7 @@ All experiments now use the centralized framework utilities for error handling, 
 ## Folder structure (this directory)
 
 ```bash
-ml_playground/experiments/
+src/ml_playground/experiments/
 ├── Readme.md                    # overview and conventions (this file)
 ├── __init__.py                  # package marker/registry setup
 ├── default_config.toml          # baseline config used by templates/examples
@@ -54,41 +54,48 @@ Important: Strict configuration injection
 
 Common CLI patterns
 
+<<<<<<< HEAD:ml_playground/experiments/Readme.md
 - Prepare: `uvx --from . dev-tasks prepare <name> [--config path]` (e.g., `uvx --from . dev-tasks prepare shakespeare`).
 - Train: `uvx --from . dev-tasks train <name> --config path` (e.g., `uvx --from . dev-tasks train shakespeare --config ml_playground/configs/shakespeare_cpu.toml`).
 - Sample: `uvx --from . dev-tasks sample <name> --config path` (e.g., `uvx --from . dev-tasks sample shakespeare --config ml_playground/configs/shakespeare_cpu.toml`).
 - End‑to‑end: `uvx --from . dev-tasks loop <name> --config path` (e.g., `uvx --from . dev-tasks loop bundestag_char --config ml_playground/configs/bundestag_char_cpu.toml`).
+=======
+- Prepare: `make prepare <name> [CONFIG=path]` (e.g., `make prepare shakespeare`).
+- Train: `make train <name> CONFIG=path` (e.g., `make train shakespeare CONFIG=src/ml_playground/experiments/shakespeare/config.toml`).
+- Sample: `make sample <name> CONFIG=path` (e.g., `make sample shakespeare CONFIG=src/ml_playground/experiments/shakespeare/config.toml`).
+- End‑to‑end: `make loop <name> CONFIG=path` (e.g., `make loop bundestag_char CONFIG=src/ml_playground/experiments/bundestag_char/config.toml`).
+>>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/Readme.md
 
 Implemented experiments (current)
 
 - shakespeare — Tiny Shakespeare with GPT‑2 BPE (tiktoken)
-  - Readme: ml_playground/experiments/shakespeare/Readme.md
-  - Config:  ml_playground/experiments/shakespeare/config.toml
+  - Readme: src/ml_playground/experiments/shakespeare/Readme.md
+  - Config:  src/ml_playground/experiments/shakespeare/config.toml
   - Prepare name: `shakespeare`
 - bundestag_char — Character‑level modeling on Bundestag text
-  - Readme: ml_playground/experiments/bundestag_char/Readme.md
-  - Config:  ml_playground/experiments/bundestag_char/config.toml
+  - Readme: src/ml_playground/experiments/bundestag_char/Readme.md
+  - Config:  src/ml_playground/experiments/bundestag_char/config.toml
   - Prepare name: `bundestag_char`
 - bundestag_tiktoken — BPE tokenization (tiktoken) for Bundestag text
-  - Readme: ml_playground/experiments/bundestag_tiktoken/Readme.md
-  - Config:  ml_playground/experiments/bundestag_tiktoken/config.toml
+  - Readme: src/ml_playground/experiments/bundestag_tiktoken/Readme.md
+  - Config:  src/ml_playground/experiments/bundestag_tiktoken/config.toml
   - Prepare name: `bundestag_tiktoken`
 - bundestag_finetuning_mps — Generic HF + PEFT LoRA finetuning integration (Apple MPS‑friendly)
-  - Readme: ml_playground/experiments/bundestag_finetuning_mps/Readme.md
-  - Example preset config: ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+  - Readme: src/ml_playground/experiments/bundestag_finetuning_mps/Readme.md
+  - Example preset config: src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
   - Dataset value in TOML/CLI: `bundestag_finetuning_mps`
 - bundestag_qwen15b_lora_mps — Qwen2.5‑1.5B preset for the generic finetuning integration
-  - Readme: ml_playground/experiments/bundestag_qwen15b_lora_mps/Readme.md
-  - Config:  ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+  - Readme: src/ml_playground/experiments/bundestag_qwen15b_lora_mps/Readme.md
+  - Config:  src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
   - Uses dataset/integration: `bundestag_finetuning_mps`
 - speakger — Gemma‑based finetuning workflow targeting SpeakGer‑style data
-  - Readme: ml_playground/experiments/speakger/Readme.md
-  - Config:  ml_playground/experiments/speakger/config.toml
+  - Readme: src/ml_playground/experiments/speakger/Readme.md
+  - Config:  src/ml_playground/experiments/speakger/config.toml
   - Uses dataset/integration: `gemma_finetuning_mps` (see notes in the experiment Readme)
 
 Add a new experiment (checklist)
 
-1) Create a folder: `ml_playground/experiments/<name>/`
+1) Create a folder: `src/ml_playground/experiments/<name>/`
 2) Implement a strict preparer in `preparer.py` that exposes a class with `.prepare(...)` (see template below).
 
 3) Place seeds and prepared artifacts in `<name>/datasets/` (created at runtime).
@@ -102,16 +109,16 @@ Notes
 
 ## New Experiment Template
 
-Use this copy-ready template to create a new experiment at `ml_playground/experiments/<name>/`.
+Use this copy-ready template to create a new experiment at `src/ml_playground/experiments/<name>/`.
 
 - Files to create:
 
-  - `ml_playground/experiments/<name>/preparer.py`
-  - `ml_playground/experiments/<name>/config.toml`
-  - `ml_playground/experiments/<name>/Readme.md`
-  - `ml_playground/experiments/<name>/datasets/` (created at runtime)
+  - `src/ml_playground/experiments/<name>/preparer.py`
+  - `src/ml_playground/experiments/<name>/config.toml`
+  - `src/ml_playground/experiments/<name>/Readme.md`
+  - `src/ml_playground/experiments/<name>/datasets/` (created at runtime)
 
-Paste the following into `ml_playground/experiments/<name>/Readme.md` and replace placeholders in angle brackets <> with your experiment specifics.
+Paste the following into `src/ml_playground/experiments/<name>/Readme.md` and replace placeholders in angle brackets <> with your experiment specifics.
 
 ```markdown
 # <Title of Your Experiment>
@@ -125,7 +132,7 @@ Paste the following into `ml_playground/experiments/<name>/Readme.md` and replac
 - Pipeline: prepare → train → sample via ml_playground CLI
 
 ## Data
-- Inputs (raw): <path(s) under this experiment, e.g., `ml_playground/experiments/<name>/datasets/input.txt` or a `raw/` folder>
+- Inputs (raw): <path(s) under this experiment, e.g., `src/ml_playground/experiments/<name>/datasets/input.txt` or a `raw/` folder>
   - <If missing, describe seeding behavior or how to place inputs>
 - Outputs (prepared):
   - <list prepared artifacts, e.g., train.bin, val.bin, meta.pkl or tokenizer/, train.jsonl, val.jsonl>
@@ -146,7 +153,7 @@ uvx --from . dev-tasks verify
 
 ## How to Run
 
-- Config path: `ml_playground/experiments/<name>/config.toml`
+- Config path: `src/ml_playground/experiments/<name>/config.toml`
 
 Prepare dataset:
 
@@ -157,29 +164,41 @@ uvx --from . dev-tasks prepare <name>
 Train:
 
 ```bash
+<<<<<<< HEAD:ml_playground/experiments/Readme.md
 uvx --from . dev-tasks train <name> --config ml_playground/experiments/<name>/config.toml
+=======
+make train <name> CONFIG=src/ml_playground/experiments/<name>/config.toml
+>>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/Readme.md
 ```
 
 Sample:
 
 ```bash
+<<<<<<< HEAD:ml_playground/experiments/Readme.md
 uvx --from . dev-tasks sample <name> --config ml_playground/experiments/<name>/config.toml
+=======
+make sample <name> CONFIG=src/ml_playground/experiments/<name>/config.toml
+>>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/Readme.md
 ```
 
 End-to-end loop:
 
 ```bash
+<<<<<<< HEAD:ml_playground/experiments/Readme.md
 uvx --from . dev-tasks loop <name> --config ml_playground/experiments/<name>/config.toml
+=======
+make loop <name> CONFIG=src/ml_playground/experiments/<name>/config.toml
+>>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/Readme.md
 ```
 
 ## Configuration
 
-- Use the default settings in `ml_playground/configs/` where available and adjust via experiment configs under `ml_playground/experiments/<name>/config.toml`.
+- Use the shared defaults in `src/ml_playground/experiments/default_config.toml` and adjust via experiment configs under `src/ml_playground/experiments/<name>/config.toml`.
 - For tiny test defaults, see `tests/e2e/ml_playground/experiments/test_default_config.toml`.
 
 ## Outputs
 
-- Data artifacts: `ml_playground/experiments/<name>/datasets/...`
+- Data artifacts: `src/ml_playground/experiments/<name>/datasets/...`
 - Training artifacts: `out_dir` contains checkpoints (and adapters if applicable) and `logs/tb`
 
 ## Troubleshooting

@@ -12,7 +12,7 @@ Minimal experiment to prepare, train, and sample on the Tiny Shakespeare corpus 
 ## Data
 
 - Preparer auto-downloads `input.txt` if missing.
-- Prepared artifacts under `[train.data].dataset_dir` (default: `ml_playground/experiments/shakespeare/datasets/`).
+- Prepared artifacts under `[train.data].dataset_dir` (default: `src/ml_playground/experiments/shakespeare/datasets/`).
 - Universal meta: the preparer writes `meta.pkl` alongside `train.bin` and `val.bin`.
 
 ## Method/Model
@@ -23,7 +23,7 @@ For framework utilities, see [../../docs/framework_utilities.md](../../docs/fram
 
 ## How to Run
 
-- Config: `ml_playground/experiments/shakespeare/config.toml`
+- Config: `src/ml_playground/experiments/shakespeare/config.toml`
 
 ```bash
 # Environment setup (once)
@@ -31,18 +31,27 @@ uvx --from . dev-tasks setup
 uvx --from . dev-tasks verify
 
 # Prepare → Train → Sample (separate)
+<<<<<<< HEAD:ml_playground/experiments/shakespeare/Readme.md
 uvx --from . dev-tasks prepare shakespeare
 uvx --from . dev-tasks train shakespeare --config ml_playground/experiments/shakespeare/config.toml
 uvx --from . dev-tasks sample shakespeare --config ml_playground/experiments/shakespeare/config.toml
 
 # Or end-to-end
 uvx --from . dev-tasks loop shakespeare --config ml_playground/experiments/shakespeare/config.toml
+=======
+make prepare shakespeare
+make train shakespeare CONFIG=src/ml_playground/experiments/shakespeare/config.toml
+make sample shakespeare CONFIG=src/ml_playground/experiments/shakespeare/config.toml
+
+# Or end-to-end
+make loop shakespeare CONFIG=src/ml_playground/experiments/shakespeare/config.toml
+>>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/shakespeare/Readme.md
 ```
 
 ## Configuration Highlights
 
-- `[train.data].dataset_dir` default: `ml_playground/experiments/shakespeare/datasets`
-- `[train.runtime].out_dir` default: `ml_playground/experiments/shakespeare/out/shakespeare_next`
+- `[train.data].dataset_dir` default: `src/ml_playground/experiments/shakespeare/datasets`
+- `[train.runtime].out_dir` default: `src/ml_playground/experiments/shakespeare/out/shakespeare_next`
 - `[train.runtime].device`: `cpu` or `mps` (or `cuda` if available)
 
 ## Outputs
@@ -54,7 +63,7 @@ uvx --from . dev-tasks loop shakespeare --config ml_playground/experiments/shake
 
 ```bash
 # experiment documentation (this file)
-ml_playground/experiments/shakespeare/
+src/ml_playground/experiments/shakespeare/
 ├── Readme.md        
 # sample/preset config for real runs
 ├── config.toml      

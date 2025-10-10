@@ -19,6 +19,14 @@ logger = logging.getLogger(__name__)
 TomlMapping = Dict[str, Any]
 
 
+def _package_root() -> Path:
+    return Path(__file__).resolve().parent.parent
+
+
+def _project_root() -> Path:
+    return _package_root().parent
+
+
 class ExperimentPayload(TypedDict, total=False):
     shared: TomlMapping
     prepare: TomlMapping
@@ -29,22 +37,17 @@ class ExperimentPayload(TypedDict, total=False):
 def get_cfg_path(experiment: str, exp_config: Path | None) -> Path:
     if exp_config:
         return exp_config
-    return (
-        Path(__file__).resolve().parent.parent
-        / "experiments"
-        / experiment
-        / "config.toml"
-    )
+    return _package_root() / "experiments" / experiment / "config.toml"
 
 
 def get_default_config_path(project_root: Path | None = None) -> Path:
     if project_root is None:
-        project_root = Path(__file__).resolve().parent.parent
+        project_root = _project_root()
     return _default_config_path_from_root(project_root)
 
 
 def list_experiments_with_config(prefix: str = "") -> list[str]:
-    root = Path(__file__).resolve().parent.parent / "experiments"
+    root = _package_root() / "experiments"
     if not root.exists():
         return []
     try:
@@ -86,7 +89,13 @@ def read_toml_dict(
 
 
 def _default_config_path_from_root(project_root: Path) -> Path:
-    return project_root / "ml_playground" / "experiments" / "default_config.toml"
+    if project_root.name == "ml_playground":
+        base = project_root
+    elif project_root.name == "src":
+        base = project_root / "ml_playground"
+    else:
+        base = project_root / "src" / "ml_playground"
+    return base / "experiments" / "default_config.toml"
 
 
 def _load_and_merge_configs(
@@ -140,7 +149,7 @@ def load_train_config(
     config_path: Path, *, default_config_path: Path | None = None
 ) -> TrainerConfig:
     raw_exp = read_toml_dict(config_path)
-    project_root = Path(__file__).resolve().parent.parent.parent
+    project_root = _project_root()
     defaults_path = (
         default_config_path
         if default_config_path is not None
@@ -164,7 +173,7 @@ def load_sample_config(
     config_path: Path, *, default_config_path: Path | None = None
 ) -> SamplerConfig:
     raw_exp = read_toml_dict(config_path)
-    project_root = Path(__file__).resolve().parent.parent.parent
+    project_root = _project_root()
     defaults_path = _default_config_path_from_root(project_root)
     defaults_raw = read_toml_dict(defaults_path) if defaults_path.exists() else {}
 
@@ -187,7 +196,7 @@ def load_prepare_config(
     config_path: Path, *, default_config_path: Path | None = None
 ) -> PreparerConfig:
     raw_exp = read_toml_dict(config_path)
-    project_root = Path(__file__).resolve().parent.parent.parent
+    project_root = _project_root()
     defaults_path = _default_config_path_from_root(project_root)
     defaults_raw = read_toml_dict(defaults_path) if defaults_path.exists() else {}
 

@@ -645,7 +645,8 @@ def test_get_cfg_path_explicit_and_default(tmp_path: Path):
     assert p == explicit
     # Default path under experiments root
     d = config_cli.cfg_path_for("bundestag_char", None)
-    assert d.as_posix().endswith("ml_playground/experiments/bundestag_char/config.toml")
+    expected_suffix = Path("src/ml_playground/experiments/bundestag_char/config.toml").as_posix()
+    assert d.as_posix().endswith(expected_suffix)
 
 
 def test_load_config_error_branches(tmp_path: Path):

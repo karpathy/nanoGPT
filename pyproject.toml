@@ -62,10 +62,10 @@ package = true
 # allow system-specific torch wheels to be resolved from PyPI
 
 [tool.hatch.build.targets.wheel]
-packages = []
+packages = ["src/ml_playground"]
 include = [
-    "ml_playground",
-    "ml_playground/**",
+    "src/ml_playground",
+    "src/ml_playground/**",
     "tools",
     "tools/**",
 ]
@@ -149,14 +149,14 @@ extend-select = [
 # When invoked without explicit targets, analyze only the project code.
 [tool.mypy]
 # When invoked without explicit targets, analyze only the project code.
-files = ["ml_playground"]
+files = ["src/ml_playground"]
 # Also exclude common ignored/artifact directories if mypy is invoked without args.
 # Additionally exclude analysis (LIT integration) to avoid pulling heavy third-party types
 # that slow down type checking and are not part of core runtime.
-exclude = '(^|.*/)(out/|data/|datasets/|checkpoints/|runs/|wandb/|lightning_logs/|artifacts/|mlruns/|htmlcov/|ml_playground/experiments/|ml_playground/analysis/|\\.idea/|\\.vscode/|\\.venv/|env/|\\.cache/|\\.git/)'
+exclude = '(^|.*/)(out/|data/|datasets/|checkpoints/|runs/|wandb/|lightning_logs/|artifacts/|mlruns/|htmlcov/|src/ml_playground/experiments/|src/ml_playground/analysis/|\\.idea/|\\.vscode/|\\.venv/|env/|\\.cache/|\\.git/)'
 
 explicit_package_bases = true
-mypy_path = ["."]
+mypy_path = ["src"]
 namespace_packages = true
 
 # Speed up type checking by not following imports into third-party libraries
@@ -169,7 +169,7 @@ cache_dir = ".cache/mypy"
 [tool.pytest.ini_options]
 # Updated pytest settings for ml_playground
 addopts = "-W error --strict-markers --strict-config -v -W \"ignore:Skipping collection of '.hypothesis' directory.*:UserWarning\""
-pythonpath = ["."]
+pythonpath = ["src", "."]
 testpaths = [
     "tests",
 ]
@@ -231,7 +231,7 @@ omit = [
     "**/tools/*",
     "**/_remote_module_non_scriptable.py",
     # Temporarily exclude analysis (LIT integration) due to dependency issues
-    "ml_playground/analysis/*",
+    "src/ml_playground/analysis/*",
 ]
 
 [tool.coverage.report]
@@ -244,7 +244,7 @@ exclude_lines = [
 show_missing = true
 omit = [
     # Temporarily exclude analysis (LIT integration) due to dependency issues
-    "ml_playground/analysis/*",
+    "src/ml_playground/analysis/*",
 ]
 skip_covered = false
 # Align with CI gate threshold for unit+property suites

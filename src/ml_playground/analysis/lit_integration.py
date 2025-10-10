@@ -53,7 +53,7 @@ def run_server_bundestag_char(host: str, port: int, open_browser: bool, logger) 
 
     # Try to read input.txt if it exists, but keep it optional and tiny.
     try:
-        # Resolve to the ml_playground/experiments/bundestag_char directory
+        # Resolve to the src/ml_playground/experiments/bundestag_char directory
         base_dir = Path(__file__).resolve().parents[1]
         exp_dir = base_dir / "experiments" / "bundestag_char"
         input = exp_dir / "datasets" / "input.txt"

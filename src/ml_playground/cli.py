@@ -335,7 +335,7 @@ def _run_analyze(experiment: str, host: str, port: int, open_browser: bool) -> N
 # --- CLI definition --------------------------------------------------------
 
 
-EXPERIMENT_HELP = "Experiment name (directory in ml_playground/experiments)"
+EXPERIMENT_HELP = "Experiment name (directory in src/ml_playground/experiments)"
 
 
 ExperimentArg = Annotated[

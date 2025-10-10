@@ -27,7 +27,14 @@ tests/
 ├── property/            - Hypothesis properties scoped as part of coverage gates
 ├── support/             - shared data/assets for tests (read-only)
 └── unit/                - exemplar-driven unit tests (fast, deterministic)
+    └── <package>/       - mirrors `src/ml_playground/<package>/` for unit tests
 ```
+
+Unit tests always live under `tests/unit/<package>/...`, mirroring the namespace
+in `src/ml_playground/`. Do not create alternative layouts such as
+`tests/ml_playground/unit`; keep the suite hierarchy stable so imports, tooling,
+and documentation remain aligned with the developer guidelines
+(`.dev-guidelines/TESTING.md`).
 
 ## Coverage Policy
 

@@ -15,11 +15,11 @@
 [prepare]
 # Name of the dataset pipeline to use.
 # Path to a folder of raw .txt files (recursively scanned) OR a single CSV file.
-# Example CSV: raw_dir = "ml_playground/datasets/Bundestag.csv"
+# Example CSV: raw_dir = "src/ml_playground/datasets/Bundestag.csv"
 # UPDATE THIS PATH to point to your dataset location.
-raw_dir = "ml_playground/experiments/speakger/raw"
+raw_dir = "src/ml_playground/experiments/speakger/raw"
 # Directory where the prepared dataset artifacts are written (tokenizer, train.jsonl, val.jsonl, meta.json).
-dataset_dir = "ml_playground/experiments/speakger/datasets"
+dataset_dir = "src/ml_playground/experiments/speakger/datasets"
 # Whether to wrap speeches with structure tokens (SPEECH_START/END) during preparation.
 add_structure_tokens = true
 # Token string used to separate concatenated documents during packing.
@@ -58,6 +58,11 @@ extend_mlp_targets = false
 [train.model]
 
 [train.data]
+<<<<<<< HEAD:ml_playground/experiments/speakger/config.toml
+=======
+# Directory containing prepared dataset artifacts (tokenizer/, train.jsonl, val.jsonl, meta.json).
+dataset_dir = "src/ml_playground/experiments/speakger/datasets"
+>>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/speakger/config.toml
 # Per-step batch size (before gradient accumulation). Conservative for 32GB RAM + MPS.
 batch_size = 6
 # Number of micro-steps to accumulate gradients before an optimizer step.

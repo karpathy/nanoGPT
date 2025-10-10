@@ -19,11 +19,20 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 
 ```bash
 .
+<<<<<<< HEAD
 ├── ml_playground/             # core module (configs, experiments, runtime code)
 │   ├── analysis/              # analysis tools (e.g., LIT integration)
 │   ├── datasets/              # optional package; experiments can run without it
 │   ├── experiments/           # self-contained experiments (mid-level docs)
 │   └── configs/               # example configs referenced by docs/CLI examples
+=======
+├── src/
+│   └── ml_playground/         # core module (configs, experiments, runtime code)
+│       ├── analysis/          # analysis tools (e.g., LIT integration)
+│       ├── datasets/          # optional package; experiments can run without it
+│       ├── experiments/       # self-contained experiments (mid-level docs)
+│       └── configs/           # example configs referenced by README/Makefile
+>>>>>>> b67fd37 (docs: align references with src layout)
 ├── tests/                     # test suite (see per-folder README for scope)
 │   ├── unit/                  # low-level API tests
 │   ├── integration/           # multi-module tests via Python APIs
@@ -32,20 +41,29 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 ├── tools/                     # developer tools and vendor integrations (see tools/README.md)
 │   └── llama_cpp/             # GGUF conversion helper (vendored instructions)
 ├── docs/                      # supplementary docs (framework utilities, LIT, etc.)
+<<<<<<< HEAD
 ├── lit_nlp/                   # optional LIT integration
 ├── tools/env_tasks.py         # uv-backed CLI for environment workflows
 ├── tools/test_tasks.py        # uv-backed CLI for pytest orchestration
 ├── tools/ci_tasks.py          # uv-backed CLI for CI and coverage flows
+=======
+├── Makefile                   # entrypoints for setup, quality gates, runtime
+>>>>>>> b67fd37 (docs: align references with src layout)
 ├── pyproject.toml             # strict typing/linting/testing configuration
 └── README.md                  # this file (top-level, high abstraction)
 
 ## Policy
 
+<<<<<<< HEAD
 - Use the Typer CLIs published via UV entry points:
   - `uvx --from . env-tasks <command>` for environment setup, lint/type checks, and runtime helpers.
   - `uvx --from . test-tasks <command>` for pytest suites and local coverage.
   - `uvx --from . ci-tasks <command>` for running the full quality gates, coverage, and Cosmic Ray flows (mirrors CI).
 - Never set PYTHONPATH. Running inside the project venv ensures `ml_playground` is importable.
+=======
+- Use Make targets for all workflows (env setup, quality, tests, runtime). Under the hood, they run via uv.
+- The project uses a `src/` layout. Make targets automatically expose `src/` on `PYTHONPATH` so `ml_playground` is importable without editable installs.
+>>>>>>> b67fd37 (docs: align references with src layout)
 - Quality tooling is mandatory before commit (ruff, mypy, pyright), and tests must pass.
 - Linear history for own work: rebase your branches and avoid merge commits; fast-forward only. See `.dev-guidelines/Readme.md` for developer policies.
 - Test-Driven Development (TDD) is required for functional changes: write a failing test, implement minimal code to pass, then refactor.
@@ -58,7 +76,7 @@ Setup and Developer Workflow
 Datasets
 
 - Shakespeare (GPT-2 BPE; prepared via internal ml_playground.experiments.shakespeare)
-- Bundestag (char-level; prepared via internal ml_playground.experiments.bundestag_char; requires a user-provided text at ml_playground/experiments/bundestag_char/datasets/input.txt)
+- Bundestag (char-level; prepared via internal ml_playground.experiments.bundestag_char; requires a user-provided text at src/ml_playground/experiments/bundestag_char/datasets/input.txt)
 - Bundestag (tiktoken BPE; prepared via internal ml_playground.experiments.bundestag_tiktoken)
 
 Workflows (high-level)
@@ -68,7 +86,7 @@ Workflows (high-level)
 
 Notes
 
-- Configuration is defined via TOML dataclasses (see `ml_playground/config.py`).
+- Configuration is defined via TOML dataclasses under `src/ml_playground/configuration/`.
 - CPU/MPS are first-class. CUDA may be selected in TOML if available.
 - Checkpoint behavior and policies are described in `.dev-guidelines/Readme.md`.
 - For framework utilities, see [Framework Utilities Documentation](docs/framework_utilities.md).

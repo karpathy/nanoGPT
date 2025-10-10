@@ -11,7 +11,7 @@ Character-level language modeling on Bundestag speeches with a simple vocabulary
 
 ## Data
 
-- Input: ml_playground/experiments/bundestag_char/datasets/input.txt
+- Input: src/ml_playground/experiments/bundestag_char/datasets/input.txt
   - Preparers fail if this file is missing; create it with your own text.
 - Outputs (prepared):
   - train.bin, val.bin (uint16 arrays)
@@ -37,7 +37,7 @@ uv run setup
 
 ## How to Run
 
-- Config example: ml_playground/experiments/bundestag_char/config.toml
+- Config example: src/ml_playground/experiments/bundestag_char/config.toml
 
 Prepare:
 
@@ -48,29 +48,41 @@ uvx --from . dev-tasks prepare bundestag_char
 Train:
 
 ```bash
+<<<<<<< HEAD:ml_playground/experiments/bundestag_char/Readme.md
 uvx --from . dev-tasks train bundestag_char --config ml_playground/experiments/bundestag_char/config.toml
+=======
+make train bundestag_char CONFIG=src/ml_playground/experiments/bundestag_char/config.toml
+>>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/bundestag_char/Readme.md
 ```
 
 Sample:
 
 ```bash
+<<<<<<< HEAD:ml_playground/experiments/bundestag_char/Readme.md
 uvx --from . dev-tasks sample bundestag_char --config ml_playground/experiments/bundestag_char/config.toml
+=======
+make sample bundestag_char CONFIG=src/ml_playground/experiments/bundestag_char/config.toml
+>>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/bundestag_char/Readme.md
 ```
 
 End-to-end loop:
 
 ```bash
+<<<<<<< HEAD:ml_playground/experiments/bundestag_char/Readme.md
 uvx --from . dev-tasks loop bundestag_char --config ml_playground/experiments/bundestag_char/config.toml
+=======
+make loop bundestag_char CONFIG=src/ml_playground/experiments/bundestag_char/config.toml
+>>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/bundestag_char/Readme.md
 ```
 
 ## Configuration Highlights
 
 - [train.data]
-  - dataset_dir = "ml_playground/experiments/bundestag_char/datasets"
+  - dataset_dir = "src/ml_playground/experiments/bundestag_char/datasets"
   - train_bin = "train.bin", val_bin = "val.bin", meta_pkl = "meta.pkl"
   - batch_size, block_size, grad_accum_steps
 - [train.runtime]
-  - out_dir = "ml_playground/experiments/bundestag_char/out/bundestag_char_next"
+  - out_dir = "src/ml_playground/experiments/bundestag_char/out/bundestag_char_next"
   - device = "cpu" (or "mps"/"cuda" if available), dtype = "float32"
 - [sample.runtime]
   - out_dir should match train.runtime.out_dir
@@ -79,7 +91,7 @@ uvx --from . dev-tasks loop bundestag_char --config ml_playground/experiments/bu
 
 ## Outputs
 
-- Data artifacts: ml_playground/experiments/bundestag_char/datasets/{train.bin,val.bin,meta.pkl}
+- Data artifacts: src/ml_playground/experiments/bundestag_char/datasets/{train.bin,val.bin,meta.pkl}
 - Training: out_dir contains rotated checkpoints only, e.g.:
   - ckpt_last_XXXXXXXX.pt
   - `ckpt_best_XXXXXXXX_<metric>.pt`
@@ -88,7 +100,7 @@ uvx --from . dev-tasks loop bundestag_char --config ml_playground/experiments/bu
 ## Folder structure
 
 ```bash
-ml_playground/experiments/bundestag_char/
+src/ml_playground/experiments/bundestag_char/
 ├── Readme.md        # experiment documentation (this file)
 ├── config.toml      # sample/preset config for real runs
 ├── test_config.toml # tiny defaults for tests

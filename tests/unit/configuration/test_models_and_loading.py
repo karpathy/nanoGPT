@@ -55,19 +55,26 @@ def test_get_default_config_path_with_none_uses_package_root() -> None:
     """get_default_config_path with None should use package root."""
     path = config_loading.get_default_config_path(None)
     assert path.name == "default_config.toml"
-    assert "ml_playground/experiments" in str(path)
+    assert "src/ml_playground/experiments" in str(path)
 
 
 def test_get_default_config_path_with_explicit_root(tmp_path: Path) -> None:
     """get_default_config_path with explicit root should use that root."""
     path = config_loading.get_default_config_path(tmp_path)
-    assert path == tmp_path / "ml_playground" / "experiments" / "default_config.toml"
+    assert (
+        path
+        == tmp_path
+        / "src"
+        / "ml_playground"
+        / "experiments"
+        / "default_config.toml"
+    )
 
 
 def test_list_experiments_with_config_returns_sorted_names(tmp_path: Path) -> None:
     """list_experiments_with_config should return sorted experiment names with config.toml."""
     # Create fake experiments directory structure
-    experiments_root = tmp_path / "ml_playground" / "experiments"
+    experiments_root = tmp_path / "src" / "ml_playground" / "experiments"
     experiments_root.mkdir(parents=True)
 
     # Create experiments with config.toml
@@ -84,7 +91,7 @@ def test_list_experiments_with_config_returns_sorted_names(tmp_path: Path) -> No
     # Mock the package root
     original_file = config_loading.__file__
     config_loading.__file__ = str(
-        tmp_path / "ml_playground" / "configuration" / "loading.py"
+        tmp_path / "src" / "ml_playground" / "configuration" / "loading.py"
     )
     try:
         result = config_loading.list_experiments_with_config()
@@ -95,7 +102,7 @@ def test_list_experiments_with_config_returns_sorted_names(tmp_path: Path) -> No
 
 def test_list_experiments_with_config_filters_by_prefix(tmp_path: Path) -> None:
     """list_experiments_with_config should filter by prefix."""
-    experiments_root = tmp_path / "ml_playground" / "experiments"
+    experiments_root = tmp_path / "src" / "ml_playground" / "experiments"
     experiments_root.mkdir(parents=True)
 
     (experiments_root / "bundestag_char").mkdir()
@@ -107,7 +114,7 @@ def test_list_experiments_with_config_filters_by_prefix(tmp_path: Path) -> None:
 
     original_file = config_loading.__file__
     config_loading.__file__ = str(
-        tmp_path / "ml_playground" / "configuration" / "loading.py"
+        tmp_path / "src" / "ml_playground" / "configuration" / "loading.py"
     )
     try:
         result = config_loading.list_experiments_with_config("bundestag")
@@ -129,7 +136,7 @@ def test_list_experiments_with_config_handles_missing_root() -> None:
 
 def test_list_experiments_with_config_handles_os_error(tmp_path: Path) -> None:
     """list_experiments_with_config should return empty list on OSError."""
-    experiments_root = tmp_path / "ml_playground" / "experiments"
+    experiments_root = tmp_path / "src" / "ml_playground" / "experiments"
     experiments_root.mkdir(parents=True)
 
     # Create a file instead of directory to trigger error
@@ -137,7 +144,7 @@ def test_list_experiments_with_config_handles_os_error(tmp_path: Path) -> None:
 
     original_file = config_loading.__file__
     config_loading.__file__ = str(
-        tmp_path / "ml_playground" / "configuration" / "loading.py"
+        tmp_path / "src" / "ml_playground" / "configuration" / "loading.py"
     )
 
     # Mock iterdir to raise OSError
@@ -173,13 +180,19 @@ tokenizer_type = "char"
 """)
 
     # Create default config
-    default_path = tmp_path / "ml_playground" / "experiments" / "default_config.toml"
+    default_path = (
+        tmp_path
+        / "src"
+        / "ml_playground"
+        / "experiments"
+        / "default_config.toml"
+    )
     default_path.parent.mkdir(parents=True)
     default_path.write_text("")
 
     original_file = config_loading.__file__
     config_loading.__file__ = str(
-        tmp_path / "ml_playground" / "configuration" / "loading.py"
+        tmp_path / "src" / "ml_playground" / "configuration" / "loading.py"
     )
     try:
         cfg = config_loading.load_prepare_config(cfg_path)
@@ -195,13 +208,19 @@ def test_load_prepare_config_missing_section_raises(tmp_path: Path) -> None:
     cfg_path = tmp_path / "config.toml"
     cfg_path.write_text("[train]\n")
 
-    default_path = tmp_path / "ml_playground" / "experiments" / "default_config.toml"
+    default_path = (
+        tmp_path
+        / "src"
+        / "ml_playground"
+        / "experiments"
+        / "default_config.toml"
+    )
     default_path.parent.mkdir(parents=True)
     default_path.write_text("")
 
     original_file = config_loading.__file__
     config_loading.__file__ = str(
-        tmp_path / "ml_playground" / "configuration" / "loading.py"
+        tmp_path / "src" / "ml_playground" / "configuration" / "loading.py"
     )
     try:
         with pytest.raises(ValueError, match="must contain a \\[prepare\\] section"):

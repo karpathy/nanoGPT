@@ -15,7 +15,7 @@ operations:
 
 ## Error Handling Utilities
 
-The `ml_playground/error_handling.py` module provides:
+The `src/ml_playground/core/error_handling.py` module provides:
 
 ### Exception Classes
 
@@ -42,7 +42,8 @@ The `ml_playground/error_handling.py` module provides:
 
 ## Tokenizer Utilities
 
-The `ml_playground/tokenizer.py` module provides a unified tokenizer protocol and implementations:
+The `src/ml_playground/core/tokenizer.py` module provides a unified tokenizer protocol and implementations while
+`src/ml_playground/core/tokenizer_protocol.py` defines the `Tokenizer` protocol:
 
 ### Tokenizer Protocol
 
@@ -65,17 +66,18 @@ All tokenizers implement the `Tokenizer` protocol with these methods:
 
 ## Data Preparation Utilities
 
-The updated `ml_playground/prepare.py` module provides:
+The updated `src/ml_playground/data_pipeline/preparer.py` module coordinates experiment preparation pipelines and
+re-exports the IO helpers implemented in `src/ml_playground/data_pipeline/transforms/io.py`:
 
 ### File State Management
 
-- `snapshot_files(paths: Iterable[Path])` - Take a snapshot of file states for diffing later
-- `diff_files(paths: Iterable[Path], before: dict[Path, tuple[bool, float, int]])` - Compare file states and determine
+- `snapshot_file_states(paths: Iterable[Path])` - Take a snapshot of file states for diffing later
+- `diff_file_states(paths: Iterable[Path], before: dict[Path, tuple[bool, float, int]])` - Compare file states and determine
   what changed
 
 ### Metadata Creation
 
-- `create_standardized_metadata(tokenizer: Tokenizer, train_tokens: int, val_tokens: int, extras: dict = None)` - Create
+- `create_standardized_metadata(tokenizer: Tokenizer, train_tokens: int, val_tokens: int, extras: dict | None = None)` - Create
   standardized metadata for dataset preparation
 
 ### Data Preparation Example
@@ -88,7 +90,7 @@ The updated `ml_playground/prepare.py` module provides:
 
 ## CLI Utilities
 
-The `ml_playground/cli.py` module provides the command-line interface for the framework. It uses a standardized
+The `src/ml_playground/cli.py` module provides the command-line interface for the framework. It uses a standardized
 structure for defining and running commands.
 
 ### Commands
@@ -121,16 +123,16 @@ All commands are also available via the executable script `./tools/dev_tasks.py`
 ## Configuration System
 
 The framework uses a TOML-based configuration system with strict Pydantic models for validation and type safety. The
-configuration stack now lives under `ml_playground/configuration/`, which is split into three focused modules:
+configuration stack now lives under `src/ml_playground/configuration/`, which is split into three focused modules:
 
-- `ml_playground/configuration/models.py` — all Pydantic schemas (`ExperimentConfig`, `TrainerConfig`, etc.).
-- `ml_playground/configuration/loading.py` — TOML IO helpers (`read_toml_dict`, `load_full_experiment_config`, section
+- `ml_playground.configuration.models` — all Pydantic schemas (`ExperimentConfig`, `TrainerConfig`, etc.).
+- `ml_playground.configuration.loading` — TOML IO helpers (`read_toml_dict`, `load_full_experiment_config`, section
   loaders) plus deep-merge utilities.
-- `ml_playground/configuration/cli.py` — adapters used by the Typer CLI (`load_experiment`, prerequisite checks, config
+- `ml_playground.configuration.cli` — adapters used by the Typer CLI (`load_experiment`, prerequisite checks, config
   path helpers).
 
-Legacy modules `ml_playground/config.py` and `ml_playground/config_loader.py` remain as thin re-export shims for
-compatibility but should not receive new logic.
+Legacy shims that previously lived under `ml_playground/config.py` and `ml_playground/config_loader.py` have been
+retired; depend exclusively on the `ml_playground.configuration` package.
 
 ### Config Models
 
@@ -178,11 +180,11 @@ Example annotations include `RuntimeConfig.eval_interval: AtLeastOneInt`, `DataC
 
 ### Loader & CLI Adapters
 
-- Use `ml_playground/configuration/loading.load_full_experiment_config()` for end-to-end resolution (defaults +
+- Use `ml_playground.configuration.loading.load_full_experiment_config()` for end-to-end resolution (defaults +
   experiment TOML + `.ldres` overrides).
 - Section helpers `load_train_config`, `load_sample_config`, and `load_prepare_config` live alongside the full loader
   and apply consistent provenance metadata.
-- CLI code should call `ml_playground/configuration/cli.load_experiment()` and related helpers (`cfg_path_for`,
+- CLI code should call `ml_playground.configuration.cli.load_experiment()` and related helpers (`cfg_path_for`,
   `ensure_*_prerequisites`). Avoid re-implementing filesystem logic inside command handlers.
 
 ### Logger Behavior
@@ -357,27 +359,29 @@ these rules immediately and update tests in lockstep.
 
 - **Single Source of Truth for Configuration**
 
-  - Use `ml_playground/config.py` as the only configuration authority.
-  - Prefer `load_experiment_toml()` and strongly typed models: `ExperimentConfig`, `TrainerConfig`, `SamplerConfig`,
+  - Use `ml_playground.configuration.models` as the only configuration authority.
+  - Prefer `load_experiment_toml()` from `ml_playground.configuration.loading` and strongly typed models:
+    `ExperimentConfig`, `TrainerConfig`, `SamplerConfig`,
     `RuntimeConfig`.
   - Paths must be `pathlib.Path`. Resolve relative paths relative to the TOML file location, not CWD.
 
 - **Public APIs only (no internal/legacy helpers)**
 
   - Tests and modules must import and use public APIs from concrete submodules, never private helpers in
-    `ml_playground/cli.py` or ad-hoc wrappers.
+    `src/ml_playground/cli.py` or ad-hoc wrappers.
   - If a test references `cli._internal_*` or `_get_experiment_loader`, delete/replace the test with public-API
     equivalents.
 
 - **Tokenizer Protocol as the only tokenization entrypoint**
 
-  - Use `ml_playground/tokenizer.py` factory `create_tokenizer()` and the `Tokenizer` protocol.
+  - Use `src/ml_playground/core/tokenizer.py` factory `create_tokenizer()` and the protocol defined in
+    `src/ml_playground/core/tokenizer_protocol.py`.
   - `DataConfig` controls tokenizer selection (`char`, `word`, `tiktoken`) and parameters (e.g., `ngram_size`). Do not
     re-implement tokenizers in experiments.
 
 - **Centralized Error Handling**
 
-  - Raise and handle exceptions from `ml_playground/error_handling.py`.
+  - Raise and handle exceptions from `src/ml_playground/core/error_handling.py`.
   - Use `safe_file_operation()` and `ProgressReporter` for predictable I/O and progress.
 
 - **Import Hygiene (zero workarounds)**
@@ -395,10 +399,10 @@ these rules immediately and update tests in lockstep.
 The following items are legacy/back-compat and must be removed or migrated:
 
 - Obsolete CLI internal helpers (e.g., `ml_playground.cli._get_experiment_loader`, `cli._resolve_and_load_configs`,
-  `cli._apply_train_overrides`, `cli.load_app_config`). Replace with public functions in `ml_playground/config.py` and
-  explicit CLI flows.
+  `cli._apply_train_overrides`, `cli.load_app_config`). Replace with public functions in
+  `ml_playground.configuration` and explicit CLI flows.
 - Ad-hoc config loaders and duplicate path-resolution logic (e.g., alternate `config_loader` modules). Consolidate on
-  `ml_playground/config.py` models and validators.
+  `ml_playground.configuration` models and validators.
 - Legacy test assumptions about relative paths and implicit defaults. Tests must create minimal TOMLs and assert
   behavior via typed models.
 - Backward-compat CLI flags mutating config. Configuration comes from TOML plus well-defined env JSON overrides only.
@@ -410,7 +414,7 @@ implicit fallbacks are not supported.
 
 - **Configuration (TOML-only, strict schema)**
 
-  - Models in `ml_playground/config.py` are the single source of truth.
+  - Models in `ml_playground.configuration.models` are the single source of truth.
   - Unknown/extra keys are forbidden (Pydantic `extra="forbid"`).
   - No runtime references/indirections are supported; `SamplerConfig.runtime` must be provided explicitly in TOML.
   - Path resolution and coercion to `Path` happen in loaders relative to the TOML file; models themselves only accept
@@ -459,7 +463,8 @@ comply with strict mode.
 1. Tokenization
 
    - Use `create_tokenizer()` exclusively. Migrate any custom tokenization code into the unified protocol or remove it.
-   - Ensure `prepare.py` helpers are used for dataset preparation and metadata creation.
+   - Ensure `src/ml_playground/data_pipeline/preparer.py` and supporting transforms are used for dataset preparation and
+     metadata creation.
 
 1. Error handling and logging
 
@@ -491,7 +496,8 @@ comply with strict mode.
 
 ```python
 from pathlib import Path
-from ml_playground.config import load_experiment_toml, SamplerConfig
+from ml_playground.configuration.loading import load_experiment_toml
+from ml_playground.configuration.models import SamplerConfig
 
 p = Path("experiments/exp/config.toml")
 exp = load_experiment_toml(p)
@@ -508,7 +514,8 @@ assert runtime.device in {"cpu", "mps", "cuda"}
 ```python
 from pathlib import Path
 from ml_playground.core.tokenizer import create_tokenizer
-from ml_playground.data_pipeline import prepare_with_tokenizer, write_bin_and_meta
+from ml_playground.data_pipeline.transforms.tokenization import prepare_with_tokenizer
+from ml_playground.data_pipeline.transforms.io import write_bin_and_meta
 
 tok = create_tokenizer("tiktoken", encoding_name="gpt2")
 train_arr, val_arr, meta = prepare_with_tokenizer("hello world", tok)

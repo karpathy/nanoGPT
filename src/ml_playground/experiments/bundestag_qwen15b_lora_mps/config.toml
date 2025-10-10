@@ -10,9 +10,9 @@
 
 [prepare]
 # Path to a folder of raw .txt files (recursively scanned) or a single input.txt in this folder.
-raw_dir = "ml_playground/experiments/bundestag_qwen15b_lora_mps/raw/plenarprotokolle"
+raw_dir = "src/ml_playground/experiments/bundestag_qwen15b_lora_mps/raw/plenarprotokolle"
 # Directory where the prepared dataset artifacts are written (tokenizer, train.jsonl, val.jsonl, meta.json).
-dataset_dir = "ml_playground/experiments/bundestag_qwen15b_lora_mps/datasets"
+dataset_dir = "src/ml_playground/experiments/bundestag_qwen15b_lora_mps/datasets"
 # Whether to wrap speeches with structure tokens (SPEECH_START/END, SPEAKER, etc.) during preparation.
 add_structure_tokens = true
 # Token string used to separate concatenated documents during packing; ensure it’s present if you depend on it.
@@ -89,7 +89,7 @@ min_lr = 0.000002
 
 [train.runtime]
 # Output directory for checkpoints, adapters, tokenizer copy, logs, and samples.
-out_dir = "ml_playground/experiments/bundestag_qwen15b_lora_mps/out/bundestag_qwen15b_lora_mps"
+out_dir = "src/ml_playground/experiments/bundestag_qwen15b_lora_mps/out/bundestag_qwen15b_lora_mps"
 # Total number of optimizer steps to run (across all epochs/data passes).
 max_iters = 200000
 # Frequency (in steps) to run evaluation on the validation set.
@@ -127,7 +127,7 @@ keep_last_n = 3
 
 [sample.runtime]
 # Directory from which to read adapters/tokenizer and where to write generated samples.
-out_dir = "ml_playground/experiments/bundestag_qwen15b_lora_mps/out/bundestag_qwen15b_lora_mps"
+out_dir = "src/ml_playground/experiments/bundestag_qwen15b_lora_mps/out/bundestag_qwen15b_lora_mps"
 # Compute device for sampling: "mps", "cuda", or "cpu".
 device = "mps"
 # Compute dtype during sampling; "float16" is common for speed/memory.

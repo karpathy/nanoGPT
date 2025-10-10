@@ -40,7 +40,11 @@ This preset uses the `bundestag_finetuning_mps` integration under the hood.
 End‑to‑end loop:
 
 ```bash
+<<<<<<< HEAD:ml_playground/experiments/bundestag_qwen15b_lora_mps/Readme.md
 uvx --from . dev-tasks loop bundestag_qwen15b_lora_mps --config ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+=======
+make loop bundestag_qwen15b_lora_mps CONFIG=src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+>>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/bundestag_qwen15b_lora_mps/Readme.md
 ```
 
 Individual steps:
@@ -50,10 +54,17 @@ Individual steps:
 uvx --from . dev-tasks prepare bundestag_qwen15b_lora_mps
 
 # Train
+<<<<<<< HEAD:ml_playground/experiments/bundestag_qwen15b_lora_mps/Readme.md
 uvx --from . dev-tasks train bundestag_qwen15b_lora_mps --config ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 
 # Sample
 uvx --from . dev-tasks sample bundestag_qwen15b_lora_mps --config ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+=======
+make train bundestag_qwen15b_lora_mps CONFIG=src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+
+# Sample
+make sample bundestag_qwen15b_lora_mps CONFIG=src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+>>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/bundestag_qwen15b_lora_mps/Readme.md
 ```
 
 ## Configuration Highlights
@@ -83,7 +94,7 @@ out/bundestag_qwen15b_lora_mps/
 ## Folder structure
 
 ```bash
-ml_playground/experiments/bundestag_qwen15b_lora_mps/
+src/ml_playground/experiments/bundestag_qwen15b_lora_mps/
 ├── Readme.md        # preset documentation (this file)
 ├── __init__.py      # package marker
 ├── config.toml      # preset config targeting Qwen2.5-1.5B + LoRA
@@ -102,7 +113,7 @@ ml_playground/experiments/bundestag_qwen15b_lora_mps/
 
 ## Notes
 
-- This preset rides on the generic integration at `ml_playground/experiments/bundestag_finetuning_mps`.
+- This preset rides on the generic integration at `src/ml_playground/experiments/bundestag_finetuning_mps`.
 - Swap the base model by changing `[train.hf_model].model_name`.
 
 ## Checklist
