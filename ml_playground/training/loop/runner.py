@@ -284,12 +284,16 @@ class Trainer:
 
     def _train_step(self, X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
         """Perform a gradient accumulation step and update EMA if configured."""
-        loss_tensor = torch.tensor(0.0, device=X.device)
-        for _ in range(self.cfg.data.grad_accum_steps):
-            with self.ctx:
-                logits, loss_tensor = self.model(X, Y)
-                loss_tensor = loss_tensor / self.cfg.data.grad_accum_steps
-            self.scaler.scale(loss_tensor).backward()
+
+        grad_steps = int(self.cfg.data.grad_accum_steps)
+        if grad_steps <= 0:
+            raise ValueError("grad_accum_steps must be a positive integer")
+
+        loss_tensor: torch.Tensor
+        if grad_steps == 1:
+            loss_tensor = self._train_step_single(X, Y)
+        else:
+            loss_tensor = self._train_step_accum(X, Y, grad_steps)
 
         if self.cfg.optim.grad_clip != 0.0:
             self.scaler.unscale_(self.optimizer)
@@ -303,6 +307,53 @@ class Trainer:
 
         if self.ema:
             self.ema.update(cast(GPT, getattr(self.model, "_orig_mod", self.model)))
+        return loss_tensor.detach()
+
+    def _train_step_single(self, X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
+        with self.ctx:
+            _, loss_tensor = self.model(X, Y)
+        self.scaler.scale(loss_tensor).backward()
+        return loss_tensor
+
+    def _train_step_accum(
+        self, X: torch.Tensor, Y: torch.Tensor, grad_steps: int
+    ) -> torch.Tensor:
+        if grad_steps > 1 and hasattr(torch, "vmap"):
+            try:
+                return self._train_step_vmap(X, Y, grad_steps)
+            except RuntimeError:
+                # Fallback if vmap cannot be applied (e.g., due to unsupported ops)
+                pass
+        return self._train_step_python(X, Y, grad_steps)
+
+    def _train_step_python(
+        self, X: torch.Tensor, Y: torch.Tensor, grad_steps: int
+    ) -> torch.Tensor:
+        loss_tensor = torch.tensor(0.0, device=X.device)
+        with self.ctx:
+            for _ in range(grad_steps):
+                _, loss_tensor = self.model(X, Y)
+                loss_tensor = loss_tensor / grad_steps
+                self.scaler.scale(loss_tensor).backward()
+        return loss_tensor
+
+    def _train_step_vmap(
+        self, X: torch.Tensor, Y: torch.Tensor, grad_steps: int
+    ) -> torch.Tensor:
+        x_expanded = X.unsqueeze(0).expand(grad_steps, *X.shape)
+        y_expanded = Y.unsqueeze(0).expand(grad_steps, *Y.shape)
+
+        with self.ctx:
+
+            def _forward(x_batch: torch.Tensor, y_batch: torch.Tensor) -> torch.Tensor:
+                _, loss_val = self.model(x_batch, y_batch)
+                return loss_val
+
+            vmap_fn = torch.vmap(_forward)
+            losses = vmap_fn(x_expanded, y_expanded)
+
+        loss_tensor = losses.mean()
+        self.scaler.scale(loss_tensor).backward()
         return loss_tensor
 
 

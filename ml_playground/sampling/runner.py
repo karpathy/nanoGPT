@@ -170,13 +170,14 @@ class Sampler:
             return
 
         prompt_ids = tuple(start_ids)
+        device = torch.device(self.runtime_cfg.device)
         if (
             self._prompt_tensor is None
             or self._cached_prompt_ids != prompt_ids
-            or self._prompt_tensor.device != torch.device(self.runtime_cfg.device)
+            or self._prompt_tensor.device != device
         ):
             self._prompt_tensor = torch.as_tensor(
-                start_ids, dtype=torch.long, device=self.runtime_cfg.device
+                start_ids, dtype=torch.long, device=device
             ).unsqueeze(0)
             self._cached_prompt_ids = prompt_ids
 
@@ -185,21 +186,48 @@ class Sampler:
         self.logger.info("Sampling...")
         with torch.no_grad():
             with self.ctx:
-                for k in range(self.sample_cfg.num_samples):
+                for _ in range(self.sample_cfg.num_samples):
                     y = self.model.generate(
                         x,
                         self.sample_cfg.max_new_tokens,
                         temperature=self.sample_cfg.temperature,
                         top_k=self.sample_cfg.top_k,
                     )
-                    output_ids = y[0].detach().cpu().tolist()
-                    output = self.tokenizer.decode(output_ids)
+                    output_tensor = y[0].detach().cpu()
+                    output = self._decode_tokens(output_tensor)
                     self.logger.info(output)
                     self.logger.info("---------------")
 
+    def _decode_tokens(self, token_tensor: torch.Tensor) -> str:
+        if token_tensor.dtype != torch.long:
+            token_tensor = token_tensor.to(torch.long)
+        if token_tensor.device.type != "cpu":
+            token_tensor = token_tensor.cpu()
 
-def sample(cfg: SamplerConfig, shared: SharedConfig) -> None:
-    """Run sampling with a required `SharedConfig` produced by the CLI."""
+        decoder = getattr(self.tokenizer, "decode_tensor", None)
+        if callable(decoder):
+            return cast(str, decoder(token_tensor))
+
+        token_list = token_tensor.tolist()
+        return self.tokenizer.decode(token_list)
+
+
+def sample(cfg: SamplerConfig, shared: SharedConfig | None = None) -> None:
+    """Run sampling with optional shared configuration fallback."""
+
+    if shared is None:
+        runtime = cfg.runtime
+        if runtime is None:
+            raise ValueError("Runtime configuration is missing")
+        out_dir = runtime.out_dir
+        shared = SharedConfig(
+            experiment="unknown",
+            config_path=out_dir / "config.toml",
+            project_home=out_dir.parent if out_dir.parent else out_dir,
+            dataset_dir=out_dir,
+            train_out_dir=out_dir,
+            sample_out_dir=out_dir,
+        )
 
     sampler_instance = Sampler(cfg, shared)
     sampler_instance.run()
