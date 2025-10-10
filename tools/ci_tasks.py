@@ -141,8 +141,12 @@ def unit(
     """Run unit tests."""
     if os.environ.get("CI_COVERAGE_FRAGMENT") == "unit":
         _run_coverage_fragment("unit", args)
-    else:
-        _pytest(["tests/unit", *utils.forwarded_args(args)])
+        return
+
+    _pytest(["tests/unit", *utils.forwarded_args(args)])
+    fragment_env = os.environ.copy()
+    fragment_env["CI_COVERAGE_FRAGMENT"] = "unit"
+    utils.uv_run("ci-tasks", "unit", env=fragment_env)
 
 
 @app.command("property")
@@ -154,8 +158,12 @@ def property_tests(
     """Run property-based tests."""
     if os.environ.get("CI_COVERAGE_FRAGMENT") == "property":
         _run_coverage_fragment("property", args)
-    else:
-        _pytest(["tests/property", *utils.forwarded_args(args)])
+        return
+
+    _pytest(["tests/property", *utils.forwarded_args(args)])
+    fragment_env = os.environ.copy()
+    fragment_env["CI_COVERAGE_FRAGMENT"] = "property"
+    utils.uv_run("ci-tasks", "property", env=fragment_env)
 
 
 @app.command()
