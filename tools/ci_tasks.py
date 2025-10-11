@@ -206,45 +206,14 @@ def coverage_report(
     """Generate coverage reports under .cache/coverage."""
     dest_cov = utils.coverage_file()
     ci_strict = os.environ.get("CI", "").lower() == "true"
-    fragments = utils.coverage_fragments(dest_cov)
     if not dest_cov.exists():
-        if fragments:
-            env_combine = _coverage_file_env(dest_cov)
-            result = utils.uv_run(
-                "coverage",
-                "combine",
-                *(str(fragment) for fragment in fragments),
-                env=env_combine,
-                check=False,
-            )
-            if result.returncode != 0:
-                message = "[coverage] failed to combine coverage fragments"
-                if ci_strict:
-                    typer.echo(message, err=True)
-                    raise typer.Exit(result.returncode or 1)
-                raise typer.Exit(result.returncode)
-            for fragment in fragments:
-                utils.remove_path(fragment)
-        else:
-            coverage_test()
-            fragments = utils.coverage_fragments(dest_cov)
-            if fragments:
-                env_combine = _coverage_file_env(dest_cov)
-                result = utils.uv_run(
-                    "coverage",
-                    "combine",
-                    *(str(fragment) for fragment in fragments),
-                    env=env_combine,
-                    check=False,
-                )
-                if result.returncode != 0:
-                    message = "[coverage] failed to combine coverage fragments"
-                    if ci_strict:
-                        typer.echo(message, err=True)
-                        raise typer.Exit(result.returncode or 1)
-                    raise typer.Exit(result.returncode)
-                for fragment in fragments:
-                    utils.remove_path(fragment)
+        typer.echo(
+            "[coverage] missing coverage data file. Ensure the prior 'coverage-test' step ran and wrote '"
+            + str(dest_cov)
+            + "'",
+            err=True,
+        )
+        raise typer.Exit(1)
 
     if ci_strict and dest_cov.stat().st_size == 0:
         typer.echo("[coverage] coverage data file is empty", err=True)
