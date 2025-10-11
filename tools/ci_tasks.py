@@ -190,6 +190,9 @@ def coverage_test() -> None:
         "tests/property",
         env=env,
     )
+    # Normalize to a single monolithic file so the report stage can rely on it
+    env_combine = _coverage_file_env(dest_cov)
+    utils.uv_run("coverage", "combine", env=env_combine, check=False)
 
 
 @app.command("coverage-report")
