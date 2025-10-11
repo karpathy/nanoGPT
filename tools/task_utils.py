@@ -113,6 +113,7 @@ def coverage_file() -> Path:
 
 
 def coverage_fragments(dest: Path) -> list[Path]:
+    dest.parent.mkdir(parents=True, exist_ok=True)
     return [p for p in dest.parent.glob("coverage.sqlite.*") if p.name != dest.name]
 
 
