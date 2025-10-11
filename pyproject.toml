@@ -72,6 +72,16 @@ packages = ["src/ml_playground"]
 include = [
     "src/ml_playground",
     "src/ml_playground/**",
+]
+
+[tool.hatch.build.targets.wheel.force-include]
+"tools" = "tools"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "pyproject.toml",
+    "src/ml_playground",
+    "src/ml_playground/**",
     "tools",
     "tools/**",
 ]
