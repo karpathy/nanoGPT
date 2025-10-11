@@ -47,8 +47,8 @@ Property-based tests using Hypothesis complement example-driven unit tests. They
 
 ## Run Locally
 
-- Run all unit tests: `uvx --from . dev-tasks unit`
-- Unit with coverage: `uvx --from . dev-tasks unit-cov`
+- Run all unit tests: `uvx --from . test-tasks unit`
+- Unit with coverage: `uvx --from . test-tasks unit-cov`
 - Single file: `uv run pytest tests/unit/path/to/test_*.py`
 
 ## Folder structure

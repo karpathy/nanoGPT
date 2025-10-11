@@ -102,23 +102,23 @@ structure for defining and running commands.
 
 ### Usage
 
-Run subcommands via the UVX-backed `dev-tasks` CLI:
+Invoke subcommands directly via the Typer CLI packaged with the project:
 
 ```bash
 # Prepare data for an experiment
-uvx --from . dev-tasks prepare <experiment> [--config /path/to/config.toml]
+uv run python -m ml_playground.cli prepare <experiment> --config path/to/config.toml
 
 # Train a model for an experiment
-uvx --from . dev-tasks train <experiment> --config /path/to/config.toml
+uv run python -m ml_playground.cli train <experiment> --config path/to/config.toml
 
 # Sample from a trained model
-uvx --from . dev-tasks sample <experiment> --config /path/to/config.toml
+uv run python -m ml_playground.cli sample <experiment> --config path/to/config.toml
 
 # Run prepare -> train -> sample in one go
-uvx --from . dev-tasks loop <experiment> --config /path/to/config.toml
+uv run python -m ml_playground.cli loop <experiment> --config path/to/config.toml
 ```
 
-All commands are also available via the executable script `./tools/dev_tasks.py` if you prefer a local runner.
+The CLI emits concise, structured logs; pass `--verbose` where available for additional detail.
 
 ## Configuration System
 

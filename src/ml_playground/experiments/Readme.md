@@ -54,17 +54,10 @@ Important: Strict configuration injection
 
 Common CLI patterns
 
-<<<<<<< HEAD:ml_playground/experiments/Readme.md
-- Prepare: `uvx --from . dev-tasks prepare <name> [--config path]` (e.g., `uvx --from . dev-tasks prepare shakespeare`).
-- Train: `uvx --from . dev-tasks train <name> --config path` (e.g., `uvx --from . dev-tasks train shakespeare --config ml_playground/configs/shakespeare_cpu.toml`).
-- Sample: `uvx --from . dev-tasks sample <name> --config path` (e.g., `uvx --from . dev-tasks sample shakespeare --config ml_playground/configs/shakespeare_cpu.toml`).
-- End‑to‑end: `uvx --from . dev-tasks loop <name> --config path` (e.g., `uvx --from . dev-tasks loop bundestag_char --config ml_playground/configs/bundestag_char_cpu.toml`).
-=======
-- Prepare: `make prepare <name> [CONFIG=path]` (e.g., `make prepare shakespeare`).
-- Train: `make train <name> CONFIG=path` (e.g., `make train shakespeare CONFIG=src/ml_playground/experiments/shakespeare/config.toml`).
-- Sample: `make sample <name> CONFIG=path` (e.g., `make sample shakespeare CONFIG=src/ml_playground/experiments/shakespeare/config.toml`).
-- End‑to‑end: `make loop <name> CONFIG=path` (e.g., `make loop bundestag_char CONFIG=src/ml_playground/experiments/bundestag_char/config.toml`).
->>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/Readme.md
+- Prepare: `uv run python -m ml_playground.cli prepare <name> --config path/to/config.toml` (e.g., `uv run python -m ml_playground.cli prepare shakespeare --config src/ml_playground/experiments/shakespeare/config.toml`).
+- Train: `uv run python -m ml_playground.cli train <name> --config path/to/config.toml` (e.g., `uv run python -m ml_playground.cli train shakespeare --config src/ml_playground/experiments/shakespeare/config.toml`).
+- Sample: `uv run python -m ml_playground.cli sample <name> --config path/to/config.toml` (e.g., `uv run python -m ml_playground.cli sample shakespeare --config src/ml_playground/experiments/shakespeare/config.toml`).
+- End‑to‑end: `uv run python -m ml_playground.cli loop <name> --config path/to/config.toml` (e.g., `uv run python -m ml_playground.cli loop bundestag_char --config src/ml_playground/experiments/bundestag_char/config.toml`).
 
 Implemented experiments (current)
 
@@ -147,8 +140,8 @@ Paste the following into `src/ml_playground/experiments/<name>/Readme.md` and re
 ## Environment Setup (preferred)
 
 ```bash
-uvx --from . dev-tasks setup
-uvx --from . dev-tasks verify
+uvx --from . env-tasks setup
+uvx --from . env-tasks verify
 ```
 
 ## How to Run
@@ -158,37 +151,25 @@ uvx --from . dev-tasks verify
 Prepare dataset:
 
 ```bash
-uvx --from . dev-tasks prepare <name>
+uv run python -m ml_playground.cli prepare <name> --config src/ml_playground/experiments/<name>/config.toml
 ```
 
 Train:
 
 ```bash
-<<<<<<< HEAD:ml_playground/experiments/Readme.md
-uvx --from . dev-tasks train <name> --config ml_playground/experiments/<name>/config.toml
-=======
-make train <name> CONFIG=src/ml_playground/experiments/<name>/config.toml
->>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/Readme.md
+uv run python -m ml_playground.cli train <name> --config src/ml_playground/experiments/<name>/config.toml
 ```
 
 Sample:
 
 ```bash
-<<<<<<< HEAD:ml_playground/experiments/Readme.md
-uvx --from . dev-tasks sample <name> --config ml_playground/experiments/<name>/config.toml
-=======
-make sample <name> CONFIG=src/ml_playground/experiments/<name>/config.toml
->>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/Readme.md
+uv run python -m ml_playground.cli sample <name> --config src/ml_playground/experiments/<name>/config.toml
 ```
 
 End-to-end loop:
 
 ```bash
-<<<<<<< HEAD:ml_playground/experiments/Readme.md
-uvx --from . dev-tasks loop <name> --config ml_playground/experiments/<name>/config.toml
-=======
-make loop <name> CONFIG=src/ml_playground/experiments/<name>/config.toml
->>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/Readme.md
+uv run python -m ml_playground.cli loop <name> --config src/ml_playground/experiments/<name>/config.toml
 ```
 
 ## Configuration

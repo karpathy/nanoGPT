@@ -14,7 +14,7 @@ Get up and running immediately:
 ```bash
 uvx --from . env-tasks setup
 uvx --from . env-tasks verify
-uvx --from . ci-tasks quality   # ruff+format+pyright+mypy+pytest
+uvx --from . ci-tasks quality   # ruff + format + pyright + mypy + pytest
 ```
 
 ## Documentation Structure
@@ -115,17 +115,17 @@ uvx --from . ci-tasks quality
 
 ```bash
 # Prepare datasets
-uv run python -m ml_playground.cli prepare shakespeare
-uv run python -m ml_playground.cli prepare bundestag_char
+uv run python -m ml_playground.cli prepare shakespeare --config src/ml_playground/experiments/shakespeare_cpu.toml
+uv run python -m ml_playground.cli prepare bundestag_char --config src/ml_playground/configs/bundestag_char_cpu.toml
 
 # Train (select config path explicitly)
-uv run python -m ml_playground.cli train shakespeare --exp-config ml_playground/configs/shakespeare_cpu.toml
+uv run python -m ml_playground.cli train shakespeare --config src/ml_playground/configs/shakespeare_cpu.toml
 
 # Sample from trained model
-uv run python -m ml_playground.cli sample shakespeare --exp-config ml_playground/configs/shakespeare_cpu.toml
+uv run python -m ml_playground.cli sample shakespeare --config src/ml_playground/configs/shakespeare_cpu.toml
 
 # End-to-end pipeline
-uv run python -m ml_playground.cli loop bundestag_char --exp-config ml_playground/configs/bundestag_char_cpu.toml
+uv run python -m ml_playground.cli loop bundestag_char --config src/ml_playground/configs/bundestag_char_cpu.toml
 ```
 
 ## Need Help?

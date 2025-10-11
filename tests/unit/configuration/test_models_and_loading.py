@@ -55,7 +55,11 @@ def test_get_default_config_path_with_none_uses_package_root() -> None:
     """get_default_config_path with None should use package root."""
     path = config_loading.get_default_config_path(None)
     assert path.name == "default_config.toml"
-    assert "src/ml_playground/experiments" in str(path)
+    assert (
+        str(path)
+        .replace("\\", "/")
+        .endswith("src/ml_playground/experiments/default_config.toml")
+    )
 
 
 def test_get_default_config_path_with_explicit_root(tmp_path: Path) -> None:
@@ -63,11 +67,7 @@ def test_get_default_config_path_with_explicit_root(tmp_path: Path) -> None:
     path = config_loading.get_default_config_path(tmp_path)
     assert (
         path
-        == tmp_path
-        / "src"
-        / "ml_playground"
-        / "experiments"
-        / "default_config.toml"
+        == tmp_path / "src" / "ml_playground" / "experiments" / "default_config.toml"
     )
 
 
@@ -181,11 +181,7 @@ tokenizer_type = "char"
 
     # Create default config
     default_path = (
-        tmp_path
-        / "src"
-        / "ml_playground"
-        / "experiments"
-        / "default_config.toml"
+        tmp_path / "src" / "ml_playground" / "experiments" / "default_config.toml"
     )
     default_path.parent.mkdir(parents=True)
     default_path.write_text("")
@@ -209,11 +205,7 @@ def test_load_prepare_config_missing_section_raises(tmp_path: Path) -> None:
     cfg_path.write_text("[train]\n")
 
     default_path = (
-        tmp_path
-        / "src"
-        / "ml_playground"
-        / "experiments"
-        / "default_config.toml"
+        tmp_path / "src" / "ml_playground" / "experiments" / "default_config.toml"
     )
     default_path.parent.mkdir(parents=True)
     default_path.write_text("")
