@@ -170,6 +170,13 @@ jobs:
         with:
           name: coverage-fragment-property
           path: .cache/coverage
+      - run: |
+          export COVERAGE_FILE=.cache/coverage/coverage.sqlite
+          uv run --project . coverage combine \
+            .cache/coverage/coverage.sqlite.unit \
+            .cache/coverage/coverage.sqlite.property
+          ls -la .cache/coverage || true
+          test -f "$COVERAGE_FILE"
       - run: uvx --from . ci-tasks coverage-report --fail-under 87
       - uses: actions/upload-artifact@v4
         if: always()
