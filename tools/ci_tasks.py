@@ -52,7 +52,11 @@ def _coverage_file_env(coverage_file: Path) -> dict[str, str]:
 
 
 def _combine_fragments(
-    dest_cov: Path, fragments: list[Path], *, ci_strict: bool
+    dest_cov: Path,
+    fragments: list[Path],
+    *,
+    ci_strict: bool,
+    cleanup: bool = True,
 ) -> None:
     if not fragments:
         return
@@ -73,46 +77,9 @@ def _combine_fragments(
             typer.echo(message, err=True)
             raise typer.Exit(result.returncode or 1)
         raise typer.Exit(result.returncode)
-    for fragment in fragments:
-        utils.remove_path(fragment)
-
-
-def _run_coverage_fragment(
-    fragment: CoverageFragment, args: Optional[List[str]] = None
-) -> Path:
-    fragment_path = _coverage_fragment_path(fragment)
-    utils.remove_path(fragment_path)
-    env = _coverage_run_env(fragment_path)
-    targets = {
-        "unit": ["tests/unit"],
-        "property": ["tests/property"],
-    }[fragment]
-    extra = utils.forwarded_args(args)
-    command = utils.pytest_command(targets + extra)
-    try:
-        n_index = command.index("-n")
-        command[n_index + 1] = "0"
-    except ValueError:
-        pass
-    utils.uv_run(
-        "coverage",
-        "run",
-        f"--data-file={fragment_path}",
-        "-m",
-        *command,
-        env=env,
-    )
-    shards = utils.coverage_fragments(fragment_path)
-    if shards:
-        _combine_fragments(fragment_path, shards, ci_strict=False)
-
-    if not fragment_path.exists():
-        typer.echo(
-            f"[coverage] fragment generation produced no data for {fragment}",
-            err=True,
-        )
-        raise typer.Exit(1)
-    return fragment_path
+    if cleanup:
+        for fragment in fragments:
+            utils.remove_path(fragment)
 
 
 @app.command()
@@ -194,13 +161,34 @@ def acceptance(
 @app.command("coverage-test")
 def coverage_test() -> None:
     """Run targeted tests under coverage to collect data."""
+    utils.ensure_cache_dirs("coverage", "hypothesis")
     dest_cov = utils.coverage_file()
+    dest_cov.parent.mkdir(parents=True, exist_ok=True)
     utils.remove_path(dest_cov)
-    fragments = [
-        _run_coverage_fragment("unit"),
-        _run_coverage_fragment("property"),
-    ]
-    _combine_fragments(dest_cov, fragments, ci_strict=False)
+    for fragment in utils.coverage_fragments(dest_cov):
+        utils.remove_path(fragment)
+
+    env = os.environ.copy()
+    env.update(
+        {
+            "HYPOTHESIS_DATABASE_DIRECTORY": str(utils.CACHE_DIR / "hypothesis"),
+            "HYPOTHESIS_STORAGE_DIRECTORY": str(utils.CACHE_DIR / "hypothesis"),
+            "HYPOTHESIS_SEED": "0",
+            "PYTHONHASHSEED": "0",
+            "COVERAGE_FILE": str(dest_cov),
+        }
+    )
+    utils.uv_run(
+        "coverage",
+        "run",
+        "-m",
+        "pytest",
+        "-n",
+        "0",
+        "tests/unit",
+        "tests/property",
+        env=env,
+    )
 
 
 @app.command("coverage-report")
@@ -217,17 +205,27 @@ def coverage_report(
     """Generate coverage reports under .cache/coverage."""
     dest_cov = utils.coverage_file()
     ci_strict = os.environ.get("CI", "").lower() == "true"
-    fragments = utils.coverage_fragments(dest_cov)
-
-    if fragments:
-        _combine_fragments(dest_cov, fragments, ci_strict=ci_strict)
-
     if not dest_cov.exists():
-        typer.echo(
-            "[coverage] coverage data file is missing; run `uvx --from . ci-tasks coverage-test` or provide coverage fragments",
-            err=True,
-        )
-        raise typer.Exit(1)
+        coverage_test()
+    else:
+        fragments = utils.coverage_fragments(dest_cov)
+        if fragments:
+            env_combine = _coverage_file_env(dest_cov)
+            result = utils.uv_run(
+                "coverage",
+                "combine",
+                *(str(fragment) for fragment in fragments),
+                env=env_combine,
+                check=False,
+            )
+            if result.returncode != 0:
+                message = "[coverage] failed to combine coverage fragments"
+                if ci_strict:
+                    typer.echo(message, err=True)
+                    raise typer.Exit(result.returncode or 1)
+                raise typer.Exit(result.returncode)
+            for fragment in fragments:
+                utils.remove_path(fragment)
 
     if ci_strict and dest_cov.stat().st_size == 0:
         typer.echo("[coverage] coverage data file is empty", err=True)
