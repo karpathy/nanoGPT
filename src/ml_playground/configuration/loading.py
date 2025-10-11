@@ -89,6 +89,15 @@ def read_toml_dict(
 
 
 def _default_config_path_from_root(project_root: Path) -> Path:
+    # If we're running from an installed package, _project_root() equals the
+    # parent of the package directory. In that case, defaults live inside the
+    # package itself.
+    if _package_root().parent == project_root:
+        return _package_root() / "experiments" / "default_config.toml"
+
+    # Otherwise, compute a path based on common project layouts. Do not check
+    # for existence here; callers like tests may pass a synthetic root and
+    # assert the constructed path shape.
     if project_root.name == "ml_playground":
         base = project_root
     elif project_root.name == "src":
@@ -174,7 +183,11 @@ def load_sample_config(
 ) -> SamplerConfig:
     raw_exp = read_toml_dict(config_path)
     project_root = _project_root()
-    defaults_path = _default_config_path_from_root(project_root)
+    defaults_path = (
+        default_config_path
+        if default_config_path is not None
+        else _default_config_path_from_root(project_root)
+    )
     defaults_raw = read_toml_dict(defaults_path) if defaults_path.exists() else {}
 
     raw_merged = merge_mappings(defaults_raw, raw_exp)
@@ -197,7 +210,11 @@ def load_prepare_config(
 ) -> PreparerConfig:
     raw_exp = read_toml_dict(config_path)
     project_root = _project_root()
-    defaults_path = _default_config_path_from_root(project_root)
+    defaults_path = (
+        default_config_path
+        if default_config_path is not None
+        else _default_config_path_from_root(project_root)
+    )
     defaults_raw = read_toml_dict(defaults_path) if defaults_path.exists() else {}
 
     raw_merged = merge_mappings(defaults_raw, raw_exp)
