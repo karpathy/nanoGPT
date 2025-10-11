@@ -181,6 +181,7 @@ def coverage_test() -> None:
     utils.uv_run(
         "coverage",
         "run",
+        f"--data-file={dest_cov}",
         "-m",
         "pytest",
         "-n",
