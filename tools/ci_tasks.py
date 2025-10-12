@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import os
+import json
 from pathlib import Path
 from typing import List, Literal, Optional
 
@@ -241,6 +242,78 @@ def coverage_report(
             typer.echo(f"  - {path.relative_to(utils.ROOT)}")
 
 
+@app.command("coverage-threshold")
+def coverage_threshold(
+    line_threshold: float = typer.Option(
+        0.0,
+        "--line-threshold",
+        help="Fail if total line coverage is below this percentage.",
+    ),
+    branch_threshold: float = typer.Option(
+        0.0,
+        "--branch-threshold",
+        help="Fail if total branch coverage is below this percentage.",
+    ),
+    verbose: bool = typer.Option(
+        False, "--verbose", help="Print computed coverage totals."
+    ),
+) -> None:
+    """Fail when coverage metrics drop below configured thresholds."""
+    dest_cov = utils.coverage_file()
+    if not dest_cov.exists():
+        typer.echo(
+            "[coverage] missing coverage data file. Run 'uvx --from . ci-tasks coverage-test' first.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    env = _coverage_file_env(dest_cov)
+    json_path = dest_cov.parent / "coverage.json"
+    utils.uv_run("coverage", "json", "-o", str(json_path), env=env)
+
+    try:
+        totals = json.loads(json_path.read_text(encoding="utf-8"))["totals"]
+    except (json.JSONDecodeError, KeyError) as exc:  # pragma: no cover - defensive
+        typer.echo(f"[coverage] failed to parse branch coverage data: {exc}", err=True)
+        raise typer.Exit(1)
+
+    num_branches = totals.get("num_branches", 0)
+    covered_branches = totals.get("covered_branches", 0)
+    covered_lines = totals.get("covered_lines", 0)
+    num_statements = totals.get("num_statements", 0)
+
+    messages: list[str] = []
+
+    line_pct = (covered_lines / num_statements) * 100 if num_statements else 0.0
+    if verbose:
+        typer.echo(
+            f"[coverage] totals: lines={line_pct:.2f}% branches="
+            f"{(covered_branches / num_branches * 100) if num_branches else float('nan'):.2f}%"
+        )
+
+    if line_threshold > 0 and num_statements == 0:
+        messages.append("line coverage totals missing from coverage.json")
+    elif line_threshold > 0 and line_pct < line_threshold:
+        messages.append(
+            f"Line coverage {line_pct:.2f}% < {line_threshold:.2f}%. Run 'uvx --from . ci-tasks coverage-test'."
+        )
+
+    if branch_threshold > 0:
+        if num_branches == 0:
+            messages.append("Branch coverage data missing from coverage.json")
+        else:
+            branch_pct = (covered_branches / num_branches) * 100
+            if branch_pct < branch_threshold:
+                messages.append(
+                    f"Branch coverage {branch_pct:.2f}% < {branch_threshold:.2f}%."
+                )
+
+    if messages:
+        for message in messages:
+            typer.echo(f"[coverage] {message}", err=True)
+        raise typer.Exit(1)
+
+
 @app.command("coverage-badge")
 def coverage_badge() -> None:
     """Regenerate the SVG coverage badges."""
@@ -251,10 +324,19 @@ def coverage_badge() -> None:
 
 
 @app.command()
-def quality() -> None:
+def quality(
+    args: Optional[List[str]] = typer.Argument(
+        None, help="Additional pre-commit arguments", metavar="PRECOMMIT_ARGS"
+    ),
+) -> None:
     """Run the full pre-commit quality gate."""
     utils.uv_run(
-        "pre-commit", "run", "--config", str(utils.PRE_COMMIT_CONFIG), "--all-files"
+        "pre-commit",
+        "run",
+        "--config",
+        str(utils.PRE_COMMIT_CONFIG),
+        "--all-files",
+        *utils.forwarded_args(args),
     )
     integration()
     acceptance()
@@ -262,7 +344,11 @@ def quality() -> None:
 
 
 @app.command("quality-fast")
-def quality_fast() -> None:
+def quality_fast(
+    args: Optional[List[str]] = typer.Argument(
+        None, help="Additional pre-commit arguments", metavar="PRECOMMIT_ARGS"
+    ),
+) -> None:
     """Run lint/format focused pre-commit hooks."""
     utils.uv_run(
         "pre-commit",
@@ -271,6 +357,7 @@ def quality_fast() -> None:
         str(utils.PRE_COMMIT_CONFIG),
         "--all-files",
         "ruff",
+        *utils.forwarded_args(args),
     )
     utils.uv_run(
         "pre-commit",
@@ -279,6 +366,7 @@ def quality_fast() -> None:
         str(utils.PRE_COMMIT_CONFIG),
         "--all-files",
         "ruff-format",
+        *utils.forwarded_args(args),
     )
     utils.uv_run(
         "pre-commit",
@@ -287,6 +375,7 @@ def quality_fast() -> None:
         str(utils.PRE_COMMIT_CONFIG),
         "--all-files",
         "mdformat",
+        *utils.forwarded_args(args),
     )
 
 

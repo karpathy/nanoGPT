@@ -77,3 +77,11 @@ jobs:
       - if: steps.cache-venv.outputs.cache-hit != 'true'
         run: uv sync --frozen
       - run: uvx --from . ci-tasks quality
+      - name: Ensure coverage badges are committed
+        run: |
+          if ! git diff --quiet -- docs/assets/coverage*.svg; then
+            echo "::error::Coverage badges are stale. Run 'uvx --from . ci-tasks coverage-report --fail-under 87' and 'uvx --from . ci-tasks coverage-badge', then commit the updated SVGs." >&2
+            git status --short docs/assets/coverage*.svg || true
+            exit 1
+          fi
+

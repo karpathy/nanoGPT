@@ -8,7 +8,7 @@ import shutil
 import subprocess
 from importlib import resources
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Iterable, List, Optional
 
 import typer
 
@@ -92,8 +92,25 @@ def ensure_cache_dirs(*subdirs: str) -> None:
         (CACHE_DIR / subdir).mkdir(parents=True, exist_ok=True)
 
 
-def forwarded_args(args: Optional[List[str]]) -> List[str]:
-    return list(args or [])
+def forwarded_args(args: Any) -> List[str]:
+    if args is None:
+        return []
+
+    try:
+        from typer.models import ArgumentInfo, OptionInfo  # type: ignore
+
+        if isinstance(args, (ArgumentInfo, OptionInfo)):
+            return []
+    except ImportError:  # pragma: no cover - Typer not installed
+        pass
+
+    if isinstance(args, str):
+        return [args]
+
+    if isinstance(args, Iterable):
+        return list(args)
+
+    return [str(args)]
 
 
 def pytest_command(extra: Optional[List[str]] = None) -> List[str]:

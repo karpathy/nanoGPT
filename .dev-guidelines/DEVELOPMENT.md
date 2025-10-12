@@ -1,6 +1,6 @@
-______________________________________________________________________
-
-## trigger: always_on
+---
+trigger: always_on
+---
 
 # ml_playground Development Practices
 

@@ -38,7 +38,8 @@ repos:
         if compgen -G "${COVERAGE_DIR}/coverage.sqlite."* > /dev/null; then
           COVERAGE_FILE="${COVERAGE_DIR}/coverage.sqlite" uv run coverage combine
         fi
-        COVERAGE_FILE="${COVERAGE_DIR}/coverage.sqlite" uv run coverage report -m --fail-under=87.00
+        COVERAGE_FILE="${COVERAGE_DIR}/coverage.sqlite" uv run coverage report -m
+        uvx --from . python tools/ci_tasks.py coverage-threshold --line-threshold 87 --branch-threshold 78
     language: system
     pass_filenames: false
 - repo: local
