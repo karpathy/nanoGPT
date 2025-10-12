@@ -26,21 +26,20 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - uses: astral-sh/setup-uv@v4
+      - id: setup-uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: latest
+          enable-cache: true
+          cache-local-path: .cache/uv
+          cache-dependency-glob: uv.lock
+          prune-cache: false
       - name: Prepare cache directories
         run: |
           mkdir -p .cache/uv
           mkdir -p .cache/pre-commit
           mkdir -p .cache/ruff
           mkdir -p .venv
-      - uses: actions/cache@v4
-        id: cache-uv-venv
-        with:
-          path: |
-            .venv
-          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-venv-${{ hashFiles('uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-venv-
       - name: Cache pre-commit envs
         uses: actions/cache@v4
         with:
@@ -48,15 +47,6 @@ jobs:
           key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-pre-commit-${{ hashFiles('.githooks/.pre-commit-config.yaml') }}
           restore-keys: |
             ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-pre-commit-
-      - name: Cache uv global wheels
-        uses: actions/cache@v4
-        id: cache-uv
-        with:
-          path: |
-            .cache/uv
-          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-wheels-${{ hashFiles('uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-wheels-
       - name: Cache ruff cache
         uses: actions/cache@v4
         with:
@@ -70,8 +60,7 @@ jobs:
           du -sh .cache/uv || true
           du -sh .cache/pre-commit || true
           du -sh .venv || true
-      - if: steps.cache-uv-venv.outputs.cache-hit != 'true'
-        run: uv sync --frozen
+      - run: uv sync --frozen --group dev --group ml
       - run: uvx --from . ci-tasks quality
       - name: Ensure coverage badges are committed
         run: |

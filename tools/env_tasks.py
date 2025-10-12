@@ -33,14 +33,24 @@ def setup(
 
 @app.command()
 def sync(
+    groups: list[str] = typer.Option(
+        None,
+        "--group",
+        help="Sync the specified dependency groups (repeatable).",
+    ),
     all_groups: bool = typer.Option(
-        True, "--all-groups/--project-only", help="Install dev dependencies (default)"
+        False,
+        "--all-groups",
+        help="Install all optional dependency groups.",
     ),
 ) -> None:
     """Sync project dependencies."""
     args = ["sync"]
     if all_groups:
         args.append("--all-groups")
+    elif groups:
+        for group in groups:
+            args.extend(["--group", group])
     utils.uv(*args)
 
 

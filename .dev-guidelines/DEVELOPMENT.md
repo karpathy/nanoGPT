@@ -1,10 +1,19 @@
----
-trigger: always_on
----
+______________________________________________________________________
+
+## trigger: always_on
 
 # ml_playground Development Practices
 
 Core development practices, quality standards, and workflow for ml_playground contributors.
+
+## Quick Start
+
+```bash
+uvx --from . env-tasks setup
+uvx --from . env-tasks sync --group dev --group ml
+uvx --from . env-tasks verify
+uvx --from . ci-tasks quality   # ruff + format + pyright + mypy + pytest
+```
 
 ## Guiding Principles
 
@@ -13,32 +22,40 @@ Core development practices, quality standards, and workflow for ml_playground co
   implementation so that each change stays paired with its tests and leaves the branch in a runnable state (see
   [Developer Guidelines](Readme.md#core-principles-non-negotiable) and
   [Testing Standards](TESTING.md)).
+
 - **UV-first Typer CLIs.** Use the `env-tasks`, `test-tasks`, and `ci-tasks` Typer apps published via UVX for setup,
   quality gates, and runtime commands instead of ad-hoc pip, manual venv activation, or removed Make targets. This keeps
   environments reproducible and mirrors CI behavior (see the [repository README](../README.md#policy) and
   [Developer Guidelines](Readme.md#quick-start)).
+
 - **Single-source, fail-fast configuration.** Treat TOML as the sole source of truth; the configuration loaders merge the
   global defaults with experiment overrides, resolve relative paths, and raise immediately on malformed input while the
   strict Pydantic models forbid extras and enforce cross-field invariants (see
   [Configuration documentation](../docs/framework_utilities.md#configuration-system) and
   [`ml_playground/configuration`](../ml_playground/configuration)).
+
 - **Strict typing and pure, path-aware utilities.** Favor explicit type hints, `pathlib.Path` values, and deterministic,
   side-effect-light helpers so code remains easy to reason about and resilient to filesystem drift (see
   [Developer Guidelines](Readme.md#core-principles-non-negotiable) and
   [`ml_playground/core`](../ml_playground/core)).
+
 - **Centralized utilities over ad-hoc logic.** Reuse the shared error-handling, tokenizer, and data-preparation
   infrastructure instead of duplicating behavior, and link to the centralized documentation when extending them (see
   [Framework Utilities](../docs/framework_utilities.md#overview)).
+
 - **Deterministic, multi-layered tests.** Keep unit tests fast, isolated, and deterministic; complement them with
   property, integration, e2e, and acceptance suites so changes are guarded at multiple levels while maintaining coverage
   expectations (see [tests/README.md](../tests/README.md) and
   [tests/unit/README.md](../tests/unit/README.md#principles)).
+
 - **Documentation with intentional abstraction.** Follow the abstraction gradient and DRY rules for README files,
   keeping shared narratives centralized and using annotated folder trees rather than duplicating prose (see the
   [Documentation Guidelines](DOCUMENTATION.md#abstraction-policy)).
+
 - **Git hygiene and reviewability.** Develop on short-lived feature branches, keep commits granular and conventional,
   and maintain a linear, runnable history to streamline reviews and CI (see
   [Developer Guidelines](Readme.md#core-principles-non-negotiable)).
+
 - **Self-contained tooling.** Run helper scripts via UV, keep them documented and explicit in their CLI contracts, and
   avoid hidden behavior or manual environment tweaks (see [tools/README.md](../tools/README.md#conventions)).
 
