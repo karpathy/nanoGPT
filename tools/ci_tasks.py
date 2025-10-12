@@ -256,6 +256,9 @@ def quality() -> None:
     utils.uv_run(
         "pre-commit", "run", "--config", str(utils.PRE_COMMIT_CONFIG), "--all-files"
     )
+    integration()
+    acceptance()
+    e2e()
 
 
 @app.command("quality-fast")

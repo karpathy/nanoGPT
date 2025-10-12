@@ -2,186 +2,78 @@ name: Quality Gates
 
 on:
   push:
-    branches: [ master, '**' ]
+    branches: [ master ]
   pull_request:
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  lint:
-    name: Lint (Ruff)
+  quality:
+    name: Quality (pre-commit gate)
     runs-on: ubuntu-latest
+    env:
+      PRE_COMMIT_HOME: .cache/pre-commit
+      UV_CACHE_DIR: .cache/uv
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - id: setup-python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.13'
       - uses: astral-sh/setup-uv@v4
+      - name: Force cache envs for subsequent steps
+        run: |
+          echo "UV_CACHE_DIR=.cache/uv" >> "$GITHUB_ENV"
+          echo "PRE_COMMIT_HOME=.cache/pre-commit" >> "$GITHUB_ENV"
+      - name: Prepare cache directories
+        run: |
+          mkdir -p .cache/uv
+          mkdir -p .cache/pre-commit
+          mkdir -p .cache/ruff
+          mkdir -p .venv
       - uses: actions/cache@v4
+        id: cache-venv
+        with:
+          path: |
+            .venv
+          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uvenv-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uvenv-
+      - name: Cache pre-commit envs
+        uses: actions/cache@v4
+        with:
+          path: .cache/pre-commit
+          key: ${{ runner.os }}-precommit-${{ hashFiles('.githooks/.pre-commit-config.yaml') }}-py${{ steps.setup-python.outputs.python-version }}
+          restore-keys: |
+            ${{ runner.os }}-precommit-
+      - name: Cache uv global wheels
+        uses: actions/cache@v4
+        id: cache-uv
         with:
           path: |
             .cache/uv
-            .venv
-          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
-      - run: uv sync --all-groups --frozen
-      - run: uvx --from . ci-tasks lint
-
-  unit:
-    name: Unit Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-      - uses: astral-sh/setup-uv@v4
-      - uses: actions/cache@v4
+          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uvcache-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uvcache-
+      - name: Cache ruff cache
+        uses: actions/cache@v4
         with:
           path: |
-            .cache/uv
-            .venv
-          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
-      - run: uv sync --all-groups --frozen
-      - run: |
-          mkdir -p .cache/coverage
-          export COVERAGE_FILE=.cache/coverage/coverage.sqlite.unit
-          uv run --project . coverage run \
-            --data-file="$COVERAGE_FILE" \
-            -m pytest -q -n 0 -W error --strict-markers --strict-config tests/unit
-          # In case coverage emitted host-suffixed shards, combine into target
-          uv run --project . coverage combine "$COVERAGE_FILE"* || true
-          ls -la .cache/coverage || true
-          test -f "$COVERAGE_FILE"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: coverage-fragment-unit
-          path: .cache/coverage/coverage.sqlite.unit
-          if-no-files-found: error
-
-  property:
-    name: Property Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-      - uses: astral-sh/setup-uv@v4
-      - uses: actions/cache@v4
-        with:
-          path: |
-            .cache/uv
-            .venv
-          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
-      - run: uv sync --all-groups --frozen
-      - run: |
-          mkdir -p .cache/coverage
-          export COVERAGE_FILE=.cache/coverage/coverage.sqlite.property
-          uv run --project . coverage run \
-            --data-file="$COVERAGE_FILE" \
-            -m pytest -q -n 0 -W error --strict-markers --strict-config tests/property
-          # In case coverage emitted host-suffixed shards, combine into target
-          uv run --project . coverage combine "$COVERAGE_FILE"* || true
-          ls -la .cache/coverage || true
-          test -f "$COVERAGE_FILE"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: coverage-fragment-property
-          path: .cache/coverage/coverage.sqlite.property
-          if-no-files-found: error
-
-  integration:
-    name: Integration Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-      - uses: astral-sh/setup-uv@v4
-      - uses: actions/cache@v4
-        with:
-          path: |
-            .cache/uv
-            .venv
-          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
-      - run: uv sync --all-groups --frozen
-      - run: uvx --from . ci-tasks integration
-
-  e2e:
-    name: End-to-End Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-      - uses: astral-sh/setup-uv@v4
-      - uses: actions/cache@v4
-        with:
-          path: |
-            .cache/uv
-            .venv
-          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
-      - run: uv sync --all-groups --frozen
-      - run: uvx --from . ci-tasks e2e
-
-  acceptance:
-    name: Acceptance Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-      - uses: astral-sh/setup-uv@v4
-      - uses: actions/cache@v4
-        with:
-          path: |
-            .cache/uv
-            .venv
-          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
-      - run: uv sync --all-groups --frozen
-      - run: uvx --from . ci-tasks acceptance
-
-  coverage:
-    name: Coverage (Unit + Property)
-    needs: [unit, property]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-      - uses: astral-sh/setup-uv@v4
-      - uses: actions/cache@v4
-        with:
-          path: |
-            .cache/uv
-            .venv
-          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
-      - run: uv sync --all-groups --frozen
-      - uses: actions/download-artifact@v4
-        with:
-          name: coverage-fragment-unit
-          path: .cache/coverage
-      - uses: actions/download-artifact@v4
-        with:
-          name: coverage-fragment-property
-          path: .cache/coverage
-      - run: |
-          export COVERAGE_FILE=.cache/coverage/coverage.sqlite
-          uv run --project . coverage combine \
-            .cache/coverage/coverage.sqlite.unit \
-            .cache/coverage/coverage.sqlite.property
-          ls -la .cache/coverage || true
-          test -f "$COVERAGE_FILE"
-      - run: uvx --from . ci-tasks coverage-report --fail-under 87
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: coverage-badge-${{ github.run_id }}
-          path: |
-            .cache/coverage/coverage.json
-            .cache/coverage/htmlcov/
+            ~/.cache/ruff
+            .cache/ruff
+          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-ruff-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-ruff-
+      - name: Show cache sizes
+        run: |
+          du -sh .cache/uv || true
+          du -sh .cache/pre-commit || true
+          du -sh .venv || true
+      - if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: uv sync --frozen
+      - run: uvx --from . ci-tasks quality

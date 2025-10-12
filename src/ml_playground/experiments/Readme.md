@@ -63,15 +63,15 @@ Implemented experiments (current)
 
 - shakespeare — Tiny Shakespeare with GPT‑2 BPE (tiktoken)
   - Readme: src/ml_playground/experiments/shakespeare/Readme.md
-  - Config:  src/ml_playground/experiments/shakespeare/config.toml
+  - Config: src/ml_playground/experiments/shakespeare/config.toml
   - Prepare name: `shakespeare`
 - bundestag_char — Character‑level modeling on Bundestag text
   - Readme: src/ml_playground/experiments/bundestag_char/Readme.md
-  - Config:  src/ml_playground/experiments/bundestag_char/config.toml
+  - Config: src/ml_playground/experiments/bundestag_char/config.toml
   - Prepare name: `bundestag_char`
 - bundestag_tiktoken — BPE tokenization (tiktoken) for Bundestag text
   - Readme: src/ml_playground/experiments/bundestag_tiktoken/Readme.md
-  - Config:  src/ml_playground/experiments/bundestag_tiktoken/config.toml
+  - Config: src/ml_playground/experiments/bundestag_tiktoken/config.toml
   - Prepare name: `bundestag_tiktoken`
 - bundestag_finetuning_mps — Generic HF + PEFT LoRA finetuning integration (Apple MPS‑friendly)
   - Readme: src/ml_playground/experiments/bundestag_finetuning_mps/Readme.md
@@ -79,21 +79,24 @@ Implemented experiments (current)
   - Dataset value in TOML/CLI: `bundestag_finetuning_mps`
 - bundestag_qwen15b_lora_mps — Qwen2.5‑1.5B preset for the generic finetuning integration
   - Readme: src/ml_playground/experiments/bundestag_qwen15b_lora_mps/Readme.md
-  - Config:  src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+  - Config: src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
   - Uses dataset/integration: `bundestag_finetuning_mps`
 - speakger — Gemma‑based finetuning workflow targeting SpeakGer‑style data
   - Readme: src/ml_playground/experiments/speakger/Readme.md
-  - Config:  src/ml_playground/experiments/speakger/config.toml
+  - Config: src/ml_playground/experiments/speakger/config.toml
   - Uses dataset/integration: `gemma_finetuning_mps` (see notes in the experiment Readme)
 
 Add a new experiment (checklist)
 
-1) Create a folder: `src/ml_playground/experiments/<name>/`
-2) Implement a strict preparer in `preparer.py` that exposes a class with `.prepare(...)` (see template below).
+1. Create a folder: `src/ml_playground/experiments/<name>/`
 
-3) Place seeds and prepared artifacts in `<name>/datasets/` (created at runtime).
-4) Put a TOML config at `<name>/config.toml`, referenced by your README and examples.
-5) Write `<name>/Readme.md` following the common blueprint: Overview → Data → Method/Model → Environment → How to Run → Config Highlights → Outputs → Troubleshooting → Notes.
+1. Implement a strict preparer in `preparer.py` that exposes a class with `.prepare(...)` (see template below).
+
+1. Place seeds and prepared artifacts in `<name>/datasets/` (created at runtime).
+
+1. Put a TOML config at `<name>/config.toml`, referenced by your README and examples.
+
+1. Write `<name>/Readme.md` following the common blueprint: Overview → Data → Method/Model → Environment → How to Run → Config Highlights → Outputs → Troubleshooting → Notes.
 
 Notes
 
@@ -111,9 +114,9 @@ Use this copy-ready template to create a new experiment at `src/ml_playground/ex
   - `src/ml_playground/experiments/<name>/Readme.md`
   - `src/ml_playground/experiments/<name>/datasets/` (created at runtime)
 
-Paste the following into `src/ml_playground/experiments/<name>/Readme.md` and replace placeholders in angle brackets <> with your experiment specifics.
+Paste the following into `src/ml_playground/experiments/<name>/Readme.md` and replace placeholders in angle brackets \<> with your experiment specifics.
 
-```markdown
+````markdown
 # <Title of Your Experiment>
 
 <One-sentence summary of the goal. Example: "Minimal experiment to prepare, train, and sample on <dataset> using <tokenization/method>.">
@@ -142,7 +145,7 @@ Paste the following into `src/ml_playground/experiments/<name>/Readme.md` and re
 ```bash
 uvx --from . env-tasks setup
 uvx --from . env-tasks verify
-```
+````
 
 ## How to Run
 
@@ -191,7 +194,7 @@ uv run python -m ml_playground.cli loop <name> --config src/ml_playground/experi
 
 - The dataset preparer for this experiment is auto‑discovered via a class in `preparer.py` and invoked by the CLI.
 - Keep all paths in TOML relative to the repo root for portability.
-Example `preparer.py` (strict API):
+  Example `preparer.py` (strict API):
 
 ```python
 from __future__ import annotations
@@ -208,3 +211,4 @@ class MyPreparer(_PreparerProto):
         # ... your preparation logic ...
         # write_bin_and_meta(ds_dir, train_ids, val_ids, meta)
         return PrepareReport(created_files=(), updated_files=(), skipped_files=(), messages=("ok",))
+```

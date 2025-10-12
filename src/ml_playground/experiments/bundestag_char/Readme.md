@@ -23,7 +23,7 @@ Character-level language modeling on Bundestag speeches with a simple vocabulary
 - Encode train/val splits 90/10 into uint16 arrays
 - Model architecture and training hyperparameters are specified in TOML
 - TensorBoard logging at out_dir/logs/tb
-This experiment uses the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../../docs/framework_utilities.md).
+  This experiment uses the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../../docs/framework_utilities.md).
 
 ## Environment Setup (UV-only)
 
@@ -48,45 +48,33 @@ uvx --from . dev-tasks prepare bundestag_char
 Train:
 
 ```bash
-<<<<<<< HEAD:ml_playground/experiments/bundestag_char/Readme.md
 uvx --from . dev-tasks train bundestag_char --config ml_playground/experiments/bundestag_char/config.toml
-=======
-make train bundestag_char CONFIG=src/ml_playground/experiments/bundestag_char/config.toml
->>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/bundestag_char/Readme.md
 ```
 
 Sample:
 
 ```bash
-<<<<<<< HEAD:ml_playground/experiments/bundestag_char/Readme.md
 uvx --from . dev-tasks sample bundestag_char --config ml_playground/experiments/bundestag_char/config.toml
-=======
-make sample bundestag_char CONFIG=src/ml_playground/experiments/bundestag_char/config.toml
->>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/bundestag_char/Readme.md
 ```
 
 End-to-end loop:
 
 ```bash
-<<<<<<< HEAD:ml_playground/experiments/bundestag_char/Readme.md
 uvx --from . dev-tasks loop bundestag_char --config ml_playground/experiments/bundestag_char/config.toml
-=======
-make loop bundestag_char CONFIG=src/ml_playground/experiments/bundestag_char/config.toml
->>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/bundestag_char/Readme.md
 ```
 
 ## Configuration Highlights
 
-- [train.data]
+- \[train.data\]
   - dataset_dir = "src/ml_playground/experiments/bundestag_char/datasets"
   - train_bin = "train.bin", val_bin = "val.bin", meta_pkl = "meta.pkl"
   - batch_size, block_size, grad_accum_steps
-- [train.runtime]
+- \[train.runtime\]
   - out_dir = "src/ml_playground/experiments/bundestag_char/out/bundestag_char_next"
   - device = "cpu" (or "mps"/"cuda" if available), dtype = "float32"
-- [sample.runtime]
+- \[sample.runtime\]
   - out_dir should match train.runtime.out_dir
-- [sample.sample]
+- \[sample.sample\]
   - start prompt text, num_samples, max_new_tokens
 
 ## Outputs
@@ -120,7 +108,7 @@ src/ml_playground/experiments/bundestag_char/
 ## Word Tokenizer Option
 
 - This experiment now supports a word-level tokenizer in addition to char/n-gram.
-- To enable, set in config under [train.data]:
+- To enable, set in config under \[train.data\]:
 
 ```toml
 # Tokenizer selection: "char" (default) or "word"

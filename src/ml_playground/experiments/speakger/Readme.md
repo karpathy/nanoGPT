@@ -66,35 +66,42 @@ make loop speakger CONFIG=src/ml_playground/experiments/speakger/config.toml
 Memory-friendly defaults for 32GB Apple Silicon are recommended.
 
 - `[prepare]`
+
   - `raw_dir`: path to .txt folder or CSV file
   - `dataset_dir`: prepared dataset output directory
   - `add_structure_tokens`: wrap content with speaker/party/year tokens
   - `doc_separator`: separator token between documents
 
 - `[train.hf_model]`
+
   - `model_name`: e.g., `google/gemma-2-2b` or `google/gemma-2-9b-it`
   - `gradient_checkpointing = true`
   - `block_size`: 256–512 typical on MPS
 
 - `[train.peft]`
+
   - `enabled = true`, `r = 8..16`, `lora_alpha = 16`
   - `target_modules = ["q_proj","k_proj","v_proj","o_proj"]`
   - `extend_mlp_targets = false` (set true to include MLP projections)
 
 - `[train.data]`
+
   - `dataset_dir`: same as in `[prepare]`
   - `batch_size`, `grad_accum_steps` control effective batch size
   - `block_size`: token sequence length per batch element
 
 - `[train.runtime]`
+
   - `out_dir`: where adapters/checkpoints/logs go
   - `device`: `mps` (Apple), `cuda` (NVIDIA), or `cpu`
   - `dtype`: `float16` suggested on mps/cuda, `float32` for stability
 
 - `[sample.runtime]`
+
   - `out_dir`, `device`, `dtype`
 
 - `[sample.sample]`
+
   - `start`: prompt string or `FILE:path/to/prompt.txt`
   - `num_samples`, `max_new_tokens`, `temperature`, `top_k`, `top_p`
 

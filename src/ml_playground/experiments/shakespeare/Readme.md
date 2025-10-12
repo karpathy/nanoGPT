@@ -19,7 +19,7 @@ Minimal experiment to prepare, train, and sample on the Tiny Shakespeare corpus 
 
 - GPT-2 BPE via tiktoken; small GPT configured via TOML (see `[train.*]`).
 - Rotated checkpoints and TensorBoard logs under `[train.runtime].out_dir`.
-For framework utilities, see [../../docs/framework_utilities.md](../../docs/framework_utilities.md).
+  For framework utilities, see [../../docs/framework_utilities.md](../../docs/framework_utilities.md).
 
 ## How to Run
 
@@ -31,21 +31,12 @@ uvx --from . dev-tasks setup
 uvx --from . dev-tasks verify
 
 # Prepare → Train → Sample (separate)
-<<<<<<< HEAD:ml_playground/experiments/shakespeare/Readme.md
 uvx --from . dev-tasks prepare shakespeare
 uvx --from . dev-tasks train shakespeare --config ml_playground/experiments/shakespeare/config.toml
 uvx --from . dev-tasks sample shakespeare --config ml_playground/experiments/shakespeare/config.toml
 
 # Or end-to-end
 uvx --from . dev-tasks loop shakespeare --config ml_playground/experiments/shakespeare/config.toml
-=======
-make prepare shakespeare
-make train shakespeare CONFIG=src/ml_playground/experiments/shakespeare/config.toml
-make sample shakespeare CONFIG=src/ml_playground/experiments/shakespeare/config.toml
-
-# Or end-to-end
-make loop shakespeare CONFIG=src/ml_playground/experiments/shakespeare/config.toml
->>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/shakespeare/Readme.md
 ```
 
 ## Configuration Highlights

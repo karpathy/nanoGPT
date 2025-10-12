@@ -1,6 +1,6 @@
-______________________________________________________________________
-
-## trigger: always_on description: documentation standards for nanoGPT/ml_playground
+---
+trigger: always_on
+---
 
 # Documentation Guidelines
 

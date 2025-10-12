@@ -23,7 +23,7 @@ Byte-Pair Encoding (BPE) experiment using tiktoken to tokenize Bundestag speeche
 - Tokenize with tiktoken (cl100k_base by default) into uint32 arrays
 - Model hyperparameters and runtime behavior controlled by TOML
 - TensorBoard logs written to out_dir/logs/tb
-This experiment uses the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../../docs/framework_utilities.md).
+  This experiment uses the centralized framework utilities for error handling, progress reporting, and file operations. For more information, see [Framework Utilities Documentation](../../docs/framework_utilities.md).
 
 ## Environment Setup (UV-only)
 
@@ -48,43 +48,31 @@ uvx --from . dev-tasks prepare bundestag_tiktoken
 Train:
 
 ```bash
-<<<<<<< HEAD:ml_playground/experiments/bundestag_tiktoken/Readme.md
 uvx --from . dev-tasks train bundestag_tiktoken --config ml_playground/experiments/bundestag_tiktoken/config.toml
-=======
-make train bundestag_tiktoken CONFIG=src/ml_playground/experiments/bundestag_tiktoken/config.toml
->>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/bundestag_tiktoken/Readme.md
 ```
 
 Sample:
 
 ```bash
-<<<<<<< HEAD:ml_playground/experiments/bundestag_tiktoken/Readme.md
 uvx --from . dev-tasks sample bundestag_tiktoken --config ml_playground/experiments/bundestag_tiktoken/config.toml
-=======
-make sample bundestag_tiktoken CONFIG=src/ml_playground/experiments/bundestag_tiktoken/config.toml
->>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/bundestag_tiktoken/Readme.md
 ```
 
 End-to-end loop:
 
 ```bash
-<<<<<<< HEAD:ml_playground/experiments/bundestag_tiktoken/Readme.md
 uvx --from . dev-tasks loop bundestag_tiktoken --config ml_playground/experiments/bundestag_tiktoken/config.toml
-=======
-make loop bundestag_tiktoken CONFIG=src/ml_playground/experiments/bundestag_tiktoken/config.toml
->>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/bundestag_tiktoken/Readme.md
 ```
 
 ## Configuration Highlights
 
-- [train.data]
+- \[train.data\]
   - dataset_dir = "src/ml_playground/experiments/bundestag_tiktoken/datasets"
   - train_bin, val_bin, meta_pkl
   - batch_size, block_size, grad_accum_steps
-- [train.runtime]
+- \[train.runtime\]
   - out_dir = "src/ml_playground/experiments/bundestag_tiktoken/out/bundestag_tiktoken"
   - device = "mps" (or "cpu"/"cuda")
-- [sample.runtime]
+- \[sample.runtime\]
   - out_dir should match train.runtime.out_dir
 
 ## Outputs

@@ -10,15 +10,11 @@ repos:
   rev: 0.7.17
   hooks:
   - id: mdformat
+    args: [--check]
     additional_dependencies:
       - mdformat-gfm
-    files: '(README|CONTRIBUTING|LICENSE|CHANGELOG)\.md$|^(docs|tests|\.dev-guidelines)/.*\.md$'
-- repo: https://github.com/checkmake/checkmake.git
-  # Or another commit hash or version
-  rev: 0.2.2
-  hooks:
-  # Use this hook to let pre-commit build checkmake in its sandbox
-  - id: checkmake
+      - mdformat-frontmatter
+    files: '^(docs|src/ml_playground|tests|\.dev-guidelines)/.*\.md$|^[^/]+\.md$'
 - repo: local
   hooks:
   - id: coverage-threshold
@@ -32,14 +28,11 @@ repos:
         CACHE_GLOB="${COVERAGE_DIR}/coverage.sqlite*"
         mkdir -p "${COVERAGE_DIR}"
         if ! compgen -G "${CACHE_GLOB}" > /dev/null; then
-          echo "[info] generating coverage data"
           rm -f "${CACHE_GLOB}"
           uvx --from . ci-tasks coverage-test
-        else
-          echo "[info] reusing cached coverage data"
         fi
         if ! compgen -G "${COVERAGE_DIR}/coverage.sqlite"* > /dev/null; then
-          echo "[error] No coverage data found. Run 'uvx --from . ci-tasks coverage-test' first." >&2
+          echo "[error] No coverage data; run 'uvx --from . ci-tasks coverage-test'." >&2
           exit 2
         fi
         if compgen -G "${COVERAGE_DIR}/coverage.sqlite."* > /dev/null; then
@@ -48,18 +41,33 @@ repos:
         COVERAGE_FILE="${COVERAGE_DIR}/coverage.sqlite" uv run coverage report -m --fail-under=87.00
     language: system
     pass_filenames: false
+- repo: local
+  hooks:
   - id: pyright
     name: pyright
-    entry: uv run pyright src/ml_playground
+    entry: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        uv run pyright src/ml_playground
     language: system
     pass_filenames: false
+- repo: local
+  hooks:
   - id: mypy
     name: mypy
-    entry: uv run mypy --incremental src/ml_playground
+    entry: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        uv run mypy --incremental
     language: system
     pass_filenames: false
+- repo: https://github.com/jendrikseipp/vulture
+  rev: v2.11
+  hooks:
   - id: vulture
-    name: vulture
-    entry: uv run vulture src/ml_playground --min-confidence 90
-    language: system
+    args: [src/ml_playground, --min-confidence, '90']
     pass_filenames: false

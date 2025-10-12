@@ -1,6 +1,6 @@
-______________________________________________________________________
-
-## trigger: always_on description: Git branching, versioning, and commit policy
+---
+trigger: always_on
+---
 
 # Git Versioning & Workflow
 

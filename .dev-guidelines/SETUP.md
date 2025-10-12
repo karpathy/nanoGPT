@@ -1,6 +1,6 @@
-______________________________________________________________________
-
-## trigger: always_on description: globs:
+---
+trigger: always_on
+---
 
 # ml_playground Setup Guide
 

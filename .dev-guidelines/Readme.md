@@ -1,6 +1,7 @@
-______________________________________________________________________
-
-## trigger: always_on
+---
+trigger: always_on
+description:
+---
 
 # ml_playground Developer Guidelines
 

@@ -1,3 +1,7 @@
+---
+trigger: always_on
+---
+
 # Testing Standards
 
 ## Test-Driven Development (REQUIRED)
@@ -230,20 +234,30 @@ exceptions. NO second chances.
 ## Mutation Testing (Optional)
 
 - **Tooling**: Cosmic Ray configuration lives in `pyproject.toml` under `[cosmic-ray]`.
+
 - **Primary local command**:
+
   ```bash
   uvx --from . dev-tasks mutation run
   ```
+
   This target resets `.cache/cosmic-ray/session.sqlite`, prints the active configuration via `tools/mutation_summary.py`,
   runs `cosmic-ray init/exec`, and finishes with `tools/mutation_report.py` to display survivor counts.
+
 - **Alternative local command**: `uvx --from . dev-tasks quality-ext` executes the broader quality suite, including mutation if desired.
+
 - **Default scope**: `module-path = "ml_playground"`, exercising the entire package with
   `pytest -q -n auto tests/unit` and a 1 s timeout per mutant/test run.
+
 - **Latest baseline (2025-10-06)**: `uvx --from . dev-tasks mutation run` processed **5 314** mutants (killed: **5 312**, incompetent: **2**)
   in approximately **1 h 31 m** wall-clock time.
+
 - **Session hygiene**: Both targets delete the session DB on every run; do not commit `.cache/cosmic-ray/`.
+
 - **Follow-up**: Survivor automation and module-specific hardening tasks are tracked in `.ldres/tv-tasks.md`.
+
 - **CI workflow**: Trigger the long-running mutation suite via GitHub Actions → *Mutation Suite* workflow. It runs weekly on Mondays at 01:00 UTC and is available on-demand through the *Run workflow* button.
+
 - The `.cache/cosmic-ray/` directory is treated like other build artifacts: never commit it; clean with `uvx --from . dev-tasks clean` if needed.
 
 ## Running Tests

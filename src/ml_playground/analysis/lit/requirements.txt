@@ -22,7 +22,7 @@ tf-keras==2.16.0
 tensorflow-macos==2.16.2; platform_system == "Darwin" and platform_machine == "arm64"
 tensorflow-metal==1.2.0; platform_system == "Darwin" and platform_machine == "arm64"
 # - On all other platforms, install upstream TensorFlow
-tensorflow==2.16.2; not (platform_system == "Darwin" and platform_machine == "arm64")
+tensorflow==2.16.2; platform_system != "Darwin" or platform_machine != "arm64"
 
 # Utilities used by tooling
 psutil>=5.9,<6

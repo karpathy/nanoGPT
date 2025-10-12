@@ -6,6 +6,7 @@ import os
 import shlex
 import shutil
 import subprocess
+from importlib import resources
 from pathlib import Path
 from typing import List, Optional
 
@@ -40,7 +41,7 @@ PYTEST_BASE = ["-q", "-n", "auto", "-W", "error", "--strict-markers", "--strict-
 PRE_COMMIT_CONFIG = ROOT / ".githooks" / ".pre-commit-config.yaml"
 CACHE_DIR = ROOT / ".cache"
 LIT_VENV = ROOT / ".venv312"
-LIT_REQUIREMENTS = ROOT / "ml_playground" / "analysis" / "lit" / "requirements.txt"
+LIT_REQUIREMENTS = resources.files("ml_playground.analysis.lit") / "requirements.txt"
 
 
 class CommandError(RuntimeError):
