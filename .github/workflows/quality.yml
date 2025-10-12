@@ -17,6 +17,7 @@ jobs:
     name: Quality (pre-commit gate)
     runs-on: ubuntu-latest
     env:
+      RUFF_CACHE_DIR: .cache/ruff
       PRE_COMMIT_HOME: .cache/pre-commit
       UV_CACHE_DIR: .cache/uv
     steps:
@@ -26,10 +27,6 @@ jobs:
         with:
           python-version: '3.13'
       - uses: astral-sh/setup-uv@v4
-      - name: Force cache envs for subsequent steps
-        run: |
-          echo "UV_CACHE_DIR=.cache/uv" >> "$GITHUB_ENV"
-          echo "PRE_COMMIT_HOME=.cache/pre-commit" >> "$GITHUB_ENV"
       - name: Prepare cache directories
         run: |
           mkdir -p .cache/uv
@@ -37,44 +34,43 @@ jobs:
           mkdir -p .cache/ruff
           mkdir -p .venv
       - uses: actions/cache@v4
-        id: cache-venv
+        id: cache-uv-venv
         with:
           path: |
             .venv
-          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uvenv-${{ hashFiles('uv.lock') }}
+          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-venv-${{ hashFiles('uv.lock') }}
           restore-keys: |
-            ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uvenv-
+            ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-venv-
       - name: Cache pre-commit envs
         uses: actions/cache@v4
         with:
           path: .cache/pre-commit
-          key: ${{ runner.os }}-precommit-${{ hashFiles('.githooks/.pre-commit-config.yaml') }}-py${{ steps.setup-python.outputs.python-version }}
+          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-pre-commit-${{ hashFiles('.githooks/.pre-commit-config.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-precommit-
+            ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-pre-commit-
       - name: Cache uv global wheels
         uses: actions/cache@v4
         id: cache-uv
         with:
           path: |
             .cache/uv
-          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uvcache-${{ hashFiles('uv.lock') }}
+          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-wheels-${{ hashFiles('uv.lock') }}
           restore-keys: |
-            ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uvcache-
+            ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-wheels-
       - name: Cache ruff cache
         uses: actions/cache@v4
         with:
           path: |
-            ~/.cache/ruff
             .cache/ruff
-          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-ruff-${{ hashFiles('pyproject.toml') }}
+          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-ruff-${{ hashFiles('pyproject.toml') }}
           restore-keys: |
-            ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-ruff-
+            ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-ruff-
       - name: Show cache sizes
         run: |
           du -sh .cache/uv || true
           du -sh .cache/pre-commit || true
           du -sh .venv || true
-      - if: steps.cache-venv.outputs.cache-hit != 'true'
+      - if: steps.cache-uv-venv.outputs.cache-hit != 'true'
         run: uv sync --frozen
       - run: uvx --from . ci-tasks quality
       - name: Ensure coverage badges are committed

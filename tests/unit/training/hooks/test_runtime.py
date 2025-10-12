@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 import torch
+from contextlib import nullcontext
 
 from ml_playground.configuration.models import (
     DataConfig,
@@ -107,3 +108,96 @@ def test_setup_runtime_float16() -> None:
 
     assert runtime.device_type == "cpu"
     assert runtime.autocast_context is not None
+
+
+def test_setup_runtime_injected_cuda_available_true() -> None:
+    """setup_runtime should use injected cuda_available_func returning True."""
+    cfg = _make_config(device="cuda", dtype="float32")
+
+    cuda_called = False
+
+    def fake_cuda():
+        nonlocal cuda_called
+        cuda_called = True
+        return True
+
+    seed_called = False
+
+    def fake_seed(seed):
+        nonlocal seed_called
+        seed_called = True
+
+    runtime = setup_runtime(
+        cfg,
+        cuda_available_func=fake_cuda,
+        cuda_seed_func=fake_seed,
+        autocast_func=lambda *args: nullcontext(),
+    )
+
+    assert cuda_called
+    assert seed_called
+    assert runtime.device_type == "cuda"
+
+
+def test_setup_runtime_injected_cuda_available_false() -> None:
+    """setup_runtime should use injected cuda_available_func returning False."""
+    cfg = _make_config(device="cpu", dtype="float32")
+
+    cuda_called = False
+
+    def fake_cuda():
+        nonlocal cuda_called
+        cuda_called = True
+        return False
+
+    runtime = setup_runtime(cfg, cuda_available_func=fake_cuda)
+
+    assert cuda_called
+    assert runtime.device_type == "cpu"
+
+
+def test_setup_runtime_cuda_error_handling() -> None:
+    """setup_runtime should handle RuntimeError in CUDA setup."""
+    cfg = _make_config(device="cuda", dtype="float32")
+
+    cuda_called = False
+
+    def fake_cuda():
+        nonlocal cuda_called
+        cuda_called = True
+        return True
+
+    seed_called = False
+
+    def fake_seed(seed):
+        nonlocal seed_called
+        seed_called = True
+        raise RuntimeError("CUDA error")
+
+    runtime = setup_runtime(
+        cfg,
+        cuda_available_func=fake_cuda,
+        cuda_seed_func=fake_seed,
+        autocast_func=lambda *args: nullcontext(),
+    )
+
+    assert cuda_called
+    assert seed_called
+    assert runtime.device_type == "cuda"
+
+
+def test_setup_runtime_injected_autocast_func() -> None:
+    """setup_runtime should use injected autocast_func for GPU."""
+    cfg = _make_config(device="cuda", dtype="float16")
+
+    autocast_called = False
+
+    def fake_autocast(device_type, dtype):
+        nonlocal autocast_called
+        autocast_called = True
+        return nullcontext()
+
+    runtime = setup_runtime(cfg, autocast_func=fake_autocast)
+
+    assert autocast_called
+    assert runtime.device_type == "cuda"

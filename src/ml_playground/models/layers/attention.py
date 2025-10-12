@@ -12,6 +12,8 @@ class CausalSelfAttention(nn.Module):
 
     def __init__(self, config: GPTConfig) -> None:
         super().__init__()
+        if config.n_head <= 0:
+            raise ValueError("n_head must be a positive integer")
         if config.n_embd % config.n_head != 0:
             raise ValueError("n_embd must be divisible by n_head")
 

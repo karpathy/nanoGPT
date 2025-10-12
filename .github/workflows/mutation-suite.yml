@@ -16,11 +16,14 @@ jobs:
   mutation:
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    env:
+      UV_CACHE_DIR: .cache/uv
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Python
+        id: setup-python
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -28,17 +31,24 @@ jobs:
       - name: Setup uv
         uses: astral-sh/setup-uv@v4
 
+      - name: Prepare cache directories
+        run: |
+          mkdir -p .cache/uv
+          mkdir -p .venv
+
       - name: Cache uv virtualenv
+        id: cache-uv
         uses: actions/cache@v4
         with:
           path: |
             .cache/uv
             .venv
-          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-venv-${{ hashFiles('uv.lock') }}
           restore-keys: |
-            ${{ runner.os }}-uv-
+            ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-venv-
 
       - name: Sync dependencies (dev + project)
+        if: steps.cache-uv.outputs.cache-hit != 'true'
         run: uvx --from . env-tasks sync
 
       - name: Run mutation suite

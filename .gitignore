@@ -29,7 +29,10 @@ __pycache__/
 out/
 .coverage
 coverage.xml
+# Allow documentation under docs/coverage while keeping raw coverage outputs ignored
 coverage/
+!docs/coverage/
+!docs/coverage/*.md
 htmlcov/
 
 # Centralized caches (preferred location)
