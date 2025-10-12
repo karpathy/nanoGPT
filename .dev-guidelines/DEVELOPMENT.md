@@ -217,6 +217,64 @@ optimized for non-interactive or copy-paste workflows.
   gh pr view --web
   ```
 
+### GitHub Actions locally (`act`)
+
+- **Install**:
+
+  ```bash
+  brew install act
+  ```
+
+  Use the [official installation guide](https://nektosact.com/installation/index.html) on non-macOS platforms and make sure
+  Docker Desktop (or another OCI runtime) is running before executing any jobs.
+
+- **Match the hosted runner image**:
+
+  ```bash
+  act --container-architecture linux/amd64 \
+      -P ubuntu-latest=catthehacker/ubuntu:act-latest --list
+  ```
+
+  Running with `--list` prints the jobs `act` would execute and validates that the image mapping provides Python 3.13 and
+  the tooling bundle we expect on `ubuntu-latest`.
+
+- **Replay the quality workflow**:
+
+  ```bash
+  act --container-architecture linux/amd64 \
+      -P ubuntu-latest=catthehacker/ubuntu:act-latest \
+      -W .github/workflows/quality.yml --job quality
+  ```
+
+  Passing `--job` narrows the invocation to the `quality` job, matching what CI runs on pushes and PRs.
+
+- **Persist caches between runs**:
+
+  ```bash
+  act --container-architecture linux/amd64 \
+      -P ubuntu-latest=catthehacker/ubuntu:act-latest \
+      -W .github/workflows/quality.yml --job quality \
+      --bind .cache:/root/.cache --bind .venv:/root/project/.venv
+  ```
+
+  Mirror CI cache locations (`.cache/uv`, `.cache/ruff`, `.venv`) so dependency downloads survive container teardown and
+  subsequent runs start warm.
+
+- **Inject secrets or environment overrides when necessary**:
+
+  ```bash
+  act --secret GITHUB_TOKEN=$(gh auth token) \
+      -e .github/workflows/events/quality.push.json \
+      -P ubuntu-latest=catthehacker/ubuntu:act-latest
+  ```
+
+  Event payloads let you debug branch- or PR-specific logic locally; store them under `.github/workflows/events/` if you
+  need repeatable scenarios and remember to keep sensitive data out of version control.
+
+- **Understand limitations**: `act` skips GitHub-hosted services (e.g., dependency caches, OpenID providers) and only
+  approximates matrix and reusable workflows. Use it for fast feedback, then confirm with a real GitHub Actions run before
+  merging.
+
 #### CI inspection shortcuts
 
 - **List recent runs for a branch**:

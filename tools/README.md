@@ -31,6 +31,9 @@ Always run through the project venv using UV. From repo root:
 # Quality gates
 uvx --from . ci-tasks quality
 
+# Run GitHub quality workflow locally via act
+uvx --from . ci-tasks quality-ci-local
+
 # Coverage report with threshold enforcement
 uvx --from . ci-tasks coverage-report --fail-under 87
 
@@ -43,6 +46,8 @@ uvx --from . lint-tasks ruff
 # Environment setup
 uvx --from . env-tasks setup
 ```
+
+- **`quality-ci-local`**: Binds `.cache/uv`, `.cache/pre-commit`, `.cache/ruff`, and `.venv` into the container. Toggle mounts with `--no-bind-caches` or pass additional flags directly to `act`.
 
 ## Examples
 

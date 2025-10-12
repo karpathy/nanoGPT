@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import json
+import subprocess
 from pathlib import Path
 from typing import List, Literal, Optional
 
@@ -384,6 +385,53 @@ def quality_ext() -> None:
     """Run quality gates followed by mutation testing."""
     quality()
     mutation_run()
+
+
+@app.command("quality-ci-local")
+def quality_ci_local(
+    bind_caches: bool = typer.Option(
+        True,
+        "--bind-caches/--no-bind-caches",
+        help="Bind local caches and the project virtualenv into the act container.",
+    ),
+    args: Optional[List[str]] = typer.Argument(
+        None,
+        help="Additional arguments forwarded to act.",
+        metavar="ACT_ARGS",
+    ),
+) -> None:
+    """Run the GitHub quality workflow locally using act."""
+    utils.ensure_cache_dirs("uv", "pre-commit", "ruff")
+    (utils.ROOT / ".venv").mkdir(parents=True, exist_ok=True)
+
+    command: List[str] = [
+        "act",
+        "--container-architecture",
+        "linux/amd64",
+        "-P",
+        "ubuntu-latest=catthehacker/ubuntu:act-latest",
+        "-W",
+        ".github/workflows/quality.yml",
+        "--job",
+        "quality",
+    ]
+
+    if bind_caches:
+        binds: list[tuple[Path, str]] = [
+            (utils.CACHE_DIR / "uv", "/root/.cache/uv"),
+            (utils.CACHE_DIR / "pre-commit", "/root/.cache/pre-commit"),
+            (utils.CACHE_DIR / "ruff", "/root/.cache/ruff"),
+            (utils.ROOT / ".venv", "/root/project/.venv"),
+        ]
+        for host_path, container_path in binds:
+            host_path.mkdir(parents=True, exist_ok=True)
+            command.extend(["--bind", f"{host_path}:{container_path}"])
+
+    command.extend(utils.forwarded_args(args))
+
+    result = subprocess.run(command, cwd=utils.ROOT)
+    if result.returncode != 0:
+        raise typer.Exit(result.returncode)
 
 
 @mutation_app.command("reset")
