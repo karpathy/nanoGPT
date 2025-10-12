@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 
 from ml_playground.core.error_handling import (
+    DetailedException,
+    MLPlaygroundError,
     setup_logging,
     safe_call,
     safe_file_operation,
@@ -23,6 +25,21 @@ from ml_playground.core.error_handling import (
     FileOperationError,
     ValidationError,
 )
+
+
+def test_ml_playground_error_reports_reason_and_rationale() -> None:
+    err = MLPlaygroundError(
+        "Boom",
+        reason="Demonstration failure",
+        rationale="Test ensures rich diagnostics are surfaced",
+    )
+    assert err.message == "Boom"
+    assert err.reason == "Demonstration failure"
+    assert err.rationale == "Test ensures rich diagnostics are surfaced"
+    rendered = str(err)
+    assert "Reason: Demonstration failure" in rendered
+    assert "Rationale: Test ensures rich diagnostics are surfaced" in rendered
+    assert isinstance(err, DetailedException)
 
 
 def test_setup_logging_idempotent_and_level():
@@ -77,8 +94,10 @@ def test_safe_file_operation_wraps_ioerror():
     import logging
 
     logger = logging.getLogger("ml_pg_test")
-    with pytest.raises(FileOperationError, match="disk full"):
+    with pytest.raises(FileOperationError, match="disk full") as exc:
         safe_file_operation(bad_io, logger=logger)
+    assert exc.value.reason == "OSError raised during file operation"
+    assert "Filesystem paths must be reachable" in exc.value.rationale
 
 
 def test_validate_file_and_directory(tmp_path: Path):
@@ -92,25 +111,33 @@ def test_validate_file_and_directory(tmp_path: Path):
     validate_directory_exists(d, "TestDir")
 
     # file does not exist
-    with pytest.raises(DataError):
+    with pytest.raises(DataError) as missing_file:
         validate_file_exists(tmp_path / "missing.txt")
+    assert missing_file.value.reason == "Path does not exist on disk"
     # path exists but is not file
-    with pytest.raises(DataError):
+    with pytest.raises(DataError) as wrong_kind:
         validate_file_exists(d)
+    assert wrong_kind.value.reason == "Path refers to a non-file entry"
 
     # dir does not exist
-    with pytest.raises(DataError):
+    with pytest.raises(DataError) as missing_dir:
         validate_directory_exists(tmp_path / "missing_dir")
+    assert missing_dir.value.reason == "Path does not exist on disk"
     # path exists but is not directory
-    with pytest.raises(DataError):
+    with pytest.raises(DataError) as wrong_dir_kind:
         validate_directory_exists(f)
+    assert wrong_dir_kind.value.reason == "Path refers to a non-directory entry"
 
 
 def test_validate_config_value():
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as missing:
         validate_config_value(None, "x", int, required=True)
-    with pytest.raises(ValidationError):
+    assert missing.value.reason == "Configuration entry absent"
+    assert "required keys" in missing.value.rationale
+    with pytest.raises(ValidationError) as wrong_type:
         validate_config_value("hi", "x", int)
+    assert wrong_type.value.reason == "Type mismatch for configuration entry"
+    assert "deterministic" in wrong_type.value.rationale
     # ok
     validate_config_value(3, "x", int)
 
@@ -172,8 +199,10 @@ def test_safe_file_operation_unexpected_error() -> None:
         raise ValueError("logic error")
 
     logger = logging.getLogger("ml_pg_test_unexpected")
-    with pytest.raises(FileOperationError, match="Unexpected error"):
+    with pytest.raises(FileOperationError, match="Unexpected error") as unexpected:
         safe_file_operation(bad_logic, logger=logger)
+    assert unexpected.value.reason == "ValueError raised outside expected IO failures"
+    assert "investigate the triggering logic" in unexpected.value.rationale
 
 
 def test_progress_reporter_no_total_and_small_updates(

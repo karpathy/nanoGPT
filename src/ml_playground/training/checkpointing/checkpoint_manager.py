@@ -117,7 +117,11 @@ class CheckpointDependencies:
 
 def _expect_mapping(value: Any, field: str) -> Dict[str, Any]:
     if not isinstance(value, Mapping):
-        raise CheckpointError(f"Checkpoint field '{field}' must be a mapping")
+        raise CheckpointError(
+            f"Checkpoint field '{field}' must be a mapping",
+            reason=f"Observed type {type(value).__name__}",
+            rationale="Checkpoint serialization stores dictionaries for composite payload sections",
+        )
     return dict(value)
 
 
@@ -128,7 +132,9 @@ def _expect_type(value: Any, field: str, expected_type: ExpectedTypes) -> Any:
         else:
             expected_names = expected_type.__name__
         raise CheckpointError(
-            f"Checkpoint field '{field}' expected {expected_names}, got {type(value).__name__}"
+            f"Checkpoint field '{field}' expected {expected_names}, got {type(value).__name__}",
+            reason="Type mismatch in checkpoint payload",
+            rationale="Checkpoint validation enforces stable types so reloading preserves training state",
         )
     return value
 
@@ -174,7 +180,9 @@ class Checkpoint:
         missing = required_fields.difference(payload.keys())
         if missing:
             raise CheckpointError(
-                f"Checkpoint payload missing required fields: {', '.join(sorted(missing))}"
+                f"Checkpoint payload missing required fields: {', '.join(sorted(missing))}",
+                reason=f"Absent keys: {', '.join(sorted(missing))}",
+                rationale="Restoring training requires all critical checkpoint sections to be present",
             )
 
         model = _expect_mapping(payload["model"], "model")
@@ -231,7 +239,9 @@ class CheckpointManager:
         self.atomic = atomic
         if keep_last < 0 or keep_best < 0:
             raise CheckpointError(
-                f"Invalid checkpoint keep policy: keep_last={keep_last}, keep_best={keep_best} (must be >= 0)"
+                f"Invalid checkpoint keep policy: keep_last={keep_last}, keep_best={keep_best} (must be >= 0)",
+                reason="Retention counts cannot be negative",
+                rationale="Checkpoint rotation policies rely on non-negative keep windows to manage files deterministically",
             )
         self.keep_last = keep_last
         self.keep_best = keep_best
@@ -252,25 +262,35 @@ class CheckpointManager:
                 it = int(iter_str)
             except ValueError as e:
                 raise CheckpointError(
-                    f"Could not parse iteration from last-checkpoint filename {p.name}: {e}"
+                    f"Could not parse iteration from last-checkpoint filename {p.name}: {e}",
+                    reason="Filename suffix does not encode an integer iteration",
+                    rationale="Checkpoint discovery depends on canonical naming to rebuild manager state",
                 ) from e
             try:
                 created = self._deps.path_stat(p).st_mtime
             except OSError as e:
-                raise CheckpointError(f"Failed to stat checkpoint file {p}: {e}") from e
+                raise CheckpointError(
+                    f"Failed to stat checkpoint file {p}: {e}",
+                    reason=f"{e.__class__.__name__} while retrieving filesystem metadata",
+                    rationale="Manager must inspect filesystem timestamps to order checkpoints",
+                ) from e
             self.last_checkpoints.append(_CkptInfo(p, float("inf"), it, created))
         for p in sorted(self.out_dir.glob("ckpt_best_*.pt")):
             stem = p.stem  # e.g., ckpt_best_00000010_1.234567
             parts = stem.split("_")
             if len(parts) < 3:
                 raise CheckpointError(
-                    f"Unexpected best-checkpoint filename format: {p.name}"
+                    f"Unexpected best-checkpoint filename format: {p.name}",
+                    reason="Filename lacks iteration/metric segments",
+                    rationale="Best-checkpoint retention requires canonical ckpt_best_<iter>_<metric>.pt names",
                 )
             try:
                 it = int(parts[2])
             except ValueError as e:
                 raise CheckpointError(
-                    f"Could not parse iteration from best-checkpoint filename {p.name}: {e}"
+                    f"Could not parse iteration from best-checkpoint filename {p.name}: {e}",
+                    reason="Iteration segment is not an integer",
+                    rationale="Consistent numbering lets the manager sort best checkpoints by creation",
                 ) from e
             metric = float("inf")
             if len(parts) >= 4:
@@ -278,12 +298,18 @@ class CheckpointManager:
                     metric = float(parts[3])
                 except ValueError as e:
                     raise CheckpointError(
-                        f"Could not parse metric from best-checkpoint filename {p.name}: {e}"
+                        f"Could not parse metric from best-checkpoint filename {p.name}: {e}",
+                        reason="Metric segment is not a float",
+                        rationale="Best checkpoint ordering depends on parsing the recorded metric",
                     ) from e
             try:
                 created = self._deps.path_stat(p).st_mtime
             except OSError as e:
-                raise CheckpointError(f"Failed to stat checkpoint file {p}: {e}") from e
+                raise CheckpointError(
+                    f"Failed to stat checkpoint file {p}: {e}",
+                    reason=f"{e.__class__.__name__} while retrieving filesystem metadata",
+                    rationale="Manager must inspect filesystem timestamps to order checkpoints",
+                ) from e
             self.best_checkpoints.append(_CkptInfo(p, metric, it, created))
 
     def save_checkpoint(
@@ -330,7 +356,9 @@ class CheckpointManager:
                     logger.info(f"Removed old last checkpoint: {old.path}")
                 except OSError as e:
                     raise CheckpointError(
-                        f"Failed to remove old last checkpoint {old.path}: {e}"
+                        f"Failed to remove old last checkpoint {old.path}: {e}",
+                        reason=f"{e.__class__.__name__} while deleting checkpoint file",
+                        rationale="Retention pruning must delete expired checkpoints to honour keep_last policy",
                     ) from e
 
         # Manage best checkpoints
@@ -366,7 +394,9 @@ class CheckpointManager:
                         logger.info(f"Removed old best checkpoint: {ckpt.path}")
                     except OSError as e:
                         raise CheckpointError(
-                            f"Failed to remove old best checkpoint {ckpt.path}: {e}"
+                            f"Failed to remove old best checkpoint {ckpt.path}: {e}",
+                            reason=f"{e.__class__.__name__} while deleting checkpoint file",
+                            rationale="Retention pruning must delete expired best checkpoints to honour keep_best policy",
                         ) from e
 
         # Strict mode: do NOT create or update any stable checkpoint pointers.
@@ -382,7 +412,9 @@ class CheckpointManager:
             self._discover_existing()
             if not self.last_checkpoints:
                 raise CheckpointError(
-                    f"No last checkpoints discovered in {self.out_dir}"
+                    f"No last checkpoints discovered in {self.out_dir}",
+                    reason="Last checkpoint rotation list is empty",
+                    rationale="Loading latest checkpoint requires at least one saved checkpoint on disk",
                 )
 
         # Get the most recent checkpoint
@@ -406,11 +438,17 @@ class CheckpointManager:
         except (OSError, RuntimeError, TorchUnpicklingError) as e:
             logger.error(f"Error loading checkpoint from {latest_ckpt.path}: {e}")
             raise CheckpointLoadError(
-                f"Failed to load checkpoint from {latest_ckpt.path}: {e}"
+                f"Failed to load checkpoint from {latest_ckpt.path}: {e}",
+                reason=f"Deserialization raised {e.__class__.__name__}",
+                rationale="Checkpoints must be readable Torch payloads to resume training",
             ) from e
 
         if not isinstance(checkpoint_dict, Mapping):
-            raise CheckpointError("Checkpoint file does not contain a mapping payload")
+            raise CheckpointError(
+                "Checkpoint file does not contain a mapping payload",
+                reason=f"Loaded object type: {type(checkpoint_dict).__name__}",
+                rationale="Checkpoint payloads must be mapping-like to hydrate strongly typed objects",
+            )
 
         checkpoint = Checkpoint.from_payload(cast(Mapping[str, Any], checkpoint_dict))
 
@@ -423,7 +461,9 @@ class CheckpointManager:
             self._discover_existing()
             if not self.best_checkpoints:
                 raise CheckpointError(
-                    f"No best checkpoints discovered in {self.out_dir}"
+                    f"No best checkpoints discovered in {self.out_dir}",
+                    reason="Best checkpoint rotation list is empty",
+                    rationale="Loading best checkpoint requires at least one tracked best checkpoint",
                 )
 
         # Get the best checkpoint (lowest metric)
@@ -445,11 +485,17 @@ class CheckpointManager:
         except (OSError, RuntimeError, TorchUnpicklingError) as e:
             logger.error(f"Error loading best checkpoint from {best_ckpt.path}: {e}")
             raise CheckpointLoadError(
-                f"Failed to load best checkpoint from {best_ckpt.path}: {e}"
+                f"Failed to load best checkpoint from {best_ckpt.path}: {e}",
+                reason=f"Deserialization raised {e.__class__.__name__}",
+                rationale="Best checkpoints must remain readable Torch payloads to be promoted",
             ) from e
 
         if not isinstance(checkpoint_dict, Mapping):
-            raise CheckpointError("Checkpoint file does not contain a mapping payload")
+            raise CheckpointError(
+                "Checkpoint file does not contain a mapping payload",
+                reason=f"Loaded object type: {type(checkpoint_dict).__name__}",
+                rationale="Checkpoint payloads must be mapping-like to hydrate strongly typed objects",
+            )
 
         checkpoint = Checkpoint.from_payload(cast(Mapping[str, Any], checkpoint_dict))
 

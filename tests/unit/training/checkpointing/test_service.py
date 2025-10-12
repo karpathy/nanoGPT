@@ -232,11 +232,21 @@ def test_load_checkpoint_handles_checkpoint_error(tmp_path: Path) -> None:
 
         def load_latest_checkpoint(self, *, device, logger):  # type: ignore[no-untyped-def]
             del device, logger
-            raise CheckpointError("bad checkpoint")
+            raise CheckpointError(
+                "bad checkpoint",
+                reason="Stubbed manager signalled load failure",
+                rationale="Service must propagate checkpoint errors so callers can react",
+            )
 
     result = service.load_checkpoint(_Manager(), cfg, logger=logger)
     assert result is None
-    assert logger.warnings == ["Could not load checkpoint (latest): bad checkpoint"]
+    assert len(logger.warnings) == 1
+    warning_lines = logger.warnings[0].splitlines()
+    assert warning_lines[0] == "Could not load checkpoint (latest): bad checkpoint"
+    assert warning_lines[1] == "Reason: Stubbed manager signalled load failure"
+    assert warning_lines[2] == (
+        "Rationale: Service must propagate checkpoint errors so callers can react"
+    )
 
 
 def test_load_checkpoint_override_success(tmp_path: Path) -> None:

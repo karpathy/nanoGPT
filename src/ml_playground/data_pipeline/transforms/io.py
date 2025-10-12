@@ -51,7 +51,9 @@ def write_bin_and_meta(
                 existing_meta = pickle.load(f)
         except (OSError, pickle.UnpicklingError, EOFError) as e:
             raise DataError(
-                f"Failed to read existing meta.pkl at {meta_path}: {e}"
+                f"Failed to read existing meta.pkl at {meta_path}: {e}",
+                reason=f"Unable to deserialize metadata due to {e.__class__.__name__}",
+                rationale="Preparation requires re-using valid metadata to guarantee deterministic outputs",
             ) from e
         if isinstance(existing_meta, dict) and "meta_version" in existing_meta:
             created, _, skipped = diff_file_states(
@@ -64,7 +66,9 @@ def write_bin_and_meta(
                 pass
             return
         raise DataError(
-            f"Invalid existing meta.pkl at {meta_path}: expected dict with 'meta_version'"
+            f"Invalid existing meta.pkl at {meta_path}: expected dict with 'meta_version'",
+            reason="Metadata structure missing required 'meta_version' key",
+            rationale="Prepare reruns rely on versioned metadata to decide reuse behaviour",
         )
 
     tmp_train = train_path.with_name("." + train_path.name + ".tmp")
@@ -117,7 +121,11 @@ def setup_tokenizer(
         meta = pickle.load(f)
     tokenizer_type = meta.get("tokenizer_type")
     if tokenizer_type is None:
-        raise DataError(f"Invalid meta.pkl at {meta_path}: missing 'tokenizer_type'")
+        raise DataError(
+            f"Invalid meta.pkl at {meta_path}: missing 'tokenizer_type'",
+            reason="Metadata lacks tokenizer_type entry",
+            rationale="Downstream steps need explicit tokenizer kind to construct compatible tokenizers",
+        )
     if tokenizer_type in ("char", "word"):
         vocab = meta.get("stoi") or meta.get("vocab")
         tokenizer = create_tokenizer(coerce_tokenizer_type(tokenizer_type), vocab=vocab)

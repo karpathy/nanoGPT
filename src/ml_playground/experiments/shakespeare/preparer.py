@@ -57,10 +57,18 @@ class ShakespearePreparer(_PreparerProto):
                     rfs()
                 text = getattr(resp, "text", None)
                 if text is None:
-                    raise DataError("http_get did not return an object with .text")
+                    raise DataError(
+                        "http_get did not return an object with .text",
+                        reason="Injected HTTP client returned response without 'text' attribute",
+                        rationale="Dataset download expects a text payload to seed the corpus",
+                    )
                 f_input.write_text(text, encoding="utf-8")
             except requests.exceptions.RequestException as e:
-                raise DataError(f"Failed to download Shakespeare dataset: {e}") from e
+                raise DataError(
+                    f"Failed to download Shakespeare dataset: {e}",
+                    reason=f"HTTP request raised {e.__class__.__name__}",
+                    rationale="Shakespeare preparer requires network access or cached input.txt",
+                ) from e
 
         validate_file_exists(f_input, "Shakespeare input file")
 

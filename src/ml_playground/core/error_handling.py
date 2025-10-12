@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 import traceback
-from typing import Any, Callable, Optional, Type, TypeVar
+from typing import Any, Callable, Optional, Protocol, Type, TypeVar, runtime_checkable
 from pathlib import Path
 from ml_playground.core.logging_protocol import LoggerLike
 
@@ -14,6 +14,7 @@ T = TypeVar("T")
 
 
 __all__ = [
+    "DetailedException",
     "MLPlaygroundError",
     "ConfigurationError",
     "DataError",
@@ -38,10 +39,49 @@ __all__ = [
 ]
 
 
-class MLPlaygroundError(Exception):
-    """Base exception class for ml_playground framework errors."""
+@runtime_checkable
+class DetailedException(Protocol):
+    """Protocol describing the structured diagnostics exposed by errors."""
 
-    pass
+    @property
+    def message(self) -> str:
+        """The primary human-readable error message."""
+        ...
+
+    @property
+    def reason(self) -> str:
+        """Concise statement of the immediate failure cause."""
+        ...
+
+    @property
+    def rationale(self) -> str:
+        """Explanation of the expectation or invariant that was violated."""
+        ...
+
+
+class MLPlaygroundError(Exception):
+    """Base exception class for ml_playground framework errors.
+
+    Every subclass must provide a *reason* (what failed) and a *rationale*
+    (why the code expected something different). This mirrors the
+    diagnostics provided by languages like Rust and Elm, ensuring each
+    exception carries actionable guidance.
+    """
+
+    def __init__(self, message: str, *, reason: str, rationale: str) -> None:
+        super().__init__(message)
+        self.message: str = message
+        self.reason: str = reason
+        self.rationale: str = rationale
+
+    def __str__(self) -> str:
+        return "\n".join(
+            (
+                self.message,
+                f"Reason: {self.reason}",
+                f"Rationale: {self.rationale}",
+            )
+        )
 
 
 class ConfigurationError(MLPlaygroundError):
@@ -164,26 +204,50 @@ def safe_file_operation(
         return func(*args, **kwargs)
     except (IOError, OSError) as e:
         logger.error(f"File operation failed: {e}")
-        raise FileOperationError(f"File operation failed: {e}") from e
+        raise FileOperationError(
+            f"File operation failed: {e}",
+            reason=f"{e.__class__.__name__} raised during file operation",
+            rationale="Filesystem paths must be reachable and writable for this action",
+        ) from e
     except Exception as e:
         logger.error(f"Unexpected error during file operation: {e}")
-        raise FileOperationError(f"Unexpected error during file operation: {e}") from e
+        raise FileOperationError(
+            f"Unexpected error during file operation: {e}",
+            reason=f"{e.__class__.__name__} raised outside expected IO failures",
+            rationale="File helpers expect predictable IO exceptions; investigate the triggering logic",
+        ) from e
 
 
 def validate_file_exists(path: Path, description: str = "File") -> None:
     """Ensure that ``path`` refers to an existing file, raising ``DataError`` otherwise."""
     if not path.exists():
-        raise DataError(f"{description} not found at {path}")
+        raise DataError(
+            f"{description} not found at {path}",
+            reason="Path does not exist on disk",
+            rationale="Callers must provide existing files to proceed with deterministic pipelines",
+        )
     if not path.is_file():
-        raise DataError(f"{description} path {path} exists but is not a file")
+        raise DataError(
+            f"{description} path {path} exists but is not a file",
+            reason="Path refers to a non-file entry",
+            rationale="File validations expect regular files to ensure reproducible IO",
+        )
 
 
 def validate_directory_exists(path: Path, description: str = "Directory") -> None:
     """Ensure that ``path`` refers to an existing directory, raising ``DataError`` otherwise."""
     if not path.exists():
-        raise DataError(f"{description} not found at {path}")
+        raise DataError(
+            f"{description} not found at {path}",
+            reason="Path does not exist on disk",
+            rationale="Directory checks assume the location has been created beforehand",
+        )
     if not path.is_dir():
-        raise DataError(f"{description} path {path} exists but is not a directory")
+        raise DataError(
+            f"{description} path {path} exists but is not a directory",
+            reason="Path refers to a non-directory entry",
+            rationale="Directory validations guard against pointing tooling at invalid filesystem nodes",
+        )
 
 
 def validate_config_value(
@@ -191,11 +255,17 @@ def validate_config_value(
 ) -> None:
     """Validate presence and type of a configuration entry."""
     if required and value is None:
-        raise ValidationError(f"Required configuration value '{name}' is missing")
+        raise ValidationError(
+            f"Required configuration value '{name}' is missing",
+            reason="Configuration entry absent",
+            rationale="TOML configs must include all required keys to satisfy schema validation",
+        )
     if value is not None and not isinstance(value, expected_type):
         raise ValidationError(
             f"Configuration value '{name}' must be of type {expected_type.__name__}, "
-            f"got {type(value).__name__}"
+            f"got {type(value).__name__}",
+            reason="Type mismatch for configuration entry",
+            rationale="Configuration parsing enforces explicit types to keep runtime deterministic",
         )
 
 

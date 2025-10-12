@@ -25,7 +25,9 @@ TokenizerKind = Literal["char", "word", "tiktoken"]
 def coerce_tokenizer_type(value: str) -> TokenizerKind:
     if value not in {"char", "word", "tiktoken"}:
         raise DataError(
-            "Unsupported tokenizer type. Expected one of {'char', 'word', 'tiktoken'}"
+            "Unsupported tokenizer type. Expected one of {'char', 'word', 'tiktoken'}",
+            reason=f"Received unsupported tokenizer type: {value!r}",
+            rationale="Data preparation only supports canonical tokenizer families to guarantee compatibility",
         )
     return cast(TokenizerKind, value)
 

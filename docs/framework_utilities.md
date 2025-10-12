@@ -19,7 +19,9 @@ The `src/ml_playground/core/error_handling.py` module provides:
 
 ### Exception Classes
 
-- `MLPlaygroundError` - Base exception class for all framework errors
+- `DetailedException` protocol - Captures the structured diagnostics interface (`message`, `reason`, `rationale`).
+- `MLPlaygroundError` - Base exception class for all framework errors. Every subclass must provide a reason (what failed)
+  and a rationale (why the code expected a different outcome); the string form prints all three fields on separate lines.
 - `ConfigurationError` - Raised for configuration-related errors
 - `DataError` - Raised for data-related errors
 - `ModelError` - Raised for model-related errors

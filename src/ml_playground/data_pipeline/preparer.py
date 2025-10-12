@@ -103,7 +103,9 @@ class _PreparationPipeline:
         if isinstance(data_cfg, DataConfig):
             return data_cfg
         raise DataError(
-            "prepare.extras.data_config must be a DataConfig instance when provided"
+            "prepare.extras.data_config must be a DataConfig instance when provided",
+            reason=f"Received extras['data_config'] of type {type(data_cfg).__name__}",
+            rationale="Preparation extras rely on DataConfig for deterministic file layout",
         )
 
     def _default_split(self) -> float:
@@ -113,9 +115,17 @@ class _PreparationPipeline:
         try:
             ratio = float(raw)
         except (TypeError, ValueError) as exc:
-            raise DataError(f"Invalid split ratio in extras: {raw!r}") from exc
+            raise DataError(
+                f"Invalid split ratio in extras: {raw!r}",
+                reason=f"Unable to coerce provided split to float: {exc}",
+                rationale="Training/validation split must be numeric to derive dataset boundaries",
+            ) from exc
         if not (0.0 <= ratio <= 1.0):
-            raise DataError(f"split ratio must be within [0.0, 1.0]; received {ratio}")
+            raise DataError(
+                f"split ratio must be within [0.0, 1.0]; received {ratio}",
+                reason="Split ratio outside inclusive [0.0, 1.0] range",
+                rationale="Dataset preparation assumes ratios describe a valid probability interval",
+            )
         return ratio
 
     def _load_raw_text(self) -> str:
@@ -124,7 +134,11 @@ class _PreparationPipeline:
             if self._cfg.read_text_fn is not None:
                 return self._cfg.read_text_fn(Path(raw_text_path))
             return Path(raw_text_path).read_text(encoding="utf-8")
-        raise DataError("No raw text path provided in preparer config")
+        raise DataError(
+            "No raw text path provided in preparer config",
+            reason="Preparer configuration missing raw_text_path",
+            rationale="Prepare pipeline requires a seed corpus path to produce binaries",
+        )
 
     def _output_paths(self, data_cfg: DataConfig | None) -> list[Path]:
         if data_cfg is not None:

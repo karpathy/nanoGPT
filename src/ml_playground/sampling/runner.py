@@ -146,7 +146,9 @@ class Sampler:
             return tokenizer
         raise DataError(
             f"Tokenizer metadata not found in sampling output directory: {self.out_dir}.\n"
-            "Expected 'meta.pkl' to exist. Run 'train' first to propagate metadata to the sampling directory."
+            "Expected 'meta.pkl' to exist. Run 'train' first to propagate metadata to the sampling directory.",
+            reason="Sampling directory missing meta.pkl",
+            rationale="Sampling assumes training artifacts were synced so tokenizer configuration is available",
         )
 
     def _get_start_ids(self) -> list[int]:
@@ -159,7 +161,9 @@ class Sampler:
             except (OSError, IOError) as e:
                 # Replace bare except with explicit file operation error
                 raise FileOperationError(
-                    f"Failed to read prompt file {prompt_path}: {e}"
+                    f"Failed to read prompt file {prompt_path}: {e}",
+                    reason=f"{e.__class__.__name__} raised while reading prompt file",
+                    rationale="Sampling requires the prompt file to be readable to seed generation",
                 ) from e
         return self.tokenizer.encode(start_text)
 
