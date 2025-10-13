@@ -277,7 +277,7 @@ exceptions. NO second chances.
 
 ## Running Tests
 
-{{ ... }}
+Use the Typer wrappers for consistency with CI:
 
 ```bash
 # Fast check
@@ -289,6 +289,8 @@ uvx --from . test-tasks pytest -- -m "not slow and not perf" -q
 # Full suite with coverage
 uvx --from . ci-tasks coverage-report --fail-under 87
 ```
+
+Invoke targeted suites directly with `uv run pytest path/to/test.py` when iterating on a single module, but ensure the commands above pass before committing.
 
 ### CI Commands
 

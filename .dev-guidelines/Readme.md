@@ -96,35 +96,11 @@ All documentation in this repo must adhere to [DOCUMENTATION.md](DOCUMENTATION.m
 
 ## Essential Commands
 
-**Environment Setup**:
+**Environment Setup**: Follow [`SETUP.md#environment-setup`](SETUP.md#environment-setup) to create and verify the UV environment.
 
-```bash
-uvx --from . env-tasks setup
-uvx --from . env-tasks verify
-```
+**Quality Gates**: Run `uvx --from . ci-tasks quality` before each commit; see [`DEVELOPMENT.md#quality-gates-mandatory`](DEVELOPMENT.md#quality-gates-mandatory) for full rationale.
 
-**Quality Gates** (run before each commit):
-
-```bash
-uvx --from . ci-tasks quality
-```
-
-**Runtime Entry Points**:
-
-```bash
-# Prepare datasets
-uv run python -m ml_playground.cli prepare shakespeare --config src/ml_playground/experiments/shakespeare/config.toml
-uv run python -m ml_playground.cli prepare bundestag_char --config src/ml_playground/experiments/bundestag_char/config.toml
-
-# Train (select config path explicitly)
-uv run python -m ml_playground.cli train shakespeare --config src/ml_playground/experiments/shakespeare/config.toml
-
-# Sample from trained model
-uv run python -m ml_playground.cli sample shakespeare --config src/ml_playground/experiments/shakespeare/config.toml
-
-# End-to-end pipeline
-uv run python -m ml_playground.cli loop bundestag_char --config src/ml_playground/experiments/bundestag_char/config.toml
-```
+**Runtime Entry Points**: Use the Typer CLI commands documented in [`SETUP.md#basic-workflow-commands`](SETUP.md#basic-workflow-commands) and the flows outlined in [`ARCHITECTURE.md#runtime-entry-points`](ARCHITECTURE.md#runtime-entry-points).
 
 ## Need Help?
 
