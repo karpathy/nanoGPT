@@ -360,19 +360,6 @@ optimized for non-interactive or copy-paste workflows.
 
 ## Architecture Notes
 
-### Checkpointing and Resume
-
-Checkpoints are strictly rotated-only.
-
-- Last checkpoints are saved with a timestamped suffix, e.g., `ckpt_last_XXXXXXXX.pt`.
-- Best checkpoints are saved with a timestamped suffix and metric, e.g., `ckpt_best_XXXXXXXX_<metric>.pt`.
-- On resume, checkpointed `model_args` override TOML for compatibility.
-- To change model shapes: start with fresh `out_dir` or delete existing checkpoints.
-
-### Dataset Notes
-
-- Char-level Bundestag dataset autoseeds from bundled sample resource
-- Replace with real data for non-trivial runs
-- Use `device="cpu"` for tests and local CI
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for detailed diagrams and flows covering configuration loading, dataset lifecycle, runtime entry points, and checkpoint retention policies.
 
 For import standards, see [IMPORT_GUIDELINES.md](IMPORT_GUIDELINES.md).
