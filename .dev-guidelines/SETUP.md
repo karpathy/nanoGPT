@@ -24,7 +24,6 @@ Quick start guide for setting up the ml_playground development environment.
 - [Configuration System](#configuration-system)
 - [Testing](#testing)
 - [Quality Gates](#quality-gates)
-- [TDD Workflow (Required)](#tdd-workflow-required)
 - [Quick Troubleshooting](#quick-troubleshooting)
 
 ## Prerequisites
@@ -37,13 +36,14 @@ Quick start guide for setting up the ml_playground development environment.
 ### 1. Create Virtual Environment
 
 ```bash
-uvx --from . dev-tasks setup
+uv venv
+uv sync --all-groups
 ```
 
 ### 2. Verify Installation
 
 ```bash
-uvx --from . dev-tasks verify
+uv run python -c "import ml_playground; print('✓ ml_playground import OK')"
 ```
 
 ## Basic Workflow Commands
@@ -51,8 +51,8 @@ uvx --from . dev-tasks verify
 ### Dataset Preparation
 
 ```bash
-uvx --from . dev-tasks prepare shakespeare
-uvx --from . dev-tasks prepare bundestag_char
+uv run python -m ml_playground.cli prepare shakespeare --config src/ml_playground/experiments/shakespeare/config.toml
+uv run python -m ml_playground.cli prepare bundestag_char --config src/ml_playground/experiments/bundestag_char/config.toml
 ```
 
 Notes:
@@ -65,8 +65,8 @@ Notes:
 ### Training
 
 ```bash
-uvx --from . dev-tasks train shakespeare --config ml_playground/configs/shakespeare_cpu.toml
-uvx --from . dev-tasks train bundestag_char --config ml_playground/configs/bundestag_char_cpu.toml
+uv run python -m ml_playground.cli train shakespeare --config src/ml_playground/experiments/shakespeare/config.toml
+uv run python -m ml_playground.cli train bundestag_char --config src/ml_playground/experiments/bundestag_char/config.toml
 ```
 
 Notes:
@@ -78,8 +78,8 @@ Notes:
 ### Sampling
 
 ```bash
-uvx --from . dev-tasks sample shakespeare --config ml_playground/configs/shakespeare_cpu.toml
-uvx --from . dev-tasks sample bundestag_char --config ml_playground/configs/bundestag_char_cpu.toml
+uv run python -m ml_playground.cli sample shakespeare --config src/ml_playground/experiments/shakespeare/config.toml
+uv run python -m ml_playground.cli sample bundestag_char --config src/ml_playground/experiments/bundestag_char/config.toml
 ```
 
 Notes:
@@ -91,7 +91,7 @@ Notes:
 ### End-to-End Loop
 
 ```bash
-uvx --from . dev-tasks loop bundestag_char --config ml_playground/configs/bundestag_char_cpu.toml
+uv run python -m ml_playground.cli loop bundestag_char --config src/ml_playground/experiments/bundestag_char/config.toml
 ```
 
 Make output is intentionally quieter by default via a global `.SILENT:` directive; only explicit messages are printed.
@@ -120,31 +120,17 @@ Make output is intentionally quieter by default via a global `.SILENT:` directiv
 - End-to-end (E2E) tests: see `tests/e2e/README.md` (CLI wiring, config merge, logging)
   - When invoking the CLI in E2E tests, pass the tiny test defaults explicitly:
     `--exp-config tests/e2e/ml_playground/experiments/test_default_config.toml`
+- Follow strict TDD as outlined in [`TESTING.md`](./TESTING.md#test-driven-development-required) and commit pairing rules from [`DEVELOPMENT.md`](./DEVELOPMENT.md#commit-standards).
 
 ## Quality Gates
 
 ```bash
 # Full gate: ruff (lint+format), pyright, mypy, pytest
-uvx --from . dev-tasks quality
+uvx --from . ci-tasks quality
 
 # Extended: optional mutation testing (Cosmic Ray)
-uvx --from . dev-tasks quality-ext
+uvx --from . ci-tasks quality-ext
 ```
-
-## TDD Workflow (Required)
-
-1. Write a failing test specifying the behavior (unit or integration).
-1. Implement the minimal production code to make the test pass.
-1. Refactor with tests green.
-
-Commit pairing rule (required): each functional change MUST include its tests in the same commit (unit/integration).
-Exceptions: documentation-only, test-only refactors (no behavior change), mechanical formatting.
-
-Recommended commit sequence per behavior:
-
-- `test(<scope>): specify failing behavior` (optional)
-- implementation + tests in the SAME COMMIT if not done above
-- `refactor(<scope>): tidy up with green tests` (optional)
 
 ## Quick Troubleshooting
 

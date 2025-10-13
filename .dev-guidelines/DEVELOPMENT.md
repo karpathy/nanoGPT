@@ -73,33 +73,9 @@ Core development practices, quality standards, and workflow for ml_playground co
 
 ## Quality Gates (Mandatory)
 
-For detailed information about the centralized framework utilities, see [Framework Utilities
-Documentation](../docs/framework_utilities.md).
+Pre-commit and CI both execute `uvx --from . ci-tasks quality`, which wraps ruff lint/format, mdformat, pyright, mypy, and the targeted pytest slices. Override the default parallelism via `uvx --from . ci-tasks quality PRE_COMMIT_JOBS=4` when needed. See [Framework Utilities Documentation](../docs/framework_utilities.md) for supporting infrastructure.
 
-The pre-commit hook and CI both execute `uvx --from . dev-tasks quality`. That target expands to ruff (lint + format),
-pyright, mypy (scoped to `ml_playground`), and the targeted pytest suite. The command now runs
-pre-commit with `--jobs $(PRE_COMMIT_JOBS)`, defaulting to `min(os.cpu_count(), 8)`; override via
-`uvx --from . dev-tasks quality PRE_COMMIT_JOBS=4` when you want to cap parallelism (e.g., inside containers).
-
-During active development you may run narrower commands to iterate quickly, for example:
-
-```bash
-uv run pytest tests/property/cli/test_cli_property.py
-uv run ruff check path/to/file.py
-```
-
-When you want the convenience wrappers (parallelized pytest, cache-aware collection, etc.), use the
-`dev-tasks` commands directly. During tight iteration, reach for `uvx --from . dev-tasks quality-fast` to run only the
-formatting hooks (`ruff`, `ruff-format`, `mdformat`) with the same parallelism flags before kicking
-off the heavier type and test gates:
-
-```bash
-uvx --from . dev-tasks coverage-report      # run property + unit suites with coverage output
-uvx --from . dev-tasks property             # property-based suites only
-uvx --from . dev-tasks unit                 # deterministic unit suites
-uvx --from . dev-tasks quality-fast         # lint/format the whole tree quickly
-uvx --from . dev-tasks lint                 # ruff lint+format without type checking
-```
+For focused iterations, rely on task-specific commands (e.g., `uv run pytest path/to/test.py`, `uv run ruff check path/to/file.py`). Convenience wrappers remain available under `ci-tasks` and `env-tasks` for coverage reports, property suites, and lint-only passes.
 
 ## Commit Standards
 
@@ -129,7 +105,7 @@ uvx --from . dev-tasks lint                 # ruff lint+format without type chec
 
 - Every commit MUST be in a runnable state when checked out.
 - Runnable means:
-  - Pre-commit (and therefore `uvx --from . dev-tasks quality`) passes when the commit is created. Do not bypass hooks or suppress failures.
+  - Pre-commit (and therefore `uvx --from . ci-tasks quality`) passes when the commit is created. Do not bypass hooks or suppress failures.
   - No partially applied migrations or broken CLI entry points.
   - Documentation build (if modified) is not broken.
 - Do not commit code that knowingly breaks the build with intent to "fix later". Split work into smaller, independently
@@ -223,7 +199,7 @@ optimized for non-interactive or copy-paste workflows.
 - **Search tests only**:
 
   ```bash
-  rg --glob 'tests/**' "dev-tasks"
+  rg --glob 'tests/**' "ml_playground.cli"
   ```
 
 ### GitHub CLI (`gh`)

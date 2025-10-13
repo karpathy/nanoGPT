@@ -75,7 +75,7 @@ ml_playground/experiments/shakespeare/
 
 ## Markdown Style (mdformat)
 
-- Run `uv run mdformat <file.md>` (or rely on `uvx --from . dev-tasks quality`) to format Markdown consistently.
+- Run `uv run mdformat <file.md>` (or rely on `uvx --from . ci-tasks quality`) to format Markdown consistently.
 - Maintain one blank line above and below headings.
 - Ensure a blank line before and after lists; mdformat enforces indentation automatically.
 - Add a blank line before and after fenced code blocks and specify a language when possible.
@@ -129,7 +129,7 @@ ml_playground/experiments/shakespeare/
 
 ## Commit and Review Expectations
 
-- Docs must pass the markdownlint portion of our quality gates. The pre-commit hook runs `uvx --from . dev-tasks quality`,
+- Docs must pass the markdownlint portion of our quality gates. The pre-commit hook runs `uvx --from . ci-tasks quality`,
   so avoid bypassing it.
 - Prefer granular commits with clear `docs(<area>): <subject>` messages.
 - When documenting functional changes to code, ensure the associated commit pairs production code and tests in the same

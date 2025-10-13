@@ -88,32 +88,11 @@ All documentation in this repo must adhere to [DOCUMENTATION.md](DOCUMENTATION.m
 
 ## Core Principles (Non-Negotiable)
 
-**Quality First**: All quality gates must pass before any commit/PR:
-
-- Linting and formatting
-- Static analysis
-- Type checking
-- Tests with warnings as errors
-
-**Granular Commits**: Make small, focused commits with conventional commit messages. Run quality gates before each
-commit, not just before PR.
-
-**Runnable Commits**: Every commit must be in a runnable state when checked out. Do not land commits that break `uvx --from . ci-tasks quality`, CLI entry points, or docs builds. Never bypass verification (avoid `--no-verify`).
-
-**Feature Branches Only**: All work happens on short‑lived feature branches; no direct commits to `main`. Use kebab-case
-names like `feat/<scope>-<short-desc>`, `fix/<scope>-<short-desc>`. Keep branches focused and prefer multiple small PRs.
-
-**TOML Configuration**: TOML is the primary source of truth, mapped to dataclasses. No ad‑hoc CLI parameter overrides.
-
-- Allowed exceptions (as implemented):
-  - Global CLI option `--exp-config PATH` selects an alternative experiment TOML file (replaces the experiment’s
-    `config.toml`). The global `experiments/default_config.toml` is still merged first under the experiment config.
-  - Environment JSON overrides are supported, deep-merged, and strictly re-validated; invalid overrides are ignored to
-    avoid breaking flows:
-    - `ML_PLAYGROUND_TRAIN_OVERRIDES`
-    - `ML_PLAYGROUND_SAMPLE_OVERRIDES`
-
-**Strict Typing**: Code is strictly typed with explicit types and pathlib.Path for filesystem paths.
+- **Quality gates stay green**: Always run `uvx --from . ci-tasks quality` before committing. Deep details live in [`DEVELOPMENT.md`](./DEVELOPMENT.md#quality-gates-mandatory).
+- **TDD and commit pairing**: Follow the commit policy in [`DEVELOPMENT.md`](./DEVELOPMENT.md#commit-standards) and the strict TDD workflow in [`TESTING.md`](./TESTING.md#test-driven-development-required).
+- **Feature branches + conventional commits**: Required naming and history rules are documented in [`GIT_VERSIONING.md`](./GIT_VERSIONING.md).
+- **Configuration via TOML**: Treat configuration as single-source per [`SETUP.md`](./SETUP.md#configuration-system) and [`DEVELOPMENT.md`](./DEVELOPMENT.md#guiding-principles).
+- **Strict typing + UV tooling**: See [`DEVELOPMENT.md`](./DEVELOPMENT.md#guiding-principles) for typing, tooling, and reuse expectations.
 
 ## Essential Commands
 
@@ -134,17 +113,17 @@ uvx --from . ci-tasks quality
 
 ```bash
 # Prepare datasets
-uv run python -m ml_playground.cli prepare shakespeare --config src/ml_playground/experiments/shakespeare_cpu.toml
-uv run python -m ml_playground.cli prepare bundestag_char --config src/ml_playground/configs/bundestag_char_cpu.toml
+uv run python -m ml_playground.cli prepare shakespeare --config src/ml_playground/experiments/shakespeare/config.toml
+uv run python -m ml_playground.cli prepare bundestag_char --config src/ml_playground/experiments/bundestag_char/config.toml
 
 # Train (select config path explicitly)
-uv run python -m ml_playground.cli train shakespeare --config src/ml_playground/configs/shakespeare_cpu.toml
+uv run python -m ml_playground.cli train shakespeare --config src/ml_playground/experiments/shakespeare/config.toml
 
 # Sample from trained model
-uv run python -m ml_playground.cli sample shakespeare --config src/ml_playground/configs/shakespeare_cpu.toml
+uv run python -m ml_playground.cli sample shakespeare --config src/ml_playground/experiments/shakespeare/config.toml
 
 # End-to-end pipeline
-uv run python -m ml_playground.cli loop bundestag_char --config src/ml_playground/configs/bundestag_char_cpu.toml
+uv run python -m ml_playground.cli loop bundestag_char --config src/ml_playground/experiments/bundestag_char/config.toml
 ```
 
 ## Need Help?
