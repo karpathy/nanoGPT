@@ -105,7 +105,7 @@ All documentation in this repo must adhere to [DOCUMENTATION.md](DOCUMENTATION.m
 ## Need Help?
 
 - **Setup issues**: See [SETUP.md](SETUP.md) for installation and basic workflow
-- **Development questions**: Check [DEVELOPMENT.md](DEVELOPMENT.md) for practices and standards
+- **Development questions**: Check [DEVELOPMENT.md](DEVELOPMENT.md) for practices, standards, and architecture pointers
 - **Import problems**: Review [IMPORT_GUIDELINES.md](IMPORT_GUIDELINES.md) for strict policies
 - **Troubleshooting**: Consult [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for common issues
 
