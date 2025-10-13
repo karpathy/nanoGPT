@@ -1,11 +1,28 @@
 ---
 trigger: always_on
+description: Branching model, Conventional Commit rules, and linear history practices
 ---
 
 # Git Versioning & Workflow
 
 Canonical rules for branches, commit messages, and history management. Keep commits runnable and history linear to
 maintain velocity and reliability.
+
+<details>
+<summary>Related documentation</summary>
+
+- [Developer Guidelines Index](./Readme.md) – Entry point for ml_playground principles and quick-start commands.
+- [Development Practices](./DEVELOPMENT.md) – Quality gates, commit standards, and runnable-state expectations.
+
+</details>
+
+## Table of Contents
+
+- [Branching Model (Feature Branches REQUIRED)](#branching-model-feature-branches-required)
+- [Conventional Commits](#conventional-commits)
+- [Linear History & Rebasing](#linear-history--rebasing)
+- [Verification Gates & Runnable Commits](#verification-gates--runnable-commits)
+- [Commit Granularity (Reference)](#commit-granularity-reference)
 
 ## Branching Model (Feature Branches REQUIRED)
 

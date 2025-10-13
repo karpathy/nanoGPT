@@ -1,8 +1,23 @@
----
-trigger: always_on
----
+## -trigger: always_on description: Exhaustive testing policies enforcing TDD, coverage, and determinism
 
 # Testing Standards
+
+<details>
+<summary>Related documentation</summary>
+
+- [Developer Guidelines Index](./Readme.md) – Entry point for core policies and quick-start commands.
+- [Development Practices](./DEVELOPMENT.md) – Commit pairing rules, quality gates, and tooling workflows.
+
+</details>
+
+## Table of Contents
+
+- [Test-Driven Development (REQUIRED)](#test-driven-development-required)
+- [Testing Standards (ULTRA-STRICT POLICY - 100% SUCCESS REQUIRED)](#testing-standards-ultra-strict-policy---100-success-required)
+- [Mutation Testing (Optional)](#mutation-testing-optional)
+- [Running Tests](#running-tests)
+- [Example Test Patterns](#example-test-patterns)
+- [Adding New Tests](#adding-new-tests)
 
 ## Test-Driven Development (REQUIRED)
 

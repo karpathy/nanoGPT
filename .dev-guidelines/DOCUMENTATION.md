@@ -1,11 +1,36 @@
 ---
 trigger: always_on
+description: Standards for documentation structure, abstraction levels, and formatting
 ---
 
 # Documentation Guidelines
 
 Unified standards for all documentation in this repository. Applies to top-level docs, module docs, experiment
 READMEs, tests READMEs, and tools.
+
+<details>
+<summary>Related documentation</summary>
+
+- [Developer Guidelines Index](./Readme.md) – Entry point for the ml_playground guideline system with quick-start commands and core principles.
+- [Development Practices](./DEVELOPMENT.md) – Core development practices, quality standards, and workflow for ml_playground contributors.
+
+</details>
+
+## Table of Contents
+
+- [Abstraction Policy](#abstraction-policy)
+- [Required Sections per Experiment Readme](#required-sections-per-experiment-readme)
+- [Folder Tree Standard](#folder-tree-standard)
+- [Linking to Framework Docs](#linking-to-framework-docs)
+- [Markdown Style (mdformat)](#markdown-style-mdformat)
+- [Guideline Divergence Documentation](#guideline-divergence-documentation)
+- [Cross-Referencing](#cross-referencing)
+- [Cross-Document Details Blocks](#cross-document-details-blocks)
+- [DRY Documentation](#dry-documentation)
+- [Brevity](#brevity)
+- [Commit and Review Expectations](#commit-and-review-expectations)
+- [Tests and Tools READMEs](#tests-and-tools-readmes)
+- [Maintenance](#maintenance)
 
 ## Abstraction Policy
 

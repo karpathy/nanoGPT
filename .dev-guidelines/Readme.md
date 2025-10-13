@@ -1,12 +1,30 @@
 ---
 trigger: always_on
-description:
+description: Entry point for ml_playground developer guidelines and core policies
 ---
 
 # ml_playground Developer Guidelines
 
 **Audience**: Advanced contributors working exclusively on the `ml_playground` module. These rules are binding. Follow
 them exactly.
+
+<details>
+<summary>Related documentation</summary>
+
+- [Development Practices](./DEVELOPMENT.md) – Core development practices, quality standards, and workflow for ml_playground contributors.
+- [Documentation Guidelines](./DOCUMENTATION.md) – Unified standards for documentation structure, abstraction levels, and formatting.
+- [Setup Guide](./SETUP.md) – Quick start instructions for preparing the ml_playground development environment.
+
+</details>
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Documentation Structure](#documentation-structure)
+- [Core Principles (Non-Negotiable)](#core-principles-non-negotiable)
+- [Essential Commands](#essential-commands)
+- [Need Help?](#need-help)
+- [🧪 Testing Docs](#%f0%9f%a7%aa-testing-docs)
 
 ## Quick Start
 

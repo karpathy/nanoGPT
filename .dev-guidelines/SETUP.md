@@ -1,10 +1,31 @@
 ---
 trigger: always_on
+description: Quick start instructions for preparing the ml_playground development environment
 ---
 
 # ml_playground Setup Guide
 
 Quick start guide for setting up the ml_playground development environment.
+
+<details>
+<summary>Related documentation</summary>
+
+- [Developer Guidelines Index](./Readme.md) – Entry point for principles, quick-start commands, and reference links.
+- [Development Practices](./DEVELOPMENT.md) – Quality gates, tooling workflows, and architecture notes.
+- [Documentation Guidelines](./DOCUMENTATION.md) – Shared Markdown structure and cross-referencing standards.
+
+</details>
+
+## Table of Contents
+
+- [Prerequisites](#prerequisites)
+- [Environment Setup](#environment-setup)
+- [Basic Workflow Commands](#basic-workflow-commands)
+- [Configuration System](#configuration-system)
+- [Testing](#testing)
+- [Quality Gates](#quality-gates)
+- [TDD Workflow (Required)](#tdd-workflow-required)
+- [Quick Troubleshooting](#quick-troubleshooting)
 
 ## Prerequisites
 

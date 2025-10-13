@@ -1,12 +1,28 @@
-______________________________________________________________________
-
-## trigger: always_on description: globs:
+---
+trigger: always_on
+description: Import standards enforcing PEP 420 namespaces and strict module boundaries
+---
 
 # Import Guidelines: PEP 420 Namespace Policy
 
-This repository adopts **PEP 420 implicit namespace packages** as the default. Package directories should **not**
-contain `__init__.py` unless the limited exception policy below applies. All engineers must follow this document as
-written; deviations require explicit approval.
+<details>
+<summary>Related documentation</summary>
+
+- [Developer Guidelines Index](./Readme.md) – Entry point for core policies and quick-start commands.
+- [Development Practices](./DEVELOPMENT.md) – Commit standards, tooling policies, and architecture notes.
+
+</details>
+
+## Table of Contents
+
+- [Core Principles](#core-principles)
+- [PEP 420 Namespace Defaults](#pep-420-namespace-defaults)
+- [Mandatory Rules (No Exceptions Without Approval)](#mandatory-rules-no-exceptions-without-approval)
+- [Canonical Patterns](#canonical-patterns)
+- [Exception Handling Checklist](#exception-handling-checklist)
+- [Tooling Enforcement](#tooling-enforcement)
+- [Review Checklist](#review-checklist)
+- [Rationale](#rationale)
 
 ## Core Principles
 

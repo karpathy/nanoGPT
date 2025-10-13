@@ -1,19 +1,31 @@
-______________________________________________________________________
-
-## trigger: always_on
+---
+trigger: always_on
+description: Core development practices, quality standards, and workflow for contributors
+---
 
 # ml_playground Development Practices
 
 Core development practices, quality standards, and workflow for ml_playground contributors.
 
-## Quick Start
+<details>
+<summary>Related documentation</summary>
 
-```bash
-uvx --from . env-tasks setup
-uvx --from . env-tasks sync --group dev --group ml
-uvx --from . env-tasks verify
-uvx --from . ci-tasks quality   # ruff + format + pyright + mypy + pytest
-```
+- [Developer Guidelines Index](./Readme.md) – Entry point for the ml_playground guideline system with quick-start commands and core principles.
+- [Documentation Guidelines](./DOCUMENTATION.md) – Standards for structure, abstraction, and formatting across documentation.
+- [Testing Standards](./TESTING.md) – Detailed requirements for TDD, coverage, and test organization.
+
+</details>
+
+## Table of Contents
+
+- [Guiding Principles](#guiding-principles)
+- [Quality Gates (Mandatory)](#quality-gates-mandatory)
+- [Commit Standards](#commit-standards)
+- [Testing Standards](#testing-standards)
+- [Code Style Standards](#code-style-standards)
+- [Tool Configuration Policy](#tool-configuration-policy)
+- [Dev Tooling Quick Reference](#dev-tooling-quick-reference)
+- [Architecture Notes](#architecture-notes)
 
 ## Guiding Principles
 
