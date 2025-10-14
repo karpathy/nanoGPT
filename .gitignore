@@ -10,3 +10,6 @@ __pycache__/
 input.txt
 env/
 venv/
+
+!**/math/**
+!**/out-math/**
