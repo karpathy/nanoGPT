@@ -24,6 +24,7 @@ TOOL_MAP: Dict[str, str] = {
     "kiro": ".kiro/steering/product.md",
     "windsurf": ".windsurf/rules/rule.md",
     "cursor": ".cursor/rules/00-readme.mdc",
+    "gemini": "GEMINI.md",
     # "codex": "Agent.md" - for codex we would need to merge or hope to
 }
 
@@ -343,6 +344,11 @@ def setup(
     primary_path = (PROJECT_DIR / tool_path).resolve()
     ensure_dir(primary_path.parent, dry_run)
     create_or_update_link(primary_path, readme, dry_run=dry_run)
+
+    if tool == "gemini":
+        info("note   gemini special case: skipping additional links.")
+        info("done.")
+        return
 
     # 4) Mirror entire BASE_DIR contents into tool_dir (recursive)
     # Exclude the README file to avoid duplication, since it already has a primary mapping above
