@@ -16,6 +16,8 @@ jobs:
   mutation:
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    env:
+      UV_CACHE_DIR: .cache/uv
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,23 +28,36 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Install build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-dev build-essential libffi-dev gfortran
+
       - name: Setup uv
         id: setup-uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v6
         with:
           version: latest
           enable-cache: true
           cache-local-path: .cache/uv
           cache-dependency-glob: uv.lock
-          prune-cache: false
+          prune-cache: true
 
       - name: Prepare cache directories
         run: |
           mkdir -p .cache/uv
           mkdir -p .venv
-
-      - name: Sync dependencies (dev + ml)
-        run: uv run env-tasks sync --group dev --group ml
+      - name: Cache virtual environment
+        id: cache-venv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-venv-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-venv-
+      - name: Sync dependencies (dev)
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: uv run env-tasks sync --group dev
 
       - name: Run mutation suite
         run: uv run ci-tasks mutation run
@@ -50,6 +65,9 @@ jobs:
       - name: Capture mutation report
         run: |
           uv run python tools/mutation_report.py --config pyproject.toml | tee mutation-report.txt
+
+      - name: Prune uv cache
+        run: uv cache prune --ci
 
       - name: Upload mutation artifacts
         if: always()

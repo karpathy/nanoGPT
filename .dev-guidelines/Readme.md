@@ -62,6 +62,11 @@ This guideline system is organized into focused documents for easy navigation:
 - Code style standards and tooling
 - Architecture notes and best practices
 
+### ⚙️ [CI.md](CI.md) - Continuous Integration Guidelines
+
+- Platform-agnostic CI principles and maintenance policies
+- Links to `.github` documentation for concrete workflow implementations
+
 ### 🔀 [GIT_VERSIONING.md](GIT_VERSIONING.md) - Git Versioning & Workflow
 
 - Feature branch model, naming conventions, and linear history/rebase policy

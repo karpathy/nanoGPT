@@ -27,19 +27,27 @@ jobs:
         with:
           python-version: '3.13'
       - id: setup-uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v6
         with:
           version: latest
           enable-cache: true
           cache-local-path: .cache/uv
           cache-dependency-glob: uv.lock
-          prune-cache: false
+          prune-cache: true
       - name: Prepare cache directories
         run: |
           mkdir -p .cache/uv
           mkdir -p .cache/pre-commit
           mkdir -p .cache/ruff
           mkdir -p .venv
+      - name: Cache virtual environment
+        id: cache-venv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-venv-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-uv-venv-
       - name: Cache pre-commit envs
         uses: actions/cache@v4
         with:
@@ -60,8 +68,11 @@ jobs:
           du -sh .cache/uv || true
           du -sh .cache/pre-commit || true
           du -sh .venv || true
-      - run: uv sync --frozen --group dev
+      - if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: uv sync --frozen --group dev
       - run: uv run ci-tasks quality
+      - name: Prune uv cache
+        run: uv cache prune --ci
       - name: Ensure coverage badges are committed
         run: |
           if ! git diff --quiet -- docs/assets/coverage*.svg; then
