@@ -10,6 +10,8 @@ from importlib import resources
 from pathlib import Path
 from typing import Any, Iterable, List, Optional
 
+import tomllib
+
 import typer
 
 
@@ -40,6 +42,38 @@ PKG = "ml_playground"
 PYTEST_BASE = ["-q", "-n", "auto", "-W", "error", "--strict-markers", "--strict-config"]
 PRE_COMMIT_CONFIG = ROOT / ".githooks" / ".pre-commit-config.yaml"
 CACHE_DIR = ROOT / ".cache"
+_CACHE_ENV: dict[str, str] = {}
+
+
+def _load_cache_settings() -> None:
+    global CACHE_DIR
+
+    try:
+        with (ROOT / "pyproject.toml").open("rb") as fp:
+            pyproject_data = tomllib.load(fp)
+    except FileNotFoundError:  # pragma: no cover - defensive
+        pyproject_data = {}
+
+    cache_config = (
+        pyproject_data.get("tool", {}).get("ml_playground", {}).get("cache", {})
+    )
+
+    base_dir = cache_config.get("base_dir")
+    if isinstance(base_dir, str) and base_dir:
+        CACHE_DIR = ROOT / base_dir
+
+    env_config = cache_config.get("env", {})
+    for key, value in env_config.items():
+        if not isinstance(value, str):
+            continue
+        resolved = (ROOT / value).resolve()
+        resolved_str = str(resolved)
+        _CACHE_ENV[key] = resolved_str
+        os.environ.setdefault(key, resolved_str)
+
+
+_load_cache_settings()
+
 LIT_VENV = ROOT / ".venv312"
 LIT_REQUIREMENTS = resources.files("ml_playground.analysis.lit") / "requirements.txt"
 
@@ -57,7 +91,11 @@ def _run(
     command: List[str], *, env: Optional[dict[str, str]] = None, check: bool = True
 ) -> subprocess.CompletedProcess:
     _echo_command(command)
-    result = subprocess.run(command, cwd=ROOT, env=env)
+    run_env = os.environ.copy()
+    run_env.update(_CACHE_ENV)
+    if env:
+        run_env.update(env)
+    result = subprocess.run(command, cwd=ROOT, env=run_env)
     if check and result.returncode != 0:
         raise CommandError(f"Command failed with exit code {result.returncode}")
     return result
@@ -90,6 +128,8 @@ def uv_run(
 def ensure_cache_dirs(*subdirs: str) -> None:
     for subdir in subdirs:
         (CACHE_DIR / subdir).mkdir(parents=True, exist_ok=True)
+    for path in _CACHE_ENV.values():
+        Path(path).mkdir(parents=True, exist_ok=True)
 
 
 def forwarded_args(args: Any) -> List[str]:

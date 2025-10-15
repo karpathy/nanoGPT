@@ -43,10 +43,10 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 ## Policy
 
 - Use the uv-backed Typer CLIs for all workflows (env setup, quality, tests, runtime):
-  - `uvx --from . env-tasks <command>` for environment setup, cache cleanup, TensorBoard, and AI-guideline helpers.
-  - `uvx --from . lint-tasks <command>` for lint/format bundles when you need faster feedback.
-  - `uvx --from . test-tasks <command>` for pytest suites.
-  - `uvx --from . ci-tasks <command>` for end-to-end quality gates, coverage generation, and mutation workflows.
+  - `uv run env-tasks <command>` for environment setup, cache cleanup, TensorBoard, and AI-guideline helpers.
+  - `uv run lint-tasks <command>` for lint/format bundles when you need faster feedback.
+  - `uv run test-tasks <command>` for pytest suites.
+  - `uv run ci-tasks <command>` for end-to-end quality gates, coverage generation, and mutation workflows.
 - The project uses a `src/` layout. The uv CLIs automatically expose `src/` so `ml_playground` is importable without editable installs.
 - Quality tooling is mandatory before commit (ruff, mypy, pyright), and tests must pass.
 - Linear history for own work: rebase your branches and avoid merge commits; fast-forward only. See `.dev-guidelines/Readme.md` for developer policies.

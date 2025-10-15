@@ -60,12 +60,12 @@ jobs:
           du -sh .cache/uv || true
           du -sh .cache/pre-commit || true
           du -sh .venv || true
-      - run: uv sync --frozen --group dev --group ml
-      - run: uvx --from . ci-tasks quality
+      - run: uv sync --frozen --group dev
+      - run: uv run ci-tasks quality
       - name: Ensure coverage badges are committed
         run: |
           if ! git diff --quiet -- docs/assets/coverage*.svg; then
-            echo "::error::Coverage badges are stale. Run 'uvx --from . ci-tasks coverage-report --fail-under 87' and 'uvx --from . ci-tasks coverage-badge', then commit the updated SVGs." >&2
+            echo "::error::Coverage badges are stale. Run 'uv run ci-tasks coverage-report --fail-under 87' and 'uv run ci-tasks coverage-badge', then commit the updated SVGs." >&2
             git status --short docs/assets/coverage*.svg || true
             exit 1
           fi

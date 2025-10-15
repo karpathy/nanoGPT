@@ -45,12 +45,12 @@ uv add peft transformers torch tensorboard
 ```bash
 # Prepare → Train → Sample (separate)
 <<<<<<< HEAD:ml_playground/experiments/speakger/Readme.md
-uvx --from . dev-tasks prepare speakger
-uvx --from . dev-tasks train speakger --config ml_playground/experiments/speakger/config.toml
-uvx --from . dev-tasks sample speakger --config ml_playground/experiments/speakger/config.toml
+uv run dev-tasks prepare speakger
+uv run dev-tasks train speakger --config ml_playground/experiments/speakger/config.toml
+uv run dev-tasks sample speakger --config ml_playground/experiments/speakger/config.toml
 
 # Or end-to-end
-uvx --from . dev-tasks loop speakger --config ml_playground/experiments/speakger/config.toml
+uv run dev-tasks loop speakger --config ml_playground/experiments/speakger/config.toml
 =======
 make prepare speakger
 make train speakger CONFIG=src/ml_playground/experiments/speakger/config.toml

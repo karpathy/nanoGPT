@@ -143,8 +143,8 @@ Paste the following into `src/ml_playground/experiments/<name>/Readme.md` and re
 ## Environment Setup (preferred)
 
 ```bash
-uvx --from . env-tasks setup
-uvx --from . env-tasks verify
+uv run env-tasks setup
+uv run env-tasks verify
 ````
 
 ## How to Run

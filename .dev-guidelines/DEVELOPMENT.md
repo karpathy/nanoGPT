@@ -29,7 +29,7 @@ Core development practices, quality standards, and workflow for ml_playground co
 
 ## Guiding Principles
 
-- **Quality gates and TDD discipline.** Always run `uvx --from . ci-tasks quality` before committing and practice strict
+- **Quality gates and TDD discipline.** Always run `uv run ci-tasks quality` before committing and practice strict
   TDD as the default workflow (see [Developer Guidelines](Readme.md#core-principles-non-negotiable) and the canonical
   process in [Testing Standards](TESTING.md#test-driven-development-required)).
 - **UV-first Typer CLIs.** Prefer the published Typer entry points (`env-tasks`, `test-tasks`, `ci-tasks`) over ad-hoc
@@ -53,7 +53,7 @@ Core development practices, quality standards, and workflow for ml_playground co
 
 ## Quality Gates (Mandatory)
 
-Pre-commit and CI both execute `uvx --from . ci-tasks quality`, which wraps ruff lint/format, mdformat, pyright, mypy, and the targeted pytest slices. Override the default parallelism via `uvx --from . ci-tasks quality PRE_COMMIT_JOBS=4` when needed. See [Framework Utilities Documentation](../docs/framework_utilities.md) for supporting infrastructure.
+Pre-commit and CI both execute `uv run ci-tasks quality`, which wraps ruff lint/format, mdformat, pyright, mypy, and the targeted pytest slices. Override the default parallelism via `uv run ci-tasks quality PRE_COMMIT_JOBS=4` when needed. See [Framework Utilities Documentation](../docs/framework_utilities.md) for supporting infrastructure.
 
 For focused iterations, rely on task-specific commands (e.g., `uv run pytest path/to/test.py`, `uv run ruff check path/to/file.py`). Convenience wrappers remain available under `ci-tasks` and `env-tasks` for coverage reports, property suites, and lint-only passes.
 
@@ -85,7 +85,7 @@ For focused iterations, rely on task-specific commands (e.g., `uv run pytest pat
 
 - Every commit MUST be in a runnable state when checked out.
 - Runnable means:
-  - Pre-commit (and therefore `uvx --from . ci-tasks quality`) passes when the commit is created. Do not bypass hooks or suppress failures.
+  - Pre-commit (and therefore `uv run ci-tasks quality`) passes when the commit is created. Do not bypass hooks or suppress failures.
   - No partially applied migrations or broken CLI entry points.
   - Documentation build (if modified) is not broken.
 - Do not commit code that knowingly breaks the build with intent to "fix later". Split work into smaller, independently
@@ -147,13 +147,13 @@ Ruff automatically applies modern Python best practices:
 Use these commands from the repository root (or specify `--repo`/`--cwd` when required). They are
 optimized for non-interactive or copy-paste workflows.
 
-### uv / uvx
+### uv
 
 - **One-off commands**:
 
   ```bash
-  uvx python -m http.server 8000
-  uvx ruff check ml_playground/
+  uv run python -m http.server 8000
+  uv run ruff check ml_playground/
   ```
 
 - **Locked sync (no drift)**:
@@ -325,7 +325,7 @@ optimized for non-interactive or copy-paste workflows.
 - **Follow local development server**:
 
   ```bash
-  uvx python scripts/run_dev_server.py 2>&1 | tee /tmp/mlp-dev.log
+  uv run python scripts/run_dev_server.py 2>&1 | tee /tmp/mlp-dev.log
   ```
 
 - **Check git status without pager**:

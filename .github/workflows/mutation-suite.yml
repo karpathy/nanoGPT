@@ -42,10 +42,10 @@ jobs:
           mkdir -p .venv
 
       - name: Sync dependencies (dev + ml)
-        run: uvx --from . env-tasks sync --group dev --group ml
+        run: uv run env-tasks sync --group dev --group ml
 
       - name: Run mutation suite
-        run: uvx --from . ci-tasks mutation run
+        run: uv run ci-tasks mutation run
 
       - name: Capture mutation report
         run: |

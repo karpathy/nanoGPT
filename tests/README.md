@@ -26,17 +26,17 @@ and documentation remain aligned with the developer guidelines
 
 ## Coverage Policy
 
-- `uvx --from . ci-tasks coverage-report` runs `pytest tests/unit tests/property` under coverage.
+- `uv run ci-tasks coverage-report` runs `pytest tests/unit tests/property` under coverage.
 - Integration, E2E, and acceptance suites do not contribute to coverage gates, but they
   still run in CI.
 - See `.dev-guidelines/TESTING.md` for thresholds and gating rules.
 
 ## Running Tests
 
-- **Fast feedback (unit + property)**: `uvx --from . ci-tasks coverage-report`
+- **Fast feedback (unit + property)**: `uv run ci-tasks coverage-report`
 - **Specific suite**: `uv run pytest tests/<suite>/`
 - **Single file**: `uv run pytest tests/<suite>/path/to/test_file.py`
-- **Acceptance workflows**: `uvx --from . test-tasks acceptance`
+- **Acceptance workflows**: `uv run test-tasks acceptance`
 
 ## Additional References
 

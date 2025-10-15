@@ -31,9 +31,9 @@ them exactly.
 Get up and running immediately:
 
 ```bash
-uvx --from . env-tasks setup
-uvx --from . env-tasks verify
-uvx --from . ci-tasks quality   # ruff + format + pyright + mypy + pytest
+uv run env-tasks setup
+uv run env-tasks verify
+uv run ci-tasks quality   # ruff + format + pyright + mypy + pytest
 ```
 
 ## Documentation Structure
@@ -88,7 +88,7 @@ All documentation in this repo must adhere to [DOCUMENTATION.md](DOCUMENTATION.m
 
 ## Core Principles (Non-Negotiable)
 
-- **Quality gates stay green**: Always run `uvx --from . ci-tasks quality` before committing. Deep details live in [`DEVELOPMENT.md`](./DEVELOPMENT.md#quality-gates-mandatory).
+- **Quality gates stay green**: Always run `uv run ci-tasks quality` before committing. Deep details live in [`DEVELOPMENT.md`](./DEVELOPMENT.md#quality-gates-mandatory).
 - **TDD and commit pairing**: Follow the commit policy in [`DEVELOPMENT.md`](./DEVELOPMENT.md#commit-standards) and the strict TDD workflow in [`TESTING.md`](./TESTING.md#test-driven-development-required).
 - **Feature branches + conventional commits**: Required naming and history rules are documented in [`GIT_VERSIONING.md`](./GIT_VERSIONING.md).
 - **Configuration via TOML**: Treat configuration as single-source per [`SETUP.md`](./SETUP.md#configuration-system) and [`DEVELOPMENT.md`](./DEVELOPMENT.md#guiding-principles).
@@ -98,7 +98,7 @@ All documentation in this repo must adhere to [DOCUMENTATION.md](DOCUMENTATION.m
 
 **Environment Setup**: Follow [`SETUP.md#environment-setup`](SETUP.md#environment-setup) to create and verify the UV environment.
 
-**Quality Gates**: Run `uvx --from . ci-tasks quality` before each commit; see [`DEVELOPMENT.md#quality-gates-mandatory`](DEVELOPMENT.md#quality-gates-mandatory) for full rationale.
+**Quality Gates**: Run `uv run ci-tasks quality` before each commit; see [`DEVELOPMENT.md#quality-gates-mandatory`](DEVELOPMENT.md#quality-gates-mandatory) for full rationale.
 
 **Runtime Entry Points**: Use the Typer CLI commands documented in [`SETUP.md#basic-workflow-commands`](SETUP.md#basic-workflow-commands) and the flows outlined in [`ARCHITECTURE.md#runtime-entry-points`](ARCHITECTURE.md#runtime-entry-points).
 

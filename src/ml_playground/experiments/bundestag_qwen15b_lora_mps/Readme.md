@@ -28,9 +28,9 @@ For framework utilities, see [../../docs/framework_utilities.md](../../docs/fram
 ## Environment Setup (UV-only)
 
 ```bash
-uvx --from . dev-tasks setup
+uv run dev-tasks setup
 # If needed, add runtime packages
-uvx --from . dev-tasks verify
+uv run dev-tasks verify
 ```
 
 ## How to Run
@@ -41,7 +41,7 @@ End‑to‑end loop:
 
 ```bash
 <<<<<<< HEAD:ml_playground/experiments/bundestag_qwen15b_lora_mps/Readme.md
-uvx --from . dev-tasks loop bundestag_qwen15b_lora_mps --config ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+uv run dev-tasks loop bundestag_qwen15b_lora_mps --config ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 =======
 make loop bundestag_qwen15b_lora_mps CONFIG=src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 >>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/bundestag_qwen15b_lora_mps/Readme.md
@@ -51,14 +51,14 @@ Individual steps:
 
 ```bash
 # Prepare
-uvx --from . dev-tasks prepare bundestag_qwen15b_lora_mps
+uv run dev-tasks prepare bundestag_qwen15b_lora_mps
 
 # Train
 <<<<<<< HEAD:ml_playground/experiments/bundestag_qwen15b_lora_mps/Readme.md
-uvx --from . dev-tasks train bundestag_qwen15b_lora_mps --config ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+uv run dev-tasks train bundestag_qwen15b_lora_mps --config ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 
 # Sample
-uvx --from . dev-tasks sample bundestag_qwen15b_lora_mps --config ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+uv run dev-tasks sample bundestag_qwen15b_lora_mps --config ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 =======
 make train bundestag_qwen15b_lora_mps CONFIG=src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 

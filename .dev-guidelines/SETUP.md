@@ -126,10 +126,10 @@ Make output is intentionally quieter by default via a global `.SILENT:` directiv
 
 ```bash
 # Full gate: ruff (lint+format), pyright, mypy, pytest
-uvx --from . ci-tasks quality
+uv run ci-tasks quality
 
 # Extended: optional mutation testing (Cosmic Ray)
-uvx --from . ci-tasks quality-ext
+uv run ci-tasks quality-ext
 ```
 
 ## Quick Troubleshooting

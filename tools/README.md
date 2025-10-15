@@ -10,11 +10,11 @@ is invoked via UV CLIs—no raw `pip`, no manual venv activation.
 
 ## Structure
 
-- `ci_tasks.py` — Typer CLI exposing quality gates (`uvx --from . ci-tasks quality`), coverage workflows, and mutation helpers.
-- `env_tasks.py` — Typer CLI for environment setup, verification, cache cleanup, TensorBoard, and AI guideline symlinks (`uvx --from . env-tasks <command>`).
-- `lint_tasks.py` — Typer CLI bundling lint/format slices for fast feedback (`uvx --from . lint-tasks <command>`).
-- `lit_tasks.py` — Typer CLI for LIT integration helpers (`uvx --from . lit-tasks <command>`).
-- `test_tasks.py` — Typer CLI orchestrating pytest suites (`uvx --from . test-tasks <suite>`).
+- `ci_tasks.py` — Typer CLI exposing quality gates (`uv run ci-tasks quality`), coverage workflows, and mutation helpers.
+- `env_tasks.py` — Typer CLI for environment setup, verification, cache cleanup, TensorBoard, and AI guideline symlinks (`uv run env-tasks <command>`).
+- `lint_tasks.py` — Typer CLI bundling lint/format slices for fast feedback (`uv run lint-tasks <command>`).
+- `lit_tasks.py` — Typer CLI for LIT integration helpers (`uv run lit-tasks <command>`).
+- `test_tasks.py` — Typer CLI orchestrating pytest suites (`uv run test-tasks <suite>`).
 - `task_utils.py` — shared helpers (UV process wrappers, cache helpers) used by the CLIs above.
 - `cleanup_ignored_tracked.py` — remove accidentally tracked files that should be ignored.
 - `mutation_summary.py` — prints the active Cosmic Ray configuration before mutation runs.
@@ -29,22 +29,22 @@ Always run through the project venv using UV. From repo root:
 
 ```bash
 # Quality gates
-uvx --from . ci-tasks quality
+uv run ci-tasks quality
 
 # Run GitHub quality workflow locally via act
-uvx --from . ci-tasks quality-ci-local
+uv run ci-tasks quality-ci-local
 
 # Coverage report with threshold enforcement
-uvx --from . ci-tasks coverage-report --fail-under 87
+uv run ci-tasks coverage-report --fail-under 87
 
 # Run unit tests
-uvx --from . test-tasks unit
+uv run test-tasks unit
 
 # Fast lint bundle
-uvx --from . lint-tasks ruff
+uv run lint-tasks ruff
 
 # Environment setup
-uvx --from . env-tasks setup
+uv run env-tasks setup
 ```
 
 - **`quality-ci-local`**: Binds `.cache/uv`, `.cache/pre-commit`, `.cache/ruff`, and `.venv` into the container. Toggle mounts with `--no-bind-caches` or pass additional flags directly to `act`.
@@ -55,7 +55,7 @@ uvx --from . env-tasks setup
 
 ```bash
 uv run python tools/port_kill.py 6006
-uvx --from . env-tasks tensorboard --logdir out/<run>/logs/tb
+uv run env-tasks tensorboard --logdir out/<run>/logs/tb
 ```
 
 - Clean up noisy artifacts that slipped into Git:

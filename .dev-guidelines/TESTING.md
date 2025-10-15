@@ -52,8 +52,8 @@ Testing Docs
 ### 1. Test Framework and Runner
 
 - **Framework**: pytest only. Do not use unittest or nose.
-- **Runner**: `uvx --from . test-tasks test` (invokes pytest under the hood)
-- **Coverage**: `uvx --from . ci-tasks coverage-badge`
+- **Runner**: `uv run test-tasks test` (invokes pytest under the hood)
+- **Coverage**: `uv run ci-tasks coverage-badge`
   (generates reports under `.cache/coverage` and refreshes
   `docs/assets/coverage.svg`, `docs/assets/coverage-lines.svg`, and
   `docs/assets/coverage-branches.svg`)
@@ -234,7 +234,7 @@ while keeping slower integration/E2E flows outside the gating path.
 
 **Badge workflow**:
 
-- Pre-commit automatically runs `uvx --from . ci-tasks coverage-badge` and stages the refreshed line and branch badges.
+- Pre-commit automatically runs `uv run ci-tasks coverage-badge` and stages the refreshed line and branch badges.
 - CI re-runs the same target and fails if any of the coverage badge SVGs differ from the committed versions.
 
 ### 12. Flaky Test Policy (IMMEDIATE ACTION REQUIRED)
@@ -253,18 +253,18 @@ exceptions. NO second chances.
 - **Primary local command**:
 
   ```bash
-  uvx --from . ci-tasks mutation run
+  uv run ci-tasks mutation run
   ```
 
   This target resets `.cache/cosmic-ray/session.sqlite`, prints the active configuration via `tools/mutation_summary.py`,
   runs `cosmic-ray init/exec`, and finishes with `tools/mutation_report.py` to display survivor counts.
 
-- **Alternative local command**: `uvx --from . ci-tasks quality-ext` executes the broader quality suite, including mutation if desired.
+- **Alternative local command**: `uv run ci-tasks quality-ext` executes the broader quality suite, including mutation if desired.
 
 - **Default scope**: `module-path = "ml_playground"`, exercising the entire package with
   `pytest -q -n auto tests/unit` and a 1 s timeout per mutant/test run.
 
-- **Latest baseline (2025-10-06)**: `uvx --from . ci-tasks mutation run` processed **5 314** mutants (killed: **5 312**, incompetent: **2**)
+- **Latest baseline (2025-10-06)**: `uv run ci-tasks mutation run` processed **5 314** mutants (killed: **5 312**, incompetent: **2**)
   in approximately **1 h 31 m** wall-clock time.
 
 - **Session hygiene**: Both targets delete the session DB on every run; do not commit `.cache/cosmic-ray/`.
@@ -273,7 +273,7 @@ exceptions. NO second chances.
 
 - **CI workflow**: Trigger the long-running mutation suite via GitHub Actions → *Mutation Suite* workflow. It runs weekly on Mondays at 01:00 UTC and is available on-demand through the *Run workflow* button.
 
-- The `.cache/cosmic-ray/` directory is treated like other build artifacts: never commit it; clean with `uvx --from . env-tasks clean` if needed.
+- The `.cache/cosmic-ray/` directory is treated like other build artifacts: never commit it; clean with `uv run env-tasks clean` if needed.
 
 ## Running Tests
 
@@ -281,13 +281,13 @@ Use the Typer wrappers for consistency with CI:
 
 ```bash
 # Fast check
-uvx --from . test-tasks pytest -- -q
+uv run test-tasks pytest -- -q
 
 # With markers (exclude slow/perf)
-uvx --from . test-tasks pytest -- -m "not slow and not perf" -q
+uv run test-tasks pytest -- -m "not slow and not perf" -q
 
 # Full suite with coverage
-uvx --from . ci-tasks coverage-report --fail-under 87
+uv run ci-tasks coverage-report --fail-under 87
 ```
 
 Invoke targeted suites directly with `uv run pytest path/to/test.py` when iterating on a single module, but ensure the commands above pass before committing.
@@ -296,7 +296,7 @@ Invoke targeted suites directly with `uv run pytest path/to/test.py` when iterat
 
 ```bash
 # Coverage check (CI)
-uvx --from . ci-tasks coverage-report --fail-under 87
+uv run ci-tasks coverage-report --fail-under 87
 ```
 
 ## Example Test Patterns

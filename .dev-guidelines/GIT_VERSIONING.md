@@ -75,7 +75,7 @@ Poor examples (do not use):
 ## Verification Gates & Runnable Commits
 
 - Every commit must be runnable when checked out.
-- Gates to pass locally (same as pre-commit/CI): `uvx --from . ci-tasks quality`.
+- Gates to pass locally (same as pre-commit/CI): `uv run ci-tasks quality`.
 - Do not bypass verification (avoid `--no-verify`).
 - See `.dev-guidelines/DEVELOPMENT.md` → “Runnable State Requirement (MANDATORY)” for details.
 

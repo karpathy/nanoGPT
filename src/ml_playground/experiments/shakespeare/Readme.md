@@ -27,16 +27,16 @@ Minimal experiment to prepare, train, and sample on the Tiny Shakespeare corpus 
 
 ```bash
 # Environment setup (once)
-uvx --from . dev-tasks setup
-uvx --from . dev-tasks verify
+uv run dev-tasks setup
+uv run dev-tasks verify
 
 # Prepare → Train → Sample (separate)
-uvx --from . dev-tasks prepare shakespeare
-uvx --from . dev-tasks train shakespeare --config ml_playground/experiments/shakespeare/config.toml
-uvx --from . dev-tasks sample shakespeare --config ml_playground/experiments/shakespeare/config.toml
+uv run dev-tasks prepare shakespeare
+uv run dev-tasks train shakespeare --config ml_playground/experiments/shakespeare/config.toml
+uv run dev-tasks sample shakespeare --config ml_playground/experiments/shakespeare/config.toml
 
 # Or end-to-end
-uvx --from . dev-tasks loop shakespeare --config ml_playground/experiments/shakespeare/config.toml
+uv run dev-tasks loop shakespeare --config ml_playground/experiments/shakespeare/config.toml
 ```
 
 ## Configuration Highlights

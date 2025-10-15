@@ -53,7 +53,7 @@ The estimates below translate the uncovered branches into projected gains toward
   - Exercise checkpoint cleanup logic through tmp directories with controlled permissions, ensuring filesystem edge cases are covered deterministically.【F:.ldres/coverage-opportunities.md†L31-L48】
   - Cover inference/prep fallbacks by instantiating minimal dataclasses lacking optional attributes and by using permission-locked tmp paths to trigger documented `OSError` branches.【F:.ldres/coverage-opportunities.md†L59-L73】
 - **Verification loop**
-  - After each feature PR, regenerate metrics with `uvx --from . dev-tasks coverage-report` and confirm that badges and XML outputs are updated before committing.
+  - After each feature PR, regenerate metrics with `uv run dev-tasks coverage-report` and confirm that badges and XML outputs are updated before committing.
   - Ratchet `.githooks/.pre-commit-config.yaml` thresholds once branch coverage clears each milestone (85 → 90 → 95) to keep regressions out.
   - Document any intentional skips or hardware limitations directly in the associated tests and cross-link the rationale in `docs/coverage/roadmap.md` to maintain transparency.
 

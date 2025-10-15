@@ -18,7 +18,9 @@ import typer
 
 from tools import task_utils as utils
 
-app = typer.Typer(help="CI-oriented commands executed via uvx.", no_args_is_help=True)
+app = typer.Typer(
+    help="CI-oriented commands executed via uv run.", no_args_is_help=True
+)
 mutation_app = typer.Typer(help="Mutation testing helpers")
 app.add_typer(mutation_app, name="mutation")
 
@@ -263,7 +265,7 @@ def coverage_threshold(
     dest_cov = utils.coverage_file()
     if not dest_cov.exists():
         typer.echo(
-            "[coverage] missing coverage data file. Run 'uvx --from . ci-tasks coverage-test' first.",
+            "[coverage] missing coverage data file. Run 'uv run ci-tasks coverage-test' first.",
             err=True,
         )
         raise typer.Exit(1)
@@ -296,7 +298,7 @@ def coverage_threshold(
         messages.append("line coverage totals missing from coverage.json")
     elif line_threshold > 0 and line_pct < line_threshold:
         messages.append(
-            f"Line coverage {line_pct:.2f}% < {line_threshold:.2f}%. Run 'uvx --from . ci-tasks coverage-test'."
+            f"Line coverage {line_pct:.2f}% < {line_threshold:.2f}%. Run 'uv run ci-tasks coverage-test'."
         )
 
     if branch_threshold > 0:

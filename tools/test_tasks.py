@@ -14,7 +14,7 @@ import typer
 
 from tools import task_utils as utils
 
-app = typer.Typer(help="Test runners executed via uvx.", no_args_is_help=True)
+app = typer.Typer(help="Test runners executed via uv run.", no_args_is_help=True)
 
 
 @app.command()

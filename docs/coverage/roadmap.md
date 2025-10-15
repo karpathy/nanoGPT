@@ -5,7 +5,7 @@ Last updated: 2025-10-05
 ## Baseline snapshot
 
 - Overall line coverage (2025-10-05): **87.28%**\
-  (`uvx --from . ci-tasks coverage-report --fail-under 87.00` on Python 3.13.5; unit + property suites)
+  (`uv run ci-tasks coverage-report --fail-under 87.00` on Python 3.13.5; unit + property suites)
 - Pre-commit gate: `coverage report --fail-under=87.00`
   (raise alongside completed milestones: 90 → 95 → 99 → 100)
 - Coverage artifacts stored under `.cache/coverage/coverage.sqlite`

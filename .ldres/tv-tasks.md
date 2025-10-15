@@ -1,7 +1,7 @@
 # tv-tasks
 
 This document tracks Thomas's prioritized refactoring and infrastructure work. Keep entries concise,
-reviewable, and compliant with our UV-first workflow (`uvx --from . ci-tasks quality`). Reference
+reviewable, and compliant with our UV-first workflow (`uv run ci-tasks quality`). Reference
 `.dev-guidelines/GIT_VERSIONING.md` for branch naming, Conventional Commits, and linear history, and
 `.dev-guidelines/DOCUMENTATION.md` for documentation tone and formatting.
 
@@ -52,7 +52,7 @@ reviewable, and compliant with our UV-first workflow (`uvx --from . ci-tasks qua
      policy.
   1. Relocate or re-export regression tests; adjust imports/fixtures as needed.
   1. Update `test-tasks`/pytest configuration to include the new suite; ensure CI jobs reference it.
-- **Validation**: `uvx --from . ci-tasks quality`; `uv run pytest tests/regression -q`.
+- **Validation**: `uv run ci-tasks quality`; `uv run pytest tests/regression -q`.
 - **Git plan**:
   - Branch: `test/regression-suite`
   - Commits:
@@ -78,7 +78,7 @@ reviewable, and compliant with our UV-first workflow (`uvx --from . ci-tasks qua
   1. Record milestones in `docs/coverage/roadmap.md`, raising `--fail-under` with each completed cluster (90% → 95% → 99% → 100%).
   1. Backfill roadmap issues for any residual \<100% modules before the final gate raise.
 - **Latest snapshot (2025-10-05)**:
-  - Global coverage **87.28%** (`uvx --from . ci-tasks coverage-report --fail-under 87.00`).
+  - Global coverage **87.28%** (`uv run ci-tasks coverage-report --fail-under 87.00`).
   - Pre-commit gate `--fail-under=87.00`.
   - `.ldres/coverage-opportunities.md` holds module-level notes.
 - **Git plan**:
@@ -110,7 +110,7 @@ reviewable, and compliant with our UV-first workflow (`uvx --from . ci-tasks qua
   1. Investigate memmap-heavy tests (`tests/unit/data_pipeline/test_memmap.py`, `tests/unit/data_pipeline/test_sampling.py`) for fixture reuse or lighter data to shave remaining 0.1–0.2s hotspots.
   1. Explore smaller `max_examples` or strategy caching for `TestMergeMappings` if further property-suite savings are required; ensure assertions still meaningful.
   1. Track additional optimizations (e.g., memmap fixture changes) and rerun `pytest --durations=20` after each iteration; update this log with new baselines.
-- **Validation**: `uvx --from . ci-tasks quality`; targeted `pytest --durations=20` reruns on affected suites.
+- **Validation**: `uv run ci-tasks quality`; targeted `pytest --durations=20` reruns on affected suites.
 - **Git plan**:
   - Commits:
     - `ci(pytest): profile test runtimes and document hotspots`
@@ -119,7 +119,7 @@ reviewable, and compliant with our UV-first workflow (`uvx --from . ci-tasks qua
 
 - **Dependencies**: Coverage roadmap task; reproducible-build epic for tool integration.
 - **Latest baseline (2025-10-06)**:
-  - `uvx --from . ci-tasks mutation run` (module-path `ml_playground/`, timeout 1 s) processed **5 314** mutants (killed: 5 312,
+  - `uv run ci-tasks mutation run` (module-path `ml_playground/`, timeout 1 s) processed **5 314** mutants (killed: 5 312,
     incompetent: 2) in ~**1 h 31 m** wall clock.
 - **Next steps**:
   1. Ship an automation pipeline that ingests `cosmic-ray` survivors and opens draft PRs with proposed fixes
@@ -131,7 +131,7 @@ reviewable, and compliant with our UV-first workflow (`uvx --from . ci-tasks qua
      - `ml_playground/data_pipeline/`
      - `ml_playground/sampling/`
   1. Track survivor counts per module after each run and update this task with progress metrics.
-- **Validation**: `uvx --from . ci-tasks mutation run`; targeted survivor-specific pytest slices.
+- **Validation**: `uv run ci-tasks mutation run`; targeted survivor-specific pytest slices.
 - **Git plan**:
   - Branch: `test/mutation-hardening`
   - Commits:
@@ -151,7 +151,7 @@ reviewable, and compliant with our UV-first workflow (`uvx --from . ci-tasks qua
   1. Audit README files beyond `tests/unit/` and `tests/property/` for related-doc references.
   1. Insert or update `<details>` blocks with relative links and first-paragraph summaries per the template.
   1. Note any documents lacking clear intro paragraphs and schedule follow-up edits if needed.
-- **Validation**: `uvx --from . ci-tasks quality` (mdformat + lint).
+- **Validation**: `uv run ci-tasks quality` (mdformat + lint).
 - **Git plan**:
   - Branch: `docs/related-details-rollout`
   - Commits:
@@ -171,7 +171,7 @@ reviewable, and compliant with our UV-first workflow (`uvx --from . ci-tasks qua
   1. Refactor training and checkpointing tests to use DI fakes instead of `monkeypatch`.
   1. Update analysis/LIT tests with deterministic fakes; delete each allowlist entry as refactors land.
   1. Document the anti-mock playbook in `.dev-guidelines/TESTING.md` and broadcast via PR notes.
-- **Validation**: `uvx --from . env-tasks verify`; targeted `uv run pytest tests/unit -n 0`.
+- **Validation**: `uv run env-tasks verify`; targeted `uv run pytest tests/unit -n 0`.
 - **Git plan**:
   - Branch: `test/remove-mocks`
   - Commits:
@@ -229,7 +229,7 @@ ______________________________________________________________________
 
 ## Notes
 
-- `uvx --from . ci-tasks quality` is the canonical gate and already runs pre-commit hooks
+- `uv run ci-tasks quality` is the canonical gate and already runs pre-commit hooks
   (ruff, format, checkmake, pyright, mypy, vulture,pytest).
   No separate test run in the Make target is necessary.
 - When the "remove mocks" effort is complete, enforce no mock usage via Ruff banned-modules and a CI grep sweep.
@@ -246,7 +246,7 @@ These prompts are self-contained and aligned with:
 - `.dev-guidelines/TESTING.md`
 - `docs/framework_utilities.md`
 
-Pre-commit hooks automatically run `uvx --from . ci-tasks quality` during commits,
+Pre-commit hooks automatically run `uv run ci-tasks quality` during commits,
 so manual invocations are optional if you want faster feedback. Use short-lived feature branches,
 follow Conventional Commits, and always pair behavioral changes with tests. Never bypass verification (`--no-verify` is prohibited).
 
@@ -254,7 +254,7 @@ follow Conventional Commits, and always pair behavioral changes with tests. Neve
 
 - **Create feature branch**: Update `main`, then create a kebab-case feature branch (`git switch -c <type>/<scope>-<desc>`).
 - **Keep changesets tiny**: Implement the minimal behavior in ≤200 touched lines per commit, pairing tests and code.
-- **Run quality gates**: Execute `uvx --from . ci-tasks quality` (or stricter slices) locally before each commit and before opening the PR.
+- **Run quality gates**: Execute `uv run ci-tasks quality` (or stricter slices) locally before each commit and before opening the PR.
 - **Open focused PR**: Push the branch, open a PR summarizing the change, list validation commands, and request review.
 - **Merge cleanly into `main`**: After CI passes and review approval,
   use fast-forward or rebase-merge so the branch lands on `main` (a.k.a. master); delete the feature branch afterward.

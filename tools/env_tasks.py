@@ -43,9 +43,16 @@ def sync(
         "--all-groups",
         help="Install all optional dependency groups.",
     ),
+    frozen: bool = typer.Option(
+        False,
+        "--frozen/--no-frozen",
+        help="Use the existing lockfile without resolving new versions.",
+    ),
 ) -> None:
-    """Sync project dependencies."""
+    """Sync project dependencies using uv."""
     args = ["sync"]
+    if frozen:
+        args.append("--frozen")
     if all_groups:
         args.append("--all-groups")
     elif groups:
@@ -65,15 +72,43 @@ def verify() -> None:
 @app.command()
 def clean() -> None:
     """Remove caches and temporary build artifacts."""
-    for path in [
-        utils.ROOT / ".pytest_cache",
-        utils.ROOT / ".mypy_cache",
-        utils.ROOT / ".ruff_cache",
+    if utils.CACHE_DIR.exists():
+        before_entries = sorted(utils.CACHE_DIR.iterdir())
+        if before_entries:
+            typer.echo("[clean] cache contents before cleanup:")
+            for entry in before_entries:
+                typer.echo(f"  - {entry.relative_to(utils.ROOT)}")
+        else:
+            typer.echo("[clean] cache directory already empty")
+    else:
+        typer.echo("[clean] cache directory missing; nothing to clean")
+
+    targets = [
+        utils.CACHE_DIR / "pytest",
+        utils.CACHE_DIR / "coverage",
+        utils.CACHE_DIR / "hypothesis",
+        utils.CACHE_DIR / "pre-commit",
+        utils.CACHE_DIR / "ruff",
+        utils.CACHE_DIR / "uv",
+        utils.CACHE_DIR / "mypy",
         utils.ROOT / "htmlcov",
-    ]:
+    ]
+    for path in targets:
         utils.remove_path(path)
+
     for pycache in utils.ROOT.rglob("__pycache__"):
         utils.remove_path(pycache)
+
+    if utils.CACHE_DIR.exists():
+        after_entries = sorted(utils.CACHE_DIR.iterdir())
+        if after_entries:
+            typer.echo("[clean] cache contents after cleanup:")
+            for entry in after_entries:
+                typer.echo(f"  - {entry.relative_to(utils.ROOT)}")
+        else:
+            typer.echo("[clean] cache directory empty after cleanup")
+    else:
+        typer.echo("[clean] cache directory removed")
 
 
 @app.command("ai-guidelines")

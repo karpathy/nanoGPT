@@ -27,6 +27,15 @@ dependencies = [
     "toml>=0.10.2",
     "hatchling>=1.27.0",
     "pip >= 25.2",
+    "torch==2.8.0; platform_system == 'Linux' and platform_machine == 'x86_64'",
+    "torch==2.8.0; platform_system == 'Linux' and platform_machine != 'x86_64'",
+    "torch==2.8.0; platform_system == 'Darwin' and platform_machine == 'arm64'",
+    "torch==2.8.0; platform_system == 'Darwin' and platform_machine == 'x86_64'",
+    "torch==2.8.0; platform_system == 'Windows'",
+    "transformers==4.56.0",
+    "peft>=0.17.1",
+    "tensorboard>=2.20.0",
+    "torch-tb-profiler>=0.4.3",
 ]
 
 [project.scripts]
@@ -55,12 +64,15 @@ package = true
 [tool.uv.sources]
 # allow system-specific torch wheels to be resolved from PyPI
 
-[tool.uvx.scripts]
-env-tasks = "python tools/env_tasks.py"
-test-tasks = "python tools/test_tasks.py"
-ci-tasks = "python tools/ci_tasks.py"
-lint-tasks = "python tools/lint_tasks.py"
-lit-tasks = "python tools/lit_tasks.py"
+[tool.ml_playground.cache]
+base_dir = ".cache"
+
+[tool.ml_playground.cache.env]
+PRE_COMMIT_HOME = ".cache/pre-commit"
+RUFF_CACHE_DIR = ".cache/ruff"
+UV_CACHE_DIR = ".cache/uv"
+HYPOTHESIS_DATABASE_DIRECTORY = ".cache/hypothesis"
+HYPOTHESIS_STORAGE_DIRECTORY = ".cache/hypothesis"
 
 
 [tool.hatch.build.targets.wheel]
@@ -85,18 +97,7 @@ include = [
 
 [dependency-groups]
 # Mandatory dev tooling available in the project venv
-# Sync with: uv sync --group dev (do NOT use --all-groups unless you intend to install optional extras)
-ml = [
-    "torch==2.8.0; platform_system == 'Linux' and platform_machine == 'x86_64'",
-    "torch==2.8.0; platform_system == 'Darwin' and platform_machine == 'arm64'",
-    "torch==2.8.0; platform_system == 'Linux' and platform_machine != 'x86_64'",
-    "torch==2.8.0; platform_system == 'Darwin' and platform_machine == 'x86_64'",
-    "torch==2.8.0; platform_system == 'Windows'",
-    "transformers==4.56.0",
-    "peft>=0.17.1",
-    "tensorboard>=2.20.0",
-    "torch-tb-profiler>=0.4.3",
-]
+# Sync with: uv sync --group dev to install these extras when needed.
 dev = [
     "pytest>=8.4.1",
     "pytest-xdist>=3.8.0",

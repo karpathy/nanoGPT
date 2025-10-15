@@ -15,6 +15,7 @@ import argparse
 import os
 import signal
 import sys
+import time
 from typing import List
 
 try:
@@ -59,7 +60,7 @@ def main() -> int:
             except Exception:
                 pass
     # brief grace period
-    psutil.time.sleep(0.5)
+    time.sleep(0.5)
 
     # recheck and force kill remaining
     pids2 = listeners_on_port(args.port)

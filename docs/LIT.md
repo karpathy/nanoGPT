@@ -7,13 +7,13 @@ for quick inspection. We keep this minimal and isolated from the main project en
 
 ```bash
 # one-time setup
-uvx --from . dev-tasks lit setup --python-version 3.12
+uv run dev-tasks lit setup --python-version 3.12
 
 # run the minimal LIT server
-uvx --from . dev-tasks lit run --port 5432
+uv run dev-tasks lit run --port 5432
 
 # stop (if needed)
-uvx --from . dev-tasks lit stop --port 5432
+uv run dev-tasks lit stop --port 5432
 ```
 
 Open: [http://127.0.0.1:5432](http://127.0.0.1:5432)
