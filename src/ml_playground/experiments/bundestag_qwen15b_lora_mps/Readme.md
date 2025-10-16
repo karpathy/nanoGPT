@@ -28,7 +28,8 @@ For framework utilities, see [../../docs/framework_utilities.md](../../docs/fram
 ## Environment Setup (UV-only)
 
 ```bash
-uv run python -m ml_playground.cli prepare --help
+uv run env-tasks setup
+uv run env-tasks verify
 # Install optional extras as needed
 uv add peft transformers torch tensorboard
 ```
@@ -37,25 +38,28 @@ uv add peft transformers torch tensorboard
 
 This preset uses the `bundestag_finetuning_mps` integration under the hood.
 
-End‑to‑end loop:
+Prepare:
 
 ```bash
-uv run python -m ml_playground.cli prepare bundestag_qwen15b_lora_mps --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
-uv run python -m ml_playground.cli train bundestag_qwen15b_lora_mps --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
-uv run python -m ml_playground.cli sample bundestag_qwen15b_lora_mps --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+uv run cli prepare bundestag_qwen15b_lora_mps --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 ```
 
-Individual steps:
+Train:
 
 ```bash
-# Prepare
-uv run python -m ml_playground.cli prepare bundestag_qwen15b_lora_mps --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+uv run cli train bundestag_qwen15b_lora_mps --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+```
 
-# Train
-uv run python -m ml_playground.cli train bundestag_qwen15b_lora_mps --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+Sample:
 
-# Sample
-uv run python -m ml_playground.cli sample bundestag_qwen15b_lora_mps --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+```bash
+uv run cli sample bundestag_qwen15b_lora_mps --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+```
+
+End-to-end loop:
+
+```bash
+uv run cli loop bundestag_qwen15b_lora_mps --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 ```
 
 ## Configuration Highlights

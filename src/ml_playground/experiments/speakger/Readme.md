@@ -40,13 +40,30 @@ uv add peft transformers torch tensorboard
 
 ## How to Run
 
+### Prepare
+
 - Config: `src/ml_playground/experiments/speakger/config.toml`
 
 ```bash
-# Prepare → Train → Sample (separate)
-uv run python -m ml_playground.cli prepare speakger --exp-config src/ml_playground/experiments/speakger/config.toml
-uv run python -m ml_playground.cli train speakger --exp-config src/ml_playground/experiments/speakger/config.toml
-uv run python -m ml_playground.cli sample speakger --exp-config src/ml_playground/experiments/speakger/config.toml
+uv run cli prepare speakger --exp-config src/ml_playground/experiments/speakger/config.toml
+```
+
+### Train
+
+```bash
+uv run cli train speakger --exp-config src/ml_playground/experiments/speakger/config.toml
+```
+
+### Sample
+
+```bash
+uv run cli sample speakger --exp-config src/ml_playground/experiments/speakger/config.toml
+```
+
+### Loop
+
+```bash
+uv run cli loop speakger --exp-config src/ml_playground/experiments/speakger/config.toml
 ```
 
 ## Configuration Highlights

@@ -39,22 +39,22 @@ uv run setup
 
 - Config example: src/ml_playground/experiments/bundestag_tiktoken/config.toml
 
-Prepare dataset:
+Prepare:
 
 ```bash
-uv run python -m ml_playground.cli prepare bundestag_tiktoken
+uv run cli prepare bundestag_tiktoken
 ```
 
 Train:
 
 ```bash
-uv run python -m ml_playground.cli train bundestag_tiktoken --exp-config src/ml_playground/experiments/bundestag_tiktoken/config.toml
+uv run cli train bundestag_tiktoken --exp-config src/ml_playground/experiments/bundestag_tiktoken/config.toml
 ```
 
 Sample:
 
 ```bash
-uv run python -m ml_playground.cli sample bundestag_tiktoken --exp-config src/ml_playground/experiments/bundestag_tiktoken/config.toml
+uv run cli sample bundestag_tiktoken --exp-config src/ml_playground/experiments/bundestag_tiktoken/config.toml
 ```
 
 ## Configuration Highlights

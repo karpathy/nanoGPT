@@ -25,16 +25,28 @@ Minimal experiment to prepare, train, and sample on the Tiny Shakespeare corpus 
 
 - Config: `src/ml_playground/experiments/shakespeare/config.toml`
 
-```bash
-# Prepare → Train → Sample (separate)
-uv run cli prepare shakespeare
-uv run cli train shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml
-uv run cli sample shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml
+Prepare:
 
-# Fallback (equivalent)
-# uv run python -m ml_playground.cli prepare shakespeare
-# uv run python -m ml_playground.cli train shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml
-# uv run python -m ml_playground.cli sample shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml
+```bash
+uv run cli prepare shakespeare
+```
+
+Train:
+
+```bash
+uv run cli train shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml
+```
+
+Sample:
+
+```bash
+uv run cli sample shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml
+```
+
+End-to-end loop:
+
+```bash
+uv run cli loop shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml
 ```
 
 ## Configuration Highlights
