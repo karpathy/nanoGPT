@@ -60,12 +60,6 @@ uv run cli train speakger --exp-config src/ml_playground/experiments/speakger/co
 uv run cli sample speakger --exp-config src/ml_playground/experiments/speakger/config.toml
 ```
 
-### Loop
-
-```bash
-uv run cli loop speakger --exp-config src/ml_playground/experiments/speakger/config.toml
-```
-
 ## Configuration Highlights
 
 Memory-friendly defaults for 32GB Apple Silicon are recommended.

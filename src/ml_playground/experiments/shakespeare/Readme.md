@@ -43,12 +43,6 @@ Sample:
 uv run cli sample shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml
 ```
 
-End-to-end loop:
-
-```bash
-uv run cli loop shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml
-```
-
 ## Configuration Highlights
 
 - `[train.data].dataset_dir` default: `src/ml_playground/experiments/shakespeare/datasets`

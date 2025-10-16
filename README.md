@@ -43,7 +43,7 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 ## Policy
 
 - Use the uv-backed Typer CLIs for all workflows (env setup, quality, tests, runtime):
-  - `uv run cli <command>` for experiment pipelines (`prepare`, `train`, `sample`, `loop`).
+  - `uv run cli <command>` for experiment pipelines (`prepare`, `train`, `sample`).
   - `uv run env-tasks <command>` for environment setup, cache cleanup, TensorBoard, and AI-guideline helpers.
   - `uv run lint-tasks <command>` for lint/format bundles when you need faster feedback.
   - `uv run test-tasks <command>` for pytest suites.
@@ -76,15 +76,11 @@ Notes
 - CPU/MPS are first-class. CUDA may be selected in TOML if available.
 - Checkpoint behavior and policies are described in `.dev-guidelines/Readme.md`.
 - For framework utilities, see [Framework Utilities Documentation](docs/framework_utilities.md).
-- CLI validations: train and sample commands now fail fast if `meta.pkl` is missing. The loop's prepare-skip logic also requires `meta.pkl` to be present alongside `train.bin` and `val.bin`.
+- CLI validations: train and sample commands now fail fast if `meta.pkl` is missing.
 
 Mutation testing
 
 - See `.dev-guidelines/Readme.md` for how to run optional mutation testing (Cosmic Ray).
-
-Loop
-
-- See `.dev-guidelines/Readme.md` for end-to-end loop examples.
 
 TensorBoard (auto-enabled)
 

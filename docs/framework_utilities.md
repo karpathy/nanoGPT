@@ -98,7 +98,6 @@ structure for defining and running commands.
 - `prepare` - Prepare a dataset for training
 - `train` - Train a model
 - `sample` - Sample from a trained model
-- `loop` - Run a full train/sample loop
 
 ### Usage
 
@@ -114,8 +113,6 @@ uv run cli train <experiment> --exp-config path/to/config.toml
 # Sample from a trained model
 uv run cli sample <experiment> --exp-config path/to/config.toml
 
-# Run prepare -> train -> sample in one go
-uv run cli loop <experiment> --exp-config path/to/config.toml
 ```
 
 The CLI emits concise, structured logs; pass `--verbose` where available for additional detail.

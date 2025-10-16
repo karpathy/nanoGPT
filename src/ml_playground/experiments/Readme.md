@@ -57,7 +57,6 @@ Common CLI patterns
 - Prepare: `uv run cli prepare <name> --exp-config path/to/config.toml` (e.g., `uv run cli prepare shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml`).
 - Train: `uv run cli train <name> --exp-config path/to/config.toml` (e.g., `uv run cli train shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml`).
 - Sample: `uv run cli sample <name> --exp-config path/to/config.toml` (e.g., `uv run cli sample shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml`).
-- End‑to‑end: `uv run cli loop <name> --exp-config path/to/config.toml` (e.g., `uv run cli loop bundestag_char --exp-config src/ml_playground/experiments/bundestag_char/config.toml`).
 
 Implemented experiments (current)
 
@@ -154,25 +153,19 @@ uv run env-tasks verify
 Prepare dataset:
 
 ```bash
-uv run python -m ml_playground.cli prepare <name> --config src/ml_playground/experiments/<name>/config.toml
+uv run cli prepare <name> --exp-config src/ml_playground/experiments/<name>/config.toml
 ```
 
 Train:
 
 ```bash
-uv run python -m ml_playground.cli train <name> --config src/ml_playground/experiments/<name>/config.toml
+uv run cli train <name> --exp-config src/ml_playground/experiments/<name>/config.toml
 ```
 
 Sample:
 
 ```bash
-uv run python -m ml_playground.cli sample <name> --config src/ml_playground/experiments/<name>/config.toml
-```
-
-End-to-end loop:
-
-```bash
-uv run python -m ml_playground.cli loop <name> --config src/ml_playground/experiments/<name>/config.toml
+uv run cli sample <name> --exp-config src/ml_playground/experiments/<name>/config.toml
 ```
 
 ## Configuration

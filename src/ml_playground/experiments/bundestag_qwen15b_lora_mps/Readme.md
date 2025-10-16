@@ -56,12 +56,6 @@ Sample:
 uv run cli sample bundestag_qwen15b_lora_mps --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 ```
 
-End-to-end loop:
-
-```bash
-uv run cli loop bundestag_qwen15b_lora_mps --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
-```
-
 ## Configuration Highlights
 
 - `[prepare]`: `dataset = "bundestag_finetuning_mps"`, set `raw_dir`, `dataset_dir`, `add_structure_tokens`, `doc_separator`

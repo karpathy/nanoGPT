@@ -51,8 +51,8 @@ uv run python -c "import ml_playground; print('✓ ml_playground import OK')"
 ### Dataset Preparation
 
 ```bash
-uv run python -m ml_playground.cli prepare shakespeare --config src/ml_playground/experiments/shakespeare/config.toml
-uv run python -m ml_playground.cli prepare bundestag_char --config src/ml_playground/experiments/bundestag_char/config.toml
+uv run cli prepare shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml
+uv run cli prepare bundestag_char --exp-config src/ml_playground/experiments/bundestag_char/config.toml
 ```
 
 Notes:
@@ -65,8 +65,8 @@ Notes:
 ### Training
 
 ```bash
-uv run python -m ml_playground.cli train shakespeare --config src/ml_playground/experiments/shakespeare/config.toml
-uv run python -m ml_playground.cli train bundestag_char --config src/ml_playground/experiments/bundestag_char/config.toml
+uv run cli train shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml
+uv run cli train bundestag_char --exp-config src/ml_playground/experiments/bundestag_char/config.toml
 ```
 
 Notes:
@@ -78,8 +78,8 @@ Notes:
 ### Sampling
 
 ```bash
-uv run python -m ml_playground.cli sample shakespeare --config src/ml_playground/experiments/shakespeare/config.toml
-uv run python -m ml_playground.cli sample bundestag_char --config src/ml_playground/experiments/bundestag_char/config.toml
+uv run cli sample shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml
+uv run cli sample bundestag_char --exp-config src/ml_playground/experiments/bundestag_char/config.toml
 ```
 
 Notes:
@@ -88,16 +88,9 @@ Notes:
   `<out_dir>/<experiment>/meta.pkl`.
 - The CLI will fail fast with a clear error if `meta.pkl` cannot be found in one of the expected locations.
 
-### End-to-End Loop
+### End-to-End Workflow
 
-```bash
-uv run python -m ml_playground.cli loop bundestag_char --config src/ml_playground/experiments/bundestag_char/config.toml
-```
-
-Make output is intentionally quieter by default via a global `.SILENT:` directive; only explicit messages are printed.
-
-- The loop will only skip the prepare step if `train.bin`, `val.bin`, and `meta.pkl` are present in the dataset
-  directory.
+- Run `prepare`, `train`, and `sample` sequentially with the commands above.
 
 ## Configuration System
 
