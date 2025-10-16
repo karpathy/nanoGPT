@@ -106,16 +106,16 @@ Invoke subcommands directly via the Typer CLI packaged with the project:
 
 ```bash
 # Prepare data for an experiment
-uv run python -m ml_playground.cli prepare <experiment> --config path/to/config.toml
+uv run cli prepare <experiment> --exp-config path/to/config.toml
 
 # Train a model for an experiment
-uv run python -m ml_playground.cli train <experiment> --config path/to/config.toml
+uv run cli train <experiment> --exp-config path/to/config.toml
 
 # Sample from a trained model
-uv run python -m ml_playground.cli sample <experiment> --config path/to/config.toml
+uv run cli sample <experiment> --exp-config path/to/config.toml
 
 # Run prepare -> train -> sample in one go
-uv run python -m ml_playground.cli loop <experiment> --config path/to/config.toml
+uv run cli loop <experiment> --exp-config path/to/config.toml
 ```
 
 The CLI emits concise, structured logs; pass `--verbose` where available for additional detail.

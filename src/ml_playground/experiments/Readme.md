@@ -54,10 +54,10 @@ Important: Strict configuration injection
 
 Common CLI patterns
 
-- Prepare: `uv run python -m ml_playground.cli prepare <name> --config path/to/config.toml` (e.g., `uv run python -m ml_playground.cli prepare shakespeare --config src/ml_playground/experiments/shakespeare/config.toml`).
-- Train: `uv run python -m ml_playground.cli train <name> --config path/to/config.toml` (e.g., `uv run python -m ml_playground.cli train shakespeare --config src/ml_playground/experiments/shakespeare/config.toml`).
-- Sample: `uv run python -m ml_playground.cli sample <name> --config path/to/config.toml` (e.g., `uv run python -m ml_playground.cli sample shakespeare --config src/ml_playground/experiments/shakespeare/config.toml`).
-- End‑to‑end: `uv run python -m ml_playground.cli loop <name> --config path/to/config.toml` (e.g., `uv run python -m ml_playground.cli loop bundestag_char --config src/ml_playground/experiments/bundestag_char/config.toml`).
+- Prepare: `uv run cli prepare <name> --exp-config path/to/config.toml` (e.g., `uv run cli prepare shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml`).
+- Train: `uv run cli train <name> --exp-config path/to/config.toml` (e.g., `uv run cli train shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml`).
+- Sample: `uv run cli sample <name> --exp-config path/to/config.toml` (e.g., `uv run cli sample shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml`).
+- End‑to‑end: `uv run cli loop <name> --exp-config path/to/config.toml` (e.g., `uv run cli loop bundestag_char --exp-config src/ml_playground/experiments/bundestag_char/config.toml`).
 
 Implemented experiments (current)
 
