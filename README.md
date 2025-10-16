@@ -43,6 +43,7 @@ It is CPU/MPS-friendly, strictly typed, and uses TOML configs.
 ## Policy
 
 - Use the uv-backed Typer CLIs for all workflows (env setup, quality, tests, runtime):
+  - `uv run cli <command>` for experiment pipelines (`prepare`, `train`, `sample`, `loop`).
   - `uv run env-tasks <command>` for environment setup, cache cleanup, TensorBoard, and AI-guideline helpers.
   - `uv run lint-tasks <command>` for lint/format bundles when you need faster feedback.
   - `uv run test-tasks <command>` for pytest suites.
@@ -66,7 +67,7 @@ Datasets
 
 Workflows (high-level)
 
-- Prepare/train/sample workflows are driven by the built-in Typer CLI: `uv run python -m ml_playground.cli <command>`. For exact commands, refer to each experiment's `Readme.md` and `.dev-guidelines/Readme.md`.
+- Prepare/train/sample workflows are driven by the built-in Typer CLI: `uv run cli <command>`. For exact commands, refer to each experiment's `Readme.md` and `.dev-guidelines/Readme.md`.
 - Universal meta policy: the data directory must contain a `meta.pkl` file used by training and sampling. The `prepare` step is responsible for writing `meta.pkl`.
 
 Notes

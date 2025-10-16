@@ -42,25 +42,19 @@ uv run setup
 Prepare:
 
 ```bash
-uv run dev-tasks prepare bundestag_char
+uv run cli prepare bundestag_char
 ```
 
 Train:
 
 ```bash
-uv run dev-tasks train bundestag_char --config ml_playground/experiments/bundestag_char/config.toml
+uv run cli train bundestag_char --exp-config src/ml_playground/experiments/bundestag_char/config.toml
 ```
 
 Sample:
 
 ```bash
-uv run dev-tasks sample bundestag_char --config ml_playground/experiments/bundestag_char/config.toml
-```
-
-End-to-end loop:
-
-```bash
-uv run dev-tasks loop bundestag_char --config ml_playground/experiments/bundestag_char/config.toml
+uv run cli sample bundestag_char --exp-config src/ml_playground/experiments/bundestag_char/config.toml
 ```
 
 ## Configuration Highlights

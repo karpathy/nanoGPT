@@ -28,9 +28,9 @@ For framework utilities, see [../../docs/framework_utilities.md](../../docs/fram
 ## Environment Setup (UV-only)
 
 ```bash
-uv run dev-tasks setup
-# If needed, add runtime packages
-uv run dev-tasks verify
+uv run python -m ml_playground.cli prepare --help
+# Install optional extras as needed
+uv add peft transformers torch tensorboard
 ```
 
 ## How to Run
@@ -40,31 +40,22 @@ This preset uses the `bundestag_finetuning_mps` integration under the hood.
 End‑to‑end loop:
 
 ```bash
-<<<<<<< HEAD:ml_playground/experiments/bundestag_qwen15b_lora_mps/Readme.md
-uv run dev-tasks loop bundestag_qwen15b_lora_mps --config ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
-=======
-make loop bundestag_qwen15b_lora_mps CONFIG=src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
->>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/bundestag_qwen15b_lora_mps/Readme.md
+uv run python -m ml_playground.cli prepare bundestag_qwen15b_lora_mps --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+uv run python -m ml_playground.cli train bundestag_qwen15b_lora_mps --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+uv run python -m ml_playground.cli sample bundestag_qwen15b_lora_mps --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 ```
 
 Individual steps:
 
 ```bash
 # Prepare
-uv run dev-tasks prepare bundestag_qwen15b_lora_mps
+uv run python -m ml_playground.cli prepare bundestag_qwen15b_lora_mps --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 
 # Train
-<<<<<<< HEAD:ml_playground/experiments/bundestag_qwen15b_lora_mps/Readme.md
-uv run dev-tasks train bundestag_qwen15b_lora_mps --config ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+uv run python -m ml_playground.cli train bundestag_qwen15b_lora_mps --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 
 # Sample
-uv run dev-tasks sample bundestag_qwen15b_lora_mps --config ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
-=======
-make train bundestag_qwen15b_lora_mps CONFIG=src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
-
-# Sample
-make sample bundestag_qwen15b_lora_mps CONFIG=src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
->>>>>>> b67fd37 (docs: align references with src layout):src/ml_playground/experiments/bundestag_qwen15b_lora_mps/Readme.md
+uv run python -m ml_playground.cli sample bundestag_qwen15b_lora_mps --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
 ```
 
 ## Configuration Highlights

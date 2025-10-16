@@ -42,25 +42,19 @@ uv run setup
 Prepare dataset:
 
 ```bash
-uv run dev-tasks prepare bundestag_tiktoken
+uv run python -m ml_playground.cli prepare bundestag_tiktoken
 ```
 
 Train:
 
 ```bash
-uv run dev-tasks train bundestag_tiktoken --config ml_playground/experiments/bundestag_tiktoken/config.toml
+uv run python -m ml_playground.cli train bundestag_tiktoken --exp-config src/ml_playground/experiments/bundestag_tiktoken/config.toml
 ```
 
 Sample:
 
 ```bash
-uv run dev-tasks sample bundestag_tiktoken --config ml_playground/experiments/bundestag_tiktoken/config.toml
-```
-
-End-to-end loop:
-
-```bash
-uv run dev-tasks loop bundestag_tiktoken --config ml_playground/experiments/bundestag_tiktoken/config.toml
+uv run python -m ml_playground.cli sample bundestag_tiktoken --exp-config src/ml_playground/experiments/bundestag_tiktoken/config.toml
 ```
 
 ## Configuration Highlights
