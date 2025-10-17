@@ -69,5 +69,5 @@ tests/unit/
 
 ## Documentation
 
-- **\[Guidelines\]** Follow `.dev-guidelines/DOCUMENTATION.md` when editing this README or adding explanatory files.
-- **\[Testing alignment\]** Cross-check `.dev-guidelines/TESTING.md` to keep principles and fixture guidance in sync.
+- **[Guidelines]** Follow `.dev-guidelines/DOCUMENTATION.md` when editing this README or adding explanatory files.
+- **[Testing alignment]** Cross-check `.dev-guidelines/TESTING.md` to keep principles and fixture guidance in sync.
