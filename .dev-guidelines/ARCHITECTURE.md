@@ -51,13 +51,13 @@ The `ml_playground` stack is organized around a strictly validated configuration
 - Preparers must write `train.bin`, `val.bin`, and `meta.pkl` into the dataset directory.
 - `meta.pkl` creation is mandatory and standardized through helpers such as `ml_playground.prepare.write_bin_and_meta()`.
 - Runtime commands fail fast when required artifacts are missing:
+  - `prepare`: validates configuration and writes dataset artifacts.
   - `train`: requires `train.data.meta_path`.
   - `sample`: accepts either `train.data.meta_path` or `<sample.runtime.out_dir>/<experiment>/meta.pkl`.
-  - `loop`: skips `prepare` only when all artifacts already exist.
 
 ## Runtime Entry Points
 
-- Typer CLI module `src/ml_playground/cli.py` exposes `prepare`, `train`, `sample`, and `loop` commands.
+- Typer CLI module `src/ml_playground/cli.py` exposes `prepare`, `train`, and `sample` commands.
 - Invoke runtimes directly:
   ```bash
   uv run python -m ml_playground.cli train shakespeare --config src/ml_playground/experiments/shakespeare/config.toml

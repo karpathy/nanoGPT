@@ -7,18 +7,14 @@ repos:
     args: [--fix]
   - id: ruff-format
 - repo: https://github.com/executablebooks/mdformat
-  rev: 0.7.17
+  rev: 0.7.22
   hooks:
   - id: mdformat
-    args:
-      - --check
-      - --extension
-      - gfm
-      - --extension
-      - frontmatter
+    args: [--check]
     additional_dependencies:
       - mdformat-gfm
       - mdformat-frontmatter
+      - mdformat-tables
     files: '^(docs|src/ml_playground|tests|\.dev-guidelines)/.*\.md$|^[^/]+\.md$'
 - repo: local
   hooks:

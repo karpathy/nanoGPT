@@ -28,19 +28,19 @@ Minimal experiment to prepare, train, and sample on the Tiny Shakespeare corpus 
 Prepare:
 
 ```bash
-uv run cli prepare shakespeare
+uv run cli --exp-config src/ml_playground/experiments/shakespeare/config.toml prepare shakespeare
 ```
 
 Train:
 
 ```bash
-uv run cli train shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml
+uv run cli --exp-config src/ml_playground/experiments/shakespeare/config.toml train shakespeare
 ```
 
 Sample:
 
 ```bash
-uv run cli sample shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml
+uv run cli --exp-config src/ml_playground/experiments/shakespeare/config.toml sample shakespeare
 ```
 
 ## Configuration Highlights
@@ -87,6 +87,6 @@ src/ml_playground/experiments/shakespeare/
 - Adheres to [.dev-guidelines/Readme.md](../../.dev-guidelines/Readme.md) (abstraction, required sections).
 - Folder tree includes inline descriptions for each entry.
 - Links to shared docs where applicable (e.g., `../../docs/framework_utilities.md`).
-- Commands are copy-pasteable and minimal (setup, prepare/train/sample/loop).
+- Commands are copy-pasteable and minimal (setup, prepare/train/sample).
 - Configuration Highlights only list essential keys; defaults are not restated.
 - Outputs paths and filenames reflect current behavior (check `[train.runtime].out_dir`).

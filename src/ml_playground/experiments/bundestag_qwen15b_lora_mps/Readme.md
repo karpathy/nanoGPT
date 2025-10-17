@@ -30,8 +30,6 @@ For framework utilities, see [../../docs/framework_utilities.md](../../docs/fram
 ```bash
 uv run env-tasks setup
 uv run env-tasks verify
-# Install optional extras as needed
-uv add peft transformers torch tensorboard
 ```
 
 ## How to Run
@@ -41,19 +39,19 @@ This preset uses the `bundestag_finetuning_mps` integration under the hood.
 Prepare:
 
 ```bash
-uv run cli prepare bundestag_qwen15b_lora_mps --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+uv run cli --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml prepare bundestag_qwen15b_lora_mps
 ```
 
 Train:
 
 ```bash
-uv run cli train bundestag_qwen15b_lora_mps --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+uv run cli --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml train bundestag_qwen15b_lora_mps
 ```
 
 Sample:
 
 ```bash
-uv run cli sample bundestag_qwen15b_lora_mps --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml
+uv run cli --exp-config src/ml_playground/experiments/bundestag_qwen15b_lora_mps/config.toml sample bundestag_qwen15b_lora_mps
 ```
 
 ## Configuration Highlights
@@ -110,6 +108,6 @@ src/ml_playground/experiments/bundestag_qwen15b_lora_mps/
 - Adheres to [.dev-guidelines/Readme.md](../../.dev-guidelines/Readme.md) (abstraction, required sections).
 - Folder tree includes inline descriptions for each entry.
 - Links to shared docs where applicable (e.g., `../../docs/framework_utilities.md`).
-- Commands are copy-pasteable and minimal (setup, prepare/train/sample/loop).
+- Commands are copy-pasteable and minimal (setup, prepare/train/sample).
 - Configuration Highlights only list essential keys; defaults are not restated.
 - Outputs paths and filenames reflect current behavior (check `[train.runtime].out_dir`).

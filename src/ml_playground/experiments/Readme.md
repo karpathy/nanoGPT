@@ -18,7 +18,7 @@ Why self‑contained?
 Conventions
 
 - Discovery: an experiment must expose a `preparer.py` with a class that implements a `.prepare(...)` method. The CLI auto‑discovers these preparers.
-- Names: the experiment argument to `prepare`/`loop` equals the experiment’s registered name.
+- Names: the experiment argument to `prepare`/`train`/`sample` equals the experiment’s registered name.
 - Config location: TOML lives at the experiment root (no configs/ subfolder).
 - Data location: experiment‑local prepared data lives under `<experiment>/datasets/`.
 - Outputs: example configs write to `<experiment>/out/<run_name>`.
@@ -54,9 +54,9 @@ Important: Strict configuration injection
 
 Common CLI patterns
 
-- Prepare: `uv run cli prepare <name> --exp-config path/to/config.toml` (e.g., `uv run cli prepare shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml`).
-- Train: `uv run cli train <name> --exp-config path/to/config.toml` (e.g., `uv run cli train shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml`).
-- Sample: `uv run cli sample <name> --exp-config path/to/config.toml` (e.g., `uv run cli sample shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml`).
+- Prepare: `uv run cli --exp-config path/to/config.toml prepare <name>` (e.g., `uv run cli --exp-config src/ml_playground/experiments/shakespeare/config.toml prepare shakespeare`).
+- Train: `uv run cli --exp-config path/to/config.toml train <name>` (e.g., `uv run cli --exp-config src/ml_playground/experiments/shakespeare/config.toml train shakespeare`).
+- Sample: `uv run cli --exp-config path/to/config.toml sample <name>` (e.g., `uv run cli --exp-config src/ml_playground/experiments/shakespeare/config.toml sample shakespeare`).
 
 Implemented experiments (current)
 
@@ -153,19 +153,19 @@ uv run env-tasks verify
 Prepare dataset:
 
 ```bash
-uv run cli prepare <name> --exp-config src/ml_playground/experiments/<name>/config.toml
+uv run cli --exp-config src/ml_playground/experiments/<name>/config.toml prepare <name>
 ```
 
 Train:
 
 ```bash
-uv run cli train <name> --exp-config src/ml_playground/experiments/<name>/config.toml
+uv run cli --exp-config src/ml_playground/experiments/<name>/config.toml train <name>
 ```
 
 Sample:
 
 ```bash
-uv run cli sample <name> --exp-config src/ml_playground/experiments/<name>/config.toml
+uv run cli --exp-config src/ml_playground/experiments/<name>/config.toml sample <name>
 ```
 
 ## Configuration

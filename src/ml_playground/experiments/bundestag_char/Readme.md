@@ -42,34 +42,34 @@ uv run setup
 Prepare:
 
 ```bash
-uv run cli prepare bundestag_char
+uv run cli --exp-config src/ml_playground/experiments/bundestag_char/config.toml prepare bundestag_char
 ```
 
 Train:
 
 ```bash
-uv run cli train bundestag_char --exp-config src/ml_playground/experiments/bundestag_char/config.toml
+uv run cli --exp-config src/ml_playground/experiments/bundestag_char/config.toml train bundestag_char
 ```
 
 Sample:
 
 ```bash
-uv run cli sample bundestag_char --exp-config src/ml_playground/experiments/bundestag_char/config.toml
+uv run cli --exp-config src/ml_playground/experiments/bundestag_char/config.toml sample bundestag_char
 ```
 
 ## Configuration Highlights
 
-- \[train.data\]
-  - dataset_dir = "src/ml_playground/experiments/bundestag_char/datasets"
-  - train_bin = "train.bin", val_bin = "val.bin", meta_pkl = "meta.pkl"
-  - batch_size, block_size, grad_accum_steps
-- \[train.runtime\]
-  - out_dir = "src/ml_playground/experiments/bundestag_char/out/bundestag_char_next"
-  - device = "cpu" (or "mps"/"cuda" if available), dtype = "float32"
-- \[sample.runtime\]
-  - out_dir should match train.runtime.out_dir
-- \[sample.sample\]
-  - start prompt text, num_samples, max_new_tokens
+- `[train.data]`
+  - `dataset_dir` = "src/ml_playground/experiments/bundestag_char/datasets"
+  - `train_bin` = "train.bin", `val_bin` = "val.bin", `meta_pkl` = "meta.pkl"
+  - `batch_size`, `block_size`, `grad_accum_steps`
+- `[train.runtime]`
+  - `out_dir` = "src/ml_playground/experiments/bundestag_char/out/bundestag_char_next"
+  - `device` = "cpu" (or "mps"/"cuda" if available), `dtype` = "float32"
+- `[sample.runtime]`
+  - `out_dir` should match `[train.runtime].out_dir`
+- `[sample.sample]`
+  - `start` prompt text, `num_samples`, `max_new_tokens`
 
 ## Outputs
 
@@ -96,13 +96,13 @@ src/ml_playground/experiments/bundestag_char/
 
 ## Troubleshooting
 
-- If sampling fails with a missing `meta.pkl`, ensure it exists at `[train.data].dataset_dir` alongside `train.bin` and `val.bin`, or under `[sample.runtime].out_dir/<experiment>/meta.pkl` as per the CLI discovery rules.
+- If sampling fails with a missing `meta.pkl`, ensure it exists at `[train.data]`.dataset_dir alongside `train.bin` and `val.bin`, or under `[sample.runtime]`.out_dir/<experiment>/meta.pkl as per the CLI discovery rules.
 - Ensure your input text is UTF-8 encoded.
 
 ## Word Tokenizer Option
 
 - This experiment now supports a word-level tokenizer in addition to char/n-gram.
-- To enable, set in config under \[train.data\]:
+- To enable, set in config under `[train.data]`:
 
 ```toml
 # Tokenizer selection: "char" (default) or "word"
@@ -117,6 +117,6 @@ tokenizer = "word"
 - Adheres to [.dev-guidelines/Readme.md](../../.dev-guidelines/Readme.md) (abstraction, required sections).
 - Folder tree includes inline descriptions for each entry.
 - Links to shared docs where applicable (e.g., `../../docs/framework_utilities.md`).
-- Commands are copy-pasteable and minimal (setup, prepare/train/sample/loop).
+- Commands are copy-pasteable and minimal (setup, prepare/train/sample).
 - Configuration Highlights only list essential keys; defaults are not restated.
 - Outputs paths and filenames reflect current behavior (check `[train.runtime].out_dir`).

@@ -45,19 +45,19 @@ uv add peft transformers torch tensorboard
 - Config: `src/ml_playground/experiments/speakger/config.toml`
 
 ```bash
-uv run cli prepare speakger --exp-config src/ml_playground/experiments/speakger/config.toml
+uv run cli --exp-config src/ml_playground/experiments/speakger/config.toml prepare speakger
 ```
 
 ### Train
 
 ```bash
-uv run cli train speakger --exp-config src/ml_playground/experiments/speakger/config.toml
+uv run cli --exp-config src/ml_playground/experiments/speakger/config.toml train speakger
 ```
 
 ### Sample
 
 ```bash
-uv run cli sample speakger --exp-config src/ml_playground/experiments/speakger/config.toml
+uv run cli --exp-config src/ml_playground/experiments/speakger/config.toml sample speakger
 ```
 
 ## Configuration Highlights
@@ -149,6 +149,6 @@ src/ml_playground/experiments/speakger/
 - Adheres to `.dev-guidelines/DOCUMENTATION.md` (abstraction, required sections).
 - Folder tree includes inline descriptions for each entry.
 - Links to shared docs where applicable (e.g., `../../docs/framework_utilities.md`).
-- Commands are copy-pasteable and minimal (setup, prepare/train/sample/loop).
+- Commands are copy-pasteable and minimal (setup, prepare/train/sample).
 - Configuration Highlights only list essential keys; defaults are not restated.
 - Outputs paths and filenames reflect current behavior (check `[train.runtime].out_dir`).
