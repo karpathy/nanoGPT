@@ -8,7 +8,7 @@ wandb_project = "math"
 wandb_run_name = "ft-" + str(time.time())
 
 dataset = "math"
-init_from = "gpt2-xl"  # this is the largest GPT-2 model
+init_from = "gpt2-medium"  # this is the largest GPT-2 model
 
 # only save checkpoints if the validation loss improves
 always_save_checkpoint = False
@@ -24,5 +24,5 @@ max_iters = 20
 learning_rate = 3e-5
 decay_lr = False
 
-device = "cpu"  # run on cpu only
-compile = False  # do not torch compile the model
+# device = "cpu"  # run on cpu only
+# compile = False  # do not torch compile the model
