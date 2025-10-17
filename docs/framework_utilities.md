@@ -105,13 +105,13 @@ Invoke subcommands directly via the Typer CLI packaged with the project:
 
 ```bash
 # Prepare data for an experiment
-uv run cli prepare <experiment> --exp-config path/to/config.toml
+uv run cli --exp-config path/to/config.toml prepare <experiment>
 
 # Train a model for an experiment
-uv run cli train <experiment> --exp-config path/to/config.toml
+uv run cli --exp-config path/to/config.toml train <experiment>
 
 # Sample from a trained model
-uv run cli sample <experiment> --exp-config path/to/config.toml
+uv run cli --exp-config path/to/config.toml sample <experiment>
 
 ```
 

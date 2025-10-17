@@ -51,8 +51,8 @@ uv run python -c "import ml_playground; print('✓ ml_playground import OK')"
 ### Dataset Preparation
 
 ```bash
-uv run cli prepare shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml
-uv run cli prepare bundestag_char --exp-config src/ml_playground/experiments/bundestag_char/config.toml
+uv run cli --exp-config src/ml_playground/experiments/shakespeare/config.toml prepare shakespeare
+uv run cli --exp-config src/ml_playground/experiments/bundestag_char/config.toml prepare bundestag_char
 ```
 
 Notes:
@@ -65,8 +65,8 @@ Notes:
 ### Training
 
 ```bash
-uv run cli train shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml
-uv run cli train bundestag_char --exp-config src/ml_playground/experiments/bundestag_char/config.toml
+uv run cli --exp-config src/ml_playground/experiments/shakespeare/config.toml train shakespeare
+uv run cli --exp-config src/ml_playground/experiments/bundestag_char/config.toml train bundestag_char
 ```
 
 Notes:
@@ -78,8 +78,8 @@ Notes:
 ### Sampling
 
 ```bash
-uv run cli sample shakespeare --exp-config src/ml_playground/experiments/shakespeare/config.toml
-uv run cli sample bundestag_char --exp-config src/ml_playground/experiments/bundestag_char/config.toml
+uv run cli --exp-config src/ml_playground/experiments/shakespeare/config.toml sample shakespeare
+uv run cli --exp-config src/ml_playground/experiments/bundestag_char/config.toml sample bundestag_char
 ```
 
 Notes:
