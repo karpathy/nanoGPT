@@ -23,6 +23,46 @@ is invoked via UV CLIs—no raw `pip`, no manual venv activation.
 - `setup_ai_guidelines.py` — configure symlinks for AI pair-programming workflow per guideline docs.
 - `llama_cpp/` — vendor instructions and helpers for GGUF conversion.
 
+
+## GitHub CLI setup
+
+The GitHub CLI (`gh`) is the preferred way to open pull requests, review diffs, and inspect CI from the terminal.
+
+### Install
+
+- **macOS**: `brew install gh`
+- **Windows**: `winget install --id GitHub.cli`
+- **Ubuntu/Debian**: Follow the [official instructions](https://cli.github.com/packages) to add the repository, then run `sudo apt install gh`.
+- **Other distros**: follow the binary instructions at https://cli.github.com/manual/installation
+
+Verify the CLI is wired up before running project scripts:
+
+```bash
+gh --version
+```
+
+### Authenticate
+
+Run the guided login once per machine:
+
+```bash
+gh auth login --web --scopes 'repo,workflow'
+gh auth status
+```
+
+- Choose GitHub.com ➔ HTTPS ➔ `Y` to use the web browser flow.
+- The additional `workflow` scope lets `gh pr merge` interact with required checks.
+- Confirm credentials are cached in the macOS keychain (or your OS-equivalent credential store).
+
+### Daily usage
+
+- **Create PRs** from a feature branch: `gh pr create --fill --head <branch>` (opens editor for body tweaks).
+- **Sync** with default branch before pushing: `git fetch origin && git rebase origin/master` (requires a clean worktree).
+- **Inspect CI** without leaving the shell: `gh run list --limit 5`.
+- **Check out reviews**: `gh pr checkout <number-or-url>`.
+
+Keep commands scoped to the repository root; the CLI inherits the project Git remotes.
+
 ## Usage
 
 Always run through the project venv using UV. From repo root:
