@@ -10,7 +10,12 @@ repos:
   rev: 0.7.17
   hooks:
   - id: mdformat
-    args: [--check]
+    args:
+      - --check
+      - --extension
+      - gfm
+      - --extension
+      - frontmatter
     additional_dependencies:
       - mdformat-gfm
       - mdformat-frontmatter
