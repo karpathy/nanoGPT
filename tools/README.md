@@ -16,6 +16,7 @@ is invoked via UV CLIs—no raw `pip`, no manual venv activation.
 - `lit_tasks.py` — Typer CLI for LIT integration helpers (`uv run lit-tasks <command>`).
 - `test_tasks.py` — Typer CLI orchestrating pytest suites (`uv run test-tasks <suite>`).
 - `task_utils.py` — shared helpers (UV process wrappers, cache helpers) used by the CLIs above.
+- `review.py` — inspect review threads, bulk-reply, and delete comments using JSON mappings.
 - `cleanup_ignored_tracked.py` — remove accidentally tracked files that should be ignored.
 - `mutation_summary.py` — prints the active Cosmic Ray configuration before mutation runs.
 - `mutation_report.py` — summarizes mutant outcomes after a Cosmic Ray run.
@@ -103,6 +104,33 @@ uv run env-tasks tensorboard --logdir out/<run>/logs/tb
 ```bash
 uv run python tools/cleanup_ignored_tracked.py --dry-run
 uv run python tools/cleanup_ignored_tracked.py --apply
+```
+
+- Reply to multiple review comments at once:
+
+```bash
+cat > replies.json <<'JSON'
+{
+  "https://github.com/ORG/REPO/pull/123#discussion_r1": "Thanks, updated config.",
+  "PRRC_kwD0...": "Handled in commit abc123."
+}
+JSON
+uv run python tools/review.py list --pr 123 --unreplied --unresolved
+uv run python tools/review.py bulk-reply --pr 123 --replies replies.json --dry-run
+uv run python tools/review.py bulk-reply --pr 123 --replies replies.json
+```
+
+- Delete review comments in bulk:
+
+```bash
+cat > delete.json <<'JSON'
+[
+  "https://github.com/ORG/REPO/pull/123#discussion_r1",
+  "PRRC_kwD0..."
+]
+JSON
+uv run python tools/review.py delete --pr 123 --comments delete.json --dry-run
+uv run python tools/review.py delete --pr 123 --comments delete.json
 ```
 
 ## Conventions
