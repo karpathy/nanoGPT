@@ -1,7 +1,2 @@
-# Temporary allowlist of test files permitted to contain mocking while migrating to DI-only tests
-# Remove entries as you refactor each file. The pre-commit hook excludes these paths from scanning.
-tests/unit/configuration/test_models_and_loading.py
-tests/unit/test_public_api_policy.py
-tests/unit/analysis/analysis/test_lit_integration.py
-tests/unit/training/hooks/test_evaluation.py
-tests/unit/training/checkpointing/test_service.py
+# Temporary allowlist of test files permitted to contain mocking while migrating to DI-only tests.
+# Keep this file to preserve tooling hooks; leave it empty when no exceptions are required.

@@ -21,7 +21,13 @@ class BundestagQwen15bLoraMpsPreparer(_PreparerProto):
 
     def prepare(self, cfg: PreparerConfig) -> PrepareReport:  # type: ignore[override]
         # Determine dataset directory: use local folder under this preset
-        exp_dir = Path(__file__).resolve().parent
+        extras = getattr(cfg, "extras", {}) or {}
+        base_dir_override = extras.get("dataset_dir_override")
+        exp_dir = (
+            Path(base_dir_override)
+            if base_dir_override is not None
+            else Path(__file__).resolve().parent
+        )
         ds_dir = (exp_dir / "datasets").resolve()
 
         # Track side-effects (creation/updates) for user feedback

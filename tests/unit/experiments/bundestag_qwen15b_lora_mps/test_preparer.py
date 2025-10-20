@@ -16,31 +16,23 @@ def test_bundestag_qwen15b_preparer_creates_dataset_dir(tmp_path: Path) -> None:
 
     preparer = BundestagQwen15bLoraMpsPreparer()
 
-    import ml_playground.experiments.bundestag_qwen15b_lora_mps.preparer as preparer_module
+    cfg = PreparerConfig(
+        tokenizer_type="tiktoken",
+        logger=logging.getLogger(__name__),
+        extras={"dataset_dir_override": str(exp_dir)},
+    )
 
-    original_file = preparer_module.__file__
-    preparer_module.__file__ = str(exp_dir / "preparer.py")
+    report = preparer.prepare(cfg)
 
-    try:
-        cfg = PreparerConfig(
-            tokenizer_type="tiktoken",
-            logger=logging.getLogger(__name__),
-        )
+    # Check that dataset directory was created
+    ds_dir = exp_dir / "datasets"
+    assert ds_dir.exists()
+    assert ds_dir.is_dir()
 
-        report = preparer.prepare(cfg)
-
-        # Check that dataset directory was created
-        ds_dir = exp_dir / "datasets"
-        assert ds_dir.exists()
-        assert ds_dir.is_dir()
-
-        # Check report
-        assert len(report.messages) > 0
-        assert any("bundestag_qwen15b_lora_mps" in msg for msg in report.messages)
-        assert len(report.created_files) > 0 or len(report.skipped_files) > 0
-
-    finally:
-        preparer_module.__file__ = original_file
+    # Check report
+    assert len(report.messages) > 0
+    assert any("bundestag_qwen15b_lora_mps" in msg for msg in report.messages)
+    assert len(report.created_files) > 0 or len(report.skipped_files) > 0
 
 
 def test_bundestag_qwen15b_preparer_handles_existing_dir(tmp_path: Path) -> None:
@@ -52,60 +44,105 @@ def test_bundestag_qwen15b_preparer_handles_existing_dir(tmp_path: Path) -> None
 
     preparer = BundestagQwen15bLoraMpsPreparer()
 
-    import ml_playground.experiments.bundestag_qwen15b_lora_mps.preparer as preparer_module
+    cfg = PreparerConfig(
+        tokenizer_type="tiktoken",
+        logger=logging.getLogger(__name__),
+        extras={"dataset_dir_override": str(exp_dir)},
+    )
 
-    original_file = preparer_module.__file__
-    preparer_module.__file__ = str(exp_dir / "preparer.py")
+    report = preparer.prepare(cfg)
 
-    try:
-        cfg = PreparerConfig(
-            tokenizer_type="tiktoken",
-            logger=logging.getLogger(__name__),
-        )
+    # Directory should still exist
+    assert ds_dir.exists()
+    assert ds_dir.is_dir()
 
-        report = preparer.prepare(cfg)
-
-        # Directory should still exist
-        assert ds_dir.exists()
-        assert ds_dir.is_dir()
-
-        # Should report as skipped since it already existed
-        assert len(report.skipped_files) > 0
-
-    finally:
-        preparer_module.__file__ = original_file
+    # Should report as skipped since it already existed
+    assert len(report.skipped_files) > 0
 
 
-def test_bundestag_qwen15b_preparer_snapshot_handles_oserror() -> None:
-    """_snapshot should handle OSError when accessing file stats."""
+def test_bundestag_qwen15b_preparer_snapshot_handles_oserror(tmp_path: Path) -> None:
+    """_snapshot should handle OSError when Path.exists raises."""
     from ml_playground.experiments.bundestag_qwen15b_lora_mps.preparer import _snapshot
-    from pathlib import Path
 
-    # Create a path that doesn't exist
-    nonexistent = Path("/nonexistent/path/file.txt")
+    probe = tmp_path / "probe"
+    probe.mkdir()
 
-    result = _snapshot([nonexistent])
+    class BrokenPath(type(probe)):  # type: ignore[misc]
+        def exists(self):  # type: ignore[override]
+            raise OSError("boom")
 
-    # Should return False for existence
-    assert nonexistent in result
-    assert result[nonexistent] == (False, 0.0, 0)
+    err_path = BrokenPath(probe)
+
+    result = _snapshot([err_path])
+
+    assert err_path in result
+    assert result[err_path] == (False, 0.0, 0)
 
 
-def test_bundestag_qwen15b_preparer_diff_handles_oserror() -> None:
-    """_diff should handle OSError when checking file existence."""
+def test_bundestag_qwen15b_preparer_diff_handles_oserror(tmp_path: Path) -> None:
+    """_diff should treat OSError during stat as a creation event when path now exists."""
     from ml_playground.experiments.bundestag_qwen15b_lora_mps.preparer import _diff
-    from pathlib import Path
 
-    # Create a path that might cause OSError
-    problematic_path = Path("/nonexistent/path/file.txt")
-    before = {problematic_path: (False, 0.0, 0)}
+    target = tmp_path / "datasets"
+    target.mkdir()
 
-    created, updated, skipped = _diff([problematic_path], before)
+    class FlakyPath(type(target)):  # type: ignore[misc]
+        def exists(self):  # type: ignore[override]
+            return True
 
-    # Should handle gracefully
-    assert isinstance(created, list)
-    assert isinstance(updated, list)
-    assert isinstance(skipped, list)
+        def stat(self):  # type: ignore[override]
+            raise OSError("stat failed")
+
+    flaky = FlakyPath(target)
+    before: dict[Path, tuple[bool, float, int]] = {flaky: (False, 0.0, 0)}
+
+    created, updated, skipped = _diff([flaky], before)
+
+    assert flaky in created
+    assert not updated
+    assert not skipped
+
+
+def test_bundestag_qwen15b_preparer_diff_handles_missing_path(tmp_path: Path) -> None:
+    """_diff should no-op when the path is absent."""
+    from ml_playground.experiments.bundestag_qwen15b_lora_mps.preparer import _diff
+
+    missing = tmp_path / "missing"
+    before: dict[Path, tuple[bool, float, int]] = {missing: (False, 0.0, 0)}
+
+    created, updated, skipped = _diff([missing], before)
+
+    assert not created
+    assert not updated
+    assert not skipped
+
+
+def test_bundestag_qwen15b_preparer_diff_oserror_when_missing() -> None:
+    """_diff should skip when OSError occurs and the path disappears."""
+    from ml_playground.experiments.bundestag_qwen15b_lora_mps.preparer import _diff
+
+    class TogglePath:
+        def __init__(self) -> None:
+            self._calls = 0
+
+        def exists(self) -> bool:
+            self._calls += 1
+            return self._calls == 1
+
+        def stat(self):  # type: ignore[override]
+            raise OSError("stat failed")
+
+        def __hash__(self) -> int:
+            return id(self)
+
+    ghost = TogglePath()
+    before = {ghost: (False, 0.0, 0)}
+
+    created, updated, skipped = _diff([ghost], before)
+
+    assert not created
+    assert not updated
+    assert not skipped
 
 
 def test_bundestag_qwen15b_preparer_detects_file_updates(tmp_path: Path) -> None:

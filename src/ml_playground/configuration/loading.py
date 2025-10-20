@@ -46,8 +46,12 @@ def get_default_config_path(project_root: Path | None = None) -> Path:
     return _default_config_path_from_root(project_root)
 
 
-def list_experiments_with_config(prefix: str = "") -> list[str]:
-    root = _package_root() / "experiments"
+def list_experiments_with_config(
+    prefix: str = "",
+    *,
+    experiments_root: Path | None = None,
+) -> list[str]:
+    root = experiments_root or (_package_root() / "experiments")
     if not root.exists():
         return []
     try:

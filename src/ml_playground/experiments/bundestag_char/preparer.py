@@ -52,6 +52,7 @@ class BundestagCharPreparer(_PreparerProto):
         candidates = [
             Path("/datasets/Bundestag.csv"),
             ds_dir / "input.txt",
+            exp_dir / "input.txt",
             exp_dir / "page1.txt",
             bundled,
         ]

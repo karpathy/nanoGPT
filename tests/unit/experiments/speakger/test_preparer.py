@@ -14,31 +14,23 @@ def test_speakger_preparer_creates_dataset_dir(tmp_path: Path) -> None:
 
     preparer = SpeakGerPreparer()
 
-    import ml_playground.experiments.speakger.preparer as preparer_module
+    cfg = PreparerConfig(
+        tokenizer_type="char",
+        logger=logging.getLogger(__name__),
+        extras={"dataset_dir_override": str(exp_dir)},
+    )
 
-    original_file = preparer_module.__file__
-    preparer_module.__file__ = str(exp_dir / "preparer.py")
+    report = preparer.prepare(cfg)
 
-    try:
-        cfg = PreparerConfig(
-            tokenizer_type="char",
-            logger=logging.getLogger(__name__),
-        )
+    # Check that dataset directory was created
+    ds_dir = exp_dir / "datasets"
+    assert ds_dir.exists()
+    assert ds_dir.is_dir()
 
-        report = preparer.prepare(cfg)
-
-        # Check that dataset directory was created
-        ds_dir = exp_dir / "datasets"
-        assert ds_dir.exists()
-        assert ds_dir.is_dir()
-
-        # Check report
-        assert len(report.messages) > 0
-        assert any("speakger" in msg for msg in report.messages)
-        assert ds_dir in report.skipped_files
-
-    finally:
-        preparer_module.__file__ = original_file
+    # Check report
+    assert len(report.messages) > 0
+    assert any("speakger" in msg for msg in report.messages)
+    assert ds_dir in report.skipped_files
 
 
 def test_speakger_preparer_handles_existing_dir(tmp_path: Path) -> None:
@@ -50,30 +42,22 @@ def test_speakger_preparer_handles_existing_dir(tmp_path: Path) -> None:
 
     preparer = SpeakGerPreparer()
 
-    import ml_playground.experiments.speakger.preparer as preparer_module
+    cfg = PreparerConfig(
+        tokenizer_type="char",
+        logger=logging.getLogger(__name__),
+        extras={"dataset_dir_override": str(exp_dir)},
+    )
 
-    original_file = preparer_module.__file__
-    preparer_module.__file__ = str(exp_dir / "preparer.py")
+    report = preparer.prepare(cfg)
 
-    try:
-        cfg = PreparerConfig(
-            tokenizer_type="char",
-            logger=logging.getLogger(__name__),
-        )
+    # Directory should still exist
+    assert ds_dir.exists()
+    assert ds_dir.is_dir()
 
-        report = preparer.prepare(cfg)
-
-        # Directory should still exist
-        assert ds_dir.exists()
-        assert ds_dir.is_dir()
-
-        # Should report as skipped
-        assert ds_dir in report.skipped_files
-        assert len(report.created_files) == 0
-        assert len(report.updated_files) == 0
-
-    finally:
-        preparer_module.__file__ = original_file
+    # Should report as skipped
+    assert ds_dir in report.skipped_files
+    assert len(report.created_files) == 0
+    assert len(report.updated_files) == 0
 
 
 def test_config_path_returns_valid_path() -> None:

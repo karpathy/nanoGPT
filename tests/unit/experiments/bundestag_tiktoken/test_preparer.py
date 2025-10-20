@@ -23,34 +23,24 @@ def test_bundestag_tiktoken_preparer_creates_dataset(tmp_path: Path) -> None:
         "Hello world. This is test data for tokenization.", encoding="utf-8"
     )
 
-    # Mock the preparer to use our temp directory
     preparer = BundestagTiktokenPreparer()
 
-    # Patch __file__ to point to our temp directory
-    import ml_playground.experiments.bundestag_tiktoken.preparer as preparer_module
+    cfg = PreparerConfig(
+        tokenizer_type="tiktoken",
+        logger=logging.getLogger(__name__),
+        extras={"dataset_dir_override": str(exp_dir)},
+    )
 
-    original_file = preparer_module.__file__
-    preparer_module.__file__ = str(exp_dir / "preparer.py")
+    report = preparer.prepare(cfg)
 
-    try:
-        cfg = PreparerConfig(
-            tokenizer_type="tiktoken",
-            logger=logging.getLogger(__name__),
-        )
+    # Check that files were created
+    assert (ds_dir / "train.bin").exists()
+    assert (ds_dir / "val.bin").exists()
+    assert (ds_dir / "meta.pkl").exists()
 
-        report = preparer.prepare(cfg)
-
-        # Check that files were created
-        assert (ds_dir / "train.bin").exists()
-        assert (ds_dir / "val.bin").exists()
-        assert (ds_dir / "meta.pkl").exists()
-
-        # Check report
-        assert len(report.messages) > 0
-        assert any("bundestag_tiktoken" in msg for msg in report.messages)
-
-    finally:
-        preparer_module.__file__ = original_file
+    # Check report
+    assert len(report.messages) > 0
+    assert any("bundestag_tiktoken" in msg for msg in report.messages)
 
 
 def test_bundestag_tiktoken_preparer_handles_existing_files(tmp_path: Path) -> None:
@@ -73,33 +63,25 @@ def test_bundestag_tiktoken_preparer_handles_existing_files(tmp_path: Path) -> N
 
     preparer = BundestagTiktokenPreparer()
 
-    import ml_playground.experiments.bundestag_tiktoken.preparer as preparer_module
+    cfg = PreparerConfig(
+        tokenizer_type="tiktoken",
+        logger=logging.getLogger(__name__),
+        extras={"dataset_dir_override": str(exp_dir)},
+    )
 
-    original_file = preparer_module.__file__
-    preparer_module.__file__ = str(exp_dir / "preparer.py")
+    report = preparer.prepare(cfg)
 
-    try:
-        cfg = PreparerConfig(
-            tokenizer_type="tiktoken",
-            logger=logging.getLogger(__name__),
-        )
+    # Files should be updated
+    assert (ds_dir / "train.bin").exists()
+    assert (ds_dir / "val.bin").exists()
+    assert (ds_dir / "meta.pkl").exists()
 
-        report = preparer.prepare(cfg)
-
-        # Files should be updated
-        assert (ds_dir / "train.bin").exists()
-        assert (ds_dir / "val.bin").exists()
-        assert (ds_dir / "meta.pkl").exists()
-
-        # Check that report indicates updates or skips
-        assert (
-            len(report.updated_files) > 0
-            or len(report.created_files) > 0
-            or len(report.skipped_files) > 0
-        )
-
-    finally:
-        preparer_module.__file__ = original_file
+    # Check that report indicates updates or skips
+    assert (
+        len(report.updated_files) > 0
+        or len(report.created_files) > 0
+        or len(report.skipped_files) > 0
+    )
 
 
 def test_bundestag_tiktoken_preparer_with_bundled_input(tmp_path: Path) -> None:
@@ -115,23 +97,15 @@ def test_bundestag_tiktoken_preparer_with_bundled_input(tmp_path: Path) -> None:
 
     preparer = BundestagTiktokenPreparer()
 
-    import ml_playground.experiments.bundestag_tiktoken.preparer as preparer_module
+    cfg = PreparerConfig(
+        tokenizer_type="tiktoken",
+        logger=logging.getLogger(__name__),
+        extras={"dataset_dir_override": str(exp_dir)},
+    )
 
-    original_file = preparer_module.__file__
-    preparer_module.__file__ = str(exp_dir / "preparer.py")
+    preparer.prepare(cfg)
 
-    try:
-        cfg = PreparerConfig(
-            tokenizer_type="tiktoken",
-            logger=logging.getLogger(__name__),
-        )
-
-        preparer.prepare(cfg)
-
-        # Should successfully create dataset from bundled input
-        assert (ds_dir / "train.bin").exists()
-        assert (ds_dir / "val.bin").exists()
-        assert (ds_dir / "meta.pkl").exists()
-
-    finally:
-        preparer_module.__file__ = original_file
+    # Should successfully create dataset from bundled input
+    assert (ds_dir / "train.bin").exists()
+    assert (ds_dir / "val.bin").exists()
+    assert (ds_dir / "meta.pkl").exists()

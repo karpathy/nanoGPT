@@ -16,7 +16,13 @@ class SpeakGerPreparer(_PreparerProto):
     def prepare(self, cfg: PreparerConfig) -> PrepareReport:  # type: ignore[override]
         # Minimal preparer: this experiment expects pre-tokenized data or external pipeline.
         # We simply ensure the dataset directory exists and report no-op if present.
-        exp_dir = Path(__file__).resolve().parent
+        extras = getattr(cfg, "extras", {}) or {}
+        base_dir_override = extras.get("dataset_dir_override")
+        exp_dir = (
+            Path(base_dir_override)
+            if base_dir_override is not None
+            else Path(__file__).resolve().parent
+        )
         ds_dir = exp_dir / "datasets"
         ds_dir.mkdir(parents=True, exist_ok=True)
         msgs = (

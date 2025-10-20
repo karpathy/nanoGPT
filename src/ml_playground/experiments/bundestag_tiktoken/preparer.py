@@ -23,7 +23,13 @@ from ml_playground.core.error_handling import validate_file_exists, ProgressRepo
 
 class BundestagTiktokenPreparer(_PreparerProto):
     def prepare(self, cfg: PreparerConfig) -> PrepareReport:  # type: ignore[override]
-        exp_dir = Path(__file__).resolve().parent
+        extras = getattr(cfg, "extras", {}) or {}
+        base_dir_override = extras.get("dataset_dir_override")
+        exp_dir = (
+            Path(base_dir_override)
+            if base_dir_override is not None
+            else Path(__file__).resolve().parent
+        )
         ds_dir = exp_dir / "datasets"
         ds_dir.mkdir(parents=True, exist_ok=True)
         outputs = [ds_dir / "train.bin", ds_dir / "val.bin", ds_dir / "meta.pkl"]
@@ -35,6 +41,7 @@ class BundestagTiktokenPreparer(_PreparerProto):
         candidates = [
             Path("/datasets/Bundestag.csv"),
             ds_dir / "input.txt",
+            exp_dir / "input.txt",
             exp_dir / "page1.txt",
             bundled,
         ]
