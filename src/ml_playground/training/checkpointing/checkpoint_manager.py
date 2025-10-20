@@ -266,14 +266,7 @@ class CheckpointManager:
                     reason="Filename suffix does not encode an integer iteration",
                     rationale="Checkpoint discovery depends on canonical naming to rebuild manager state",
                 ) from e
-            try:
-                created = self._deps.path_stat(p).st_mtime
-            except OSError as e:
-                raise CheckpointError(
-                    f"Failed to stat checkpoint file {p}: {e}",
-                    reason=f"{e.__class__.__name__} while retrieving filesystem metadata",
-                    rationale="Manager must inspect filesystem timestamps to order checkpoints",
-                ) from e
+            created = self._stat_checkpoint_file(p)
             self.last_checkpoints.append(_CkptInfo(p, float("inf"), it, created))
         for p in sorted(self.out_dir.glob("ckpt_best_*.pt")):
             stem = p.stem  # e.g., ckpt_best_00000010_1.234567
@@ -302,15 +295,19 @@ class CheckpointManager:
                         reason="Metric segment is not a float",
                         rationale="Best checkpoint ordering depends on parsing the recorded metric",
                     ) from e
-            try:
-                created = self._deps.path_stat(p).st_mtime
-            except OSError as e:
-                raise CheckpointError(
-                    f"Failed to stat checkpoint file {p}: {e}",
-                    reason=f"{e.__class__.__name__} while retrieving filesystem metadata",
-                    rationale="Manager must inspect filesystem timestamps to order checkpoints",
-                ) from e
+            created = self._stat_checkpoint_file(p)
             self.best_checkpoints.append(_CkptInfo(p, metric, it, created))
+
+    def _stat_checkpoint_file(self, path: Path) -> float:
+        """Return the modification time for ``path`` with uniform error handling."""
+        try:
+            return self._deps.path_stat(path).st_mtime
+        except OSError as e:
+            raise CheckpointError(
+                f"Failed to stat checkpoint file {path}: {e}",
+                reason=f"{e.__class__.__name__} while retrieving filesystem metadata",
+                rationale="Manager must inspect filesystem timestamps to order checkpoints",
+            ) from e
 
     def save_checkpoint(
         self,
