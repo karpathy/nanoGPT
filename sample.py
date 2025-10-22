@@ -6,7 +6,7 @@ import pickle
 from contextlib import nullcontext
 import torch
 import tiktoken
-from model import GPTConfig, GPT
+from model import GPTConfig, GPT, SSMConfig, SSM
 
 # -----------------------------------------------------------------------------
 init_from = 'resume' # either 'resume' (from an out_dir) or a gpt2 variant (e.g. 'gpt2-xl')
@@ -36,8 +36,20 @@ if init_from == 'resume':
     # init from a model saved in a specific directory
     ckpt_path = os.path.join(out_dir, 'ckpt.pt')
     checkpoint = torch.load(ckpt_path, map_location=device)
-    gptconf = GPTConfig(**checkpoint['model_args'])
-    model = GPT(gptconf)
+    model_args = checkpoint['model_args']
+
+    # Determine model type (default to 'gpt' for backward compatibility)
+    model_type = model_args.get('model_type', 'gpt')
+
+    if model_type == 'gpt':
+        config = GPTConfig(**model_args)
+        model = GPT(config)
+    elif model_type == 'ssm':
+        config = SSMConfig(**model_args)
+        model = SSM(config)
+    else:
+        raise ValueError(f"Unknown model_type: {model_type}")
+
     state_dict = checkpoint['model']
     unwanted_prefix = '_orig_mod.'
     for k,v in list(state_dict.items()):
