@@ -1,0 +1,309 @@
+name: NanoGPT Daily Training Pipeline
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:  # Allow manual triggers
+    inputs:
+      data_source:
+        description: 'Data source to scrape'
+        required: false
+        default: 'news'
+        type: choice
+        options:
+          - news
+          - arxiv
+          - reddit
+          - github
+
+env:
+  PYTHON_VERSION: '3.10'
+  MODEL_SIZE: 'gpt2'  # or gpt2-medium for better quality
+  MAX_ITERS: 2000
+  
+jobs:
+  # Stage 1: Fetch and prepare recent data
+  fetch-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      data-ready: ${{ steps.prepare.outputs.ready }}
+      data-artifact: ${{ steps.upload.outputs.artifact-id }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install requests beautifulsoup4 feedparser tiktoken numpy
+      
+      - name: Fetch recent data
+        id: fetch
+        env:
+          NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
+          REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+          REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+        run: |
+          python scripts/fetch_data.py \
+            --source ${{ github.event.inputs.data_source || 'news' }} \
+            --output-dir ./data/raw \
+            --days 1
+      
+      - name: Prepare training data
+        id: prepare
+        run: |
+          python scripts/prepare_data.py \
+            --input-dir ./data/raw \
+            --output-dir ./data/processed
+          
+          if [ -f "./data/processed/train.bin" ] && [ -f "./data/processed/val.bin" ]; then
+            echo "ready=true" >> $GITHUB_OUTPUT
+            echo "✅ Data preparation successful"
+          else
+            echo "ready=false" >> $GITHUB_OUTPUT
+            echo "❌ Data preparation failed"
+            exit 1
+          fi
+      
+      - name: Upload processed data
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: training-data-${{ github.run_id }}
+          path: |
+            ./data/processed/train.bin
+            ./data/processed/val.bin
+            ./data/processed/meta.pkl
+          retention-days: 7
+
+  # Stage 2: Train the model
+  train-model:
+    needs: fetch-data
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: needs.fetch-data.outputs.data-ready == 'true'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install PyTorch and dependencies
+        run: |
+          pip install torch numpy transformers datasets tiktoken wandb tqdm
+      
+      - name: Download training data
+        uses: actions/download-artifact@v4
+        with:
+          name: training-data-${{ github.run_id }}
+          path: ./data/custom
+      
+      - name: Create training config
+        run: |
+          mkdir -p config
+          cat > config/finetune_custom.py << 'EOFCONFIG'
+# Training configuration for GitHub Actions
+import time
+
+out_dir = 'out-custom'
+eval_interval = 100
+eval_iters = 20
+log_interval = 10
+
+# Model from OpenAI
+init_from = 'gpt2'
+
+# Data
+dataset = 'custom'
+batch_size = 8
+block_size = 256
+
+# Optimization
+max_iters = 2000
+learning_rate = 3e-5
+weight_decay = 1e-1
+beta1 = 0.9
+beta2 = 0.95
+grad_clip = 1.0
+
+# Learning rate decay
+decay_lr = True
+warmup_iters = 100
+lr_decay_iters = 2000
+min_lr = 3e-6
+
+# System
+device = 'cpu'
+compile = False
+
+# Logging
+wandb_log = False
+wandb_project = 'nanogpt-daily'
+wandb_run_name = 'finetune-' + str(int(time.time()))
+EOFCONFIG
+      
+      - name: Train model
+        id: train
+        run: |
+          python train.py config/finetune_custom.py 2>&1 | tee training.log
+          
+          FINAL_LOSS=$(grep "val loss" training.log | tail -1 | awk '{print $5}')
+          echo "final_loss=$FINAL_LOSS" >> $GITHUB_OUTPUT
+          
+          echo "✅ Training completed. Final validation loss: $FINAL_LOSS"
+      
+      - name: Generate samples
+        run: |
+          python sample.py \
+            --out_dir=out-custom \
+            --start="Breaking news: " \
+            --num_samples=3 \
+            --max_new_tokens=200 \
+            > samples.txt
+          
+          echo "📝 Generated samples:"
+          cat samples.txt
+      
+      - name: Upload model checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-checkpoint-${{ github.run_id }}
+          path: |
+            ./out-custom/ckpt.pt
+            ./training.log
+            ./samples.txt
+          retention-days: 30
+      
+      - name: Save training metrics
+        run: |
+          python << 'EOFPY'
+import re
+import json
+from datetime import datetime
+
+with open('training.log', 'r') as f:
+    log_content = f.read()
+
+val_losses = re.findall(r'val loss (\d+\.\d+)', log_content)
+
+metrics = {
+    'timestamp': datetime.utcnow().isoformat(),
+    'run_id': '${{ github.run_id }}',
+    'final_val_loss': float(val_losses[-1]) if val_losses else None,
+    'iterations': ${{ env.MAX_ITERS }},
+    'model_size': '${{ env.MODEL_SIZE }}'
+}
+
+with open('metrics.json', 'w') as f:
+    json.dump(metrics, f, indent=2)
+EOFPY
+      
+      - name: Upload metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: training-metrics-${{ github.run_id }}
+          path: ./metrics.json
+          retention-days: 90
+
+  # Stage 3: Evaluate and report
+  evaluate:
+    needs: train-model
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*-${{ github.run_id }}'
+          path: ./artifacts
+      
+      - name: Generate training report
+        run: |
+          python << 'EOFPY'
+import json
+import os
+from datetime import datetime
+
+with open('./artifacts/training-metrics-${{ github.run_id }}/metrics.json') as f:
+    metrics = json.load(f)
+
+with open('./artifacts/model-checkpoint-${{ github.run_id }}/samples.txt') as f:
+    samples = f.read()
+
+report = f"""# NanoGPT Training Report
+
+**Run ID:** {metrics['run_id']}  
+**Timestamp:** {metrics['timestamp']}  
+**Model:** {metrics['model_size']}  
+
+## Training Results
+
+- **Final Validation Loss:** {metrics['final_val_loss']:.4f}
+- **Iterations:** {metrics['iterations']}
+- **Data Source:** ${{ github.event.inputs.data_source || 'news' }}
+
+## Sample Generations
+
+```
+{samples}
+```
+
+## Artifacts
+
+- Model checkpoint saved and available for 30 days
+- Training log and metrics preserved
+- Compare with previous runs to track improvement
+
+---
+*Generated automatically by GitHub Actions*
+"""
+
+with open('TRAINING_REPORT.md', 'w') as f:
+    f.write(report)
+
+print(report)
+EOFPY
+      
+      - name: Create Issue with Report
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('TRAINING_REPORT.md', 'utf8');
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Training Report - Run #${{ github.run_id }}`,
+              body: report,
+              labels: ['training-report', 'automated']
+            });
+      
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: training-report-${{ github.run_id }}
+          path: TRAINING_REPORT.md
+          retention-days: 90
