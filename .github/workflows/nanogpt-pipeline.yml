@@ -115,45 +115,45 @@ jobs:
         run: |
           mkdir -p config
           cat > config/finetune_custom.py << 'EOFCONFIG'
-# Training configuration for GitHub Actions
-import time
+          # Training configuration for GitHub Actions
+          import time
 
-out_dir = 'out-custom'
-eval_interval = 100
-eval_iters = 20
-log_interval = 10
+          out_dir = 'out-custom'
+          eval_interval = 100
+          eval_iters = 20
+          log_interval = 10
 
-# Model from OpenAI
-init_from = 'gpt2'
+          # Model from OpenAI
+          init_from = 'gpt2'
 
-# Data
-dataset = 'custom'
-batch_size = 8
-block_size = 256
+          # Data
+          dataset = 'custom'
+          batch_size = 8
+          block_size = 256
 
-# Optimization
-max_iters = 2000
-learning_rate = 3e-5
-weight_decay = 1e-1
-beta1 = 0.9
-beta2 = 0.95
-grad_clip = 1.0
+          # Optimization
+          max_iters = 2000
+          learning_rate = 3e-5
+          weight_decay = 1e-1
+          beta1 = 0.9
+          beta2 = 0.95
+          grad_clip = 1.0
 
-# Learning rate decay
-decay_lr = True
-warmup_iters = 100
-lr_decay_iters = 2000
-min_lr = 3e-6
+          # Learning rate decay
+          decay_lr = True
+          warmup_iters = 100
+          lr_decay_iters = 2000
+          min_lr = 3e-6
 
-# System
-device = 'cpu'
-compile = False
+          # System
+          device = 'cpu'
+          compile = False
 
-# Logging
-wandb_log = False
-wandb_project = 'nanogpt-daily'
-wandb_run_name = 'finetune-' + str(int(time.time()))
-EOFCONFIG
+          # Logging
+          wandb_log = False
+          wandb_project = 'nanogpt-daily'
+          wandb_run_name = 'finetune-' + str(int(time.time()))
+          EOFCONFIG
       
       - name: Train model
         id: train
@@ -190,26 +190,26 @@ EOFCONFIG
       - name: Save training metrics
         run: |
           python << 'EOFPY'
-import re
-import json
-from datetime import datetime
+          import re
+          import json
+          from datetime import datetime
 
-with open('training.log', 'r') as f:
-    log_content = f.read()
+          with open('training.log', 'r') as f:
+              log_content = f.read()
 
-val_losses = re.findall(r'val loss (\d+\.\d+)', log_content)
+          val_losses = re.findall(r'val loss (\d+\.\d+)', log_content)
 
-metrics = {
-    'timestamp': datetime.utcnow().isoformat(),
-    'run_id': '${{ github.run_id }}',
-    'final_val_loss': float(val_losses[-1]) if val_losses else None,
-    'iterations': ${{ env.MAX_ITERS }},
-    'model_size': '${{ env.MODEL_SIZE }}'
-}
+          metrics = {
+              'timestamp': datetime.utcnow().isoformat(),
+              'run_id': '${{ github.run_id }}',
+              'final_val_loss': float(val_losses[-1]) if val_losses else None,
+              'iterations': ${{ env.MAX_ITERS }},
+              'model_size': '${{ env.MODEL_SIZE }}'
+          }
 
-with open('metrics.json', 'w') as f:
-    json.dump(metrics, f, indent=2)
-EOFPY
+          with open('metrics.json', 'w') as f:
+              json.dump(metrics, f, indent=2)
+          EOFPY
       
       - name: Upload metrics
         uses: actions/upload-artifact@v4
@@ -242,49 +242,49 @@ EOFPY
       - name: Generate training report
         run: |
           python << 'EOFPY'
-import json
-import os
-from datetime import datetime
+          import json
+          import os
+          from datetime import datetime
 
-with open('./artifacts/training-metrics-${{ github.run_id }}/metrics.json') as f:
-    metrics = json.load(f)
+          with open('./artifacts/training-metrics-${{ github.run_id }}/metrics.json') as f:
+              metrics = json.load(f)
 
-with open('./artifacts/model-checkpoint-${{ github.run_id }}/samples.txt') as f:
-    samples = f.read()
+          with open('./artifacts/model-checkpoint-${{ github.run_id }}/samples.txt') as f:
+              samples = f.read()
 
-report = f"""# NanoGPT Training Report
+          report = f"""# NanoGPT Training Report
 
-**Run ID:** {metrics['run_id']}  
-**Timestamp:** {metrics['timestamp']}  
-**Model:** {metrics['model_size']}  
+          **Run ID:** {metrics['run_id']}
+          **Timestamp:** {metrics['timestamp']}
+          **Model:** {metrics['model_size']}
 
-## Training Results
+          ## Training Results
 
-- **Final Validation Loss:** {metrics['final_val_loss']:.4f}
-- **Iterations:** {metrics['iterations']}
-- **Data Source:** ${{ github.event.inputs.data_source || 'news' }}
+          - **Final Validation Loss:** {metrics['final_val_loss']:.4f}
+          - **Iterations:** {metrics['iterations']}
+          - **Data Source:** ${{ github.event.inputs.data_source || 'news' }}
 
-## Sample Generations
+          ## Sample Generations
 
-```
-{samples}
-```
+          ```
+          {samples}
+          ```
 
-## Artifacts
+          ## Artifacts
 
-- Model checkpoint saved and available for 30 days
-- Training log and metrics preserved
-- Compare with previous runs to track improvement
+          - Model checkpoint saved and available for 30 days
+          - Training log and metrics preserved
+          - Compare with previous runs to track improvement
 
----
-*Generated automatically by GitHub Actions*
-"""
+          ---
+          *Generated automatically by GitHub Actions*
+          """
 
-with open('TRAINING_REPORT.md', 'w') as f:
-    f.write(report)
+          with open('TRAINING_REPORT.md', 'w') as f:
+              f.write(report)
 
-print(report)
-EOFPY
+          print(report)
+          EOFPY
       
       - name: Create Issue with Report
         uses: actions/github-script@v7
