@@ -75,6 +75,106 @@ class CausalSelfAttention(nn.Module):
         y = self.resid_dropout(self.c_proj(y))
         return y
 
+class AttentionSinkCausalSelfAttention(nn.Module):
+    """
+    Attention with Attention Sinks - based on "Efficient Streaming Language Models with Attention Sinks"
+
+    This variant maintains attention to:
+    1. The first 'sink_size' tokens (attention sinks) - always visible
+    2. A sliding window of 'window_size' most recent tokens
+
+    This enables efficient streaming inference while maintaining performance.
+    """
+
+    def __init__(self, config):
+        super().__init__()
+        assert config.n_embd % config.n_head == 0
+        # key, query, value projections for all heads, but in a batch
+        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+        # output projection
+        self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        # regularization
+        self.attn_dropout = nn.Dropout(config.dropout)
+        self.resid_dropout = nn.Dropout(config.dropout)
+        self.n_head = config.n_head
+        self.n_embd = config.n_embd
+        self.dropout = config.dropout
+        self.sink_size = config.sink_size
+        self.window_size = config.window_size
+
+        # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
+        self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
+        if not self.flash:
+            print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
+
+        # We'll create the attention mask dynamically based on sequence length
+
+    def _create_sink_window_mask(self, T, device):
+        """
+        Create attention mask that allows:
+        - Full attention to first sink_size tokens
+        - Sliding window attention to last window_size tokens
+
+        Returns mask of shape (T, T) where 1 = attend, 0 = mask out
+        """
+        mask = torch.zeros(T, T, dtype=torch.bool, device=device)
+
+        for i in range(T):
+            # Always attend to sink tokens (first sink_size positions)
+            mask[i, :min(self.sink_size, T)] = 1
+
+            # Attend to tokens in the sliding window
+            # Window includes tokens from (i - window_size + 1) to i
+            window_start = max(self.sink_size, i - self.window_size + 1)
+            mask[i, window_start:i+1] = 1
+
+        return mask
+
+    def forward(self, x, return_attention=False):
+        B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+
+        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
+        q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
+        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+
+        # Create attention sink + sliding window mask
+        sink_window_mask = self._create_sink_window_mask(T, x.device)
+
+        # causal self-attention with sink + window pattern
+        if self.flash:
+            # For flash attention, we need to create a proper attention mask
+            # Flash attention expects None or a boolean mask where True = attend
+            # Convert our mask to the right format: (B, nh, T, T) or (T, T)
+            attn_mask = sink_window_mask.unsqueeze(0)  # (1, T, T) - will broadcast
+            # Flash attention uses inverted logic: True = keep, False = mask
+            # Our mask: True = attend, so it's already correct
+            y = torch.nn.functional.scaled_dot_product_attention(
+                q, k, v,
+                attn_mask=attn_mask,
+                dropout_p=self.dropout if self.training else 0,
+                is_causal=False  # We're providing our own mask
+            )
+            att = None  # Flash attention doesn't return attention weights
+        else:
+            # manual implementation of attention
+            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+            # Apply sink + window mask
+            att = att.masked_fill(~sink_window_mask.unsqueeze(0).unsqueeze(0), float('-inf'))
+            att = F.softmax(att, dim=-1)
+            att = self.attn_dropout(att)
+            y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+
+        y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
+
+        # output projection
+        y = self.resid_dropout(self.c_proj(y))
+
+        if return_attention and att is not None:
+            return y, att
+        return y
+
 class MLP(nn.Module):
 
     def __init__(self, config):
@@ -96,7 +196,11 @@ class Block(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
-        self.attn = CausalSelfAttention(config)
+        # Use attention sink variant if configured
+        if config.use_attention_sink:
+            self.attn = AttentionSinkCausalSelfAttention(config)
+        else:
+            self.attn = CausalSelfAttention(config)
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
@@ -114,6 +218,10 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    # Attention sink parameters (from "Efficient Streaming Language Models with Attention Sinks")
+    use_attention_sink: bool = False # Enable attention sink mechanism
+    sink_size: int = 4 # Number of initial tokens to always attend to (attention sinks)
+    window_size: int = 252 # Size of sliding attention window (total context = sink_size + window_size)
 
 class GPT(nn.Module):
 
