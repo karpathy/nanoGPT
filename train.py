@@ -27,7 +27,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from model import GPTConfig, GPT
+from model import GPTConfig, GPT, SSMConfig, SSM
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -40,20 +40,25 @@ eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = False # disabled by default
-wandb_project = 'owt'
-wandb_run_name = 'gpt2' # 'run' + str(time.time())
+wandb_log = True # disabled by default
+wandb_project = 'synthetic-lm'
+wandb_run_name = 'gpt2-real' # 'run' + str(time.time())
 # data
 dataset = 'openwebtext'
 gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
 batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size = 1024
 # model
+model_type = 'gpt'  # 'gpt' or 'ssm' - which architecture to use
 n_layer = 12
 n_head = 12
 n_embd = 768
 dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
 bias = False # do we use bias inside LayerNorm and Linear layers?
+# SSM-specific hyperparameters (only used if model_type='ssm')
+ssm_state_dim = 16  # SSM state dimension
+ssm_conv_dim = 4    # SSM convolution kernel size
+ssm_expand = 2      # SSM expansion factor
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
 max_iters = 600000 # total number of training iterations
@@ -145,16 +150,32 @@ if os.path.exists(meta_path):
 
 # model init
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
-                  bias=bias, vocab_size=None, dropout=dropout) # start with model_args from command line
+                  bias=bias, vocab_size=None, dropout=dropout, model_type=model_type) # start with model_args from command line
+
+# Add SSM-specific args if using SSM model
+if model_type == 'ssm':
+    model_args.update(dict(
+        ssm_state_dim=ssm_state_dim,
+        ssm_conv_dim=ssm_conv_dim,
+        ssm_expand=ssm_expand
+    ))
+
 if init_from == 'scratch':
     # init a new model from scratch
-    print("Initializing a new model from scratch")
+    print(f"Initializing a new {model_type.upper()} model from scratch")
     # determine the vocab size we'll use for from-scratch training
     if meta_vocab_size is None:
         print("defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)")
     model_args['vocab_size'] = meta_vocab_size if meta_vocab_size is not None else 50304
-    gptconf = GPTConfig(**model_args)
-    model = GPT(gptconf)
+
+    if model_type == 'gpt':
+        config = GPTConfig(**model_args)
+        model = GPT(config)
+    elif model_type == 'ssm':
+        config = SSMConfig(**model_args)
+        model = SSM(config)
+    else:
+        raise ValueError(f"Unknown model_type: {model_type}. Choose 'gpt' or 'ssm'.")
 elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
     # resume training from a checkpoint.
@@ -165,9 +186,25 @@ elif init_from == 'resume':
     # the rest of the attributes (e.g. dropout) can stay as desired from command line
     for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
         model_args[k] = checkpoint_model_args[k]
+
+    # Also copy SSM-specific parameters if they exist
+    for k in ['ssm_state_dim', 'ssm_conv_dim', 'ssm_expand']:
+        if k in checkpoint_model_args:
+            model_args[k] = checkpoint_model_args[k]
+
+    # Determine model type from checkpoint (backward compatible)
+    checkpoint_model_type = checkpoint_model_args.get('model_type', model_type)
+
     # create the model
-    gptconf = GPTConfig(**model_args)
-    model = GPT(gptconf)
+    if checkpoint_model_type == 'gpt':
+        config = GPTConfig(**model_args)
+        model = GPT(config)
+    elif checkpoint_model_type == 'ssm':
+        config = SSMConfig(**model_args)
+        model = SSM(config)
+    else:
+        raise ValueError(f"Unknown model_type in checkpoint: {checkpoint_model_type}")
+
     state_dict = checkpoint['model']
     # fix the keys of the state dictionary :(
     # honestly no idea how checkpoints sometimes get this prefix, have to debug more
