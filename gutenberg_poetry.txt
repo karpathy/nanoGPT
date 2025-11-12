@@ -1,0 +1,7 @@
+Roses are red,
+Violets are blue,
+Sugar is sweet,
+And so are you.
+
+This is a small file for testing purposes.
+It will be replaced with the actual dataset later.
