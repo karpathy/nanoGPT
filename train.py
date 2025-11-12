@@ -26,6 +26,7 @@ import numpy as np
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
+from torch.distributed.fsdp import fully_shard, FSDPModule
 
 from model import GPTConfig, GPT
 
@@ -68,10 +69,11 @@ lr_decay_iters = 600000 # should be ~= max_iters per Chinchilla
 min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
+enable_fsdb = True
 # system
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
-compile = True # use PyTorch 2.0 to compile the model to be faster
+compile = False # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
@@ -195,12 +197,6 @@ model.to(device)
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
-# optimizer
-optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
-if init_from == 'resume':
-    optimizer.load_state_dict(checkpoint['optimizer'])
-checkpoint = None # free up memory
-
 # compile the model
 if compile:
     print("compiling the model... (takes a ~minute)")
@@ -209,7 +205,31 @@ if compile:
 
 # wrap model into DDP container
 if ddp:
-    model = DDP(model, device_ids=[ddp_local_rank])
+    if enable_fsdb:
+        for layer in model.transformer.h:
+            # TODO: This should not be done with exceptions
+            try:
+                fully_shard(layer)
+                # print(f"Sharded layer {layer}")
+            except Exception as e:
+                print(f"Failed to fully shard layer {layer}: {e}")
+        # fully_shard(model.transformer.h)
+        # fully_shard(model.transformer)
+        fully_shard(model)
+        assert isinstance(model, FSDPModule)
+    else:
+        model = DDP(model, device_ids=[ddp_local_rank])
+
+if ddp and not enable_fsdb:
+    raw_model = model.module # unwrap DDP container
+else:
+    raw_model = model
+
+# optimizer (must be enabled after FSDP wrapping)
+optimizer = raw_model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
+if init_from == 'resume':
+    optimizer.load_state_dict(checkpoint['optimizer'])
+checkpoint = None # free up memory
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
@@ -250,8 +270,9 @@ if wandb_log and master_process:
 X, Y = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
-raw_model = model.module if ddp else model # unwrap DDP container if needed
+raw_model = model.module if ddp and not enable_fsdb else model # unwrap DDP container if needed
 running_mfu = -1.0
+ckpt_num = 0 
 while True:
 
     # determine and set the learning rate for this iteration
@@ -260,21 +281,23 @@ while True:
         param_group['lr'] = lr
 
     # evaluate the loss on train/val sets and write checkpoints
-    if iter_num % eval_interval == 0 and master_process:
+    if iter_num % eval_interval == 0:
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-        if wandb_log:
-            wandb.log({
-                "iter": iter_num,
-                "train/loss": losses['train'],
-                "val/loss": losses['val'],
-                "lr": lr,
-                "mfu": running_mfu*100, # convert to percentage
-            })
+        if master_process:
+            if wandb_log:
+                wandb.log({
+                    "iter": iter_num,
+                    "train/loss": losses['train'],
+                    "val/loss": losses['val'],
+                    "lr": lr,
+                    "mfu": running_mfu*100, # convert to percentage
+                })
+        
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
             if iter_num > 0:
-                checkpoint = {
+                ckpt = {
                     'model': raw_model.state_dict(),
                     'optimizer': optimizer.state_dict(),
                     'model_args': model_args,
@@ -282,8 +305,16 @@ while True:
                     'best_val_loss': best_val_loss,
                     'config': config,
                 }
-                print(f"saving checkpoint to {out_dir}")
-                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+                if master_process:
+                    print(f"saving checkpoint to {out_dir}")
+                    torch.save(ckpt, os.path.join(out_dir, f'ckpt_{ckpt_num}.pt'))
+                    print(f"saved checkpoint to {out_dir}/ckpt_{ckpt_num}.pt")
+                    ckpt_num += 1
+
+        # sync all ranks after checkpoint logic
+        if ddp:
+            torch.distributed.barrier()
+            
     if iter_num == 0 and eval_only:
         break
 
@@ -324,7 +355,22 @@ while True:
         if local_iter_num >= 5: # let the training loop settle a bit
             mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+        # throughput: tokens processed this iteration divided by elapsed time
+        # tokens_per_iter is computed earlier as gradient_accumulation_steps * ddp_world_size * batch_size * block_size
+        throughput = tokens_per_iter / dt if dt > 0 else float('inf')
+        if wandb_log:
+            wandb.log({
+                "iter": iter_num,
+                "train/loss": lossf,
+                "lr": lr,
+                "perf/mfu": running_mfu*100, # convert to percentage
+                "perf/tokens_per_sec": throughput,
+                "perf/mtokens_per_sec": throughput / 1e6,
+                "perf/FLOPs_per_sec": throughput * raw_model.estimate_flops_per_token(tokens_per_iter) / dt,
+                "perf/iter_time": dt,
+                "perf/TFLOPs_per_hour": throughput * raw_model.estimate_flops_per_token(tokens_per_iter) / dt * 3600 / 1e12, 
+            })
+        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%, throughput {throughput/1e6:.3f} MT/s")
     iter_num += 1
     local_iter_num += 1
 

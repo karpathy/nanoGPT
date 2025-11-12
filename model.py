@@ -302,6 +302,17 @@ class GPT(nn.Module):
         mfu = flops_achieved / flops_promised
         return mfu
 
+    def estimate_flops_per_token(self, tokens_per_iter):
+        """
+        Estimate the number of flops per token processed by the model.
+        This is used to estimate the throughput in TFLOPS.
+        """
+        N = self.get_num_params()
+        cfg = self.config
+        L, H, Q, T = cfg.n_layer, cfg.n_head, cfg.n_embd//cfg.n_head, cfg.block_size
+        flops_per_token = 6*N + 12*L*H*Q*T
+        return flops_per_token / tokens_per_iter
+
     @torch.no_grad()
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
         """
