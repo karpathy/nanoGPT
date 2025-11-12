@@ -1,7 +1,17 @@
 
 # nanoGPT
 
-![nanoGPT](assets/nanogpt.jpg)
+clone repo
+
+install dependencies
+
+pip install nvml and etc.
+
+compile.sh
+
+run_controller.sh
+
+gpu_profiler.sh
 
 
 ---
