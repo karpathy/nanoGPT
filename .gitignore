@@ -10,3 +10,8 @@ __pycache__/
 input.txt
 env/
 venv/
+lib/models/
+lib/encoder.json
+lib/encoder.py
+lib/merges.txt
+lib/vocab.txt

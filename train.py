@@ -20,12 +20,10 @@ import os
 import time
 import math
 import pickle
-from contextlib import nullcontext
-
 import numpy as np
 import torch
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.distributed import init_process_group, destroy_process_group
+from lib.get_ddp import DDP, init_process_group, destroy_process_group
+from lib.get_autocast import get_autocast_context
 
 from model import GPTConfig, GPT
 
@@ -109,7 +107,7 @@ torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
 # note: float16 data type will automatically use a GradScaler
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
-ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
+ctx = get_autocast_context(device_type, ptdtype)
 
 # poor man's data loader
 data_dir = os.path.join('data', dataset)
