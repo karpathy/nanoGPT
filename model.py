@@ -41,13 +41,19 @@ class CausalSelfAttention(nn.Module):
         self.n_head = config.n_head
         self.n_embd = config.n_embd
         self.dropout = config.dropout
+        self.window_size = config.window_size
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
         if not self.flash:
             print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
             # causal mask to ensure that attention is only applied to the left in the input sequence
-            self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
-                                        .view(1, 1, config.block_size, config.block_size))
+            # with optional sliding window attention
+            mask = torch.tril(torch.ones(config.block_size, config.block_size))
+            if config.window_size is not None:
+                # apply sliding window: only attend to previous window_size tokens
+                mask = mask * torch.triu(torch.ones(config.block_size, config.block_size),
+                                        diagonal=-config.window_size)
+            self.register_buffer("bias", mask.view(1, 1, config.block_size, config.block_size))
 
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
@@ -61,7 +67,15 @@ class CausalSelfAttention(nn.Module):
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
             # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
+            if self.window_size is not None:
+                # create sliding window attention mask for flash attention
+                # Flash attention requires explicit mask for sliding window
+                mask = torch.tril(torch.ones(T, T, dtype=torch.bool, device=x.device))
+                mask = mask & torch.triu(torch.ones(T, T, dtype=torch.bool, device=x.device),
+                                        diagonal=-self.window_size)
+                y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=mask, dropout_p=self.dropout if self.training else 0, is_causal=False)
+            else:
+                y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
         else:
             # manual implementation of attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
@@ -114,6 +128,7 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    window_size: int = None # None: full attention, int: sliding window attention with specified window size
 
 class GPT(nn.Module):
 
