@@ -25,6 +25,8 @@ from contextlib import nullcontext
 import numpy as np
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.distributed import FullyShardedDataParellel as FSDF
+from torch.distributed.fsdf.wrap import default_auto_wrap_policy
 from torch.distributed import init_process_group, destroy_process_group
 
 from model import GPTConfig, GPT
