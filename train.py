@@ -21,6 +21,7 @@ import time
 import math
 import pickle
 from contextlib import nullcontext
+from datetime import datetime
 
 import numpy as np
 import torch
@@ -78,6 +79,16 @@ exec(open('configurator.py').read()) # overrides from command line or config fil
 config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
 
+# ANSI color codes for printing to terminal
+ansi = {
+    "red": "\x1b[31m",
+    "green": "\x1b[32m",
+    "blue": "\x1b[34m",
+    "black": "\x1b[30m",
+    "bgyellow": "\x1b[43m",  # Background yellow
+    "reset": "\x1b[0m",  # Resets all ANSI colors codes to default.
+}
+
 # various inits, derived attributes, I/O setup
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
 if ddp:
@@ -99,7 +110,7 @@ else:
     seed_offset = 0
     ddp_world_size = 1
 tokens_per_iter = gradient_accumulation_steps * ddp_world_size * batch_size * block_size
-print(f"tokens per iteration will be: {tokens_per_iter:,}")
+print(f"\ntokens per iteration will be: {tokens_per_iter:,}")
 
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
@@ -144,6 +155,7 @@ if os.path.exists(meta_path):
     print(f"found vocab_size = {meta_vocab_size} (inside {meta_path})")
 
 # model init
+print(f"{ansi['bgyellow']}{ansi['black']}Initializing Model{ansi['reset']}")
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
                   bias=bias, vocab_size=None, dropout=dropout) # start with model_args from command line
 if init_from == 'scratch':
@@ -216,9 +228,15 @@ if ddp:
 def estimate_loss():
     out = {}
     model.eval()
-    for split in ['train', 'val']:
+    split_sets = ['train', 'val']
+    for split in split_sets:
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
+            print(
+                f"\rEstimating loss: {ansi['blue']}split set{ansi['reset']} {split:5s}",
+                f"{split_sets.index(split) + 1}/{len(split_sets)},",
+                f"{ansi['blue']}evaluation iteration{ansi['reset']} {k + 1}/{eval_iters}\t",
+                end = " ")
             X, Y = get_batch(split)
             with ctx:
                 logits, loss = model(X, Y)
@@ -251,7 +269,9 @@ X, Y = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
+prev_val = {"lossf": np.inf, "running_mfu": -1.0}
 running_mfu = -1.0
+print(f"{ansi['bgyellow']}{ansi['black']}Training is starting!{ansi['reset']}")
 while True:
 
     # determine and set the learning rate for this iteration
@@ -261,8 +281,18 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
+        t0_el = time.time()
+        print(f"step {iter_num}: ...estimating losses", end = "")
         losses = estimate_loss()
-        print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        t1_el = time.time()
+        t0 -= t1_el - t0_el  # Subtract the costly estimate_loss() runtime from Δt per iter.
+        print(
+            "\r"
+            f"{ansi['blue']}step{ansi['reset']} {iter_num:{max(4, len(str(max_iters)))}}:",
+            f"{ansi['blue']}train loss{ansi['reset']} {losses['train']:.4f},",
+            f"{ansi['blue']}val loss{ansi['reset']} {ansi['green' if losses['val'] < best_val_loss else 'red']}{losses['val']:.4f}{ansi['reset']},",
+            f"{ansi['blue']}Δt{ansi['reset']} {datetime.fromtimestamp(t1_el) - datetime.fromtimestamp(t0_el)}",
+            end = " ")
         if wandb_log:
             wandb.log({
                 "iter": iter_num,
@@ -282,8 +312,12 @@ while True:
                     'best_val_loss': best_val_loss,
                     'config': config,
                 }
-                print(f"saving checkpoint to {out_dir}")
+                print(f"| Saving checkpoint to {out_dir}")
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+            else:
+                print()
+        else:
+            print()
     if iter_num == 0 and eval_only:
         break
 
@@ -313,18 +347,34 @@ while True:
     # flush the gradients as soon as we can, no need for this memory anymore
     optimizer.zero_grad(set_to_none=True)
 
-    # timing and logging
-    t1 = time.time()
-    dt = t1 - t0
-    t0 = t1
     if iter_num % log_interval == 0 and master_process:
+        _every_x_evals = 1  # Print the column header every x evals
+        if iter_num % (eval_interval * _every_x_evals) == 0:
+            # Print the column header for the console output at log_interval after every `_every_x_evals` eval
+            print(
+                ansi["blue"]
+                + " " * 5 + f"{'iter':{len(str(max_iters))}}"
+                + " " * 3 + f"loss"
+                + " " * 1 + f"{ansi['reset']}(h:mm:ss.μs){ansi['blue']} Δt"
+                + " " * 7 + f"mfu"
+                + ansi["reset"])
+        # Only reset t0 if printing dt, so we see the time since last print
+        # timing and logging
+        t1 = time.time()
+        dt = t1 - t0
+        t0 = t1
         # get loss as float. note: this is a CPU-GPU sync point
         # scale up to undo the division above, approximating the true total loss (exact would have been a sum)
         lossf = loss.item() * gradient_accumulation_steps
         if local_iter_num >= 5: # let the training loop settle a bit
             mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+        print(
+            " " * 5 + f"{iter_num:{max(4, len(str(max_iters)))}}",
+            f"{ansi['green' if lossf < prev_val['lossf'] else 'red']}{lossf:.4f}{ansi['reset']}",
+            f" {f'{datetime.fromtimestamp(t1) - datetime.fromtimestamp(t1 - dt)}'.lstrip('0:'):>14}",
+            f"{ansi['green' if running_mfu > prev_val['running_mfu'] else 'red']}{running_mfu*100: 7.2f}{ansi['reset']}%")
+        prev_val |= {"lossf": lossf, "running_mfu": running_mfu}
     iter_num += 1
     local_iter_num += 1
 
