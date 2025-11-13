@@ -41,6 +41,11 @@ class CausalSelfAttention(nn.Module):
         self.n_head = config.n_head
         self.n_embd = config.n_embd
         self.dropout = config.dropout
+        
+        # SVD parameters
+        self.use_svd = getattr(config, 'use_svd', False)  # Disabled by default
+        self.svd_rank = getattr(config, 'svd_rank', None)  # If None, use full rank
+        
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
         if not self.flash:
@@ -48,6 +53,51 @@ class CausalSelfAttention(nn.Module):
             # causal mask to ensure that attention is only applied to the left in the input sequence
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
+
+    def apply_svd_to_v(self, v):
+        """
+        Apply SVD to the V (values) matrix using torch.linalg.svd
+        
+        Args:
+            v: Tensor of shape (B, nh, T, hs) where
+               B = batch size, nh = number of heads, T = sequence length, hs = head size
+        
+        Returns:
+            Reconstructed V matrix after SVD decomposition
+        """
+        if not self.use_svd:
+            return v
+        
+        return self._standard_svd_reconstruction(v)
+    
+    def _standard_svd_reconstruction(self, matrix):
+        """Standard SVD reconstruction using torch.linalg.svd"""
+        B, nh, T, hs = matrix.shape
+        
+        # Reshape matrix to (B*nh, T, hs) for SVD computation
+        matrix_reshaped = matrix.reshape(B * nh, T, hs)
+        
+        # Initialize output tensor
+        matrix_reconstructed = torch.zeros_like(matrix_reshaped)
+        
+        # Apply SVD to each (T, hs) matrix in the batch
+        for i in range(B * nh):
+            # Perform SVD: Matrix = U @ S @ Vh
+            U, S, Vh = torch.linalg.svd(matrix_reshaped[i], full_matrices=False)
+            
+            # Determine rank for reconstruction
+            if self.svd_rank is not None:
+                rank = min(self.svd_rank, S.shape[0])
+            else:
+                rank = S.shape[0]  # Full rank reconstruction
+            
+            # Reconstruct with reduced rank
+            # Matrix_approx = U[:, :rank] @ diag(S[:rank]) @ Vh[:rank, :]
+            S_diag = torch.diag(S[:rank])
+            matrix_reconstructed[i] = U[:, :rank] @ S_diag @ Vh[:rank, :]
+        
+        # Reshape back to original dimensions
+        return matrix_reconstructed.reshape(B, nh, T, hs)
 
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
@@ -57,6 +107,9 @@ class CausalSelfAttention(nn.Module):
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+
+        # Apply SVD to V (values) matrix if enabled
+        v = self.apply_svd_to_v(v)
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
@@ -114,6 +167,10 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    
+    # SVD Configuration
+    use_svd: bool = False # True: apply SVD to value matrices. False: use original values
+    svd_rank: int = None # Rank for SVD approximation. If None, use full rank
 
 class GPT(nn.Module):
 

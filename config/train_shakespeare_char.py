@@ -24,6 +24,10 @@ n_head = 6
 n_embd = 384
 dropout = 0.2
 
+# SVD Configuration - easily toggle on/off for experiments
+use_svd = False       # Set to True to enable SVD on value matrices
+svd_rank = 32         # Rank for SVD approximation
+
 learning_rate = 1e-3 # with baby networks can afford to go a bit higher
 max_iters = 5000
 lr_decay_iters = 5000 # make equal to max_iters usually
