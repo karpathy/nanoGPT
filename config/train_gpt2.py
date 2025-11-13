@@ -6,6 +6,10 @@ wandb_log = True
 wandb_project = 'owt'
 wandb_run_name='gpt2-124M'
 
+# SVD Configuration - Toggle SVD on/off and configure parameters
+use_svd = False  # Set to True to enable SVD on value matrices
+svd_rank = 32    # Rank for SVD approximation (None for full rank)
+
 # these make the total batch size be ~0.5M
 # 12 batch size * 1024 block size * 5 gradaccum * 8 GPUs = 491,520
 batch_size = 12
