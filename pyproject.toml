@@ -1,0 +1,6 @@
+[project]
+name = "mla-gpt"
+version = "0.0.1"
+
+[tool.setuptools.packages.find]
+where = ["src"]

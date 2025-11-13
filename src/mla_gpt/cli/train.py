@@ -27,7 +27,15 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from model import GPTConfig, GPT
+from mla_gpt.model import GPTConfig, GPT
+
+
+_THIS_DIR = os.path.dirname(__file__)
+_PROJECT_ROOT = os.path.dirname(_THIS_DIR)          # src/mla_gpt/cli -> src/mla_gpt
+configurator_path = os.path.join(_PROJECT_ROOT, "utils", "configurator.py")
+
+
+
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -74,7 +82,9 @@ dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported
 compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
-exec(open('configurator.py').read()) # overrides from command line or config file
+
+exec(open(configurator_path).read())# overrides from command line or config file
+
 config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
 
