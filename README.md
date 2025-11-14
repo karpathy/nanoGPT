@@ -32,6 +32,11 @@ Dependencies:
 -  `wandb` for optional logging <3
 -  `tqdm` for progress bars <3
 
+You can use the requirements file to install all dependencies:
+```
+$ pip install -r requirements.txt
+```
+
 ## quick start
 
 If you are not a deep learning professional and you just want to feel the magic and get your feet wet, the fastest way to get started is to train a character-level GPT on the works of Shakespeare. First, we download it as a single (1MB) file and turn it from raw text into one large stream of integers:
