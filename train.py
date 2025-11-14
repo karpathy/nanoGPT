@@ -38,6 +38,9 @@ log_interval = 1
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
+take_snapshots = False # if True, saves checkpoint snapshots to folder specified in snapshot_dir
+snapshot_dir = 'snapshots' # specifies folder *inside* out_dir to save snapshots to
+snapshot_interval = 500
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
@@ -103,6 +106,8 @@ print(f"tokens per iteration will be: {tokens_per_iter:,}")
 
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
+    if take_snapshots:
+        os.makedirs(os.path.join(out_dir, snapshot_dir), exist_ok=True)
 torch.manual_seed(1337 + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
@@ -252,6 +257,7 @@ t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
+last_saved = 0
 while True:
 
     # determine and set the learning rate for this iteration
@@ -284,6 +290,10 @@ while True:
                 }
                 print(f"saving checkpoint to {out_dir}")
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+        if (iter_num - last_saved) >= snapshot_interval and take_snapshots:
+            print(f"saving snapshot to {snapshot_dir}")
+            torch.save(checkpoint, os.path.join(out_dir, snapshot_dir, f"ckpt-{iter_num}-{losses['train']:.4f}-{losses['val']:.4f}.pt"))
+            last_saved = iter_num
     if iter_num == 0 and eval_only:
         break
 
