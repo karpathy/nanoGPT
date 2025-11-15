@@ -122,6 +122,7 @@ class GPT(nn.Module):
         assert config.vocab_size is not None
         assert config.block_size is not None
         self.config = config
+        self._mfu_warning_printed = False
 
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
@@ -286,7 +287,7 @@ class GPT(nn.Module):
 
         return optimizer
 
-    def estimate_mfu(self, fwdbwd_per_iter, dt):
+    def estimate_mfu(self, fwdbwd_per_iter, dt, dtype=None):
         """ estimate model flops utilization (MFU) in units of A100 bfloat16 peak FLOPS """
         # first estimate the number of flops we do per iteration.
         # see PaLM paper Appendix B as ref: https://arxiv.org/abs/2204.02311
@@ -296,11 +297,71 @@ class GPT(nn.Module):
         flops_per_token = 6*N + 12*L*H*Q*T
         flops_per_fwdbwd = flops_per_token * T
         flops_per_iter = flops_per_fwdbwd * fwdbwd_per_iter
-        # express our flops throughput as ratio of A100 bfloat16 peak flops
+        # express our flops throughput as ratio of peak flops
         flops_achieved = flops_per_iter * (1.0/dt) # per second
-        flops_promised = 312e12 # A100 GPU bfloat16 peak flops is 312 TFLOPS
+        flops_promised = self.expected_flops(dtype=dtype)
         mfu = flops_achieved / flops_promised
         return mfu
+
+
+    def expected_flops(self, dtype=None):
+        if dtype is None:                       # default to model param dtype
+            dtype = self.transformer.wte.weight.dtype
+        
+        if isinstance(dtype, str):              # user passed a string
+            dtype_key = {"float16":  "fp16",
+                         "bfloat16": "bf16",
+                         "float32":  "fp32",
+                         "tf32":     "tf32"}.get(dtype.lower(), "fp32")
+        else:                                   # torch.dtype from model param dtype
+            dtype_key = {torch.float16:  "fp16",
+                         torch.bfloat16: "bf16",
+                         torch.float32:  "fp32"}.get(dtype, "fp32")
+        
+        # If TF32 kernels are enabled treat float32 as tf32 on Ampere+ parts
+        if (dtype_key == "fp32"
+                and torch.backends.cuda.matmul.allow_tf32
+                and torch.cuda.is_available()):
+            dtype_key = "tf32"
+
+        dev_name = torch.cuda.get_device_name(0).lower() if torch.cuda.is_available() else "cpu"
+
+        PEAK = {
+            #  key-substring          bf16   fp16   tf32   fp32
+            "gb200":  dict(bf16=2500, fp16=2500, tf32=1250),
+            "b200":   dict(bf16=2250, fp16=2250, tf32=1125),
+            "h200":   dict(bf16=989,  fp16=989,  tf32=494.5, fp32=67),
+            "h100":   dict(bf16=989,  fp16=989,  tf32=494.5, fp32=67),
+            "gh200":  dict(bf16=989,  fp16=989,  tf32=494.5, fp32=67),
+            "a100":   dict(bf16=312,  fp16=312,  tf32=156,   fp32=19.5),
+            "l40s":   dict(bf16=362,  fp16=362,  tf32=183,   fp32=91.6),
+            "mi555x": dict(bf16=2300, fp16=2300),
+            "mi325x": dict(bf16=1300, fp16=1300),
+            "mi300x": dict(bf16=1300, fp16=1300),
+            "mi250x": dict(bf16=383,  fp16=383,  fp32=47.9),
+            "mi250":  dict(bf16=362,  fp16=362,  fp32=45.3),
+            "gaudi3": dict(bf16=1677, fp16=459,  fp32=229),
+            "gaudi2": dict(bf16=432),
+        }
+
+        peak_tf  = None
+        for key, d in PEAK.items():
+            if key in dev_name and dtype_key in d:
+                peak_tf = d[dtype_key]
+                break
+        if peak_tf is None:
+            peak_tf = 312   # default to A100 bf16
+
+            # Only rank-0 prints (because master_process calls estimate_mfu), and only once total.
+            if self._mfu_warning_printed:
+                print(f"[MFU] WARNING: unknown accelerator/dtype combo "
+                      f"('{dev_name}', '{dtype_key}'); "
+                      f"falling back to {peak_tf} A100 bf16 TFLOPs.")
+                self._mfu_warning_printed = True
+        
+        return peak_tf * 1e12
+
+
 
     @torch.no_grad()
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
