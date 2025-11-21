@@ -72,6 +72,7 @@ backend = 'nccl' # 'nccl', 'gloo', etc.
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
+force = False # set to True to overwrite existing checkpoint
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
@@ -147,6 +148,13 @@ if os.path.exists(meta_path):
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
                   bias=bias, vocab_size=None, dropout=dropout) # start with model_args from command line
 if init_from == 'scratch':
+    # check to make sure checkpoint does not exist unless force flag set
+    ckpt_path = os.path.join(out_dir, 'ckpt.pt')
+    if os.path.exists(ckpt_path) and not force:
+        ans = input("WARNING: Existing checkpoint found, overwrite? (y/N)")
+        if ans.lower()[:1] != "y":
+            print("\nTo resume training use --init_from=resume")
+            exit()
     # init a new model from scratch
     print("Initializing a new model from scratch")
     # determine the vocab size we'll use for from-scratch training
