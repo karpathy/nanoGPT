@@ -10,10 +10,14 @@ https://github.com/huggingface/transformers/blob/main/src/transformers/models/gp
 import math
 import inspect
 from dataclasses import dataclass
+import os
+import pickle
 
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+
+from tokenizer import TiktokenTokenizer, DictBasedTokenizer
 
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
@@ -260,6 +264,44 @@ class GPT(nn.Module):
 
         return model
 
+    @classmethod
+    def init_from(self, init_from, out_dir=None, device=None):
+        if init_from == 'resume':
+            # init from a model saved in a specific directory
+            ckpt_path = os.path.join(out_dir, 'ckpt.pt')
+            checkpoint = torch.load(ckpt_path, map_location=device)
+            gptconf = GPTConfig(**checkpoint['model_args'])
+            model = GPT(gptconf)
+            state_dict = checkpoint['model']
+            unwanted_prefix = '_orig_mod.'
+            for k, v in list(state_dict.items()):
+                if k.startswith(unwanted_prefix):
+                    state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+            model.load_state_dict(state_dict)
+        elif init_from.startswith('gpt2'):
+            # init from a given GPT-2 model
+            model = GPT.from_pretrained(init_from, dict(dropout=0.0))
+        else:
+            raise ValueError(f"Unknown value of init_from: {init_from}")
+
+        # look for the meta pickle in case it is available in the dataset folder
+        load_meta = False
+        if init_from == 'resume' and 'config' in checkpoint and 'dataset' in checkpoint[
+            'config']:  # older checkpoints might not have these...
+            meta_path = os.path.join('data', checkpoint['config']['dataset'], 'meta.pkl')
+            load_meta = os.path.exists(meta_path)
+        if load_meta:
+            print(f"Loading meta from {meta_path}...")
+            with open(meta_path, 'rb') as f:
+                meta = pickle.load(f)
+            tokenizer = DictBasedTokenizer(meta['stoi'], meta['itos'])
+        else:
+            # ok let's assume gpt-2 encodings by default
+            print("No meta.pkl found, assuming GPT-2 encodings...")
+            tokenizer = TiktokenTokenizer.gpt2_tokenizer()
+
+        return model, tokenizer
+
     def configure_optimizers(self, weight_decay, learning_rate, betas, device_type):
         # start with all of the candidate parameters
         param_dict = {pn: p for pn, p in self.named_parameters()}
@@ -303,7 +345,7 @@ class GPT(nn.Module):
         return mfu
 
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
+    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, eos_token=None):
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
@@ -326,5 +368,7 @@ class GPT(nn.Module):
             idx_next = torch.multinomial(probs, num_samples=1)
             # append sampled index to the running sequence and continue
             idx = torch.cat((idx, idx_next), dim=1)
+            if idx_next == eos_token:
+                break
 
         return idx
