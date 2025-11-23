@@ -10,7 +10,7 @@ So it's not a Python module, it's just shuttling this code away from train.py
 The code in this script then overrides the globals()
 
 I know people are not going to love this, I just really dislike configuration
-complexity and having to prepend config. to every single variable. If someone
+complexity and having to prepend config to every single variable. If someone
 comes up with a better simple Python solution I am all ears.
 """
 
@@ -33,13 +33,18 @@ for arg in sys.argv[1:]:
         key = key[2:]
         if key in globals():
             try:
-                # attempt to eval it it (e.g. if bool, number, or etc)
+                # attempt to eval it (e.g. if bool, number, or etc)
                 attempt = literal_eval(val)
             except (SyntaxError, ValueError):
                 # if that goes wrong, just use the string
                 attempt = val
-            # ensure the types match ok
-            assert type(attempt) == type(globals()[key])
+            # ensure the types match ok (if overridable and overriding values are not None)
+            if globals()[key] and attempt:
+                overridable_type = type(globals()[key])
+                overriding_type = type(attempt)
+                assert overridable_type == overriding_type, \
+                    f"'{key}' mismatch: {overridable_type} is expected, but {overriding_type} was provided"
+
             # cross fingers
             print(f"Overriding: {key} = {attempt}")
             globals()[key] = attempt
