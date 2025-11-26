@@ -49,23 +49,88 @@ class CausalSelfAttention(nn.Module):
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
 
-    def forward(self, x):
+        # -- KV Cache attr --
+        # batch_size = config.batch_size if config.batch_size else None
+        self.register_buffer("k_cache", None)
+        self.register_buffer("v_cache", None)
+        self.cache_pos = 0 # Tracks the number of tokens currently stored in the cache for the *current* sequence
+        # self.cache_batch_size = batch_size # batch size for the cache
+        self.config = config
+
+    def clear_cache(self):
+        """clears the kv cache, resets attributes"""
+        self.k_cache = None
+        self.v_cache = None
+        self.cache_pos = 0
+        self.cache_batch_size = 0
+
+
+    def forward(self, x, use_cache=False):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+        head_size = C // self.n_head
+        device = x.device
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
-        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        qkv = self.c_attn(x)
+        q, k, v  = qkv.split(self.n_embd, dim=2)
+        # print(k.size(), v.size(), "This is k and v initially")
+        k = k.view(B, T, self.n_head, head_size).transpose(1, 2) # (B, nh, T, hs)
+        q = q.view(B, T, self.n_head, head_size).transpose(1, 2) # (B, nh, T, hs)
+        v = v.view(B, T, self.n_head, head_size).transpose(1, 2) # (B, nh, T, hs)
 
+        ## KV caching
+
+        if use_cache:
+            if self.cache_pos == 0 or self.k_cache is None:
+                self.k_cache = torch.zeros(B, self.n_head, self.config.block_size, head_size, dtype=k.dtype, device=device)
+                self.v_cache = torch.zeros(B, self.n_head, self.config.block_size, head_size, dtype=v.dtype, device=device)
+                self.cache_pos = 0
+                self.cache_batch_size = B
+            
+            # if T != 1:
+            #     print(self.cache_pos, self.config.block_size, T, " This is T")
+            # if exceed capacity:
+            if self.cache_pos + T >= self.config.block_size:
+                
+                # Truncation, loose oldest tokens
+                print(f"Warning: KV cache overflow imminent (pos={self.cache_pos}, new_T={T}, size={self.config.block_size}). Truncating cache.")
+                self.k_cache = self.k_cache[:, :, T:, :] # shift left
+                self.v_cache = self.v_cache[:, :, T:, :] # shift left
+                self.cache_pos -= T
+                # this shouldn't be needed really, with proper generation code of sequence len T
+                self.cache_pos = max(0, self.cache_pos)
+                # add 0s in the end
+                self.k_cache = torch.cat((self.k_cache, torch.zeros((B, self.n_head, T, head_size), dtype=k.dtype, device=device)), dim=2)
+                self.v_cache = torch.cat((self.v_cache, torch.zeros((B, self.n_head, T, head_size), dtype=v.dtype, device=device)), dim=2)
+            
+            # add new tokens to the cache
+            self.k_cache[:, :, self.cache_pos:self.cache_pos + T, :] = k
+            self.v_cache[:, :, self.cache_pos:self.cache_pos + T, :] = v
+            self.cache_pos += T
+
+            # retrieve full k v sequences
+            k = self.k_cache[:, :, :self.cache_pos, :]
+            v = self.v_cache[:, :, :self.cache_pos, :]
+            # print(k.size(), v.size(), "This is k and v")
+
+        # end k v cache logic
+        # print(k.size(), v.size(), "This is k and v after cache")
+        
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
             # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
+            is_causal_flag = (T > 1 and not use_cache) # Only apply causal mask if T>1 and not using cache
+            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=is_causal_flag)
+
         else:
             # manual implementation of attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+            # Apply causal mask only if not using cache (cache implicitly handles causality for T=1 generation)
+            # Or if T > 1 even when caching (though typically T=1 for cached generation steps)
+            if not use_cache or T > 1:
+                current_k_len = k.size(-2)
+                att = att.masked_fill(self.bias[:,:,:T,:current_k_len] == 0, float('-inf'))
+
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
             y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
@@ -100,11 +165,14 @@ class Block(nn.Module):
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
-    def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
+    def forward(self, x, use_cache=False):
+        x = x + self.attn(self.ln_1(x), use_cache=use_cache)
         x = x + self.mlp(self.ln_2(x))
         return x
-
+    
+    def clear_cache(self):
+        """clears the kv cache, resets attributes"""
+        self.attn.clear_cache()
 @dataclass
 class GPTConfig:
     block_size: int = 1024
@@ -167,18 +235,30 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None):
+    def forward(self, idx, targets=None, use_cache=False):
         device = idx.device
         b, t = idx.size()
+
+        # update positional embeddings when using cache
+        if use_cache:
+            pos_start = self.transformer.h[0].attn.cache_pos
+        else:
+            pos_start = 0
+        pos_end = min(pos_start + t, self.config.block_size)
+
+        # handle cases when cahce is full or generation exceeds block size
+        # TODO
+
+        pos = torch.arange(pos_start, pos_end, dtype=torch.long, device=device) # shape (t)
+
         assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
-        pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
 
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
         for block in self.transformer.h:
-            x = block(x)
+            x = block(x, use_cache=use_cache)
         x = self.transformer.ln_f(x)
 
         if targets is not None:
@@ -232,7 +312,7 @@ class GPT(nn.Module):
         model = GPT(config)
         sd = model.state_dict()
         sd_keys = sd.keys()
-        sd_keys = [k for k in sd_keys if not k.endswith('.attn.bias')] # discard this mask / buffer, not a param
+        sd_keys = [k for k in sd_keys if not k.endswith('.attn.bias') and not k.endswith('_cache') and not k.endswith('cache_pos')] # discard this mask / buffer, not a param
 
         # init a huggingface/transformers model
         model_hf = GPT2LMHeadModel.from_pretrained(model_type)
@@ -303,17 +383,30 @@ class GPT(nn.Module):
         return mfu
 
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
+    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, use_cache=False):
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
         Most likely you'll want to make sure to be in model.eval() mode of operation for this.
         """
+        self.eval()
+
+        for block in self.transformer.h:
+            block.attn.clear_cache() # clear the cache for each block
+
+        idx_next = idx
         for _ in range(max_new_tokens):
+            
+            # use next token only if using kv caching
+            idx_cond = idx_next if use_cache else idx
+            
             # if the sequence context is growing too long we must crop it at block_size
-            idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
+            if idx_cond.size(1) > self.config.block_size:
+                # crop the leftmost tokens
+                idx_cond = idx_cond[:, -self.config.block_size:]
             # forward the model to get the logits for the index in the sequence
-            logits, _ = self(idx_cond)
+            logits, _ = self(idx_cond, use_cache=use_cache)
+
             # pluck the logits at the final step and scale by desired temperature
             logits = logits[:, -1, :] / temperature
             # optionally crop the logits to only the top k options
