@@ -40,6 +40,12 @@ for arg in sys.argv[1:]:
                 attempt = val
             # ensure the types match ok
             assert type(attempt) == type(globals()[key])
+            # Validate path parameters to prevent directory traversal attacks
+            if key == 'out_dir' and isinstance(attempt, str):
+                # Reject paths with directory traversal sequences (..)
+                assert '..' not in attempt, f"Path traversal detected: {attempt}"
+                # Reject absolute paths (starting with /)
+                assert not attempt.startswith('/'), f"Absolute paths not allowed: {attempt}"
             # cross fingers
             print(f"Overriding: {key} = {attempt}")
             globals()[key] = attempt
