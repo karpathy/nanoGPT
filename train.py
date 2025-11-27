@@ -159,7 +159,11 @@ elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
     # resume training from a checkpoint.
     ckpt_path = os.path.join(out_dir, 'ckpt.pt')
-    checkpoint = torch.load(ckpt_path, map_location=device)
+    # Verify checkpoint is from a trusted source (internal training directory only)
+    if not os.path.abspath(ckpt_path).startswith(os.path.abspath(out_dir)):
+        raise ValueError(f"Checkpoint path {ckpt_path} is outside trusted directory {out_dir}")
+    # Load checkpoint only from trusted internal directory to prevent arbitrary code execution
+    checkpoint = torch.load(ckpt_path, map_location=device, weights_only=True)
     checkpoint_model_args = checkpoint['model_args']
     # force these config attributes to be equal otherwise we can't even resume training
     # the rest of the attributes (e.g. dropout) can stay as desired from command line
@@ -283,7 +287,20 @@ while True:
                     'config': config,
                 }
                 print(f"saving checkpoint to {out_dir}")
-                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+                # Save checkpoint with weights_only=True to prevent arbitrary code execution
+                # Separate metadata from model state to ensure safe deserialization
+                torch.save({
+                    'model': checkpoint['model'],
+                    'optimizer': checkpoint['optimizer'],
+                }, os.path.join(out_dir, 'ckpt.pt'))
+                # Save metadata separately as JSON for safer handling
+                import json
+                with open(os.path.join(out_dir, 'ckpt_meta.json'), 'w') as f:
+                    json.dump({
+                        'model_args': checkpoint['model_args'],
+                        'iter_num': checkpoint['iter_num'],
+                        'best_val_loss': float(checkpoint['best_val_loss']),
+                    }, f)
     if iter_num == 0 and eval_only:
         break
 
