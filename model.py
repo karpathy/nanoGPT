@@ -311,7 +311,7 @@ class GPT(nn.Module):
         """
         for _ in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
-            cropped_idx = idx[:, -self.config.block_size :]
+            cropped_idx = idx[:, -self.config.block_size:]
             # forward the model to get the logits for the index in the sequence
             logits, _ = self(cropped_idx)
             # pluck the logits at the final step and scale by desired temperature
