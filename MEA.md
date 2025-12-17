@@ -58,12 +58,11 @@ Attention-only benchmark (`B=1, nh=12, hs=64, dtype=bf16, chunk=4096`):
 
 | T | SDPA (fwd+bwd) | MEA (fwd+bwd) | Speedup |
 |---:|---:|---:|---:|
-| 65,536  | 140 ms | 443 ms | 0.32× |
-| 131,072 | 540 ms | 914 ms | 0.59× |
+| 65,536  | 141 ms | 443 ms | 0.32× |
+| 131,072 | 538 ms | 913 ms | 0.59× |
 | 262,144 | 2159 ms | 1929 ms | **1.12×** |
 
 If you need MEA to be compelling at smaller `T`, the next steps are typically:
 
 - A fused kernel (e.g. Triton) to avoid Python-level overhead.
 - A custom backward / checkpointing strategy to reduce training-time saved-tensor memory.
-
