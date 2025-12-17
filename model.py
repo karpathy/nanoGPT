@@ -15,6 +15,65 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+def mea_attention(q, k, v, *, order=2, chunk_size=64, fp32_accum=True):
+    """
+    Matrix Exponential Attention (MEA) via truncated Taylor series up to `order`.
+    Implements the causal (strictly lower-triangular) version without materializing
+    the (T,T) attention matrix, using a chunked streaming scan.
+
+    Expects q,k,v of shape (B, nh, T, hs). Returns y of same shape as v.
+    Currently supports order in {0,1,2}.
+    """
+    if order not in (0, 1, 2):
+        raise NotImplementedError(f"MEA currently supports order in {{0,1,2}}, got {order}")
+    if chunk_size <= 0:
+        raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
+
+    if order == 0:
+        return v
+
+    B, nh, T, hs = q.shape
+    y = torch.empty_like(v)
+
+    acc_dtype = torch.float32 if fp32_accum else q.dtype
+    P = torch.zeros((B, nh, hs, hs), device=q.device, dtype=acc_dtype)
+    if order == 2:
+        E = torch.zeros((B, nh, hs, hs), device=q.device, dtype=acc_dtype)
+    else:
+        E = None
+
+    q_acc = q.to(acc_dtype)
+    k_acc = k.to(acc_dtype)
+    v_acc = v.to(acc_dtype)
+
+    for start in range(0, T, chunk_size):
+        end = min(start + chunk_size, T)
+        q_c = q_acc[:, :, start:end, :]  # (B, nh, L, hs)
+        k_c = k_acc[:, :, start:end, :]
+        v_c = v_acc[:, :, start:end, :]
+
+        kv = k_c.unsqueeze(-1) * v_c.unsqueeze(-2)  # (B, nh, L, hs, hs)
+        P_c = kv.cumsum(dim=2) + P.unsqueeze(2)      # (B, nh, L, hs, hs)
+        s_c = (q_c.unsqueeze(-2) @ P_c).squeeze(-2)  # (B, nh, L, hs)
+
+        if order == 1:
+            y_c = v_c + s_c
+            P = P_c[:, :, -1]
+            y[:, :, start:end, :] = y_c.to(dtype=v.dtype)
+            continue
+
+        ks = k_c.unsqueeze(-1) * s_c.unsqueeze(-2)   # (B, nh, L, hs, hs)
+        E_c = ks.cumsum(dim=2) + E.unsqueeze(2)      # (B, nh, L, hs, hs)
+        o2_c = (q_c.unsqueeze(-2) @ E_c).squeeze(-2) # (B, nh, L, hs)
+
+        y_c = v_c + s_c + 0.5 * o2_c
+        y[:, :, start:end, :] = y_c.to(dtype=v.dtype)
+
+        P = P_c[:, :, -1]
+        E = E_c[:, :, -1]
+
+    return y
+
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
 
@@ -75,6 +134,54 @@ class CausalSelfAttention(nn.Module):
         y = self.resid_dropout(self.c_proj(y))
         return y
 
+class MEASelfAttention(nn.Module):
+
+    def __init__(self, config):
+        super().__init__()
+        assert config.n_embd % config.n_head == 0
+        if config.mea_order not in (0, 1, 2):
+            raise ValueError(f"config.mea_order must be in {{0,1,2}}, got {config.mea_order}")
+        if config.mea_chunk_size <= 0:
+            raise ValueError(f"config.mea_chunk_size must be >= 1, got {config.mea_chunk_size}")
+
+        # key, query, value projections for all heads, but in a batch
+        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+        # output projection
+        self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        # regularization
+        self.attn_dropout = nn.Dropout(config.dropout)
+        self.resid_dropout = nn.Dropout(config.dropout)
+        self.n_head = config.n_head
+        self.n_embd = config.n_embd
+        self.dropout = config.dropout
+
+        self.mea_order = config.mea_order
+        self.mea_chunk_size = config.mea_chunk_size
+        self.mea_scale = config.mea_scale
+        self.mea_fp32_accum = config.mea_fp32_accum
+
+    def forward(self, x):
+        B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+
+        q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
+        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+
+        if self.mea_scale:
+            q = q * (1.0 / math.sqrt(k.size(-1)))
+
+        y = mea_attention(
+            q, k, v,
+            order=self.mea_order,
+            chunk_size=self.mea_chunk_size,
+            fp32_accum=self.mea_fp32_accum,
+        )
+        y = self.attn_dropout(y)
+        y = y.transpose(1, 2).contiguous().view(B, T, C)
+        y = self.resid_dropout(self.c_proj(y))
+        return y
+
 class MLP(nn.Module):
 
     def __init__(self, config):
@@ -96,7 +203,12 @@ class Block(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
-        self.attn = CausalSelfAttention(config)
+        if config.attn_type == 'softmax':
+            self.attn = CausalSelfAttention(config)
+        elif config.attn_type == 'mea':
+            self.attn = MEASelfAttention(config)
+        else:
+            raise ValueError(f"unknown attn_type {config.attn_type!r} (expected 'softmax' or 'mea')")
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
@@ -114,6 +226,11 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    attn_type: str = 'softmax' # 'softmax' (standard) or 'mea' (Matrix Exponential Attention)
+    mea_order: int = 2         # Taylor truncation order H (currently supports 0,1,2)
+    mea_chunk_size: int = 64   # chunk length for the streaming scan (trade memory vs speed)
+    mea_scale: bool = True     # apply 1/sqrt(head_dim) scaling to Q like standard attention
+    mea_fp32_accum: bool = True # accumulate streaming states in fp32 for stability
 
 class GPT(nn.Module):
 
