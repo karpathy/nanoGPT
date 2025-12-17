@@ -43,15 +43,15 @@ def main():
 
     for order in (0, 1, 2):
         y_ref = mea_reference(q, k, v, order=order)
-        for chunk_size in (1, 4, 16):
-            y = mea_attention(q, k, v, order=order, chunk_size=chunk_size, fp32_accum=True)
-            max_err = (y - y_ref).abs().max().item()
-            print(f"order={order} chunk={chunk_size} max_err={max_err:.3e}")
-            assert torch.allclose(y, y_ref, atol=1e-5, rtol=1e-5)
+        for impl in ("block", "scan"):
+            for chunk_size in (1, 4, 16):
+                y = mea_attention(q, k, v, order=order, impl=impl, chunk_size=chunk_size, fp32_accum=True)
+                max_err = (y - y_ref).abs().max().item()
+                print(f"impl={impl} order={order} chunk={chunk_size} max_err={max_err:.3e}")
+                assert torch.allclose(y, y_ref, atol=1e-5, rtol=1e-5)
 
     print("OK")
 
 
 if __name__ == "__main__":
     main()
-

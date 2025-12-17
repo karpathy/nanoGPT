@@ -56,7 +56,8 @@ dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
 bias = False # do we use bias inside LayerNorm and Linear layers?
 attn_type = 'softmax' # 'softmax' or 'mea'
 mea_order = 2
-mea_chunk_size = 64
+mea_impl = 'block' # 'block' or 'scan'
+mea_chunk_size = 256
 mea_scale = True
 mea_fp32_accum = True
 # adamw optimizer
@@ -151,7 +152,7 @@ if os.path.exists(meta_path):
 # model init
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
                   bias=bias, vocab_size=None, dropout=dropout,
-                  attn_type=attn_type, mea_order=mea_order, mea_chunk_size=mea_chunk_size,
+                  attn_type=attn_type, mea_order=mea_order, mea_impl=mea_impl, mea_chunk_size=mea_chunk_size,
                   mea_scale=mea_scale, mea_fp32_accum=mea_fp32_accum) # start with model_args from command line
 if init_from == 'scratch':
     # init a new model from scratch
@@ -171,7 +172,7 @@ elif init_from == 'resume':
     # force these config attributes to be equal otherwise we can't even resume training
     # the rest of the attributes (e.g. dropout) can stay as desired from command line
     for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size',
-              'attn_type', 'mea_order', 'mea_chunk_size', 'mea_scale', 'mea_fp32_accum']:
+              'attn_type', 'mea_order', 'mea_impl', 'mea_chunk_size', 'mea_scale', 'mea_fp32_accum']:
         if k in checkpoint_model_args:
             model_args[k] = checkpoint_model_args[k]
     # create the model
@@ -194,7 +195,7 @@ elif init_from.startswith('gpt2'):
     model = GPT.from_pretrained(init_from, override_args)
     # read off the created config params, so we can store them into checkpoint correctly
     for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size',
-              'attn_type', 'mea_order', 'mea_chunk_size', 'mea_scale', 'mea_fp32_accum']:
+              'attn_type', 'mea_order', 'mea_impl', 'mea_chunk_size', 'mea_scale', 'mea_fp32_accum']:
         model_args[k] = getattr(model.config, k)
 # crop down the model block size if desired, using model surgery
 if block_size < model.config.block_size:

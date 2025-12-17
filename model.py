@@ -15,7 +15,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-def mea_attention(q, k, v, *, order=2, chunk_size=64, fp32_accum=True):
+def mea_attention_scan(q, k, v, *, order=2, chunk_size=64, fp32_accum=True):
     """
     Matrix Exponential Attention (MEA) via truncated Taylor series up to `order`.
     Implements the causal (strictly lower-triangular) version without materializing
@@ -73,6 +73,77 @@ def mea_attention(q, k, v, *, order=2, chunk_size=64, fp32_accum=True):
         E = E_c[:, :, -1]
 
     return y
+
+def mea_attention_block(q, k, v, *, order=2, chunk_size=256, fp32_accum=True):
+    """
+    Blockwise MEA (order<=2): exact causal computation that only materializes
+    (chunk_size, chunk_size) local score blocks A = Q K^T per chunk.
+
+    This is still a reference implementation, but tends to be friendlier to
+    autograd (vs storing per-token prefix states).
+
+    Expects q,k,v of shape (B, nh, T, hs). Returns y of same shape as v.
+    Currently supports order in {0,1,2}.
+    """
+    if order not in (0, 1, 2):
+        raise NotImplementedError(f"MEA currently supports order in {{0,1,2}}, got {order}")
+    if chunk_size <= 0:
+        raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
+    if order == 0:
+        return v
+
+    B, nh, T, hs = q.shape
+    dv = v.shape[-1]
+    if dv != hs:
+        raise NotImplementedError("nanogpt MEA currently assumes value dim == head dim")
+
+    acc_dtype = torch.float32 if fp32_accum else q.dtype
+    q_acc = q.to(acc_dtype)
+    k_acc = k.to(acc_dtype)
+    v_acc = v.to(acc_dtype)
+
+    y_acc = torch.empty_like(v_acc)
+    P = torch.zeros((B, nh, hs, dv), device=q.device, dtype=acc_dtype)
+    E = torch.zeros_like(P) if order == 2 else None
+
+    for start in range(0, T, chunk_size):
+        end = min(start + chunk_size, T)
+        q_b = q_acc[:, :, start:end, :]  # (B, nh, L, d)
+        k_b = k_acc[:, :, start:end, :]
+        v_b = v_acc[:, :, start:end, :]
+
+        A = torch.matmul(q_b, k_b.transpose(-2, -1)).tril()  # (B, nh, L, L)
+
+        # order 1: y1_t = q_t^T P_t^{KV}
+        y1 = torch.matmul(q_b, P) + torch.matmul(A, v_b)
+        if order == 1:
+            y_acc[:, :, start:end, :] = v_b + y1
+            P = P + torch.einsum('bhld,bhlv->bhdv', k_b, v_b)
+            continue
+
+        # order 2: y2_t = q_t^T E_t, with E_t = sum_{i<=t} k_i (q_i^T P_i)
+        alpha = y1
+        y2 = torch.matmul(q_b, E) + torch.matmul(A, alpha)
+        y_acc[:, :, start:end, :] = v_b + y1 + 0.5 * y2
+
+        P = P + torch.einsum('bhld,bhlv->bhdv', k_b, v_b)
+        E = E + torch.einsum('bhld,bhlv->bhdv', k_b, alpha)
+
+    return y_acc.to(dtype=v.dtype)
+
+def mea_attention(q, k, v, *, order=2, chunk_size=256, fp32_accum=True, impl='block'):
+    """
+    MEA wrapper that selects between implementations.
+
+    impl:
+      - 'block': blockwise exact causal MEA (materializes chunk×chunk A blocks)
+      - 'scan' : streaming scan that keeps per-token prefix states within chunk
+    """
+    if impl == 'block':
+        return mea_attention_block(q, k, v, order=order, chunk_size=chunk_size, fp32_accum=fp32_accum)
+    if impl == 'scan':
+        return mea_attention_scan(q, k, v, order=order, chunk_size=chunk_size, fp32_accum=fp32_accum)
+    raise ValueError(f"unknown MEA impl {impl!r} (expected 'block' or 'scan')")
 
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
@@ -141,6 +212,8 @@ class MEASelfAttention(nn.Module):
         assert config.n_embd % config.n_head == 0
         if config.mea_order not in (0, 1, 2):
             raise ValueError(f"config.mea_order must be in {{0,1,2}}, got {config.mea_order}")
+        if config.mea_impl not in ('block', 'scan'):
+            raise ValueError(f"config.mea_impl must be 'block' or 'scan', got {config.mea_impl!r}")
         if config.mea_chunk_size <= 0:
             raise ValueError(f"config.mea_chunk_size must be >= 1, got {config.mea_chunk_size}")
 
@@ -156,6 +229,7 @@ class MEASelfAttention(nn.Module):
         self.dropout = config.dropout
 
         self.mea_order = config.mea_order
+        self.mea_impl = config.mea_impl
         self.mea_chunk_size = config.mea_chunk_size
         self.mea_scale = config.mea_scale
         self.mea_fp32_accum = config.mea_fp32_accum
@@ -174,6 +248,7 @@ class MEASelfAttention(nn.Module):
         y = mea_attention(
             q, k, v,
             order=self.mea_order,
+            impl=self.mea_impl,
             chunk_size=self.mea_chunk_size,
             fp32_accum=self.mea_fp32_accum,
         )
@@ -228,7 +303,8 @@ class GPTConfig:
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
     attn_type: str = 'softmax' # 'softmax' (standard) or 'mea' (Matrix Exponential Attention)
     mea_order: int = 2         # Taylor truncation order H (currently supports 0,1,2)
-    mea_chunk_size: int = 64   # chunk length for the streaming scan (trade memory vs speed)
+    mea_impl: str = 'block'    # 'block' (local chunk matmuls) or 'scan' (streaming scan)
+    mea_chunk_size: int = 256  # chunk length (trade memory vs speed)
     mea_scale: bool = True     # apply 1/sqrt(head_dim) scaling to Q like standard attention
     mea_fp32_accum: bool = True # accumulate streaming states in fp32 for stability
 
