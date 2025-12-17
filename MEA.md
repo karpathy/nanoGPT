@@ -51,6 +51,7 @@ This implementation is intended as a **baseline integration** that is easy to re
 
 - For typical context sizes (e.g. `T <= 16k`), PyTorch SDPA/FlashAttention is usually much faster.
 - MEA’s scaling advantage can show up at **very long sequence lengths**, but *only once you are far enough out* that quadratic attention is costly.
+- Note: because this is a pure PyTorch scan, **training-time** memory can still grow with `T` due to autograd retaining intermediates; a custom backward or checkpointing is needed for true linear-memory training.
 
 ### Example results (single A100-SXM4-80GB, PyTorch 2.9.1+cu128)
 
