@@ -82,6 +82,14 @@ Attention-only benchmark (`B=1, nh=12, hs=64, dtype=bf16, impl=block, order=2, f
 | 524,288 | 8597 ms | 1413 ms | **6.08×** |
 | 1,048,576 | 34,486 ms | 4931 ms | **6.99×** |
 
+Forward-only can be even more favorable (especially for ultra-long-context inference):
+
+| T | SDPA (fwd) | MEA (fwd) | Speedup |
+|---:|---:|---:|---:|
+| 262,144 | 586 ms | 78.7 ms | **7.44×** |
+| 524,288 | 2390 ms | 157 ms | **15.24×** |
+| 1,048,576 | 9716 ms | 322 ms | **30.21×** |
+
 If you need MEA to be compelling at smaller `T`, the next steps are typically:
 
 - Further kernel tuning (or a more FlashAttention-like backward).
