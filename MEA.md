@@ -57,6 +57,17 @@ python mea_sweep_attn.py --Ts=8192,16384,32768,65536,131072,262144 --mode=fwd_bw
 python mea_sweep_attn.py --Ts=262144,524288,1048576 --mode=fwd --dtype=bf16 --impl=block --kernel=triton --chunk=4096 --iters=1 --warmup=1
 ```
 
+### Decode-time benchmark (KV-cache vs stateful MEA)
+
+This measures *decode-only* throughput/latency for `q_len=1` generation, comparing:
+
+- SDPA (FlashAttention) with a growing KV cache (`O(T)` per token)
+- MEA with constant-size recurrent state `P/E` (`O(1)` per token)
+
+```bash
+python mea_decode_bench.py --Ts=8192,16384,32768,65536,131072,262144,524288,1048576,2097152 --decode=128 --dtype=bf16 --order=2 --fp32_state=0 --iters=3 --warmup=1
+```
+
 ### End-to-end training smoke (tiny GPT, long context)
 
 This script times a single optimizer step while computing loss only on the final position logits (the forward pass still runs the full sequence):
@@ -83,6 +94,8 @@ Plots (generated from `plots/data/*.json` via `plots/plot_mea_results.py`):
 ![MEA vs SDPA attention scaling](plots/mea_attention_scaling.png)
 
 ![End-to-end long-context step scaling](plots/mea_train_smoke_scaling.png)
+
+![Decode-time scaling (KV-cache vs stateful MEA)](plots/mea_decode_scaling.png)
 
 **Torch kernel** (`kernel=torch, chunk=2048`):
 

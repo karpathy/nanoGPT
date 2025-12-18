@@ -9,6 +9,7 @@ import math
 import torch
 
 from model import mea_attention
+from mea_state import mea_state_alloc, mea_state_prefill_, mea_state_step_
 
 
 def mea_reference(q, k, v, order):
@@ -49,6 +50,42 @@ def main():
                 max_err = (y - y_ref).abs().max().item()
                 print(f"impl={impl} order={order} chunk={chunk_size} max_err={max_err:.3e}")
                 assert torch.allclose(y, y_ref, atol=1e-5, rtol=1e-5)
+
+    # Stateful (decode-style) recurrence check: prefill a prefix, then decode step-by-step.
+    B3, nh3, T_ctx, T_dec, hs3 = 2, 3, 9, 7, 8
+    q3 = torch.randn(B3, nh3, T_ctx + T_dec, hs3, device=device, dtype=dtype) * (1.0 / math.sqrt(hs3))
+    k3 = torch.randn(B3, nh3, T_ctx + T_dec, hs3, device=device, dtype=dtype)
+    v3 = torch.randn(B3, nh3, T_ctx + T_dec, hs3, device=device, dtype=dtype)
+    for order in (0, 1, 2):
+        y_ref = mea_reference(q3, k3, v3, order=order)
+        state, acc_dtype = mea_state_alloc(
+            B=B3,
+            nh=nh3,
+            d=hs3,
+            dv=hs3,
+            device=device,
+            dtype=dtype,
+            order=order,
+            fp32_state=True,
+        )
+        q3_acc = q3.to(acc_dtype)
+        k3_acc = k3.to(acc_dtype)
+        v3_acc = v3.to(acc_dtype)
+        y_ctx = mea_state_prefill_(state, q=q3_acc[:, :, :T_ctx, :], k=k3_acc[:, :, :T_ctx, :], v=v3_acc[:, :, :T_ctx, :], order=order)
+        y_dec = []
+        for t in range(T_dec):
+            y_t = mea_state_step_(
+                state,
+                q=q3_acc[:, :, T_ctx + t, :],
+                k=k3_acc[:, :, T_ctx + t, :],
+                v=v3_acc[:, :, T_ctx + t, :],
+                order=order,
+            )
+            y_dec.append(y_t.unsqueeze(2))
+        y_stateful = torch.cat([y_ctx, torch.cat(y_dec, dim=2)], dim=2).to(dtype=dtype)
+        max_err = (y_stateful - y_ref).abs().max().item()
+        print(f"stateful order={order} max_err={max_err:.3e}")
+        assert torch.allclose(y_stateful, y_ref, atol=1e-5, rtol=1e-5)
 
     # Triton kernel sanity check (forward + backward) vs the torch block reference.
     if device == "cuda":

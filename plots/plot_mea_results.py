@@ -66,6 +66,14 @@ def main() -> None:
         _load_sweep_json(data_dir / "mea_fwd_bwd_small.json"),
         _load_sweep_json(data_dir / "mea_fwd_bwd_large.json"),
     )
+    decode_all = data_dir / "decode_all.json"
+    if decode_all.exists():
+        decode = _load_sweep_json(decode_all)
+    else:
+        decode = _merge_sweeps(
+            _load_sweep_json(data_dir / "decode_small.json"),
+            _load_sweep_json(data_dir / "decode_large.json"),
+        )
 
     train_softmax = {
         262_144: _load_train_json(data_dir / "train_softmax_262k.json"),
@@ -234,10 +242,71 @@ def main() -> None:
     out2 = out_dir / "mea_train_smoke_scaling.png"
     fig2.savefig(out2, bbox_inches="tight")
 
+    # ---- Figure 3: decode-time (KV-cache SDPA vs stateful MEA)
+    fig3, axes3 = plt.subplots(2, 2, figsize=(16, 10), constrained_layout=True)
+    ax_tok, ax_ms, ax_mem, ax_speed = axes3.flatten()
+
+    ax_tok.plot(decode["T"], decode["softmax_tok_s"], marker="o", lw=2.8, color=palette["SDPA"], label="SDPA / FlashAttention (KV-cache)")
+    ax_tok.plot(decode["T"], decode["mea_tok_s"], marker="o", lw=2.8, color=palette["MEA"], label="MEA (stateful P/E)")
+    ax_tok.set_xscale("log", base=2)
+    ax_tok.set_yscale("log")
+    ax_tok.set_title("Decode throughput")
+    ax_tok.set_ylabel("Tokens / second (log)")
+    ax_tok.set_xlabel("Context length T")
+    ax_tok.xaxis.set_major_formatter(FuncFormatter(_fmt_T))
+    ax_tok.legend(loc="upper right")
+
+    ax_ms.plot(decode["T"], decode["softmax_ms_per_tok"], marker="o", lw=2.8, color=palette["SDPA"], label="SDPA / FlashAttention (KV-cache)")
+    ax_ms.plot(decode["T"], decode["mea_ms_per_tok"], marker="o", lw=2.8, color=palette["MEA"], label="MEA (stateful P/E)")
+    ax_ms.set_xscale("log", base=2)
+    ax_ms.set_yscale("log")
+    ax_ms.set_title("Decode latency")
+    ax_ms.set_ylabel("Time per token (ms, log)")
+    ax_ms.set_xlabel("Context length T")
+    ax_ms.xaxis.set_major_formatter(FuncFormatter(_fmt_T))
+    ax_ms.yaxis.set_major_formatter(FuncFormatter(_fmt_ms))
+
+    ax_mem.plot(decode["T"], decode["softmax_kv_cache_mib"], marker="o", lw=2.8, color="#111827", label="Softmax KV cache (K+V)")
+    ax_mem.plot(decode["T"], decode["mea_state_mib"], marker="o", lw=2.8, color="#10b981", label="MEA state (P+E)")
+    ax_mem.set_xscale("log", base=2)
+    ax_mem.set_yscale("log")
+    ax_mem.set_title("Theoretical memory (per layer)")
+    ax_mem.set_ylabel("MiB (log)")
+    ax_mem.set_xlabel("Context length T")
+    ax_mem.xaxis.set_major_formatter(FuncFormatter(_fmt_T))
+    ax_mem.legend(loc="upper left")
+
+    ax_speed.plot(decode["T"], decode["speedup"], marker="o", lw=2.8, color="#f59e0b", label="Speedup (SDPA / MEA)")
+    ax_speed.set_xscale("log", base=2)
+    ax_speed.set_yscale("log")
+    ax_speed.set_title("Speedup")
+    ax_speed.set_ylabel("SDPA / MEA (log)")
+    ax_speed.set_xlabel("Context length T")
+    ax_speed.xaxis.set_major_formatter(FuncFormatter(_fmt_T))
+    ax_speed.axhline(1.0, color="#111827", lw=1.3, alpha=0.5)
+    ax_speed.axhline(10.0, color="#111827", lw=1.0, alpha=0.25, linestyle="--")
+    ax_speed.fill_between(decode["T"], 1.0, decode["speedup"], where=decode["speedup"] >= 1.0, color="#10b981", alpha=0.12)
+
+    # Annotate a couple of big points
+    for T_anno in (1_048_576, 2_097_152):
+        if T_anno in set(decode["T"]):
+            y = float(decode.loc[decode["T"] == T_anno, "speedup"].iloc[0])
+            _annotate(ax_speed, T_anno, f"{y:.1f}× @ {_fmt_T(T_anno)} (decode)", y)
+
+    fig3.suptitle(
+        "Decode-time scaling: KV-cache SDPA vs stateful MEA\n"
+        "(A100-80GB, bf16, B=1, nh=12, hs=64, MEA order=2; per-layer memory shown)",
+        fontsize=18,
+        fontweight="bold",
+    )
+
+    out3 = out_dir / "mea_decode_scaling.png"
+    fig3.savefig(out3, bbox_inches="tight")
+
     print(f"wrote {out1}")
     print(f"wrote {out2}")
+    print(f"wrote {out3}")
 
 
 if __name__ == "__main__":
     main()
-
