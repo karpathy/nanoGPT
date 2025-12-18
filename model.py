@@ -123,6 +123,9 @@ def mea_attention_block(q, k, v, *, order=2, chunk_size=256, fp32_accum=True, ke
         k_b = k_acc[:, :, start:end, :]
         v_b = v_acc[:, :, start:end, :]
 
+        is_first = start == 0
+        is_last = end == T
+
         if kernel == 'torch':
             A = torch.matmul(q_b, k_b.transpose(-2, -1)).tril()  # (B, nh, L, L)
             Av = torch.matmul(A, v_b)
@@ -130,10 +133,11 @@ def mea_attention_block(q, k, v, *, order=2, chunk_size=256, fp32_accum=True, ke
             Av = triton_trimatmul_autograd(q_b, k_b, v_b, causal=True)
 
         # order 1: y1_t = q_t^T P_t^{KV}
-        y1 = torch.matmul(q_b, P) + Av
+        y1 = Av if is_first else (torch.matmul(q_b, P) + Av)
         if order == 1:
             y_acc[:, :, start:end, :] = v_b + y1
-            P = P + torch.einsum('bhld,bhlv->bhdv', k_b, v_b)
+            if not is_last:
+                P = P + torch.matmul(k_b.transpose(-2, -1), v_b)
             continue
 
         # order 2: y2_t = q_t^T E_t, with E_t = sum_{i<=t} k_i (q_i^T P_i)
@@ -142,11 +146,12 @@ def mea_attention_block(q, k, v, *, order=2, chunk_size=256, fp32_accum=True, ke
             Aalpha = torch.matmul(A, alpha)
         else:
             Aalpha = triton_trimatmul_autograd(q_b, k_b, alpha, causal=True)
-        y2 = torch.matmul(q_b, E) + Aalpha
+        y2 = Aalpha if is_first else (torch.matmul(q_b, E) + Aalpha)
         y_acc[:, :, start:end, :] = v_b + y1 + 0.5 * y2
 
-        P = P + torch.einsum('bhld,bhlv->bhdv', k_b, v_b)
-        E = E + torch.einsum('bhld,bhlv->bhdv', k_b, alpha)
+        if not is_last:
+            P = P + torch.matmul(k_b.transpose(-2, -1), v_b)
+            E = E + torch.matmul(k_b.transpose(-2, -1), alpha)
 
     return y_acc.to(dtype=v.dtype)
 
