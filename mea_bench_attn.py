@@ -3,10 +3,10 @@ Attention-only benchmark: SDPA (FlashAttention) vs MEA (order<=2).
 
 Examples (A100):
   # forward-only
-  python mea_bench_attn.py --T=262144 --mode=fwd --dtype=bf16 --chunk=4096
+  python mea_bench_attn.py --T=262144 --mode=fwd --dtype=bf16 --impl=block --kernel=triton --chunk=4096
 
   # forward+backward
-  python mea_bench_attn.py --T=262144 --mode=fwd_bwd --dtype=bf16 --chunk=4096 --iters=1 --warmup=1
+  python mea_bench_attn.py --T=262144 --mode=fwd_bwd --dtype=bf16 --impl=block --kernel=triton --chunk=4096 --iters=1 --warmup=1
 """
 
 import argparse
@@ -76,6 +76,7 @@ def main():
     parser.add_argument("--chunk", type=int, default=4096)
     parser.add_argument("--order", type=int, default=2, choices=[0, 1, 2])
     parser.add_argument("--impl", type=str, default="block", choices=["block", "scan"])
+    parser.add_argument("--kernel", type=str, default="torch", choices=["torch", "triton"], help="for impl=block: use torch matmuls or Triton fused kernel")
     parser.add_argument("--fp32_accum", action="store_true", help="accumulate MEA states in fp32 (slower)")
     args = parser.parse_args()
 
@@ -105,7 +106,7 @@ def main():
         return y
 
     def mea_once():
-        y = mea_attention(q, k, v, order=args.order, impl=args.impl, chunk_size=args.chunk, fp32_accum=args.fp32_accum)
+        y = mea_attention(q, k, v, order=args.order, impl=args.impl, kernel=args.kernel, chunk_size=args.chunk, fp32_accum=args.fp32_accum)
         if require_grad:
             y.float().sum().backward()
             q.grad = None
@@ -119,7 +120,7 @@ def main():
 
     print(f"device={device} dtype={dtype} mode={args.mode} B={args.B} nh={args.nh} hs={args.hs} T={args.T}")
     print(f"sdpa: {ms_sdpa:8.2f} ms/iter | peak {mem_sdpa:8.0f} MiB")
-    print(f"mea : {ms_mea:8.2f} ms/iter | peak {mem_mea:8.0f} MiB | impl={args.impl} order={args.order} chunk={args.chunk} fp32_accum={args.fp32_accum}")
+    print(f"mea : {ms_mea:8.2f} ms/iter | peak {mem_mea:8.0f} MiB | impl={args.impl} kernel={args.kernel} order={args.order} chunk={args.chunk} fp32_accum={args.fp32_accum}")
     print(f"speedup: {ms_sdpa/ms_mea:6.2f}x")
 
 

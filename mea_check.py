@@ -50,6 +50,50 @@ def main():
                 print(f"impl={impl} order={order} chunk={chunk_size} max_err={max_err:.3e}")
                 assert torch.allclose(y, y_ref, atol=1e-5, rtol=1e-5)
 
+    # Triton kernel sanity check (forward + backward) vs the torch block reference.
+    if device == "cuda":
+        try:
+            import triton  # noqa: F401
+        except Exception:
+            triton = None
+
+        if triton is not None:
+            # Use a head dim compatible with the Triton kernel tiling.
+            B2, nh2, T2, hs2 = 2, 3, 32, 64
+            q0 = torch.randn(B2, nh2, T2, hs2, device=device, dtype=dtype) * (1.0 / math.sqrt(hs2))
+            k0 = torch.randn(B2, nh2, T2, hs2, device=device, dtype=dtype)
+            v0 = torch.randn(B2, nh2, T2, hs2, device=device, dtype=dtype)
+
+            for order in (1, 2):
+                for chunk_size in (4, 16):
+                    q2 = q0.clone().detach().requires_grad_(True)
+                    k2 = k0.clone().detach().requires_grad_(True)
+                    v2 = v0.clone().detach().requires_grad_(True)
+
+                    y_torch = mea_attention(q2, k2, v2, order=order, impl="block", kernel="torch", chunk_size=chunk_size, fp32_accum=True)
+                    loss = y_torch.float().sum()
+                    loss.backward()
+                    gq_t, gk_t, gv_t = q2.grad.detach().clone(), k2.grad.detach().clone(), v2.grad.detach().clone()
+
+                    q2.grad = None
+                    k2.grad = None
+                    v2.grad = None
+
+                    y_triton = mea_attention(q2, k2, v2, order=order, impl="block", kernel="triton", chunk_size=chunk_size, fp32_accum=True)
+                    loss = y_triton.float().sum()
+                    loss.backward()
+                    gq_r, gk_r, gv_r = q2.grad.detach().clone(), k2.grad.detach().clone(), v2.grad.detach().clone()
+
+                    y_err = (y_triton - y_torch).abs().max().item()
+                    gq_err = (gq_r - gq_t).abs().max().item()
+                    gk_err = (gk_r - gk_t).abs().max().item()
+                    gv_err = (gv_r - gv_t).abs().max().item()
+                    print(f"triton: order={order} chunk={chunk_size} y_err={y_err:.3e} gq_err={gq_err:.3e} gk_err={gk_err:.3e} gv_err={gv_err:.3e}")
+                    assert torch.allclose(y_triton, y_torch, atol=1e-5, rtol=1e-5)
+                    assert torch.allclose(gq_r, gq_t, atol=1e-4, rtol=1e-4)
+                    assert torch.allclose(gk_r, gk_t, atol=1e-4, rtol=1e-4)
+                    assert torch.allclose(gv_r, gv_t, atol=1e-4, rtol=1e-4)
+
     print("OK")
 
 

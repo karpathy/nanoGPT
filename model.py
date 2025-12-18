@@ -74,7 +74,7 @@ def mea_attention_scan(q, k, v, *, order=2, chunk_size=64, fp32_accum=True):
 
     return y
 
-def mea_attention_block(q, k, v, *, order=2, chunk_size=256, fp32_accum=True):
+def mea_attention_block(q, k, v, *, order=2, chunk_size=256, fp32_accum=True, kernel='torch'):
     """
     Blockwise MEA (order<=2): exact causal computation that only materializes
     (chunk_size, chunk_size) local score blocks A = Q K^T per chunk.
@@ -92,6 +92,9 @@ def mea_attention_block(q, k, v, *, order=2, chunk_size=256, fp32_accum=True):
     if order == 0:
         return v
 
+    if kernel not in ('torch', 'triton'):
+        raise ValueError(f"unknown MEA kernel {kernel!r} (expected 'torch' or 'triton')")
+
     B, nh, T, hs = q.shape
     dv = v.shape[-1]
     if dv != hs:
@@ -106,16 +109,28 @@ def mea_attention_block(q, k, v, *, order=2, chunk_size=256, fp32_accum=True):
     P = torch.zeros((B, nh, hs, dv), device=q.device, dtype=acc_dtype)
     E = torch.zeros_like(P) if order == 2 else None
 
+    if kernel == 'triton':
+        try:
+            from mea_triton import triton_trimatmul_autograd
+        except Exception as e:
+            raise RuntimeError("MEA kernel='triton' requested but Triton is unavailable") from e
+    else:
+        triton_trimatmul_autograd = None
+
     for start in range(0, T, chunk_size):
         end = min(start + chunk_size, T)
         q_b = q_acc[:, :, start:end, :]  # (B, nh, L, d)
         k_b = k_acc[:, :, start:end, :]
         v_b = v_acc[:, :, start:end, :]
 
-        A = torch.matmul(q_b, k_b.transpose(-2, -1)).tril()  # (B, nh, L, L)
+        if kernel == 'torch':
+            A = torch.matmul(q_b, k_b.transpose(-2, -1)).tril()  # (B, nh, L, L)
+            Av = torch.matmul(A, v_b)
+        else:
+            Av = triton_trimatmul_autograd(q_b, k_b, v_b, causal=True)
 
         # order 1: y1_t = q_t^T P_t^{KV}
-        y1 = torch.matmul(q_b, P) + torch.matmul(A, v_b)
+        y1 = torch.matmul(q_b, P) + Av
         if order == 1:
             y_acc[:, :, start:end, :] = v_b + y1
             P = P + torch.einsum('bhld,bhlv->bhdv', k_b, v_b)
@@ -123,7 +138,11 @@ def mea_attention_block(q, k, v, *, order=2, chunk_size=256, fp32_accum=True):
 
         # order 2: y2_t = q_t^T E_t, with E_t = sum_{i<=t} k_i (q_i^T P_i)
         alpha = y1
-        y2 = torch.matmul(q_b, E) + torch.matmul(A, alpha)
+        if kernel == 'torch':
+            Aalpha = torch.matmul(A, alpha)
+        else:
+            Aalpha = triton_trimatmul_autograd(q_b, k_b, alpha, causal=True)
+        y2 = torch.matmul(q_b, E) + Aalpha
         y_acc[:, :, start:end, :] = v_b + y1 + 0.5 * y2
 
         P = P + torch.einsum('bhld,bhlv->bhdv', k_b, v_b)
@@ -131,7 +150,7 @@ def mea_attention_block(q, k, v, *, order=2, chunk_size=256, fp32_accum=True):
 
     return y_acc.to(dtype=v.dtype)
 
-def mea_attention(q, k, v, *, order=2, chunk_size=256, fp32_accum=True, impl='block'):
+def mea_attention(q, k, v, *, order=2, chunk_size=256, fp32_accum=True, impl='block', kernel='torch'):
     """
     MEA wrapper that selects between implementations.
 
@@ -140,7 +159,7 @@ def mea_attention(q, k, v, *, order=2, chunk_size=256, fp32_accum=True, impl='bl
       - 'scan' : streaming scan that keeps per-token prefix states within chunk
     """
     if impl == 'block':
-        return mea_attention_block(q, k, v, order=order, chunk_size=chunk_size, fp32_accum=fp32_accum)
+        return mea_attention_block(q, k, v, order=order, chunk_size=chunk_size, fp32_accum=fp32_accum, kernel=kernel)
     if impl == 'scan':
         return mea_attention_scan(q, k, v, order=order, chunk_size=chunk_size, fp32_accum=fp32_accum)
     raise ValueError(f"unknown MEA impl {impl!r} (expected 'block' or 'scan')")
@@ -214,6 +233,8 @@ class MEASelfAttention(nn.Module):
             raise ValueError(f"config.mea_order must be in {{0,1,2}}, got {config.mea_order}")
         if config.mea_impl not in ('block', 'scan'):
             raise ValueError(f"config.mea_impl must be 'block' or 'scan', got {config.mea_impl!r}")
+        if config.mea_kernel not in ('torch', 'triton'):
+            raise ValueError(f"config.mea_kernel must be 'torch' or 'triton', got {config.mea_kernel!r}")
         if config.mea_chunk_size <= 0:
             raise ValueError(f"config.mea_chunk_size must be >= 1, got {config.mea_chunk_size}")
 
@@ -233,6 +254,7 @@ class MEASelfAttention(nn.Module):
         self.mea_chunk_size = config.mea_chunk_size
         self.mea_scale = config.mea_scale
         self.mea_fp32_accum = config.mea_fp32_accum
+        self.mea_kernel = config.mea_kernel
 
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
@@ -251,6 +273,7 @@ class MEASelfAttention(nn.Module):
             impl=self.mea_impl,
             chunk_size=self.mea_chunk_size,
             fp32_accum=self.mea_fp32_accum,
+            kernel=self.mea_kernel,
         )
         y = self.attn_dropout(y)
         y = y.transpose(1, 2).contiguous().view(B, T, C)
@@ -307,6 +330,7 @@ class GPTConfig:
     mea_chunk_size: int = 256  # chunk length (trade memory vs speed)
     mea_scale: bool = True     # apply 1/sqrt(head_dim) scaling to Q like standard attention
     mea_fp32_accum: bool = True # accumulate streaming states in fp32 for stability
+    mea_kernel: str = 'torch'  # for impl='block': 'torch' or 'triton' (experimental)
 
 class GPT(nn.Module):
 

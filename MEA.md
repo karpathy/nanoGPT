@@ -12,6 +12,9 @@ This repo includes an **experimental** integration of **Matrix Exponential Atten
 - Two reference implementations are provided (`mea_impl`):
   - `block` (default): materializes only `chunk×chunk` score blocks `A = QKᵀ` and is usually faster/more autograd-friendly.
   - `scan`: streaming scan implementation that keeps per-token prefix states within each chunk.
+- For `mea_impl=block`, you can pick the inner-kernel implementation (`mea_kernel`):
+  - `torch` (default): uses PyTorch matmuls + `.tril()` masking (simple, often fast, higher peak memory).
+  - `triton` (experimental): uses a fused Triton triangular matmul + custom backward (lower peak memory; chunk-size tuning matters).
 
 ## How to run
 
@@ -28,7 +31,7 @@ python data/shakespeare_char/prepare.py
 
 python train.py config/train_shakespeare_char.py \
   --out_dir=out-shakespeare-char-mea-smoke \
-  --attn_type=mea --mea_order=2 --mea_impl=block --mea_chunk_size=256 \
+  --attn_type=mea --mea_order=2 --mea_impl=block --mea_kernel=triton --mea_chunk_size=256 \
   --max_iters=20 --eval_interval=20 --eval_iters=20 --log_interval=1 \
   --compile=True
 ```
@@ -38,13 +41,13 @@ python train.py config/train_shakespeare_char.py \
 Forward+backward:
 
 ```bash
-python mea_bench_attn.py --T=262144 --mode=fwd_bwd --dtype=bf16 --impl=block --chunk=2048 --iters=1 --warmup=1
+python mea_bench_attn.py --T=262144 --mode=fwd_bwd --dtype=bf16 --impl=block --kernel=triton --chunk=4096 --iters=1 --warmup=1
 ```
 
 Forward-only:
 
 ```bash
-python mea_bench_attn.py --T=262144 --mode=fwd --dtype=bf16 --impl=block --chunk=2048 --iters=3 --warmup=1
+python mea_bench_attn.py --T=262144 --mode=fwd --dtype=bf16 --impl=block --kernel=triton --chunk=4096 --iters=3 --warmup=1
 ```
 
 ## Notes on performance
@@ -53,19 +56,29 @@ This implementation is intended as a **baseline integration** that is easy to re
 
 - For typical context sizes (e.g. `T <= 16k`), PyTorch SDPA/FlashAttention is usually much faster.
 - MEA’s scaling advantage can show up at **very long sequence lengths**, but *only once you are far enough out* that quadratic attention is costly.
-- Note: because this is not a fused kernel, **training-time** memory/time characteristics depend on implementation; `mea_impl=block` is generally more autograd-friendly than `scan`, but a custom kernel/backward is still the path to best performance.
+- `mea_kernel=triton` avoids materializing `chunk×chunk` score blocks and can substantially reduce peak memory. It also changes the best `chunk` size: on A100, larger chunks (e.g. `4096`) can work well.
 
 ### Example results (single A100-SXM4-80GB, PyTorch 2.9.1+cu128)
 
-Attention-only benchmark (`B=1, nh=12, hs=64, dtype=bf16, impl=block, order=2, chunk=2048, fp32_accum=False`):
+Attention-only benchmark (`B=1, nh=12, hs=64, dtype=bf16, impl=block, order=2, fp32_accum=False`):
+
+**Torch kernel** (`kernel=torch, chunk=2048`):
 
 | T | SDPA (fwd+bwd) | MEA (fwd+bwd) | Speedup |
 |---:|---:|---:|---:|
-| 65,536  | 135 ms | 87 ms  | **1.55×** |
-| 131,072 | 539 ms | 224 ms | **2.41×** |
-| 262,144 | 2159 ms | 647 ms | **3.34×** |
+| 65,536  | 135 ms | 95 ms  | **1.43×** |
+| 131,072 | 535 ms | 228 ms | **2.35×** |
+
+**Triton kernel** (`kernel=triton, chunk=4096`):
+
+| T | SDPA (fwd+bwd) | MEA (fwd+bwd) | Speedup |
+|---:|---:|---:|---:|
+| 16,384  | 11.3 ms | 23.9 ms | 0.47× |
+| 32,768  | 42.2 ms | 41.8 ms | **1.01×** |
+| 65,536  | 136.9 ms | 95.6 ms | **1.43×** |
+| 131,072 | 534.7 ms | 205.2 ms | **2.61×** |
 
 If you need MEA to be compelling at smaller `T`, the next steps are typically:
 
-- A fused kernel (e.g. Triton) to avoid Python-level overhead.
-- A custom backward / checkpointing strategy to reduce training-time saved-tensor memory.
+- Further kernel tuning (or a more FlashAttention-like backward).
+- Layer-level integration that fuses more of the MEA block math (vs only the triangular matmul pieces).
