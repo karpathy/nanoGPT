@@ -50,6 +50,22 @@ Forward-only:
 python mea_bench_attn.py --T=262144 --mode=fwd --dtype=bf16 --impl=block --kernel=triton --chunk=4096 --iters=3 --warmup=1
 ```
 
+### Benchmark sweeps (tables)
+
+```bash
+python mea_sweep_attn.py --Ts=8192,16384,32768,65536,131072,262144 --mode=fwd_bwd --dtype=bf16 --impl=block --kernel=triton --chunk=4096 --iters=1 --warmup=1
+python mea_sweep_attn.py --Ts=262144,524288,1048576 --mode=fwd --dtype=bf16 --impl=block --kernel=triton --chunk=4096 --iters=1 --warmup=1
+```
+
+### End-to-end training smoke (tiny GPT, long context)
+
+This script times a single optimizer step while computing loss only on the final position logits (the forward pass still runs the full sequence):
+
+```bash
+python mea_train_smoke.py --attn_type=mea --T=262144 --B=1 --n_layer=2 --n_head=4 --n_embd=256 --dtype=bf16 --mea_kernel=triton --mea_chunk=4096 --warmup=1 --iters=1
+python mea_train_smoke.py --attn_type=softmax --T=262144 --B=1 --n_layer=2 --n_head=4 --n_embd=256 --dtype=bf16 --warmup=1 --iters=1
+```
+
 ## Notes on performance
 
 This implementation is intended as a **baseline integration** that is easy to read/modify.
@@ -89,6 +105,14 @@ Forward-only can be even more favorable (especially for ultra-long-context infer
 | 262,144 | 586 ms | 78.7 ms | **7.44×** |
 | 524,288 | 2390 ms | 157 ms | **15.24×** |
 | 1,048,576 | 9716 ms | 322 ms | **30.21×** |
+
+End-to-end training smoke (single optimizer step, A100-SXM4-80GB, bf16, `B=1, n_layer=2, n_head=4, n_embd=256`, loss on final position logits):
+
+| T | Softmax step | MEA step (`kernel=triton, chunk=4096`) | Speedup |
+|---:|---:|---:|---:|
+| 262,144 | 1461 ms | 463 ms | **3.15×** |
+| 524,288 | 5789 ms | 1142 ms | **5.07×** |
+| 1,048,576 | 23,410 ms | 3997 ms | **5.86×** |
 
 If you need MEA to be compelling at smaller `T`, the next steps are typically:
 
