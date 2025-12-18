@@ -78,6 +78,12 @@ This implementation is intended as a **baseline integration** that is easy to re
 
 Attention-only benchmark (`B=1, nh=12, hs=64, dtype=bf16, impl=block, order=2, fp32_accum=False`):
 
+Plots (generated from `plots/data/*.json` via `plots/plot_mea_results.py`):
+
+![MEA vs SDPA attention scaling](plots/mea_attention_scaling.png)
+
+![End-to-end long-context step scaling](plots/mea_train_smoke_scaling.png)
+
 **Torch kernel** (`kernel=torch, chunk=2048`):
 
 | T | SDPA (fwd+bwd) | MEA (fwd+bwd) | Speedup |

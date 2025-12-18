@@ -1,0 +1,28 @@
+{
+  "config": {
+    "device": "cuda",
+    "dtype": "bf16",
+    "T": 1048576,
+    "B": 1,
+    "vocab": 50304,
+    "n_layer": 2,
+    "n_head": 4,
+    "n_embd": 256,
+    "bias": false,
+    "compile": false,
+    "warmup": 1,
+    "iters": 1,
+    "attn_type": "mea",
+    "json_out": "/root/train_mea_1m.json",
+    "mea_order": 2,
+    "mea_impl": "block",
+    "mea_kernel": "triton",
+    "mea_chunk": 4096,
+    "mea_fp32_accum": false
+  },
+  "metrics": {
+    "step_ms": 3273.753662109375,
+    "tok_per_s": 320297.7707627433,
+    "peak_mib": 22731.98779296875
+  }
+}

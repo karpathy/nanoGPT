@@ -1,0 +1,37 @@
+{
+  "config": {
+    "device": "cuda",
+    "dtype": "bf16",
+    "B": 1,
+    "nh": 12,
+    "hs": 64,
+    "Ts": "524288,1048576",
+    "mode": "fwd_bwd",
+    "iters": 1,
+    "warmup": 1,
+    "chunk": 4096,
+    "order": 2,
+    "impl": "block",
+    "kernel": "triton",
+    "fp32_accum": false,
+    "json_out": "/root/mea_fwd_bwd_large.json"
+  },
+  "rows": [
+    {
+      "T": 524288,
+      "sdpa_ms": 8609.345703125,
+      "mea_ms": 1413.9791259765625,
+      "speedup": 6.088736067570283,
+      "sdpa_peak_mib": 9264.001953125,
+      "mea_peak_mib": 7744.0634765625
+    },
+    {
+      "T": 1048576,
+      "sdpa_ms": 34572.125,
+      "mea_ms": 4425.2158203125,
+      "speedup": 7.812528564439279,
+      "sdpa_peak_mib": 18544.251953125,
+      "mea_peak_mib": 15448.0634765625
+    }
+  ]
+}

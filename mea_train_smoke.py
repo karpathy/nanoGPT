@@ -77,6 +77,7 @@ def main() -> None:
     parser.add_argument("--warmup", type=int, default=1)
     parser.add_argument("--iters", type=int, default=1)
     parser.add_argument("--attn_type", type=str, default="mea", choices=["softmax", "mea"])
+    parser.add_argument("--json_out", type=str, default="", help="optional path to write JSON results")
 
     # MEA knobs (ignored for softmax)
     parser.add_argument("--mea_order", type=int, default=2, choices=[0, 1, 2])
@@ -146,7 +147,21 @@ def main() -> None:
         print(f"  mea: order={args.mea_order} impl={args.mea_impl} kernel={args.mea_kernel} chunk={args.mea_chunk} fp32_accum={args.mea_fp32_accum}")
     print(f"  step: {ms:.2f} ms | {tok_per_s:,.0f} tok/s | peak {peak_mib:.0f} MiB")
 
+    if args.json_out:
+        import json
+
+        payload = {
+            "config": vars(args),
+            "metrics": {
+                "step_ms": ms,
+                "tok_per_s": tok_per_s,
+                "peak_mib": peak_mib,
+            },
+        }
+        with open(args.json_out, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+        print(f"wrote {args.json_out}")
+
 
 if __name__ == "__main__":
     main()
-
