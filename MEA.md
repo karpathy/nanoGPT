@@ -68,6 +68,7 @@ Attention-only benchmark (`B=1, nh=12, hs=64, dtype=bf16, impl=block, order=2, f
 |---:|---:|---:|---:|
 | 65,536  | 135 ms | 95 ms  | **1.43×** |
 | 131,072 | 535 ms | 228 ms | **2.35×** |
+| 262,144 | 2141 ms | 647 ms | **3.31×** |
 
 **Triton kernel** (`kernel=triton, chunk=4096`):
 
@@ -77,6 +78,9 @@ Attention-only benchmark (`B=1, nh=12, hs=64, dtype=bf16, impl=block, order=2, f
 | 32,768  | 42.2 ms | 41.8 ms | **1.01×** |
 | 65,536  | 136.9 ms | 95.6 ms | **1.43×** |
 | 131,072 | 534.7 ms | 205.2 ms | **2.61×** |
+| 262,144 | 2141 ms | 509.5 ms | **4.20×** |
+| 524,288 | 8597 ms | 1413 ms | **6.08×** |
+| 1,048,576 | 34,486 ms | 4931 ms | **6.99×** |
 
 If you need MEA to be compelling at smaller `T`, the next steps are typically:
 
