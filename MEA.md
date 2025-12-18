@@ -96,29 +96,29 @@ Plots (generated from `plots/data/*.json` via `plots/plot_mea_results.py`):
 
 | T | SDPA (fwd+bwd) | MEA (fwd+bwd) | Speedup |
 |---:|---:|---:|---:|
-| 16,384  | 11.3 ms | 23.9 ms | 0.47× |
-| 32,768  | 42.2 ms | 41.8 ms | **1.01×** |
-| 65,536  | 136.9 ms | 95.6 ms | **1.43×** |
-| 131,072 | 534.7 ms | 205.2 ms | **2.61×** |
-| 262,144 | 2141 ms | 509.5 ms | **4.20×** |
-| 524,288 | 8597 ms | 1413 ms | **6.08×** |
-| 1,048,576 | 34,486 ms | 4931 ms | **6.99×** |
+| 16,384  | 11.3 ms | 23.8 ms | 0.47× |
+| 32,768  | 34.7 ms | 41.7 ms | 0.83× |
+| 65,536  | 134.8 ms | 90.1 ms | **1.50×** |
+| 131,072 | 535.2 ms | 205.1 ms | **2.61×** |
+| 262,144 | 2141.9 ms | 509.1 ms | **4.21×** |
+| 524,288 | 8609.4 ms | 1414.0 ms | **6.09×** |
+| 1,048,576 | 34,572.1 ms | 4425.2 ms | **7.81×** |
 
 Forward-only can be even more favorable (especially for ultra-long-context inference):
 
 | T | SDPA (fwd) | MEA (fwd) | Speedup |
 |---:|---:|---:|---:|
-| 262,144 | 586 ms | 78.7 ms | **7.44×** |
-| 524,288 | 2390 ms | 157 ms | **15.24×** |
-| 1,048,576 | 9716 ms | 322 ms | **30.21×** |
+| 262,144 | 591 ms | 79.1 ms | **7.48×** |
+| 524,288 | 2410 ms | 156.9 ms | **15.37×** |
+| 1,048,576 | 9771 ms | 313.1 ms | **31.21×** |
 
 End-to-end training smoke (single optimizer step, A100-SXM4-80GB, bf16, `B=1, n_layer=2, n_head=4, n_embd=256`, loss on final position logits):
 
 | T | Softmax step | MEA step (`kernel=triton, chunk=4096`) | Speedup |
 |---:|---:|---:|---:|
-| 262,144 | 1461 ms | 463 ms | **3.15×** |
-| 524,288 | 5789 ms | 1142 ms | **5.07×** |
-| 1,048,576 | 23,410 ms | 3997 ms | **5.86×** |
+| 262,144 | 1460 ms | 427 ms | **3.42×** |
+| 524,288 | 5792 ms | 1112 ms | **5.21×** |
+| 1,048,576 | 23,142 ms | 3274 ms | **7.07×** |
 
 If you need MEA to be compelling at smaller `T`, the next steps are typically:
 
