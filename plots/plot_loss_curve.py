@@ -26,9 +26,15 @@ def _ema(xs: list[float], beta: float) -> list[float]:
     return out
 
 
-def _load(path: Path) -> tuple[list[int], list[float], dict]:
+def _load(path: Path) -> tuple[list[int], list[float], dict, list[int], list[float]]:
     payload = json.loads(path.read_text())
-    return payload["iters"], payload["loss"], payload.get("meta", {})
+    return (
+        payload.get("iters", []),
+        payload.get("loss", []),
+        payload.get("meta", {}),
+        payload.get("val_iters", []),
+        payload.get("val_loss", []),
+    )
 
 
 def main() -> None:
@@ -43,8 +49,8 @@ def main() -> None:
     mea_path = Path(args.mea)
     out_path = Path(args.out)
 
-    it_s, loss_s, meta_s = _load(softmax_path)
-    it_m, loss_m, meta_m = _load(mea_path)
+    it_s, loss_s, meta_s, vit_s, vloss_s = _load(softmax_path)
+    it_m, loss_m, meta_m, vit_m, vloss_m = _load(mea_path)
 
     sns_style = "seaborn-v0_8-whitegrid"
     if sns_style in plt.style.available:
@@ -62,24 +68,29 @@ def main() -> None:
         }
     )
 
-    fig, ax = plt.subplots(figsize=(12, 5.2), constrained_layout=True)
+    fig, ax = plt.subplots(figsize=(12.5, 5.6), constrained_layout=True)
     colors = {"softmax": "#111827", "mea": "#2563eb"}
 
     # Raw curves (light) + EMA-smoothed (bold)
     ax.plot(it_s, loss_s, color=colors["softmax"], alpha=0.15, lw=1.0)
     ax.plot(it_m, loss_m, color=colors["mea"], alpha=0.15, lw=1.0)
 
-    ax.plot(it_s, _ema(loss_s, args.ema_beta), color=colors["softmax"], lw=2.4, label="Softmax (SDPA)")
-    ax.plot(it_m, _ema(loss_m, args.ema_beta), color=colors["mea"], lw=2.6, label="MEA (order=2, block+Triton)")
+    ax.plot(it_s, _ema(loss_s, args.ema_beta), color=colors["softmax"], lw=2.4, label="Softmax (train, EMA)")
+    ax.plot(it_m, _ema(loss_m, args.ema_beta), color=colors["mea"], lw=2.6, label="MEA (train, EMA)")
+
+    if vit_s and vloss_s:
+        ax.scatter(vit_s, vloss_s, s=26, marker="o", color=colors["softmax"], alpha=0.9, label="Softmax (val)")
+    if vit_m and vloss_m:
+        ax.scatter(vit_m, vloss_m, s=26, marker="o", color=colors["mea"], alpha=0.9, label="MEA (val)")
 
     ds = meta_s.get("dataset") or meta_m.get("dataset") or "dataset"
     max_it = max(it_s[-1] if it_s else 0, it_m[-1] if it_m else 0)
-    ax.set_title(f"Training loss: Softmax vs MEA ({ds}, {max_it} iters)")
+    ax.set_title(f"Loss curve: Softmax vs MEA ({ds}, {max_it} iters)")
     ax.set_xlabel("Iteration")
     ax.set_ylabel("Loss")
     ax.legend(loc="upper right")
 
-    # Annotate final losses
+    # Annotate final training losses
     if it_s and loss_s:
         ax.annotate(
             f"{loss_s[-1]:.3f}",
@@ -108,4 +119,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
