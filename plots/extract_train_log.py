@@ -36,30 +36,40 @@ def main() -> None:
     log_path = Path(args.log)
     text = log_path.read_text(errors="replace")
 
-    iters: list[int] = []
-    loss: list[float] = []
-    time_ms: list[float] = []
-    mfu_pct: list[float] = []
+    # Use dicts to tolerate log concatenation / resume (duplicate iter numbers).
+    it_by_iter: dict[int, float] = {}
+    loss_by_iter: dict[int, float] = {}
+    time_ms_by_iter: dict[int, float] = {}
+    mfu_pct_by_iter: dict[int, float] = {}
 
-    val_iters: list[int] = []
-    val_loss: list[float] = []
-    train_loss_eval: list[float] = []
+    train_loss_eval_by_step: dict[int, float] = {}
+    val_loss_by_step: dict[int, float] = {}
 
     for line in text.splitlines():
         line = line.strip()
         m = _ITER_RE.match(line)
         if m:
-            iters.append(int(m.group(1)))
-            loss.append(float(m.group(2)))
-            time_ms.append(float(m.group(3)))
-            mfu_pct.append(float(m.group(4)))
+            it = int(m.group(1))
+            it_by_iter[it] = it
+            loss_by_iter[it] = float(m.group(2))
+            time_ms_by_iter[it] = float(m.group(3))
+            mfu_pct_by_iter[it] = float(m.group(4))
             continue
         m = _EVAL_RE.match(line)
         if m:
-            val_iters.append(int(m.group(1)))
-            train_loss_eval.append(float(m.group(2)))
-            val_loss.append(float(m.group(3)))
+            step = int(m.group(1))
+            train_loss_eval_by_step[step] = float(m.group(2))
+            val_loss_by_step[step] = float(m.group(3))
             continue
+
+    iters = sorted(it_by_iter)
+    loss = [loss_by_iter[i] for i in iters]
+    time_ms = [time_ms_by_iter[i] for i in iters]
+    mfu_pct = [mfu_pct_by_iter[i] for i in iters]
+
+    val_iters = sorted(val_loss_by_step)
+    val_loss = [val_loss_by_step[i] for i in val_iters]
+    train_loss_eval = [train_loss_eval_by_step[i] for i in val_iters]
 
     payload = {
         "meta": {
@@ -86,4 +96,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
