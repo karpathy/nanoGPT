@@ -106,6 +106,24 @@ def _tensor_scale_stats(y: torch.Tensor) -> dict[str, float]:
     }
 
 
+def _error_stats_large(y: torch.Tensor, y_ref: torch.Tensor, *, eps: float = 1e-6) -> dict[str, float]:
+    """Large-T error stats without quantiles (quantile can be too expensive at 1M+)."""
+    y_f = y.float()
+    ref_f = y_ref.float()
+    diff = y_f - ref_f
+    err = diff.abs()
+    l2_ref = torch.linalg.vector_norm(ref_f)
+    l2_err = torch.linalg.vector_norm(diff)
+    l2_rel = (l2_err / (l2_ref + eps)).item()
+    rmse = torch.sqrt(torch.mean(diff**2)).item()
+    return {
+        "max_abs": err.max().item(),
+        "mean_abs": err.mean().item(),
+        "rmse": float(rmse),
+        "l2_rel": float(l2_rel),
+    }
+
+
 def _time_ms(fn, device: str) -> float:
     _sync(device)
     if device.startswith("cuda"):
@@ -125,6 +143,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--dtype", type=str, default="bf16", choices=["bf16", "fp16", "fp32"])
+    parser.add_argument(
+        "--allow_tf32",
+        type=str,
+        default="true",
+        choices=["true", "false"],
+        help="whether to allow TF32 for fp32 matmuls (affects fp32 reference runs)",
+    )
     parser.add_argument("--B", type=int, default=1)
     parser.add_argument("--nh", type=int, default=12)
     parser.add_argument("--hs", type=int, default=64)
@@ -142,6 +167,11 @@ def main() -> None:
     parser.add_argument("--large_Ts", type=str, default="262144,1048576,2097152")
     parser.add_argument("--skip_small", action="store_true")
     parser.add_argument("--skip_large", action="store_true")
+    parser.add_argument(
+        "--compare_large_to_fp32",
+        action="store_true",
+        help="for large_T: also compute an fp32 MEA output (same impl/kernel) and report error vs that reference",
+    )
     parser.add_argument("--json_out", type=str, default="")
     args = parser.parse_args()
 
@@ -150,8 +180,9 @@ def main() -> None:
     if device.startswith("cuda") and not torch.cuda.is_available():
         raise RuntimeError("CUDA device requested but torch.cuda.is_available() is False")
 
-    torch.backends.cuda.matmul.allow_tf32 = True
-    torch.backends.cudnn.allow_tf32 = True
+    allow_tf32 = args.allow_tf32 == "true"
+    torch.backends.cuda.matmul.allow_tf32 = allow_tf32
+    torch.backends.cudnn.allow_tf32 = allow_tf32
 
     small_Ts = _parse_int_list(args.small_Ts)
     large_Ts = _parse_int_list(args.large_Ts)
@@ -181,6 +212,7 @@ def main() -> None:
         "config": {
             "device": device,
             "dtype": str(dtype).replace("torch.", ""),
+            "allow_tf32": allow_tf32,
             "B": args.B,
             "nh": args.nh,
             "hs": args.hs,
@@ -193,6 +225,7 @@ def main() -> None:
         },
         "small_T": [],
         "large_T": [],
+        "large_T_compare": [],
     }
 
     # ---- Small T: error vs fp32 reference
@@ -247,15 +280,27 @@ def main() -> None:
         for T in large_Ts:
             if T <= 0:
                 continue
+            # Optional fp32 reference for the same random inputs.
+            q32 = k32 = v32 = y_ref32 = None
+            if args.compare_large_to_fp32:
+                q32 = torch.randn(args.B, args.nh, T, args.hs, device=device, dtype=torch.float32) * args.input_std
+                k32 = torch.randn(args.B, args.nh, T, args.hs, device=device, dtype=torch.float32) * args.input_std
+                v32 = torch.randn(args.B, args.nh, T, args.hs, device=device, dtype=torch.float32) * args.input_std
+                q32 = q32 * (1.0 / math.sqrt(args.hs))
             for fp32_accum in fp32_accum_opts:
                 for spec in impls:
                     if spec["kernel"] == "torch" and T >= 1_048_576 and args.chunk >= 4096:
                         # Torch kernel materializes chunk×chunk blocks; avoid surprising OOMs at very large T.
                         continue
-                    q = torch.randn(args.B, args.nh, T, args.hs, device=device, dtype=dtype) * args.input_std
-                    k = torch.randn(args.B, args.nh, T, args.hs, device=device, dtype=dtype) * args.input_std
-                    v = torch.randn(args.B, args.nh, T, args.hs, device=device, dtype=dtype) * args.input_std
-                    q = q * (1.0 / math.sqrt(args.hs))
+                    if args.compare_large_to_fp32:
+                        q = q32.to(dtype)
+                        k = k32.to(dtype)
+                        v = v32.to(dtype)
+                    else:
+                        q = torch.randn(args.B, args.nh, T, args.hs, device=device, dtype=dtype) * args.input_std
+                        k = torch.randn(args.B, args.nh, T, args.hs, device=device, dtype=dtype) * args.input_std
+                        v = torch.randn(args.B, args.nh, T, args.hs, device=device, dtype=dtype) * args.input_std
+                        q = q * (1.0 / math.sqrt(args.hs))
 
                     def _run():
                         return mea_attention(
@@ -321,9 +366,40 @@ def main() -> None:
                         }
                     )
 
+                    if args.compare_large_to_fp32:
+                        # Compute reference once per (T, impl/kernel) in fp32 for the same inputs.
+                        if y_ref32 is None:
+                            y_ref32 = mea_attention(
+                                q32,
+                                k32,
+                                v32,
+                                order=args.order,
+                                chunk_size=args.chunk,
+                                fp32_accum=True,  # no-op for fp32 dtype, but explicit for clarity
+                                impl=spec["impl"],
+                                kernel=spec["kernel"],
+                            )
+                        stats = _error_stats_large(y, y_ref32)
+                        results["large_T_compare"].append(
+                            {
+                                "T": int(T),
+                                "impl": spec["impl"],
+                                "kernel": spec["kernel"],
+                                "dtype": str(dtype).replace("torch.", ""),
+                                "fp32_accum": bool(fp32_accum),
+                                "stats": stats,
+                            }
+                        )
+
                     del q, k, v, y
                     if device.startswith("cuda"):
                         torch.cuda.empty_cache()
+            if y_ref32 is not None:
+                del y_ref32
+            if q32 is not None:
+                del q32, k32, v32
+            if device.startswith("cuda"):
+                torch.cuda.empty_cache()
 
     print(json.dumps(results, indent=2))
     if args.json_out:
