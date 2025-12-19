@@ -35,38 +35,40 @@ def mea_attention_scan(q, k, v, *, order=2, chunk_size=64, fp32_accum=True):
     B, nh, T, hs = q.shape
     y = torch.empty_like(v)
 
-    acc_dtype = torch.float32 if fp32_accum else q.dtype
-    P = torch.zeros((B, nh, hs, hs), device=q.device, dtype=acc_dtype)
+    # Accumulate streaming states in fp32 for stability without forcing all matmuls to fp32.
+    # This keeps Q/K/V in their original dtype and only uses fp32 for the running summaries.
+    state_dtype = torch.float32 if fp32_accum else q.dtype
+    P = torch.zeros((B, nh, hs, hs), device=q.device, dtype=state_dtype)
     if order == 2:
-        E = torch.zeros((B, nh, hs, hs), device=q.device, dtype=acc_dtype)
+        E = torch.zeros((B, nh, hs, hs), device=q.device, dtype=state_dtype)
     else:
         E = None
 
-    q_acc = q.to(acc_dtype)
-    k_acc = k.to(acc_dtype)
-    v_acc = v.to(acc_dtype)
-
     for start in range(0, T, chunk_size):
         end = min(start + chunk_size, T)
-        q_c = q_acc[:, :, start:end, :]  # (B, nh, L, hs)
-        k_c = k_acc[:, :, start:end, :]
-        v_c = v_acc[:, :, start:end, :]
+        q_c = q[:, :, start:end, :]  # (B, nh, L, hs)
+        k_c = k[:, :, start:end, :]
+        v_c = v[:, :, start:end, :]
 
-        kv = k_c.unsqueeze(-1) * v_c.unsqueeze(-2)  # (B, nh, L, hs, hs)
+        q_s = q_c.to(state_dtype)
+        k_s = k_c.to(state_dtype)
+        v_s = v_c.to(state_dtype)
+
+        kv = k_s.unsqueeze(-1) * v_s.unsqueeze(-2)  # (B, nh, L, hs, hs)
         P_c = kv.cumsum(dim=2) + P.unsqueeze(2)      # (B, nh, L, hs, hs)
-        s_c = (q_c.unsqueeze(-2) @ P_c).squeeze(-2)  # (B, nh, L, hs)
+        s_c = (q_s.unsqueeze(-2) @ P_c).squeeze(-2)  # (B, nh, L, hs)
 
         if order == 1:
-            y_c = v_c + s_c
+            y_c = v_s + s_c
             P = P_c[:, :, -1]
             y[:, :, start:end, :] = y_c.to(dtype=v.dtype)
             continue
 
-        ks = k_c.unsqueeze(-1) * s_c.unsqueeze(-2)   # (B, nh, L, hs, hs)
+        ks = k_s.unsqueeze(-1) * s_c.unsqueeze(-2)   # (B, nh, L, hs, hs)
         E_c = ks.cumsum(dim=2) + E.unsqueeze(2)      # (B, nh, L, hs, hs)
-        o2_c = (q_c.unsqueeze(-2) @ E_c).squeeze(-2) # (B, nh, L, hs)
+        o2_c = (q_s.unsqueeze(-2) @ E_c).squeeze(-2) # (B, nh, L, hs)
 
-        y_c = v_c + s_c + 0.5 * o2_c
+        y_c = v_s + s_c + 0.5 * o2_c
         y[:, :, start:end, :] = y_c.to(dtype=v.dtype)
 
         P = P_c[:, :, -1]
@@ -100,13 +102,15 @@ def mea_attention_block(q, k, v, *, order=2, chunk_size=256, fp32_accum=True, ke
     if dv != hs:
         raise NotImplementedError("nanogpt MEA currently assumes value dim == head dim")
 
-    acc_dtype = torch.float32 if fp32_accum else q.dtype
-    q_acc = q.to(acc_dtype)
-    k_acc = k.to(acc_dtype)
-    v_acc = v.to(acc_dtype)
+    # Accumulate cross-chunk summaries in fp32 for stability, but keep Q/K/V and the per-token
+    # outputs in their original dtype to avoid the huge slowdowns/memory blowups of full-fp32.
+    qkv_dtype = q.dtype
+    state_dtype = torch.float32 if fp32_accum else qkv_dtype
 
-    y_acc = torch.empty_like(v_acc)
-    P = torch.zeros((B, nh, hs, dv), device=q.device, dtype=acc_dtype)
+    # Triton requires q/k/x dtypes to match; if v differs, compute in q dtype then cast back.
+    v_compute = v.to(dtype=qkv_dtype) if v.dtype != qkv_dtype else v
+    y_out = torch.empty_like(v_compute)
+    P = torch.zeros((B, nh, hs, dv), device=q.device, dtype=state_dtype)
     E = torch.zeros_like(P) if order == 2 else None
 
     if kernel == 'triton':
@@ -119,9 +123,9 @@ def mea_attention_block(q, k, v, *, order=2, chunk_size=256, fp32_accum=True, ke
 
     for start in range(0, T, chunk_size):
         end = min(start + chunk_size, T)
-        q_b = q_acc[:, :, start:end, :]  # (B, nh, L, d)
-        k_b = k_acc[:, :, start:end, :]
-        v_b = v_acc[:, :, start:end, :]
+        q_b = q[:, :, start:end, :]  # (B, nh, L, d)
+        k_b = k[:, :, start:end, :]
+        v_b = v_compute[:, :, start:end, :]
 
         is_first = start == 0
         is_last = end == T
@@ -133,27 +137,40 @@ def mea_attention_block(q, k, v, *, order=2, chunk_size=256, fp32_accum=True, ke
             Av = triton_trimatmul_autograd(q_b, k_b, v_b, causal=True)
 
         # order 1: y1_t = q_t^T P_t^{KV}
-        y1 = Av if is_first else (torch.matmul(q_b, P) + Av)
+        if is_first:
+            y1_state = Av.to(state_dtype)
+        else:
+            y1_cross = torch.matmul(q_b.to(state_dtype), P)
+            y1_state = y1_cross + Av.to(state_dtype)
         if order == 1:
-            y_acc[:, :, start:end, :] = v_b + y1
+            y_out[:, :, start:end, :] = (v_b.to(state_dtype) + y1_state).to(dtype=qkv_dtype)
             if not is_last:
-                P = P + torch.matmul(k_b.transpose(-2, -1), v_b)
+                P = P + torch.matmul(k_b.transpose(-2, -1).to(state_dtype), v_b.to(state_dtype))
             continue
 
         # order 2: y2_t = q_t^T E_t, with E_t = sum_{i<=t} k_i (q_i^T P_i)
-        alpha = y1
+        alpha_state = y1_state
+        # Triton kernel requires q/k/x dtypes to match; use a casted view for the within-chunk
+        # A@alpha computation, but keep fp32 alpha for the cross-chunk E update.
+        alpha = alpha_state.to(dtype=qkv_dtype)
         if kernel == 'torch':
             Aalpha = torch.matmul(A, alpha)
         else:
             Aalpha = triton_trimatmul_autograd(q_b, k_b, alpha, causal=True)
-        y2 = Aalpha if is_first else (torch.matmul(q_b, E) + Aalpha)
-        y_acc[:, :, start:end, :] = v_b + y1 + 0.5 * y2
+        if is_first:
+            y2_state = Aalpha.to(state_dtype)
+        else:
+            y2_cross = torch.matmul(q_b.to(state_dtype), E)
+            y2_state = y2_cross + Aalpha.to(state_dtype)
+
+        y_out[:, :, start:end, :] = (v_b.to(state_dtype) + y1_state + 0.5 * y2_state).to(dtype=qkv_dtype)
 
         if not is_last:
-            P = P + torch.matmul(k_b.transpose(-2, -1), v_b)
-            E = E + torch.matmul(k_b.transpose(-2, -1), alpha)
+            kT = k_b.transpose(-2, -1).to(state_dtype)
+            P = P + torch.matmul(kT, v_b.to(state_dtype))
+            E = E + torch.matmul(kT, alpha_state)
 
-    return y_acc.to(dtype=v.dtype)
+    return y_out.to(dtype=v.dtype) if v.dtype != qkv_dtype else y_out
 
 def mea_attention(q, k, v, *, order=2, chunk_size=256, fp32_accum=True, impl='block', kernel='torch'):
     """
