@@ -2,6 +2,7 @@
   "config": {
     "device": "cuda",
     "dtype": "bfloat16",
+    "allow_tf32": true,
     "B": 1,
     "nh": 12,
     "hs": 64,
@@ -34,7 +35,7 @@
       "fp32_accum": false,
       "ok": true,
       "finite": true,
-      "time_ms": 528.321533203125,
+      "time_ms": 520.5995483398438,
       "peak_mib": 5384.1318359375,
       "scale": {
         "abs_max": 0.12060546875,
@@ -49,7 +50,7 @@
       "fp32_accum": false,
       "ok": true,
       "finite": true,
-      "time_ms": 314.5533447265625,
+      "time_ms": 315.75653076171875,
       "peak_mib": 21512.1376953125,
       "scale": {
         "abs_max": 0.12890625,
@@ -64,7 +65,7 @@
       "fp32_accum": false,
       "ok": true,
       "finite": true,
-      "time_ms": 644.912109375,
+      "time_ms": 647.3922729492188,
       "peak_mib": 43016.1376953125,
       "scale": {
         "abs_max": 0.140625,
