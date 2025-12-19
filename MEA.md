@@ -124,6 +124,30 @@ Plot (from `plots/data/loss_curve_shakespeare_char_*.json`):
 
 ![Training loss curve (softmax vs MEA)](plots/mea_loss_curve.png)
 
+### Loss curve (OpenWebText, real dataset sample)
+
+OpenWebText is nanoGPT’s standard pretraining dataset, but the full prep is large. For single-GPU experiments we use a **1% OpenWebText sample** (~89.7M train tokens, ~0.85M val tokens) prepared with `data/openwebtext_sample/prepare.py`.
+
+Commands (single A100-80GB, `config/train_openwebtext_sample.py`, 5k iters):
+
+```bash
+pip install datasets==2.19.0 tiktoken tqdm
+python data/openwebtext_sample/prepare.py --subset 'train[:1%]' --val_frac 0.01
+
+python train.py config/train_openwebtext_sample.py --out_dir=out-owt-sample-softmax --attn_type=softmax
+python train.py config/train_openwebtext_sample.py --out_dir=out-owt-sample-mea --attn_type=mea \
+  --mea_order=2 --mea_impl=block --mea_kernel=triton --mea_chunk_size=256 --mea_fp32_accum=True
+```
+
+Measured result at step 5000 (same hyperparams, same dataset):
+
+- Softmax: `val loss ≈ 3.952`
+- MEA: `val loss ≈ 5.550`
+
+Plot (from `plots/data/loss_curve_owt_sample_*.json`):
+
+![OpenWebText sample loss curve (softmax vs MEA)](plots/mea_loss_curve_owt_sample.png)
+
 ### Training smoke test (uses `torch.compile` if enabled)
 
 ```bash
