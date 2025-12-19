@@ -102,6 +102,28 @@ FP32 feasibility (forward-only MEA in fp32, same `order/chunk/impl/kernel`):
 
 Numbers will vary slightly across runs/hardware/settings, but this is the typical magnitude.
 
+### Loss curve (Shakespeare-char, same hyperparams)
+
+This compares `attn_type=softmax` vs `attn_type=mea` using the same training config (Shakespeare-char). These are **measured** runs on a single A100-80GB, with eval disabled (for speed) and logging every iter.
+
+Commands:
+
+```bash
+python data/shakespeare_char/prepare.py
+
+python train.py config/train_shakespeare_char.py \
+  --out_dir=out-loss-softmax --attn_type=softmax \
+  --max_iters=2000 --eval_interval=1000000000 --log_interval=1 --compile=False
+
+python train.py config/train_shakespeare_char.py \
+  --out_dir=out-loss-mea --attn_type=mea --mea_order=2 --mea_impl=block --mea_kernel=triton --mea_chunk_size=256 --mea_fp32_accum=True \
+  --max_iters=2000 --eval_interval=1000000000 --log_interval=1 --compile=False
+```
+
+Plot (from `plots/data/loss_curve_shakespeare_char_*.json`):
+
+![Training loss curve (softmax vs MEA)](plots/mea_loss_curve.png)
+
 ### Training smoke test (uses `torch.compile` if enabled)
 
 ```bash
