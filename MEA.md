@@ -69,10 +69,33 @@ python mea_numerics_report.py --dtype=fp32 --skip_small --impls=block_triton --o
 
 Tip: add `--allow_tf32=false` if you want the fp32 reference to avoid TF32 matmuls (slower but more “fp32-like”).
 
-In one run on an A100-80GB (bf16, `B=1, nh=12, hs=64, order=2, impl=block, kernel=triton, chunk=4096`), the bf16-vs-fp32 MEA error was:
+Example numbers (single A100-SXM4-80GB, random inputs with `input_std=0.02`, `allow_tf32=true`):
 
-- `fp32_accum=false`: `l2_rel` ≈ 0.31% @262k, 0.53% @1M, 0.90% @2M
-- `fp32_accum=true`: `l2_rel` ≈ 0.24–0.25% across 262k/1M/2M
+Small-T bf16 vs fp32 *naive masked* reference (`order=2`, `chunk=64`, `impl=block`, `kernel=triton`):
+
+| T | `l2_rel` (`fp32_accum=false`) | `l2_rel` (`fp32_accum=true`) | `max_abs` |
+|---:|---:|---:|---:|
+| 64  | 0.209% | 0.209% | 2.68e-4 |
+| 128 | 0.218% | 0.218% | 3.98e-4 |
+| 256 | 0.226% | 0.226% | 4.73e-4 |
+
+Large-T bf16 vs fp32 *MEA* reference (`order=2`, `chunk=4096`, `impl=block`, `kernel=triton`):
+
+| T | `l2_rel` (`fp32_accum=false`) | `l2_rel` (`fp32_accum=true`) | `max_abs` (`false/true`) |
+|---:|---:|---:|---:|
+| 262k | 0.308% | 0.237% | 7.71e-4 / 5.06e-4 |
+| 1M   | 0.531% | 0.244% | 1.19e-3 / 5.48e-4 |
+| 2M   | 0.902% | 0.253% | 2.61e-3 / 7.30e-4 |
+
+FP32 feasibility (forward-only MEA in fp32, same `order/chunk/impl/kernel`):
+
+| T | Peak alloc (MiB) | Time (ms) | Finite |
+|---:|---:|---:|:---:|
+| 262k | 4424 | 1094 | yes |
+| 1M   | 17672 | 2738 | yes |
+| 2M   | 35336 | 5503 | yes |
+
+Numbers will vary slightly across runs/hardware/settings, but this is the typical magnitude.
 
 ### Training smoke test (uses `torch.compile` if enabled)
 
