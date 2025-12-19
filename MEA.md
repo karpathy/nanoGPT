@@ -32,6 +32,46 @@ These options can help stabilize training, but they **change the operator** (i.e
 python mea_check.py
 ```
 
+### Numerics report (error range + long-T stability)
+
+Small-T (bf16 vs fp32 naive masked reference; produces an “error range” you can quote):
+
+```bash
+python mea_numerics_report.py --dtype=bf16 --small_Ts=64,128,256 --order=2 --chunk=64 \
+  --json_out=plots/data/mea_numerics_small_bf16.json
+```
+
+Large-T stability (bf16; checks finiteness/scale at ultra-long T):
+
+```bash
+python mea_numerics_report.py --dtype=bf16 --skip_small --impls=block_triton --order=2 --chunk=4096 \
+  --large_Ts=262144,1048576,2097152 --json_out=plots/data/mea_stability_large_bf16.json
+```
+
+Large-T bf16 vs fp32 *MEA reference* (same impl/kernel/inputs; this is **not** the O(T²) naive reference, which is infeasible at 1M+):
+
+```bash
+python mea_numerics_report.py --dtype=bf16 --skip_small --compare_large_to_fp32 --impls=block_triton --order=2 --chunk=4096 \
+  --large_Ts=262144,1048576,2097152 --fp32_accum=false --json_out=plots/data/mea_large_compare_bf16_to_fp32.json
+
+python mea_numerics_report.py --dtype=bf16 --skip_small --compare_large_to_fp32 --impls=block_triton --order=2 --chunk=4096 \
+  --large_Ts=262144,1048576,2097152 --fp32_accum=true --json_out=plots/data/mea_large_compare_bf16_fp32accum_to_fp32.json
+```
+
+FP32 feasibility at long T (forward-only MEA in fp32):
+
+```bash
+python mea_numerics_report.py --dtype=fp32 --skip_small --impls=block_triton --order=2 --chunk=4096 \
+  --large_Ts=262144,1048576,2097152 --fp32_accum=false --json_out=plots/data/mea_stability_large_fp32.json
+```
+
+Tip: add `--allow_tf32=false` if you want the fp32 reference to avoid TF32 matmuls (slower but more “fp32-like”).
+
+In one run on an A100-80GB (bf16, `B=1, nh=12, hs=64, order=2, impl=block, kernel=triton, chunk=4096`), the bf16-vs-fp32 MEA error was:
+
+- `fp32_accum=false`: `l2_rel` ≈ 0.31% @262k, 0.53% @1M, 0.90% @2M
+- `fp32_accum=true`: `l2_rel` ≈ 0.24–0.25% across 262k/1M/2M
+
 ### Training smoke test (uses `torch.compile` if enabled)
 
 ```bash
@@ -145,3 +185,7 @@ If you need MEA to be compelling at smaller `T`, the next steps are typically:
 
 - Further kernel tuning (or a more FlashAttention-like backward).
 - Layer-level integration that fuses more of the MEA block math (vs only the triangular matmul pieces).
+
+### Notes on bitwise alignment
+
+Different kernels/backends will generally **not** be bitwise-identical due to non-associativity of floating point math and different reduction orders/parallelism. For validation, prefer `torch.allclose` with a reasonable tolerance (and compare in fp32 when possible).
