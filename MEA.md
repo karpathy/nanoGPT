@@ -69,7 +69,12 @@ python mea_numerics_report.py --dtype=fp32 --skip_small --impls=block_triton --o
 
 Tip: add `--allow_tf32=false` if you want the fp32 reference to avoid TF32 matmuls (slower but more “fp32-like”).
 
-Example numbers (single A100-SXM4-80GB, random inputs with `input_std=0.02`, `allow_tf32=true`):
+Measured numbers (single A100-SXM4-80GB, `torch.manual_seed(0)`, random inputs with `input_std=0.02`, `allow_tf32=true`).
+These tables are copied from the JSON artifacts committed in `plots/data/`:
+
+- Small-T: `plots/data/mea_numerics_small_bf16.json`
+- Large-T compare: `plots/data/mea_large_compare_bf16_to_fp32.json`, `plots/data/mea_large_compare_bf16_fp32accum_to_fp32.json`
+- FP32 feasibility: `plots/data/mea_stability_large_fp32.json`
 
 Small-T bf16 vs fp32 *naive masked* reference (`order=2`, `chunk=64`, `impl=block`, `kernel=triton`):
 
