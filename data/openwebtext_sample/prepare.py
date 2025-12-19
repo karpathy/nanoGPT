@@ -68,7 +68,9 @@ def main() -> None:
 
         idx = 0
         for batch_idx in tqdm(range(args.total_batches), desc=f"writing {filename}"):
-            batch = dset_tok.shard(num_shards=args.total_batches, index=batch_idx, contiguous=True).with_format("numpy")
+            # Avoid `with_format("numpy")` here: HF datasets + NumPy>=2.0 can error when it
+            # tries to create zero-copy object arrays. The default Python lists work fine.
+            batch = dset_tok.shard(num_shards=args.total_batches, index=batch_idx, contiguous=True)
             arr_batch = np.concatenate(batch["ids"])
             arr[idx : idx + len(arr_batch)] = arr_batch
             idx += len(arr_batch)
@@ -83,4 +85,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
