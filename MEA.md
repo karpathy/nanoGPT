@@ -24,6 +24,8 @@ These options can help stabilize training, but they **change the operator** (i.e
 - `mea_out_groupnorm=True`: apply per-head `GroupNorm` on the concatenated head outputs (token-wise; does not mix across time).
 - `mea_out_gate=True`: apply a SiLU (“swish”) output gate computed from the input, similar to RetNet’s gated retention blocks.
 
+Note: `mea_fp32_accum=True` improves numerical stability, but in this baseline implementation it casts Q/K/V to fp32 for the internal matmuls (so it can be much slower). A more optimized variant would keep Q/K/V in bf16 and only accumulate the recurrent states in fp32.
+
 ## How to run
 
 ### Correctness check (streaming vs naive reference)
