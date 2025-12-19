@@ -77,7 +77,7 @@ def main():
     parser.add_argument("--order", type=int, default=2, choices=[0, 1, 2])
     parser.add_argument("--impl", type=str, default="block", choices=["block", "scan"])
     parser.add_argument("--kernel", type=str, default="torch", choices=["torch", "triton"], help="for impl=block: use torch matmuls or Triton fused kernel")
-    parser.add_argument("--fp32_accum", action="store_true", help="accumulate MEA states in fp32 (slower)")
+    parser.add_argument("--fp32_accum", action="store_true", help="accumulate MEA recurrent states (P/E) in fp32 for stability")
     args = parser.parse_args()
 
     torch.backends.cuda.matmul.allow_tf32 = True
