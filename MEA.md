@@ -16,6 +16,14 @@ This repo includes an **experimental** integration of **Matrix Exponential Atten
   - `torch` (default): uses PyTorch matmuls + `.tril()` masking (simple, often fast, higher peak memory).
   - `triton` (experimental): uses a fused Triton triangular matmul + custom backward (lower peak memory; chunk-size tuning matters).
 
+### Optional stability tweaks (RetNet-style)
+
+These options can help stabilize training, but they **change the operator** (i.e. it is no longer “pure” MEA as defined by the Taylor series alone):
+
+- `mea_qk_l2norm=True`: L2-normalize Q/K per token/head (cosine-style) before forming dot products.
+- `mea_out_groupnorm=True`: apply per-head `GroupNorm` on the concatenated head outputs (token-wise; does not mix across time).
+- `mea_out_gate=True`: apply a SiLU (“swish”) output gate computed from the input, similar to RetNet’s gated retention blocks.
+
 ## How to run
 
 ### Correctness check (streaming vs naive reference)

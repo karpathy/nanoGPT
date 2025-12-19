@@ -85,6 +85,11 @@ def main() -> None:
     parser.add_argument("--mea_kernel", type=str, default="triton", choices=["torch", "triton"])
     parser.add_argument("--mea_chunk", type=int, default=4096)
     parser.add_argument("--mea_fp32_accum", action="store_true")
+    parser.add_argument("--mea_qk_l2norm", action="store_true")
+    parser.add_argument("--mea_qk_l2norm_eps", type=float, default=1e-6)
+    parser.add_argument("--mea_out_groupnorm", action="store_true")
+    parser.add_argument("--mea_out_groupnorm_eps", type=float, default=1e-5)
+    parser.add_argument("--mea_out_gate", action="store_true")
     args = parser.parse_args()
 
     device = args.device
@@ -110,6 +115,11 @@ def main() -> None:
         mea_chunk_size=args.mea_chunk,
         mea_scale=True,
         mea_fp32_accum=args.mea_fp32_accum,
+        mea_qk_l2norm=args.mea_qk_l2norm,
+        mea_qk_l2norm_eps=args.mea_qk_l2norm_eps,
+        mea_out_groupnorm=args.mea_out_groupnorm,
+        mea_out_groupnorm_eps=args.mea_out_groupnorm_eps,
+        mea_out_gate=args.mea_out_gate,
     )
 
     model = GPT(cfg).to(device=device, dtype=dtype)

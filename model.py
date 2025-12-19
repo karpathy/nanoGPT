@@ -242,6 +242,10 @@ class MEASelfAttention(nn.Module):
             raise ValueError(f"config.mea_kernel must be 'torch' or 'triton', got {config.mea_kernel!r}")
         if config.mea_chunk_size <= 0:
             raise ValueError(f"config.mea_chunk_size must be >= 1, got {config.mea_chunk_size}")
+        if config.mea_qk_l2norm_eps <= 0:
+            raise ValueError(f"config.mea_qk_l2norm_eps must be > 0, got {config.mea_qk_l2norm_eps}")
+        if config.mea_out_groupnorm_eps <= 0:
+            raise ValueError(f"config.mea_out_groupnorm_eps must be > 0, got {config.mea_out_groupnorm_eps}")
 
         # key, query, value projections for all heads, but in a batch
         self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
@@ -260,6 +264,28 @@ class MEASelfAttention(nn.Module):
         self.mea_scale = config.mea_scale
         self.mea_fp32_accum = config.mea_fp32_accum
         self.mea_kernel = config.mea_kernel
+        self.mea_qk_l2norm = config.mea_qk_l2norm
+        self.mea_qk_l2norm_eps = config.mea_qk_l2norm_eps
+        self.mea_out_groupnorm = config.mea_out_groupnorm
+        self.mea_out_groupnorm_eps = config.mea_out_groupnorm_eps
+        self.mea_out_gate = config.mea_out_gate
+
+        if self.mea_out_groupnorm:
+            # Sub-LayerNorm: normalize each head independently (num_groups == n_head),
+            # without mixing statistics across sequence positions.
+            self.mea_out_norm = nn.GroupNorm(
+                num_groups=config.n_head,
+                num_channels=config.n_embd,
+                eps=self.mea_out_groupnorm_eps,
+                affine=True,
+            )
+        else:
+            self.mea_out_norm = None
+
+        if self.mea_out_gate:
+            self.mea_gate = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        else:
+            self.mea_gate = None
 
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
@@ -268,6 +294,13 @@ class MEASelfAttention(nn.Module):
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+
+        if self.mea_qk_l2norm:
+            # Normalize Q/K for stability (cosine-style similarity). Compute norms in fp32.
+            q_norm = torch.linalg.vector_norm(q.float(), dim=-1, keepdim=True).clamp_min(self.mea_qk_l2norm_eps).to(dtype=q.dtype)
+            k_norm = torch.linalg.vector_norm(k.float(), dim=-1, keepdim=True).clamp_min(self.mea_qk_l2norm_eps).to(dtype=k.dtype)
+            q = q / q_norm
+            k = k / k_norm
 
         if self.mea_scale:
             q = q * (1.0 / math.sqrt(k.size(-1)))
@@ -280,8 +313,16 @@ class MEASelfAttention(nn.Module):
             fp32_accum=self.mea_fp32_accum,
             kernel=self.mea_kernel,
         )
-        y = self.attn_dropout(y)
         y = y.transpose(1, 2).contiguous().view(B, T, C)
+
+        if self.mea_out_norm is not None:
+            y = self.mea_out_norm(y.reshape(B * T, C)).view(B, T, C)
+
+        if self.mea_gate is not None:
+            g = F.silu(self.mea_gate(x))
+            y = y * g
+
+        y = self.attn_dropout(y)
         y = self.resid_dropout(self.c_proj(y))
         return y
 
@@ -336,6 +377,11 @@ class GPTConfig:
     mea_scale: bool = True     # apply 1/sqrt(head_dim) scaling to Q like standard attention
     mea_fp32_accum: bool = True # accumulate streaming states in fp32 for stability
     mea_kernel: str = 'torch'  # for impl='block': 'torch' or 'triton' (experimental)
+    mea_qk_l2norm: bool = False # L2-normalize Q/K before MEA (stability tweak; changes semantics)
+    mea_qk_l2norm_eps: float = 1e-6
+    mea_out_groupnorm: bool = False # apply per-head GroupNorm to MEA output (RetNet-style)
+    mea_out_groupnorm_eps: float = 1e-5
+    mea_out_gate: bool = False # apply SiLU gate from input on MEA output (RetNet-style)
 
 class GPT(nn.Module):
 

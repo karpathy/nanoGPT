@@ -19,6 +19,11 @@ mea_chunk_size = 256
 mea_scale = True
 mea_fp32_accum = True
 mea_kernel = 'torch' # for mea_impl='block': 'torch' or 'triton' (experimental)
+mea_qk_l2norm = False
+mea_qk_l2norm_eps = 1e-6
+mea_out_groupnorm = False
+mea_out_groupnorm_eps = 1e-5
+mea_out_gate = False
 real_data = True
 seed = 1337
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
@@ -67,6 +72,11 @@ gptconf = GPTConfig(
     mea_scale = mea_scale,
     mea_fp32_accum = mea_fp32_accum,
     mea_kernel = mea_kernel,
+    mea_qk_l2norm = mea_qk_l2norm,
+    mea_qk_l2norm_eps = mea_qk_l2norm_eps,
+    mea_out_groupnorm = mea_out_groupnorm,
+    mea_out_groupnorm_eps = mea_out_groupnorm_eps,
+    mea_out_gate = mea_out_gate,
 )
 model = GPT(gptconf)
 model.to(device)
