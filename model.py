@@ -15,6 +15,177 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+def mea_attention_scan(q, k, v, *, order=2, chunk_size=64, fp32_accum=True):
+    """
+    Matrix Exponential Attention (MEA) via truncated Taylor series up to `order`.
+    Implements the causal (strictly lower-triangular) version without materializing
+    the (T,T) attention matrix, using a chunked streaming scan.
+
+    Expects q,k,v of shape (B, nh, T, hs). Returns y of same shape as v.
+    Currently supports order in {0,1,2}.
+    """
+    if order not in (0, 1, 2):
+        raise NotImplementedError(f"MEA currently supports order in {{0,1,2}}, got {order}")
+    if chunk_size <= 0:
+        raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
+
+    if order == 0:
+        return v
+
+    B, nh, T, hs = q.shape
+    y = torch.empty_like(v)
+
+    # Accumulate streaming states in fp32 for stability without forcing all matmuls to fp32.
+    # This keeps Q/K/V in their original dtype and only uses fp32 for the running summaries.
+    state_dtype = torch.float32 if fp32_accum else q.dtype
+    P = torch.zeros((B, nh, hs, hs), device=q.device, dtype=state_dtype)
+    if order == 2:
+        E = torch.zeros((B, nh, hs, hs), device=q.device, dtype=state_dtype)
+    else:
+        E = None
+
+    for start in range(0, T, chunk_size):
+        end = min(start + chunk_size, T)
+        q_c = q[:, :, start:end, :]  # (B, nh, L, hs)
+        k_c = k[:, :, start:end, :]
+        v_c = v[:, :, start:end, :]
+
+        q_s = q_c.to(state_dtype)
+        k_s = k_c.to(state_dtype)
+        v_s = v_c.to(state_dtype)
+
+        kv = k_s.unsqueeze(-1) * v_s.unsqueeze(-2)  # (B, nh, L, hs, hs)
+        P_c = kv.cumsum(dim=2) + P.unsqueeze(2)      # (B, nh, L, hs, hs)
+        s_c = (q_s.unsqueeze(-2) @ P_c).squeeze(-2)  # (B, nh, L, hs)
+
+        if order == 1:
+            y_c = v_s + s_c
+            P = P_c[:, :, -1]
+            y[:, :, start:end, :] = y_c.to(dtype=v.dtype)
+            continue
+
+        ks = k_s.unsqueeze(-1) * s_c.unsqueeze(-2)   # (B, nh, L, hs, hs)
+        E_c = ks.cumsum(dim=2) + E.unsqueeze(2)      # (B, nh, L, hs, hs)
+        o2_c = (q_s.unsqueeze(-2) @ E_c).squeeze(-2) # (B, nh, L, hs)
+
+        y_c = v_s + s_c + 0.5 * o2_c
+        y[:, :, start:end, :] = y_c.to(dtype=v.dtype)
+
+        P = P_c[:, :, -1]
+        E = E_c[:, :, -1]
+
+    return y
+
+def mea_attention_block(q, k, v, *, order=2, chunk_size=256, fp32_accum=True, kernel='torch'):
+    """
+    Blockwise MEA (order<=2): exact causal computation that only materializes
+    (chunk_size, chunk_size) local score blocks A = Q K^T per chunk.
+
+    This is still a reference implementation, but tends to be friendlier to
+    autograd (vs storing per-token prefix states).
+
+    Expects q,k,v of shape (B, nh, T, hs). Returns y of same shape as v.
+    Currently supports order in {0,1,2}.
+    """
+    if order not in (0, 1, 2):
+        raise NotImplementedError(f"MEA currently supports order in {{0,1,2}}, got {order}")
+    if chunk_size <= 0:
+        raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
+    if order == 0:
+        return v
+
+    if kernel not in ('torch', 'triton'):
+        raise ValueError(f"unknown MEA kernel {kernel!r} (expected 'torch' or 'triton')")
+
+    B, nh, T, hs = q.shape
+    dv = v.shape[-1]
+    if dv != hs:
+        raise NotImplementedError("nanogpt MEA currently assumes value dim == head dim")
+
+    # Accumulate cross-chunk summaries in fp32 for stability, but keep Q/K/V and the per-token
+    # outputs in their original dtype to avoid the huge slowdowns/memory blowups of full-fp32.
+    qkv_dtype = q.dtype
+    state_dtype = torch.float32 if fp32_accum else qkv_dtype
+
+    # Triton requires q/k/x dtypes to match; if v differs, compute in q dtype then cast back.
+    v_compute = v.to(dtype=qkv_dtype) if v.dtype != qkv_dtype else v
+    y_out = torch.empty_like(v_compute)
+    P = torch.zeros((B, nh, hs, dv), device=q.device, dtype=state_dtype)
+    E = torch.zeros_like(P) if order == 2 else None
+
+    if kernel == 'triton':
+        try:
+            from mea_triton import triton_trimatmul_autograd
+        except Exception as e:
+            raise RuntimeError("MEA kernel='triton' requested but Triton is unavailable") from e
+    else:
+        triton_trimatmul_autograd = None
+
+    for start in range(0, T, chunk_size):
+        end = min(start + chunk_size, T)
+        q_b = q[:, :, start:end, :]  # (B, nh, L, d)
+        k_b = k[:, :, start:end, :]
+        v_b = v_compute[:, :, start:end, :]
+
+        is_first = start == 0
+        is_last = end == T
+
+        if kernel == 'torch':
+            A = torch.matmul(q_b, k_b.transpose(-2, -1)).tril()  # (B, nh, L, L)
+            Av = torch.matmul(A, v_b)
+        else:
+            Av = triton_trimatmul_autograd(q_b, k_b, v_b, causal=True)
+
+        # order 1: y1_t = q_t^T P_t^{KV}
+        if is_first:
+            y1_state = Av.to(state_dtype)
+        else:
+            y1_cross = torch.matmul(q_b.to(state_dtype), P)
+            y1_state = y1_cross + Av.to(state_dtype)
+        if order == 1:
+            y_out[:, :, start:end, :] = (v_b.to(state_dtype) + y1_state).to(dtype=qkv_dtype)
+            if not is_last:
+                P = P + torch.matmul(k_b.transpose(-2, -1).to(state_dtype), v_b.to(state_dtype))
+            continue
+
+        # order 2: y2_t = q_t^T E_t, with E_t = sum_{i<=t} k_i (q_i^T P_i)
+        alpha_state = y1_state
+        # Triton kernel requires q/k/x dtypes to match; use a casted view for the within-chunk
+        # A@alpha computation, but keep fp32 alpha for the cross-chunk E update.
+        alpha = alpha_state.to(dtype=qkv_dtype)
+        if kernel == 'torch':
+            Aalpha = torch.matmul(A, alpha)
+        else:
+            Aalpha = triton_trimatmul_autograd(q_b, k_b, alpha, causal=True)
+        if is_first:
+            y2_state = Aalpha.to(state_dtype)
+        else:
+            y2_cross = torch.matmul(q_b.to(state_dtype), E)
+            y2_state = y2_cross + Aalpha.to(state_dtype)
+
+        y_out[:, :, start:end, :] = (v_b.to(state_dtype) + y1_state + 0.5 * y2_state).to(dtype=qkv_dtype)
+
+        if not is_last:
+            kT = k_b.transpose(-2, -1).to(state_dtype)
+            P = P + torch.matmul(kT, v_b.to(state_dtype))
+            E = E + torch.matmul(kT, alpha_state)
+
+    return y_out.to(dtype=v.dtype) if v.dtype != qkv_dtype else y_out
+
+def mea_attention(q, k, v, *, order=2, chunk_size=256, fp32_accum=True, impl='block', kernel='torch'):
+    """
+    MEA wrapper that selects between implementations.
+
+    impl:
+      - 'block': blockwise exact causal MEA (materializes chunk×chunk A blocks)
+      - 'scan' : streaming scan that keeps per-token prefix states within chunk
+    """
+    if impl == 'block':
+        return mea_attention_block(q, k, v, order=order, chunk_size=chunk_size, fp32_accum=fp32_accum, kernel=kernel)
+    if impl == 'scan':
+        return mea_attention_scan(q, k, v, order=order, chunk_size=chunk_size, fp32_accum=fp32_accum)
+    raise ValueError(f"unknown MEA impl {impl!r} (expected 'block' or 'scan')")
+
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
 
@@ -75,6 +246,103 @@ class CausalSelfAttention(nn.Module):
         y = self.resid_dropout(self.c_proj(y))
         return y
 
+class MEASelfAttention(nn.Module):
+
+    def __init__(self, config):
+        super().__init__()
+        assert config.n_embd % config.n_head == 0
+        if config.mea_order not in (0, 1, 2):
+            raise ValueError(f"config.mea_order must be in {{0,1,2}}, got {config.mea_order}")
+        if config.mea_impl not in ('block', 'scan'):
+            raise ValueError(f"config.mea_impl must be 'block' or 'scan', got {config.mea_impl!r}")
+        if config.mea_kernel not in ('torch', 'triton'):
+            raise ValueError(f"config.mea_kernel must be 'torch' or 'triton', got {config.mea_kernel!r}")
+        if config.mea_chunk_size <= 0:
+            raise ValueError(f"config.mea_chunk_size must be >= 1, got {config.mea_chunk_size}")
+        if config.mea_qk_l2norm_eps <= 0:
+            raise ValueError(f"config.mea_qk_l2norm_eps must be > 0, got {config.mea_qk_l2norm_eps}")
+        if config.mea_out_groupnorm_eps <= 0:
+            raise ValueError(f"config.mea_out_groupnorm_eps must be > 0, got {config.mea_out_groupnorm_eps}")
+
+        # key, query, value projections for all heads, but in a batch
+        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+        # output projection
+        self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        # regularization
+        self.attn_dropout = nn.Dropout(config.dropout)
+        self.resid_dropout = nn.Dropout(config.dropout)
+        self.n_head = config.n_head
+        self.n_embd = config.n_embd
+        self.dropout = config.dropout
+
+        self.mea_order = config.mea_order
+        self.mea_impl = config.mea_impl
+        self.mea_chunk_size = config.mea_chunk_size
+        self.mea_scale = config.mea_scale
+        self.mea_fp32_accum = config.mea_fp32_accum
+        self.mea_kernel = config.mea_kernel
+        self.mea_qk_l2norm = config.mea_qk_l2norm
+        self.mea_qk_l2norm_eps = config.mea_qk_l2norm_eps
+        self.mea_out_groupnorm = config.mea_out_groupnorm
+        self.mea_out_groupnorm_eps = config.mea_out_groupnorm_eps
+        self.mea_out_gate = config.mea_out_gate
+
+        if self.mea_out_groupnorm:
+            # Sub-LayerNorm: normalize each head independently (num_groups == n_head),
+            # without mixing statistics across sequence positions.
+            self.mea_out_norm = nn.GroupNorm(
+                num_groups=config.n_head,
+                num_channels=config.n_embd,
+                eps=self.mea_out_groupnorm_eps,
+                affine=True,
+            )
+        else:
+            self.mea_out_norm = None
+
+        if self.mea_out_gate:
+            self.mea_gate = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        else:
+            self.mea_gate = None
+
+    def forward(self, x):
+        B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+
+        q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
+        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+
+        if self.mea_qk_l2norm:
+            # Normalize Q/K for stability (cosine-style similarity). Compute norms in fp32.
+            q_norm = torch.linalg.vector_norm(q.float(), dim=-1, keepdim=True).clamp_min(self.mea_qk_l2norm_eps).to(dtype=q.dtype)
+            k_norm = torch.linalg.vector_norm(k.float(), dim=-1, keepdim=True).clamp_min(self.mea_qk_l2norm_eps).to(dtype=k.dtype)
+            q = q / q_norm
+            k = k / k_norm
+
+        if self.mea_scale:
+            q = q * (1.0 / math.sqrt(k.size(-1)))
+
+        y = mea_attention(
+            q, k, v,
+            order=self.mea_order,
+            impl=self.mea_impl,
+            chunk_size=self.mea_chunk_size,
+            fp32_accum=self.mea_fp32_accum,
+            kernel=self.mea_kernel,
+        )
+        y = y.transpose(1, 2).contiguous().view(B, T, C)
+
+        if self.mea_out_norm is not None:
+            y = self.mea_out_norm(y.reshape(B * T, C)).view(B, T, C)
+
+        if self.mea_gate is not None:
+            g = F.silu(self.mea_gate(x))
+            y = y * g
+
+        y = self.attn_dropout(y)
+        y = self.resid_dropout(self.c_proj(y))
+        return y
+
 class MLP(nn.Module):
 
     def __init__(self, config):
@@ -96,7 +364,12 @@ class Block(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
-        self.attn = CausalSelfAttention(config)
+        if config.attn_type == 'softmax':
+            self.attn = CausalSelfAttention(config)
+        elif config.attn_type == 'mea':
+            self.attn = MEASelfAttention(config)
+        else:
+            raise ValueError(f"unknown attn_type {config.attn_type!r} (expected 'softmax' or 'mea')")
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
@@ -114,6 +387,18 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    attn_type: str = 'softmax' # 'softmax' (standard) or 'mea' (Matrix Exponential Attention)
+    mea_order: int = 2         # Taylor truncation order H (currently supports 0,1,2)
+    mea_impl: str = 'block'    # 'block' (local chunk matmuls) or 'scan' (streaming scan)
+    mea_chunk_size: int = 256  # chunk length (trade memory vs speed)
+    mea_scale: bool = True     # apply 1/sqrt(head_dim) scaling to Q like standard attention
+    mea_fp32_accum: bool = True # accumulate streaming states in fp32 for stability
+    mea_kernel: str = 'torch'  # for impl='block': 'torch' or 'triton' (experimental)
+    mea_qk_l2norm: bool = False # L2-normalize Q/K before MEA (stability tweak; changes semantics)
+    mea_qk_l2norm_eps: float = 1e-6
+    mea_out_groupnorm: bool = False # apply per-head GroupNorm to MEA output (RetNet-style)
+    mea_out_groupnorm_eps: float = 1e-5
+    mea_out_gate: bool = False # apply SiLU gate from input on MEA output (RetNet-style)
 
 class GPT(nn.Module):
 

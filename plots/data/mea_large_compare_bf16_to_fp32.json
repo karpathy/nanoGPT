@@ -1,0 +1,118 @@
+{
+  "config": {
+    "device": "cuda",
+    "dtype": "bfloat16",
+    "allow_tf32": true,
+    "B": 1,
+    "nh": 12,
+    "hs": 64,
+    "order": 2,
+    "chunk": 4096,
+    "fp32_accum": "false",
+    "small_Ts": [
+      64,
+      128,
+      256
+    ],
+    "large_Ts": [
+      262144,
+      1048576,
+      2097152
+    ],
+    "impls": [
+      {
+        "impl": "block",
+        "kernel": "triton"
+      }
+    ]
+  },
+  "small_T": [],
+  "large_T": [
+    {
+      "T": 262144,
+      "impl": "block",
+      "kernel": "triton",
+      "fp32_accum": false,
+      "ok": true,
+      "finite": true,
+      "time_ms": 520.5995483398438,
+      "peak_mib": 5384.1318359375,
+      "scale": {
+        "abs_max": 0.12060546875,
+        "mean": -6.445565077228821e-07,
+        "std": 0.020209189504384995
+      }
+    },
+    {
+      "T": 1048576,
+      "impl": "block",
+      "kernel": "triton",
+      "fp32_accum": false,
+      "ok": true,
+      "finite": true,
+      "time_ms": 315.75653076171875,
+      "peak_mib": 21512.1376953125,
+      "scale": {
+        "abs_max": 0.12890625,
+        "mean": 5.605995738733327e-07,
+        "std": 0.020830588415265083
+      }
+    },
+    {
+      "T": 2097152,
+      "impl": "block",
+      "kernel": "triton",
+      "fp32_accum": false,
+      "ok": true,
+      "finite": true,
+      "time_ms": 647.3922729492188,
+      "peak_mib": 43016.1376953125,
+      "scale": {
+        "abs_max": 0.140625,
+        "mean": -4.2100367636521696e-07,
+        "std": 0.021660510450601578
+      }
+    }
+  ],
+  "large_T_compare": [
+    {
+      "T": 262144,
+      "impl": "block",
+      "kernel": "triton",
+      "dtype": "bfloat16",
+      "fp32_accum": false,
+      "stats": {
+        "max_abs": 0.0007708892226219177,
+        "mean_abs": 4.346801870269701e-05,
+        "rmse": 6.223082891665399e-05,
+        "l2_rel": 0.0030793168116360903
+      }
+    },
+    {
+      "T": 1048576,
+      "impl": "block",
+      "kernel": "triton",
+      "dtype": "bfloat16",
+      "fp32_accum": false,
+      "stats": {
+        "max_abs": 0.001190386712551117,
+        "mean_abs": 8.064807479968295e-05,
+        "rmse": 0.00011063141573686153,
+        "l2_rel": 0.005310970824211836
+      }
+    },
+    {
+      "T": 2097152,
+      "impl": "block",
+      "kernel": "triton",
+      "dtype": "bfloat16",
+      "fp32_accum": false,
+      "stats": {
+        "max_abs": 0.0026142336428165436,
+        "mean_abs": 0.00013859840692020953,
+        "rmse": 0.00019536787294782698,
+        "l2_rel": 0.009019259363412857
+      }
+    }
+  ]
+}
