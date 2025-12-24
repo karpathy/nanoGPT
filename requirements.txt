@@ -1,0 +1,4 @@
+datasets==2.21.0
+tiktoken==0.7.0
+transformers==4.44.2
+wandb==0.16.6
