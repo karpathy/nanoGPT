@@ -64,13 +64,21 @@ class CausalSelfAttention(nn.Module):
             y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
         else:
             # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
-            att = F.softmax(att, dim=-1)
-            att = self.attn_dropout(att)
-            y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
+            scale_factor = 1 / math.sqrt(k.size(-1)) 
+            att = (q @ k.transpose(-2, -1)) * scale_factor
 
+            # causal means the attention per token is not affected by future tokens, achieved by adding a bias
+            attn_bias = torch.zeros(k.size(-2), k.size(-2), dtype=q.dtype)
+            temp_mask = torch.ones(k.size(-2), k.size(-2), dtype=torch.bool).tril()
+            attn_bias.masked_fill_(temp_mask.logical_not(), float("-inf"))
+            att += attn_bias
+
+            att = F.softmax(att, dim=-1)
+            att = self.attn_dropout(att) if self.training else att
+            y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+        
+        y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
+        
         # output projection
         y = self.resid_dropout(self.c_proj(y))
         return y
