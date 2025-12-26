@@ -30,43 +30,36 @@ ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torc
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 # data loading init
+def get_data(i):
+    data = train_data[i:i+block_size].astype(np.int64)
+    return torch.from_numpy(data)
+
 if real_data:
     dataset = 'openwebtext'
     data_dir = os.path.join('data', dataset)
     train_data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
+    
     def get_batch(split):
-        data = train_data # note ignore split in benchmarking script
-        ix = torch.randint(len(data) - block_size, (batch_size,))
-        x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
-        y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
+        ix = torch.randint(len(train_data) - block_size, (batch_size,))
+        x = torch.stack([get_data(i) for i in ix])
+        y = torch.stack([get_data(i+1) for i in ix])
         x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
         return x, y
 else:
-    # alternatively, if fixed data is desired to not care about data loading
     x = torch.randint(50304, (batch_size, block_size), device=device)
     y = torch.randint(50304, (batch_size, block_size), device=device)
     get_batch = lambda split: (x, y)
 
 # model init
-gptconf = GPTConfig(
-    block_size = block_size, # how far back does the model look? i.e. context size
-    n_layer = 12, n_head = 12, n_embd = 768, # size of the model
-    dropout = 0, # for determinism
-    bias = bias,
-)
-model = GPT(gptconf)
-model.to(device)
-
+gptconf = GPTConfig(block_size=block_size, n_layer=12, n_head=12, n_embd=768, dropout=0, bias=bias)
+model = GPT(gptconf).to(device)
 optimizer = model.configure_optimizers(weight_decay=1e-2, learning_rate=1e-4, betas=(0.9, 0.95), device_type=device_type)
 
 if compile:
     print("Compiling model...")
-    model = torch.compile(model) # pytorch 2.0
+    model = torch.compile(model)
 
 if profile:
-    # useful docs on pytorch profiler:
-    # - tutorial https://pytorch.org/tutorials/intermediate/tensorboard_profiler_tutorial.html
-    # - api https://pytorch.org/docs/stable/profiler.html#torch.profiler.profile
     wait, warmup, active = 5, 5, 5
     num_steps = wait + warmup + active
     with torch.profiler.profile(
@@ -75,40 +68,30 @@ if profile:
         on_trace_ready=torch.profiler.tensorboard_trace_handler('./bench_log'),
         record_shapes=False,
         profile_memory=False,
-        with_stack=False, # incurs an additional overhead, disable if not needed
+        with_stack=False,
         with_flops=True,
-        with_modules=False, # only for torchscript models atm
+        with_modules=False,
     ) as prof:
-
-        X, Y = get_batch('train')
         for k in range(num_steps):
-            with ctx:
-                logits, loss = model(X, Y)
             X, Y = get_batch('train')
+            with ctx:
+                _, loss = model(X, Y)
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
-            lossf = loss.item()
-            print(f"{k}/{num_steps} loss: {lossf:.4f}")
-
-            prof.step() # notify the profiler at end of each step
-
+            print(f"{k}/{num_steps} loss: {loss.item():.4f}")
+            prof.step()
 else:
-
-    # simple benchmarking
     torch.cuda.synchronize()
-    for stage, num_steps in enumerate([10, 20]): # burnin, then benchmark
-        t0 = time.time()
-        X, Y = get_batch('train')
+    for stage, num_steps in enumerate([10, 20]):
         for k in range(num_steps):
-            with ctx:
-                logits, loss = model(X, Y)
             X, Y = get_batch('train')
+            with ctx:
+                _, loss = model(X, Y)
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
-            lossf = loss.item()
-            print(f"{k}/{num_steps} loss: {lossf:.4f}")
+            print(f"{k}/{num_steps} loss: {loss.item():.4f}")
         torch.cuda.synchronize()
         t1 = time.time()
         dt = t1-t0
