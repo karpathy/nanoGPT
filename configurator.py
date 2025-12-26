@@ -29,8 +29,7 @@ for arg in sys.argv[1:]:
     else:
         # assume it's a --key=value argument
         assert arg.startswith('--')
-        key, val = arg.split('=')
-        key = key[2:]
+        key, val = arg[2:arg.index('=')], arg[arg.index('=') + 1:]
         if key in globals():
             try:
                 # attempt to eval it it (e.g. if bool, number, or etc)
