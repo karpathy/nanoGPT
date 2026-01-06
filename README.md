@@ -1,6 +1,6 @@
 
 # nanoGPT
-
+FSDP IMPLEMENTATION!!!
 ![nanoGPT](assets/nanogpt.jpg)
 
 
