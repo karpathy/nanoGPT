@@ -1,6 +1,6 @@
 
 # nanoGPT
-
+DDP IMPLEMENTATION!!!
 ![nanoGPT](assets/nanogpt.jpg)
 
 
