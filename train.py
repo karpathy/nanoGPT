@@ -24,6 +24,11 @@ from contextlib import nullcontext
 
 import numpy as np
 import torch
+##□□■■■■■■■■□□□□■■■■■■■■□□□□■■■■■■■■■■□□##
+##□□■■□□□□□□■■□□■■□□□□□□■■□□■■□□□□□□■■□□##
+##□□■■□□□□□□■■□□■■□□□□□□■■□□■■■■■■■■■■□□##
+##□□■■□□□□□□■■□□■■□□□□□□■■□□■■□□□□□□□□□□##
+##□□■■■■■■■■□□□□■■■■■■■■□□□□■■□□□□□□□□□□##
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
@@ -66,6 +71,7 @@ decay_lr = True # whether to decay the learning rate
 warmup_iters = 2000 # how many steps to warm up for
 lr_decay_iters = 600000 # should be ~= max_iters per Chinchilla
 min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
+
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
@@ -78,6 +84,11 @@ exec(open('configurator.py').read()) # overrides from command line or config fil
 config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
 
+##□□■■■■■■■■□□□□■■■■■■■■□□□□■■■■■■■■■■□□##
+##□□■■□□□□□□■■□□■■□□□□□□■■□□■■□□□□□□■■□□##
+##□□■■□□□□□□■■□□■■□□□□□□■■□□■■■■■■■■■■□□##
+##□□■■□□□□□□■■□□■■□□□□□□■■□□■■□□□□□□□□□□##
+##□□■■■■■■■■□□□□■■■■■■■■□□□□■■□□□□□□□□□□##
 # various inits, derived attributes, I/O setup
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
 if ddp:
@@ -94,6 +105,11 @@ if ddp:
     assert gradient_accumulation_steps % ddp_world_size == 0
     gradient_accumulation_steps //= ddp_world_size
 else:
+    ##□□■■■■■■■■□□□□■■■■■■■■□□□□■■■■■■■■■■□□##
+    ##□□■■□□□□□□■■□□■■□□□□□□■■□□■■□□□□□□■■□□##
+    ##□□■■□□□□□□■■□□■■□□□□□□■■□□■■■■■■■■■■□□##
+    ##□□■■□□□□□□■■□□■■□□□□□□■■□□■■□□□□□□□□□□##
+    ##□□■■■■■■■■□□□□■■■■■■■■□□□□■■□□□□□□□□□□##
     # if not ddp, we are running on a single gpu, and one process
     master_process = True
     seed_offset = 0
@@ -207,6 +223,11 @@ if compile:
     unoptimized_model = model
     model = torch.compile(model) # requires PyTorch 2.0
 
+##□□■■■■■■■■□□□□■■■■■■■■□□□□■■■■■■■■■■□□##
+##□□■■□□□□□□■■□□■■□□□□□□■■□□■■□□□□□□■■□□##
+##□□■■□□□□□□■■□□■■□□□□□□■■□□■■■■■■■■■■□□##
+##□□■■□□□□□□■■□□■■□□□□□□■■□□■■□□□□□□□□□□##
+##□□■■■■■■■■□□□□■■■■■■■■□□□□■■□□□□□□□□□□##
 # wrap model into DDP container
 if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
@@ -250,6 +271,11 @@ if wandb_log and master_process:
 X, Y = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
+##□□■■■■■■■■□□□□■■■■■■■■□□□□■■■■■■■■■■□□##
+##□□■■□□□□□□■■□□■■□□□□□□■■□□■■□□□□□□■■□□##
+##□□■■□□□□□□■■□□■■□□□□□□■■□□■■■■■■■■■■□□##
+##□□■■□□□□□□■■□□■■□□□□□□■■□□■■□□□□□□□□□□##
+##□□■■■■■■■■□□□□■■■■■■■■□□□□■■□□□□□□□□□□##
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
 while True:
@@ -290,6 +316,11 @@ while True:
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
     for micro_step in range(gradient_accumulation_steps):
+        ##□□■■■■■■■■□□□□■■■■■■■■□□□□■■■■■■■■■■□□##
+        ##□□■■□□□□□□■■□□■■□□□□□□■■□□■■□□□□□□■■□□##
+        ##□□■■□□□□□□■■□□■■□□□□□□■■□□■■■■■■■■■■□□##
+        ##□□■■□□□□□□■■□□■■□□□□□□■■□□■■□□□□□□□□□□##
+        ##□□■■■■■■■■□□□□■■■■■■■■□□□□■■□□□□□□□□□□##
         if ddp:
             # in DDP training we only need to sync gradients at the last micro step.
             # the official way to do this is with model.no_sync() context manager, but
@@ -332,5 +363,10 @@ while True:
     if iter_num > max_iters:
         break
 
+##□□■■■■■■■■□□□□■■■■■■■■□□□□■■■■■■■■■■□□##
+##□□■■□□□□□□■■□□■■□□□□□□■■□□■■□□□□□□■■□□##
+##□□■■□□□□□□■■□□■■□□□□□□■■□□■■■■■■■■■■□□##
+##□□■■□□□□□□■■□□■■□□□□□□■■□□■■□□□□□□□□□□##
+##□□■■■■■■■■□□□□■■■■■■■■□□□□■■□□□□□□□□□□##
 if ddp:
     destroy_process_group()
