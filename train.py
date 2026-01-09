@@ -260,10 +260,10 @@ while True:
         param_group['lr'] = lr
 
     # evaluate the loss on train/val sets and write checkpoints
-    if iter_num % eval_interval == 0 and master_process:
+    if iter_num % eval_interval == 0:
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-        if wandb_log:
+        if wandb_log and master_process:
             wandb.log({
                 "iter": iter_num,
                 "train/loss": losses['train'],
@@ -271,7 +271,7 @@ while True:
                 "lr": lr,
                 "mfu": running_mfu*100, # convert to percentage
             })
-        if losses['val'] < best_val_loss or always_save_checkpoint:
+        if (losses['val'] < best_val_loss or always_save_checkpoint) and master_process:
             best_val_loss = losses['val']
             if iter_num > 0:
                 checkpoint = {
@@ -284,6 +284,11 @@ while True:
                 }
                 print(f"saving checkpoint to {out_dir}")
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+
+    # add a barrier here, so all GPUs are available for the training after the eval step
+    if ddp:
+        torch.distributed.barrier()
+
     if iter_num == 0 and eval_only:
         break
 
