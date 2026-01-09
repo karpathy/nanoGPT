@@ -7,7 +7,10 @@ from contextlib import nullcontext
 import torch
 import tiktoken
 from model import GPTConfig, GPT
-
+from tp_utils import parallelize_model
+from torch.distributed import destroy_process_group, init_process_group
+from torch.distributed._tensor import DeviceMesh
+import torch.distributed as dist
 # -----------------------------------------------------------------------------
 init_from = 'resume' # either 'resume' (from an out_dir) or a gpt2 variant (e.g. 'gpt2-xl')
 out_dir = 'out' # ignored if init_from is not 'resume'
@@ -20,6 +23,7 @@ seed = 1337
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32' or 'bfloat16' or 'float16'
 compile = False # use PyTorch 2.0 to compile the model to be faster
+use_tp = True
 exec(open('configurator.py').read()) # overrides from command line or config file
 # -----------------------------------------------------------------------------
 
@@ -48,8 +52,29 @@ elif init_from.startswith('gpt2'):
     # init from a given GPT-2 model
     model = GPT.from_pretrained(init_from, dict(dropout=0.0))
 
+
 model.eval()
-model.to(device)
+if use_tp:
+    backend = "nccl" 
+    init_process_group(backend=backend)
+    _rank = int(os.environ["RANK"])
+    _local_rank = int(os.environ["LOCAL_RANK"])
+
+    world_size = int(os.environ["WORLD_SIZE"])  # total number of training processes
+    device = f"cuda:{_local_rank}"
+    model.to(device)
+    torch.cuda.set_device(device)
+    master_process = _rank == 0  # this process will do logging, checkpointing etc.
+    seed_offset = _rank  # each process gets a different seed
+    mesh = (
+            DeviceMesh(
+                device_type="cuda",
+                mesh=list(range(dist.get_world_size())),
+            ))
+    # print(f" {dir(model)}")
+    # print("=========================")
+    num_layers = parallelize_model(model, mesh)
+
 if compile:
     model = torch.compile(model) # requires PyTorch 2.0 (optional)
 
