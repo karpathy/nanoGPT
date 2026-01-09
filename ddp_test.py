@@ -42,10 +42,9 @@ def verify_gradients_synced(model, rank, world_size):
         print("\n---grad sync check---")
         for name in grad_norms.keys():
             norms = [gathered_norms[i][name] for i in range(world_size)]
-            max_diff = max(norms) - min(norms)
-            synced = max_diff < 1e-5  # allow small numerical differences  
+            synced = max(norms) - min(norms) < 1e-5  # allow small numerical differences  
             status = "1" if synced else "0"
-            print(f"{status} {name}: norms={norms}, max_diff={max_diff:.2e}")
+            print(f"{status} {name}: norms={norms}")
             if not synced:
                 all_synced = False
         
@@ -58,8 +57,7 @@ def verify_gradients_synced(model, rank, world_size):
         # non-zero ranks also check but don't print
         for name in grad_norms.keys():
             norms = [gathered_norms[i][name] for i in range(world_size)]
-            max_diff = max(norms) - min(norms)
-            if max_diff >= 1e-5:
+            if max(norms) - min(norms) >= 1e-5:
                 all_synced = False
     
     return all_synced
@@ -81,10 +79,9 @@ def verify_params_synced(model, rank, world_size):
         print("\n---param sync check---")
         for name in param_norms.keys():
             norms = [gathered_norms[i][name] for i in range(world_size)]
-            max_diff = max(norms) - min(norms)
-            synced = max_diff < 1e-5  # allow small numerical differences
+            synced = max(norms) - min(norms) < 1e-5  # allow small numerical differences
             status = "1" if synced else "0"
-            print(f"{status} {name}: norms={norms}, max_diff={max_diff:.2e}")
+            print(f"{status} {name}: norms={norms}")
             if not synced:
                 all_synced = False
         
@@ -92,13 +89,12 @@ def verify_params_synced(model, rank, world_size):
             print("all params are synced")
         else:
             print("some params are not synced")
-        print("=" * 40 + "\n")
+        print("-" * 40 + "\n")
     else:
         # non-zero ranks also check but don't print
         for name in param_norms.keys():
             norms = [gathered_norms[i][name] for i in range(world_size)]
-            max_diff = max(norms) - min(norms)
-            if max_diff >= 1e-5:
+            if max(norms) - min(norms) >= 1e-5:
                 all_synced = False
     
     return all_synced
@@ -158,7 +154,7 @@ def main():
     # generate random input data
     X = torch.randint(0, config.vocab_size, (batch_size, block_size), device=device)
     Y = torch.randint(0, config.vocab_size, (batch_size, block_size), device=device)
-    
+
     print(f"starting forward pass for rank {rank}")
     
     # forward pass
@@ -176,7 +172,6 @@ def main():
         loss_diff = max(losses) - min(losses)
         print(f"loss difference: {loss_diff:.6f}")
         # losses should be different initially (different data batches)
-        print("Note: Initial losses may differ due to different data batches per process\n")
     
     # backward pass
     print(f"starting backward pass for rank {rank}")
@@ -232,3 +227,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

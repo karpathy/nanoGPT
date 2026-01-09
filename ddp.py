@@ -18,9 +18,9 @@ class custom_ddp:
     def _register_hooks(self):
         for param in self.module.parameters():
             if param.requires_grad:
-                param.register_hook(self._make_backward_hook(param))
+                param.register_hook(self._make_backward_hook())
     
-    def _make_backward_hook(self, param):
+    def _make_backward_hook(self):
         
         def hook(grad):
             if self.require_backward_grad_sync and grad is not None:
