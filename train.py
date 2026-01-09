@@ -14,6 +14,14 @@ $ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=0 --master_addr=123.456.123
 - Run on the worker node:
 $ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 --master_addr=123.456.123.456 --master_port=1234 train.py
 (If your cluster does not have Infiniband interconnect prepend NCCL_IB_DISABLE=1)
+
+Run with
+python -m torch.distributed.launch \
+    --nproc_per_node=2 \
+    --master_addr=127.0.0.1 \
+    --master_port=29500 \
+    --use_env \
+    test_ddp.py
 """
 
 import os
@@ -24,15 +32,15 @@ from contextlib import nullcontext
 
 import numpy as np
 import torch
+from torch.distributed import init_process_group, destroy_process_group
+
+from model import GPTConfig, GPT
 ##□□■■■■■■■■□□□□■■■■■■■■□□□□■■■■■■■■■■□□##
 ##□□■■□□□□□□■■□□■■□□□□□□■■□□■■□□□□□□■■□□##
 ##□□■■□□□□□□■■□□■■□□□□□□■■□□■■■■■■■■■■□□##
 ##□□■■□□□□□□■■□□■■□□□□□□■■□□■■□□□□□□□□□□##
 ##□□■■■■■■■■□□□□■■■■■■■■□□□□■■□□□□□□□□□□##
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.distributed import init_process_group, destroy_process_group
-
-from model import GPTConfig, GPT
+from ddp import custom_ddp
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -71,9 +79,8 @@ decay_lr = True # whether to decay the learning rate
 warmup_iters = 2000 # how many steps to warm up for
 lr_decay_iters = 600000 # should be ~= max_iters per Chinchilla
 min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
-
 # DDP settings
-backend = 'nccl' # 'nccl', 'gloo', etc.
+backend = 'gloo' # 'nccl', 'gloo', etc. - using 'gloo' for M1 Max compatibility
 # system
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
@@ -92,12 +99,19 @@ config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # various inits, derived attributes, I/O setup
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
 if ddp:
+    # Initialize process group using environment variables set by launcher
+    # This works better with torch.distributed.launch
     init_process_group(backend=backend)
     ddp_rank = int(os.environ['RANK'])
     ddp_local_rank = int(os.environ['LOCAL_RANK'])
     ddp_world_size = int(os.environ['WORLD_SIZE'])
-    device = f'cuda:{ddp_local_rank}'
-    torch.cuda.set_device(device)
+    # use 'cpu' or 'mps' instead of 'cuda'
+    if device == 'cuda' and not torch.cuda.is_available():
+        device = 'cpu'  # when 'cuda' is not available use 'cpu'
+    elif device == 'cuda':
+        device = f'cuda:{ddp_local_rank}'
+        torch.cuda.set_device(device)
+    # For 'mps' or 'cpu', use the device as is
     master_process = ddp_rank == 0 # this process will do logging, checkpointing etc.
     seed_offset = ddp_rank # each process gets a different seed
     # world_size number of processes will be training simultaneously, so we can scale
@@ -105,11 +119,6 @@ if ddp:
     assert gradient_accumulation_steps % ddp_world_size == 0
     gradient_accumulation_steps //= ddp_world_size
 else:
-    ##□□■■■■■■■■□□□□■■■■■■■■□□□□■■■■■■■■■■□□##
-    ##□□■■□□□□□□■■□□■■□□□□□□■■□□■■□□□□□□■■□□##
-    ##□□■■□□□□□□■■□□■■□□□□□□■■□□■■■■■■■■■■□□##
-    ##□□■■□□□□□□■■□□■■□□□□□□■■□□■■□□□□□□□□□□##
-    ##□□■■■■■■■■□□□□■■■■■■■■□□□□■■□□□□□□□□□□##
     # if not ddp, we are running on a single gpu, and one process
     master_process = True
     seed_offset = 0
@@ -122,7 +131,13 @@ if master_process:
 torch.manual_seed(1337 + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
-device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
+# determine device type for autocast, support cuda, mps, and cpu
+if 'cuda' in device:
+    device_type = 'cuda'
+elif device == 'mps':
+    device_type = 'mps'
+else:
+    device_type = 'cpu'
 # note: float16 data type will automatically use a GradScaler
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
@@ -228,9 +243,9 @@ if compile:
 ##□□■■□□□□□□■■□□■■□□□□□□■■□□■■■■■■■■■■□□##
 ##□□■■□□□□□□■■□□■■□□□□□□■■□□■■□□□□□□□□□□##
 ##□□■■■■■■■■□□□□■■■■■■■■□□□□■■□□□□□□□□□□##
-# wrap model into DDP container
+# customDDP wrapper instead of DistributedDataParallel
 if ddp:
-    model = DDP(model, device_ids=[ddp_local_rank])
+    model = custom_ddp(model)
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
@@ -363,10 +378,5 @@ while True:
     if iter_num > max_iters:
         break
 
-##□□■■■■■■■■□□□□■■■■■■■■□□□□■■■■■■■■■■□□##
-##□□■■□□□□□□■■□□■■□□□□□□■■□□■■□□□□□□■■□□##
-##□□■■□□□□□□■■□□■■□□□□□□■■□□■■■■■■■■■■□□##
-##□□■■□□□□□□■■□□■■□□□□□□■■□□■■□□□□□□□□□□##
-##□□■■■■■■■■□□□□■■■■■■■■□□□□■■□□□□□□□□□□##
 if ddp:
     destroy_process_group()
