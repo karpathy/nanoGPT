@@ -1,6 +1,7 @@
 """
 This training script can be run both on a single gpu in debug mode,
-and also in a larger training run with distributed data parallel (ddp).
+and also in a larger training run with distributed data parallel (ddp) or
+fully sharded data parallel (fsdp).
 
 To run on a single GPU, example:
 $ python train.py --batch_size=32 --compile=False
@@ -8,12 +9,18 @@ $ python train.py --batch_size=32 --compile=False
 To run with DDP on 4 gpus on 1 node, example:
 $ torchrun --standalone --nproc_per_node=4 train.py
 
+To run with FSDP on 4 gpus on 1 node, example:
+$ torchrun --standalone --nproc_per_node=4 train.py --use_fsdp=True
+
 To run with DDP on 4 gpus across 2 nodes, example:
 - Run on the first (master) node with example IP 123.456.123.456:
 $ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=0 --master_addr=123.456.123.456 --master_port=1234 train.py
 - Run on the worker node:
 $ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 --master_addr=123.456.123.456 --master_port=1234 train.py
 (If your cluster does not have Infiniband interconnect prepend NCCL_IB_DISABLE=1)
+
+For M1 Max MacBooks, use gloo backend:
+$ GLOO_SOCKET_IFNAME=lo0 python -m torch.distributed.launch --nproc_per_node=2 --master_addr=127.0.0.1 --master_port=29500 --use_env train.py --backend=gloo --use_fsdp=True
 """
 
 import os
@@ -24,10 +31,20 @@ from contextlib import nullcontext
 
 import numpy as np
 import torch
-from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
 from model import GPTConfig, GPT
+
+# import custom ddp and fsdp implementations
+try:
+    from ddp import custom_ddp
+except ImportError:
+    custom_ddp = None
+
+try:
+    from fsdp import custom_fsdp
+except ImportError:
+    custom_fsdp = None
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -66,8 +83,9 @@ decay_lr = True # whether to decay the learning rate
 warmup_iters = 2000 # how many steps to warm up for
 lr_decay_iters = 600000 # should be ~= max_iters per Chinchilla
 min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
-# DDP settings
+# ddp/fsdp settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
+use_fsdp = False # if True, use FSDP instead of DDP
 # system
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
@@ -81,12 +99,23 @@ config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # various inits, derived attributes, I/O setup
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
 if ddp:
+    # Initialize process group using environment variables set by launcher
+    # This works better with torch.distributed.launch
     init_process_group(backend=backend)
     ddp_rank = int(os.environ['RANK'])
     ddp_local_rank = int(os.environ['LOCAL_RANK'])
     ddp_world_size = int(os.environ['WORLD_SIZE'])
-    device = f'cuda:{ddp_local_rank}'
-    torch.cuda.set_device(device)
+    # handle device assignment based on backend and available devices
+    if backend == 'gloo' or not torch.cuda.is_available():
+        # for gloo backend (CPU/MPS) or when CUDA is not available
+        if device == 'mps' and torch.backends.mps.is_available():
+            device = 'mps'
+        else:
+            device = 'cpu'
+    else:
+        # for NCCL backend with CUDA
+        device = f'cuda:{ddp_local_rank}'
+        torch.cuda.set_device(device)
     master_process = ddp_rank == 0 # this process will do logging, checkpointing etc.
     seed_offset = ddp_rank # each process gets a different seed
     # world_size number of processes will be training simultaneously, so we can scale
@@ -106,7 +135,7 @@ if master_process:
 torch.manual_seed(1337 + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
-device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
+device_type = 'cuda' if 'cuda' in device else ('mps' if 'mps' in device else 'cpu') # for later use in torch.autocast
 # note: float16 data type will automatically use a GradScaler
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
@@ -207,9 +236,21 @@ if compile:
     unoptimized_model = model
     model = torch.compile(model) # requires PyTorch 2.0
 
-# wrap model into DDP container
+# wrap model into ddp or fsdp container
 if ddp:
-    model = DDP(model, device_ids=[ddp_local_rank])
+    if use_fsdp and custom_fsdp is not None:
+        # use custom fsdp implementation
+        model = custom_fsdp(model)
+        print(f"[Rank {ddp_rank}] Using custom FSDP")
+    elif not use_fsdp and custom_ddp is not None:
+        # use custom ddp implementation
+        model = custom_ddp(model)
+        print(f"[Rank {ddp_rank}] Using custom DDP")
+    else:
+        # fall back to pytorch's ddp
+        from torch.nn.parallel import DistributedDataParallel as DDP
+        model = DDP(model, device_ids=[ddp_local_rank])
+        print(f"[Rank {ddp_rank}] Using PyTorch DDP")
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
@@ -250,7 +291,14 @@ if wandb_log and master_process:
 X, Y = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
-raw_model = model.module if ddp else model # unwrap DDP container if needed
+# unwrap ddp/fsdp container if needed
+if ddp:
+    if hasattr(model, 'module'):
+        raw_model = model.module  # DDP or custom wrappers
+    else:
+        raw_model = model  # FSDP might not have .module
+else:
+    raw_model = model
 running_mfu = -1.0
 while True:
 
@@ -291,11 +339,12 @@ while True:
     # and using the GradScaler if data type is float16
     for micro_step in range(gradient_accumulation_steps):
         if ddp:
-            # in DDP training we only need to sync gradients at the last micro step.
+            # in ddp/fsdp training we only need to sync gradients at the last micro step.
             # the official way to do this is with model.no_sync() context manager, but
             # I really dislike that this bloats the code and forces us to repeat code
             # looking at the source of that context manager, it just toggles this variable
-            model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
+            if hasattr(model, 'require_backward_grad_sync'):
+                model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
             logits, loss = model(X, Y)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
@@ -312,6 +361,10 @@ while True:
     scaler.update()
     # flush the gradients as soon as we can, no need for this memory anymore
     optimizer.zero_grad(set_to_none=True)
+    
+    # for fsdp, sync parameters after optimizer step
+    if ddp and use_fsdp and hasattr(model, 'sync_parameters'):
+        model.sync_parameters()
 
     # timing and logging
     t1 = time.time()
