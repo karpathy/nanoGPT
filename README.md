@@ -1,6 +1,6 @@
 
 # nanoGPT
-DDP IMPLEMENTATION!!!
+DDP and FSDP IMPLEMENTATION!!!
 ![nanoGPT](assets/nanogpt.jpg)
 
 
