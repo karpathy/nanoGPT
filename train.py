@@ -26,6 +26,7 @@ import numpy as np
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
+from peft import LoraConfig, get_peft_model
 
 from model import GPTConfig, GPT
 from bf16_adamw import BF16AdamW  # Use to reproduce tt-train's training
@@ -49,6 +50,7 @@ gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
 batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size = 1024
 # model
+lora_attention = False
 n_layer = 12
 n_head = 12
 n_embd = 768
@@ -150,9 +152,17 @@ if os.path.exists(meta_path):
     meta_vocab_size = meta['vocab_size']
     print(f"found vocab_size = {meta_vocab_size} (inside {meta_path})")
 
+lora_config_attention = LoraConfig(
+    r=8,              # dimension of the smaller matrices
+    lora_alpha=1,     # scaling factor
+    lora_dropout=0.0, # dropout of LoRA layers
+    target_modules=["attn.qkv_proj", "attn.o_proj"],
+)
+
 # model init
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
                   bias=bias, vocab_size=None, dropout=dropout) # start with model_args from command line
+
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -162,6 +172,10 @@ if init_from == 'scratch':
     model_args['vocab_size'] = meta_vocab_size if meta_vocab_size is not None else 50304
     gptconf = GPTConfig(**model_args)
     model = GPT(gptconf)
+    if lora_attention:
+        model = get_peft_model(model, lora_config_attention)
+    if master_process and hasattr(model, "print_trainable_parameters"):
+        model.print_trainable_parameters()
 elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
     # resume training from a checkpoint.
@@ -175,6 +189,10 @@ elif init_from == 'resume':
     # create the model
     gptconf = GPTConfig(**model_args)
     model = GPT(gptconf)
+    if lora_attention:
+        model = get_peft_model(model, lora_config_attention)
+    if master_process and hasattr(model, "print_trainable_parameters"):
+        model.print_trainable_parameters()
     state_dict = checkpoint['model']
     # fix the keys of the state dictionary :(
     # honestly no idea how checkpoints sometimes get this prefix, have to debug more

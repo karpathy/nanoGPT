@@ -18,6 +18,9 @@ gradient_accumulation_steps = 1
 batch_size = 64
 block_size = 256 # context of up to 256 previous characters
 
+# use LoRA for attention
+lora_attention = False
+
 # baby GPT model :)
 n_layer = 6
 n_head = 6

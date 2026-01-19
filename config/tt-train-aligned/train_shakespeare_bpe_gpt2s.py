@@ -17,6 +17,9 @@ wandb_run_name = 'gpt2s'
 # Data - uses GPT-2 BPE tokenizer (vocab_size=50257)
 dataset = 'shakespeare'
 
+# use LoRA for attention
+lora_attention = False
+
 # Training config (matching tt-train)
 batch_size = 4
 gradient_accumulation_steps = 1
