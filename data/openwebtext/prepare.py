@@ -2,7 +2,14 @@
 # https://github.com/HazyResearch/flash-attention/blob/main/training/src/datamodules/language_modeling_hf.py
 
 import os
+
+# use autodl-tmp for Hugging Face cache (must be set before importing datasets)
+os.environ["HF_HOME"] = "/root/autodl-tmp/.cache/huggingface"
+# disable Xet (401 in some environments); use legacy HTTP download
+os.environ["HF_HUB_DISABLE_XET"] = "1"
+
 from tqdm import tqdm
+from huggingface_hub import constants as hf_constants
 import numpy as np
 import tiktoken
 from datasets import load_dataset # huggingface datasets
@@ -19,6 +26,9 @@ num_proc_load_dataset = num_proc
 enc = tiktoken.get_encoding("gpt2")
 
 if __name__ == '__main__':
+    # verify cache location (must be set before any hf imports)
+    print(f"HF_HOME: {hf_constants.HF_HOME}")
+    print(f"HF_HUB_CACHE: {hf_constants.HF_HUB_CACHE}")
     # takes 54GB in huggingface .cache dir, about 8M documents (8,013,769)
     dataset = load_dataset("openwebtext", num_proc=num_proc_load_dataset)
 

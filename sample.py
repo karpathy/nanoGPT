@@ -2,6 +2,9 @@
 Sample from a trained model
 """
 import os
+# disable Xet (401 in some environments); use legacy HTTP for model download
+os.environ["HF_HUB_DISABLE_XET"] = "1"
+
 import pickle
 from contextlib import nullcontext
 import torch
