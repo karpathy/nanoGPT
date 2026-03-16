@@ -1,10 +1,13 @@
 """
 Full definition of a GPT Language Model, all of it in this single file.
+Optionally supports Attention Residuals (AttnRes) from MoonshotAI.
 References:
 1) the official GPT-2 TensorFlow implementation released by OpenAI:
 https://github.com/openai/gpt-2/blob/master/src/model.py
 2) huggingface/transformers PyTorch implementation:
 https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
+3) Attention Residuals (AttnRes):
+https://github.com/MoonshotAI/Attention-Residuals
 """
 
 import math
@@ -25,6 +28,33 @@ class LayerNorm(nn.Module):
 
     def forward(self, input):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
+
+class RMSNorm(nn.Module):
+    """RMSNorm used in Attention Residuals for normalizing keys."""
+
+    def __init__(self, ndim, eps=1e-6):
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(ndim))
+        self.eps = eps
+
+    def forward(self, x):
+        rms = torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+        return x * rms * self.weight
+
+def block_attn_res(blocks, partial_block, proj, norm):
+    """
+    Inter-block attention: attend over block reps + current partial sum.
+    blocks: list of N tensors of shape [B, T, D] (completed block representations)
+    partial_block: [B, T, D] (intra-block partial sum)
+    proj: nn.Linear(D, 1, bias=False) — learned pseudo-query
+    norm: RMSNorm — applied to keys
+    Returns: [B, T, D] — weighted combination of all representations
+    """
+    V = torch.stack(blocks + [partial_block])  # [N+1, B, T, D]
+    K = norm(V)
+    logits = torch.einsum('d, n b t d -> n b t', proj.weight.squeeze(), K)
+    h = torch.einsum('n b t, n b t d -> b t d', logits.softmax(0), V)
+    return h
 
 class CausalSelfAttention(nn.Module):
 
@@ -93,17 +123,54 @@ class MLP(nn.Module):
 
 class Block(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, config, layer_idx=0):
         super().__init__()
         self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
         self.attn = CausalSelfAttention(config)
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
-    def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
-        x = x + self.mlp(self.ln_2(x))
-        return x
+        # Attention Residuals (optional)
+        self.use_attn_res = config.attn_res
+        if self.use_attn_res:
+            assert config.attn_res_block_size >= 2 and config.attn_res_block_size % 2 == 0, \
+                f"attn_res_block_size must be even and >= 2, got {config.attn_res_block_size}"
+            self.layer_idx = layer_idx
+            self.ar_block_size = config.attn_res_block_size
+            self.attn_res_proj = nn.Linear(config.n_embd, 1, bias=False)
+            self.attn_res_norm = RMSNorm(config.n_embd)
+            self.mlp_res_proj = nn.Linear(config.n_embd, 1, bias=False)
+            self.mlp_res_norm = RMSNorm(config.n_embd)
+
+    def forward(self, x, blocks=None, partial_block=None):
+        if not self.use_attn_res:
+            # original nanoGPT path — zero overhead
+            x = x + self.attn(self.ln_1(x))
+            x = x + self.mlp(self.ln_2(x))
+            return x
+
+        # --- Block AttnRes path ---
+        # attend over block reps before self-attention
+        h = block_attn_res(blocks, partial_block, self.attn_res_proj, self.attn_res_norm)
+
+        # check block boundary: start a new block
+        layers_per_block = self.ar_block_size // 2
+        if self.layer_idx % layers_per_block == 0 and self.layer_idx > 0:
+            blocks = blocks + [partial_block]
+            partial_block = None
+
+        # self-attention
+        attn_out = self.attn(self.ln_1(h))
+        partial_block = partial_block + attn_out if partial_block is not None else attn_out
+
+        # attend over block reps before MLP
+        h = block_attn_res(blocks, partial_block, self.mlp_res_proj, self.mlp_res_norm)
+
+        # MLP
+        mlp_out = self.mlp(self.ln_2(h))
+        partial_block = partial_block + mlp_out
+
+        return blocks, partial_block
 
 @dataclass
 class GPTConfig:
@@ -114,6 +181,8 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    attn_res: bool = False # True: use Attention Residuals instead of standard residual connections
+    attn_res_block_size: int = 4 # number of sub-layers per block (attn+mlp each count as 1, so 4 = 2 transformer layers per block)
 
 class GPT(nn.Module):
 
@@ -127,7 +196,7 @@ class GPT(nn.Module):
             wte = nn.Embedding(config.vocab_size, config.n_embd),
             wpe = nn.Embedding(config.block_size, config.n_embd),
             drop = nn.Dropout(config.dropout),
-            h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
+            h = nn.ModuleList([Block(config, layer_idx=i) for i in range(config.n_layer)]),
             ln_f = LayerNorm(config.n_embd, bias=config.bias),
         ))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
@@ -177,8 +246,19 @@ class GPT(nn.Module):
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
-        for block in self.transformer.h:
-            x = block(x)
+
+        if not self.config.attn_res:
+            # original nanoGPT path
+            for block in self.transformer.h:
+                x = block(x)
+        else:
+            # Attention Residuals path: maintain block reps and partial_block
+            blocks = [x]  # token embedding is the first block rep
+            partial_block = x
+            for block in self.transformer.h:
+                blocks, partial_block = block(None, blocks, partial_block)
+            x = partial_block
+
         x = self.transformer.ln_f(x)
 
         if targets is not None:
