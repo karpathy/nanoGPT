@@ -138,8 +138,16 @@ best_val_loss = 1e9
 meta_path = os.path.join(data_dir, 'meta.pkl')
 meta_vocab_size = None
 if os.path.exists(meta_path):
+    # use a restricted unpickler to prevent arbitrary code execution (CWE-502).
+    # meta.pkl only contains built-in types (dict, int, list, str), so we block
+    # all class/module imports which is the mechanism pickle exploits use.
+    class _RestrictedUnpickler(pickle.Unpickler):
+        def find_class(self, module, name):
+            raise pickle.UnpicklingError(
+                f"Refusing to unpickle class {module}.{name} in meta.pkl"
+            )
     with open(meta_path, 'rb') as f:
-        meta = pickle.load(f)
+        meta = _RestrictedUnpickler(f).load()
     meta_vocab_size = meta['vocab_size']
     print(f"found vocab_size = {meta_vocab_size} (inside {meta_path})")
 
