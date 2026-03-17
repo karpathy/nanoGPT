@@ -60,8 +60,13 @@ if init_from == 'resume' and 'config' in checkpoint and 'dataset' in checkpoint[
     load_meta = os.path.exists(meta_path)
 if load_meta:
     print(f"Loading meta from {meta_path}...")
+    class _RestrictedUnpickler(pickle.Unpickler):
+        def find_class(self, module, name):
+            raise pickle.UnpicklingError(
+                f"Refusing to unpickle class {module}.{name} in meta.pkl"
+            )
     with open(meta_path, 'rb') as f:
-        meta = pickle.load(f)
+        meta = _RestrictedUnpickler(f).load()
     # TODO want to make this more general to arbitrary encoder/decoder schemes
     stoi, itos = meta['stoi'], meta['itos']
     encode = lambda s: [stoi[c] for c in s]
