@@ -107,6 +107,28 @@ def build_norm(norm_type, ndim, bias):
         return RMSNorm(ndim)
     return LayerNorm(ndim, bias)
 
+class SwiGLU(nn.Module):
+
+    def __init__(self, config):
+        super().__init__()
+        # hidden dim = 2/3 * 4 * n_embd, rounded to nearest multiple of 64
+        # keeps parameter count close to standard 4x MLP (3hd ≈ 8d²)
+        multiple_of = 64
+        hidden = int(2 / 3 * 4 * config.n_embd)
+        hidden = multiple_of * ((hidden + multiple_of - 1) // multiple_of)
+        self.gate = nn.Linear(config.n_embd, hidden, bias=config.bias)
+        self.up   = nn.Linear(config.n_embd, hidden, bias=config.bias)
+        self.down = nn.Linear(hidden, config.n_embd, bias=config.bias)
+        self.dropout = nn.Dropout(config.dropout)
+
+    def forward(self, x):
+        return self.dropout(self.down(F.silu(self.gate(x)) * self.up(x)))
+
+def build_mlp(config):
+    if config.mlp_type == 'swiglu':
+        return SwiGLU(config)
+    return MLP(config)
+
 class Block(nn.Module):
 
     def __init__(self, config):
@@ -114,7 +136,7 @@ class Block(nn.Module):
         self.ln_1 = build_norm(config.norm_type, config.n_embd, config.bias)
         self.attn = CausalSelfAttention(config)
         self.ln_2 = build_norm(config.norm_type, config.n_embd, config.bias)
-        self.mlp = MLP(config)
+        self.mlp = build_mlp(config)
 
     def forward(self, x):
         x = x + self.attn(self.ln_1(x))
@@ -131,6 +153,7 @@ class GPTConfig:
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
     norm_type: str = 'layernorm' # 'layernorm' or 'rmsnorm'
+    mlp_type: str = 'gelu'      # 'gelu' or 'swiglu'
 
 class GPT(nn.Module):
 
