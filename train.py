@@ -55,6 +55,7 @@ n_embd = 768
 dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
 bias = False # do we use bias inside LayerNorm and Linear layers?
 norm_type = 'layernorm' # 'layernorm' or 'rmsnorm'
+mlp_type = 'gelu'      # 'gelu' or 'swiglu'
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
 max_iters = 600000 # total number of training iterations
@@ -146,7 +147,7 @@ if os.path.exists(meta_path):
 
 # model init
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
-                  bias=bias, vocab_size=None, dropout=dropout, norm_type=norm_type) # start with model_args from command line
+                  bias=bias, vocab_size=None, dropout=dropout, norm_type=norm_type, mlp_type=mlp_type) # start with model_args from command line
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -164,7 +165,7 @@ elif init_from == 'resume':
     checkpoint_model_args = checkpoint['model_args']
     # force these config attributes to be equal otherwise we can't even resume training
     # the rest of the attributes (e.g. dropout) can stay as desired from command line
-    for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size', 'norm_type']:
+    for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size', 'norm_type', 'mlp_type']:
         model_args[k] = checkpoint_model_args[k]
     # create the model
     gptconf = GPTConfig(**model_args)
