@@ -388,7 +388,14 @@ while True:
                     artifact = wandb.Artifact(
                         name=wandb_run_name.replace(' ', '-'),
                         type="model",
-                        metadata={"val_loss": best_val_loss, "iter": iter_num}
+                        metadata={
+                            "val_loss": float(best_val_loss),
+                            "val_ppl": float(math.exp(best_val_loss)),
+                            "iter": iter_num,
+                            "prefix_len": prefix_len,
+                            "update_period": prefix_update_period,
+                            "task": dataset,
+                            "model": init_from}
                     )
                     artifact.add_file(os.path.join(out_dir, 'ckpt.pt'))
                     if soft_prefix is not None:
