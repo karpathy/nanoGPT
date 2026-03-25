@@ -311,7 +311,8 @@ while True:
         if not soft_prefix.cache_valid:
             with torch.no_grad():
                 soft_prefix.build_cache(model)
-
+    # ── toggle P gradient based on whether this is an update step ──
+    soft_prefix.P.requires_grad_(update_now)
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
