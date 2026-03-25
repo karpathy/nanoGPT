@@ -12,24 +12,53 @@ from model import GPT, GPTConfig, SoftPrefix
 from contextlib import nullcontext
 import numpy as np
 
+api    = wandb.Api()
+ENTITY = api.default_entity
+PROJECT  = "nanoGPT-dissertation"
+print(f"WandB entity: {ENTITY}")
+
+def download_artifact(L, m, task):
+    artifact_name = f"{ENTITY}/{PROJECT}/prefix-L{L}-m{m}-{task}:latest"
+    try:
+        artifact  = api.artifact(artifact_name, type="model")
+        local_dir = artifact.download()
+        print(f"  Downloaded: {artifact_name} → {local_dir}")
+        return local_dir
+    except Exception as e:
+        print(f"  Could not download artifact for L={L}: {e}")
+        return None
+
 def load_checkpoint(L, m, task):
-    ckpt_path = f"/kaggle/working/h1_L{L}_m{m}/ckpt.pt"
-    if not os.path.exists(ckpt_path):
-        print(f"  Missing: {ckpt_path}")
+    local_dir = download_artifact(L, m, task)
+    if local_dir is None:
         return None, None
-    ckpt  = torch.load(ckpt_path, map_location=DEVICE)
+
+    ckpt_path = os.path.join(local_dir, "ckpt.pt")
+    if not os.path.exists(ckpt_path):
+        print(f"  Missing ckpt.pt in {local_dir}")
+        return None, None
+
+    ckpt    = torch.load(ckpt_path, map_location=DEVICE)
     gptconf = GPTConfig(**ckpt['model_args'])
     model   = GPT(gptconf)
-    # strip DDP prefix if present
-    state = {k.replace('_orig_mod.', ''): v
-             for k, v in ckpt['model'].items()}
+    state   = {k.replace('_orig_mod.', ''): v
+               for k, v in ckpt['model'].items()}
     model.load_state_dict(state)
     model.eval()
     model.to(DEVICE)
 
-    # load prefix P if it exists
+    # load P — prefer prefix_P.pt, fall back to ckpt['prefix_P']
     soft_prefix = None
-    if L > 0 and ckpt.get('prefix_P') is not None:
+    if L > 0:
+        prefix_path = os.path.join(local_dir, "prefix_P.pt")
+        if os.path.exists(prefix_path):
+            P_tensor = torch.load(prefix_path, map_location=DEVICE)['P']
+        elif ckpt.get('prefix_P') is not None:
+            P_tensor = ckpt['prefix_P']
+        else:
+            print(f"  No prefix_P found for L={L}")
+            return model, None
+
         soft_prefix = SoftPrefix(
             prefix_len = L,
             n_layer    = gptconf.n_layer,
@@ -37,15 +66,51 @@ def load_checkpoint(L, m, task):
             n_embd     = gptconf.n_embd,
             device     = DEVICE,
         )
-        soft_prefix.P = torch.nn.Parameter(ckpt['prefix_P'].to(DEVICE))
+        soft_prefix.P = torch.nn.Parameter(P_tensor.to(DEVICE))
         soft_prefix.build_cache(model)
 
     return model, soft_prefix
 
-def estimate_val_perplexity(model, soft_prefix, data_path, block_size=512,
-                             batch_size=6, eval_iters=50):
-    data  = np.memmap(data_path, dtype=np.uint16, mode='r')
-    ctx   = torch.amp.autocast(device_type='cuda', dtype=torch.float16)
+
+# ── pull training metrics from WandB run history ──────
+def get_training_metrics(L, m, task):
+    run_name = f"prefix-L{L}-m{m}-{task}"
+    try:
+        runs = api.runs(
+            f"{ENTITY}/{PROJECT}",
+            filters={"display_name": run_name}
+        )
+        run  = next(iter(runs))
+        hist = run.history(keys=[
+            "efficiency/tokens_per_sec",
+            "efficiency/peak_gpu_mem_gb",
+            "efficiency/wall_clock_sec",
+            "prefix/cache_hit_ratio",
+            "target/hit_ppl_50",
+            "target/steps_logged",
+            "mfu",
+        ])
+        if hist.empty:
+            return {}
+        last = hist.iloc[-1]
+        return {
+            "tokens_per_sec":  round(float(last.get("efficiency/tokens_per_sec", 0)), 1),
+            "peak_mem_gb":     round(float(last.get("efficiency/peak_gpu_mem_gb", 0)), 2),
+            "wall_clock_sec":  round(float(last.get("efficiency/wall_clock_sec", 0)), 1),
+            "cache_hit_ratio": round(float(last.get("prefix/cache_hit_ratio", 0)), 3),
+            "hit_ppl_50":      int(last.get("target/hit_ppl_50", 0)),
+            "steps_to_target": int(last.get("target/steps_logged", 0)),
+            "mfu":             round(float(last.get("mfu", 0)), 2),
+        }
+    except Exception as e:
+        print(f"  Could not fetch training metrics for L={L}: {e}")
+        return {}
+
+# ── eval function ───
+def estimate_val_perplexity(model, soft_prefix, data_path,
+                             block_size=512, batch_size=6, eval_iters=50):
+    data   = np.memmap(data_path, dtype=np.uint16, mode='r')
+    ctx    = torch.amp.autocast(device_type='cuda', dtype=torch.float16)
     losses = []
 
     with torch.no_grad():
@@ -78,43 +143,64 @@ for L in L_VALUES:
         continue
 
     val_loss, val_ppl = estimate_val_perplexity(model, soft_prefix, val_data)
-    param_count = L * 768
+    param_count       = L * 768
 
-    results.append({
-        "L":            L,
-        "m":            M_FIXED,
-        "val_loss":     round(val_loss, 4),
-        "val_ppl":      round(val_ppl, 2),
-        "param_count":  param_count,
-        "task":         TASK,
-    })
-    print(f"  L={L:5d}  val_loss={val_loss:.4f}  "
-          f"val_ppl={val_ppl:.2f}  params={param_count:,}")
+    r = {
+        "L":           L,
+        "m":           M_FIXED,
+        "val_loss":    round(val_loss, 4),
+        "val_ppl":     round(val_ppl, 2),
+        "param_count": param_count,
+        "task":        TASK,
+    }
+    # enrich with training metrics from WandB
+    r.update(get_training_metrics(L, M_FIXED, TASK))
+    results.append(r)
 
-print("\n" + "═"*60)
+    print(f"  L={L:5d}  val_loss={val_loss:.4f}  val_ppl={val_ppl:.2f}  "
+          f"params={param_count:,}  tok/s={r.get('tokens_per_sec', '—')}")
+
+# ── print summary table ───
+print("\n" + "═"*70)
 print(f"  H1 EVAL SUMMARY — task={TASK}, m={M_FIXED}")
-print("═"*60)
-print(f"{'L':>6}  {'val_loss':>9}  {'val_ppl':>8}  {'params':>10}")
-print("-"*60)
+print("═"*70)
+print(f"{'L':>6}  {'val_ppl':>8}  {'params':>10}  "
+      f"{'tok/s':>8}  {'mem_gb':>7}  {'wall(s)':>8}")
+print("-"*70)
 for r in results:
-    print(f"{r['L']:>6}  {r['val_loss']:>9.4f}  "
-          f"{r['val_ppl']:>8.2f}  {r['param_count']:>10,}")
+    print(f"{r['L']:>6}  {r['val_ppl']:>8.2f}  {r['param_count']:>10,}  "
+          f"{r.get('tokens_per_sec', 0):>8.1f}  "
+          f"{r.get('peak_mem_gb', 0):>7.2f}  "
+          f"{r.get('wall_clock_sec', 0):>8.1f}")
 
-run = wandb.init(
-    project = "nanoGPT-dissertation",
-    name    = f"h1-eval-summary-{TASK}",
+# ── log enriched summary table to WandB ───
+eval_run = wandb.init(
+    project  = PROJECT,
+    name     = f"h1-eval-summary-{TASK}",
     job_type = "eval",
 )
 wandb.log({
     "h1/summary_table": wandb.Table(
-        columns = ["L", "m", "val_loss", "val_ppl", "param_count"],
-        data    = [[r["L"], r["m"], r["val_loss"],
-                    r["val_ppl"], r["param_count"]]
-                   for r in results]
+        columns = [
+            "L", "m", "val_loss", "val_ppl", "param_count",
+            "tokens_per_sec", "peak_mem_gb", "wall_clock_sec",
+            "cache_hit_ratio", "hit_ppl_50", "steps_to_target", "mfu",
+        ],
+        data = [[
+            r["L"], r["m"], r["val_loss"], r["val_ppl"], r["param_count"],
+            r.get("tokens_per_sec",  0),
+            r.get("peak_mem_gb",     0),
+            r.get("wall_clock_sec",  0),
+            r.get("cache_hit_ratio", 0),
+            r.get("hit_ppl_50",      0),
+            r.get("steps_to_target", 0),
+            r.get("mfu",             0),
+        ] for r in results]
     )
 })
 wandb.finish()
 
+# ── save locally ──────────────────────────────────────────────────────
 with open("/kaggle/working/h1_eval_summary.json", "w") as f:
     json.dump(results, f, indent=2)
 print("\nSaved to /kaggle/working/h1_eval_summary.json")
