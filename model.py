@@ -26,6 +26,74 @@ class LayerNorm(nn.Module):
     def forward(self, input):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
+class SoftPrefix(torch.nn.Module):
+    """
+    Learned soft prefix for parameter-efficient tuning.
+    Only P is trained — the GPT-2 LM is frozen.
+
+    Args:
+        prefix_len: number of soft tokens (L)
+        n_layer:    number of transformer layers (12 for GPT-2 small)
+        n_head:     number of attention heads   (12 for GPT-2 small)
+        n_embd:     embedding dimension         (768 for GPT-2 small)
+        device:     cuda or cpu
+    """
+
+    def __init__(self, prefix_len, n_layer, n_head, n_embd, device):
+        super().__init__()
+        self.prefix_len = prefix_len
+        self.n_layer    = n_layer
+        self.n_head     = n_head
+        self.n_embd     = n_embd
+        self.head_dim   = n_embd // n_head
+        self.device     = device
+
+        # the only learned parameter — shape (L, d_model)
+        self.P = torch.nn.Parameter(
+            torch.randn(prefix_len, n_embd, device=device) * 0.02
+        )
+
+        # cache slots — not parameters, not saved to ckpt.pt
+        self.cached_kv   = None   # list of (k, v) tuples, one per layer
+        self.cache_valid = False
+
+    @torch.no_grad()
+    def build_cache(self, model):
+        """
+        Forward P through every attention layer once.
+        Stores detached (k, v) per layer in self.cached_kv.
+        Called once per update step, reused for next (m-1) steps.
+        """
+        kvs = []
+        # (1, L, n_embd) — batch size 1, will be expanded later
+        x = self.P.unsqueeze(0)
+
+        for block in model.transformer.h:
+            B, T, C = x.shape
+
+            # use the existing c_attn projection from the frozen model
+            qkv = block.attn.c_attn(x)          # (1, L, 3*n_embd)
+            q, k, v = qkv.split(C, dim=2)
+
+            # reshape to (1, n_head, L, head_dim)
+            k = k.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
+            v = v.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
+
+            # detach — these must not carry gradients on frozen steps
+            kvs.append((k.detach(), v.detach()))
+
+            # pass through the full block so the next layer
+            # sees the correct transformed representation
+            x = block(x)
+
+        self.cached_kv   = kvs
+        self.cache_valid = True
+
+    def invalidate(self):
+        """Call at the start of every update step to force a cache rebuild."""
+        self.cached_kv   = None
+        self.cache_valid = False
+
 class CausalSelfAttention(nn.Module):
 
     def __init__(self, config):
@@ -49,7 +117,7 @@ class CausalSelfAttention(nn.Module):
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
 
-    def forward(self, x):
+    def forward(self, x, prefix_kv=None):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
@@ -57,6 +125,13 @@ class CausalSelfAttention(nn.Module):
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+
+        if prefix_kv is not None:
+            pk, pv = prefix_kv  # (1, n_head, L, head_dim)
+            pk = pk.expand(B, -1, -1, -1)  # expand to batch size
+            pv = pv.expand(B, -1, -1, -1)
+            k = torch.cat([pk, k], dim=2)  # (B, n_head, L+T, head_dim)
+            v = torch.cat([pv, v], dim=2)
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
@@ -100,9 +175,9 @@ class Block(nn.Module):
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
-    def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
-        x = x + self.mlp(self.ln_2(x))
+    def forward(self, x, prefix_kv=None):
+        x = x + self.attn(self.ln_1(x), prefix_kv=prefix_kv) 
+        x = x + self.mlpf(self.ln_2(x))
         return x
 
 @dataclass
@@ -167,7 +242,7 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None):
+    def forward(self, idx, targets=None, prefix_kvs=None):
         device = idx.device
         b, t = idx.size()
         assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
@@ -177,8 +252,10 @@ class GPT(nn.Module):
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
-        for block in self.transformer.h:
-            x = block(x)
+
+        for i, block in enumerate(self.transformer.h):
+            pkv = prefix_kvs[i] if prefix_kvs is not None else None
+            x = block(x, prefix_kv=pkv)
         x = self.transformer.ln_f(x)
 
         if targets is not None:

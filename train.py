@@ -26,8 +26,10 @@ import numpy as np
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
+from model import GPT, GPTConfig, SoftPrefix
+import time
+import math
 
-from model import GPTConfig, GPT
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -72,6 +74,10 @@ backend = 'nccl' # 'nccl', 'gloo', etc.
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
+# ── soft prefix (dissertation experiments) ──────────────────────────
+prefix_len = 0              # L: number of soft tokens (0 = no prefix)
+prefix_update_period = 1    # m: update P every m steps (1 = dense)
+prefix_cache = True         # whether to cache prefix KV between updates
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
@@ -186,6 +192,26 @@ elif init_from.startswith('gpt2'):
     # read off the created config params, so we can store them into checkpoint correctly
     for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
         model_args[k] = getattr(model.config, k)
+    # H1 ── soft prefix setup —
+    if prefix_len > 0:
+        for p in model.parameters():
+            p.requires_grad = False
+
+        soft_prefix = SoftPrefix(
+            prefix_len=prefix_len,
+            n_layer=model.config.n_layer,
+            n_head=model.config.n_head,
+            n_embd=model.config.n_embd,
+            device=device,
+        ).to(device)
+
+        print(f"Soft prefix: L={prefix_len}, params={prefix_len * model.config.n_embd:,}")
+    else:
+        soft_prefix = None
+        for p in model.parameters():
+            p.requires_grad = False
+        print("No soft prefix — frozen GPT-2 baseline (L=0)")
+
 # crop down the model block size if desired, using model surgery
 if block_size < model.config.block_size:
     model.crop_block_size(block_size)
@@ -196,7 +222,21 @@ model.to(device)
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
 # optimizer
-optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
+if soft_prefix is not None:
+    # only train P — LM is frozen
+    optimizer = torch.optim.AdamW(
+        [soft_prefix.P],
+        lr           = learning_rate,
+        betas        = (beta1, beta2),
+        weight_decay = weight_decay,
+    )
+else:
+    # L=0 baseline — nothing to train, dummy optimizer
+    # we still run to get the val perplexity of frozen GPT-2
+    optimizer = torch.optim.AdamW(
+        [torch.nn.Parameter(torch.zeros(1, device=device))],
+        lr = learning_rate,
+    )
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory
@@ -247,43 +287,103 @@ if wandb_log and master_process:
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
-X, Y = get_batch('train') # fetch the very first batch
+X, Y = get_batch('train')
 t0 = time.time()
-local_iter_num = 0 # number of iterations in the lifetime of this process
-raw_model = model.module if ddp else model # unwrap DDP container if needed
+local_iter_num = 0
+raw_model = model.module if ddp else model
 running_mfu = -1.0
+
+training_start_time = time.time()
+torch.cuda.reset_peak_memory_stats()
 while True:
 
-    # determine and set the learning rate for this iteration
     lr = get_lr(iter_num) if decay_lr else learning_rate
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
+
+    update_now = (
+        soft_prefix is not None and
+        (iter_num % prefix_update_period == 0)
+    )
+    if soft_prefix is not None:
+        if update_now:
+            soft_prefix.invalidate()
+        if not soft_prefix.cache_valid:
+            with torch.no_grad():
+                soft_prefix.build_cache(model)
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
         if wandb_log:
+            import math
+
+            # wall-clock and throughput ───────────────────────
+            wall_clock_elapsed = time.time() - training_start_time
+            tokens_seen = iter_num * batch_size * block_size * gradient_accumulation_steps
+            tokens_per_sec = tokens_seen / max(wall_clock_elapsed, 1)
+
+            #  early-phase target (adjust threshold to your baseline PPL) ──
+            TARGET_PPL = 50.0
+            val_ppl = math.exp(losses['val'])
+            hit_target = 1 if val_ppl <= TARGET_PPL else 0
+
+            cache_hit_ratio = (
+                1.0 - (1.0 / prefix_update_period)
+                if soft_prefix is not None and prefix_update_period > 1
+                else 0.0
+            )
             wandb.log({
-                "iter": iter_num,
-                "train/loss": losses['train'],
-                "val/loss": losses['val'],
-                "lr": lr,
-                "mfu": running_mfu*100, # convert to percentage
+                "iter":                   iter_num,
+                "train/loss":             losses['train'],
+                "val/loss":               losses['val'],
+                "val/perplexity":         math.exp(losses['val']),
+                "train/perplexity": math.exp(losses['train']),
+                "lr":                     lr,
+                "mfu":                    running_mfu * 100,
+                "prefix/len":             prefix_len,
+                "prefix/update_period":   prefix_update_period,
+                "prefix/param_count":     prefix_len * model.config.n_embd,
+                "prefix/cache_hit_ratio": cache_hit_ratio,
+                "efficiency/peak_gpu_mem_gb": (
+                    torch.cuda.max_memory_allocated() / 1e9
+                ),
+                "efficiency/wall_clock_sec": wall_clock_elapsed,
+                "efficiency/tokens_per_sec": tokens_per_sec,
+                "target/hit_ppl_50": hit_target,
+                "target/steps_logged": iter_num if hit_target else 0,
             })
+
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
             if iter_num > 0:
                 checkpoint = {
-                    'model': raw_model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'model_args': model_args,
-                    'iter_num': iter_num,
+                    'model':        raw_model.state_dict(),
+                    'optimizer':    optimizer.state_dict(),
+                    'model_args':   model_args,
+                    'iter_num':     iter_num,
                     'best_val_loss': best_val_loss,
-                    'config': config,
+                    'config':       config,
+                    'prefix_P':     soft_prefix.P.detach().cpu() if soft_prefix is not None else None,
+                    'prefix_len':   prefix_len,
+                    'prefix_update_period': prefix_update_period,
                 }
                 print(f"saving checkpoint to {out_dir}")
                 torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+
+                if soft_prefix is not None:
+                    prefix_path = os.path.join(out_dir, 'prefix_P.pt')
+                    torch.save({
+                        'P':                    soft_prefix.P.detach().cpu(),
+                        'prefix_len':           prefix_len,
+                        'prefix_update_period': prefix_update_period,
+                        'val_loss':             float(best_val_loss),
+                        'iter_num':             iter_num,
+                        'task':                 dataset,
+                        'model':                init_from,
+                    }, prefix_path)
+
                 if wandb_log:
                     artifact = wandb.Artifact(
                         name=wandb_run_name.replace(' ', '-'),
@@ -291,52 +391,60 @@ while True:
                         metadata={"val_loss": best_val_loss, "iter": iter_num}
                     )
                     artifact.add_file(os.path.join(out_dir, 'ckpt.pt'))
+                    if soft_prefix is not None:
+                        artifact.add_file(prefix_path)
                     wandb.log_artifact(artifact)
+
     if iter_num == 0 and eval_only:
         break
 
-    # forward backward update, with optional gradient accumulation to simulate larger batch size
-    # and using the GradScaler if data type is float16
+    # forward backward update, with optional gradient accumulation
     for micro_step in range(gradient_accumulation_steps):
         if ddp:
-            # in DDP training we only need to sync gradients at the last micro step.
-            # the official way to do this is with model.no_sync() context manager, but
-            # I really dislike that this bloats the code and forces us to repeat code
-            # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            logits, loss = model(X, Y)
-            loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
-        # immediately async prefetch next batch while model is doing the forward pass on the GPU
+            # ── CHANGED: pass prefix_kvs when soft prefix exists ─────
+            prefix_kvs = soft_prefix.cached_kv if soft_prefix is not None else None
+            logits, loss = model(X, Y, prefix_kvs=prefix_kvs)
+            # ── END CHANGED ──────────────────────────────────────────
+            loss = loss / gradient_accumulation_steps
         X, Y = get_batch('train')
-        # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
+
     # clip the gradient
     if grad_clip != 0.0:
         scaler.unscale_(optimizer)
-        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-    # step the optimizer and scaler if training in fp16
-    scaler.step(optimizer)
-    scaler.update()
-    # flush the gradients as soon as we can, no need for this memory anymore
-    optimizer.zero_grad(set_to_none=True)
+        # ── CHANGED: clip only P's grad when prefix active ───────────
+        if soft_prefix is not None:
+            torch.nn.utils.clip_grad_norm_([soft_prefix.P], grad_clip)
+        else:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+        # ── END CHANGED ──────────────────────────────────────────────
 
-    # timing and logging
+    # ── CHANGED: only step optimizer on update steps ─────────────────
+    if soft_prefix is None or update_now:
+        scaler.step(optimizer)
+        scaler.update()
+        optimizer.zero_grad(set_to_none=True)
+    else:
+        # frozen step — discard gradients, don't move P
+        scaler.update()
+        optimizer.zero_grad(set_to_none=True)
+    # ── END CHANGED ──────────────────────────────────────────────────
+
+    # timing and logging — UNCHANGED
     t1 = time.time()
     dt = t1 - t0
     t0 = t1
     if iter_num % log_interval == 0 and master_process:
-        # get loss as float. note: this is a CPU-GPU sync point
-        # scale up to undo the division above, approximating the true total loss (exact would have been a sum)
         lossf = loss.item() * gradient_accumulation_steps
-        if local_iter_num >= 5: # let the training loop settle a bit
+        if local_iter_num >= 5:
             mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
         print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
     iter_num += 1
     local_iter_num += 1
 
-    # termination conditions
     if iter_num > max_iters:
         break
 
