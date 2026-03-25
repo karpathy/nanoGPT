@@ -158,6 +158,8 @@ def test_overfitting_risk():
     val_losses   = []
 
     for step in range(50):
+        # ── toggle grad before forward pass ──────────────────────────
+        prefix.P.requires_grad_(True)  # always True for this test since every step is an update step
         # train step
         ix = torch.randint(len(data) - block_size, (4,))
         X  = torch.stack([torch.from_numpy(
