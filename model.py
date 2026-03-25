@@ -177,7 +177,7 @@ class Block(nn.Module):
 
     def forward(self, x, prefix_kv=None):
         x = x + self.attn(self.ln_1(x), prefix_kv=prefix_kv) 
-        x = x + self.mlpf(self.ln_2(x))
+        x = x + self.mlp(self.ln_2(x))
         return x
 
 @dataclass
