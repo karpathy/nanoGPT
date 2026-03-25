@@ -411,10 +411,23 @@ while True:
         if ddp:
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            # ── CHANGED: pass prefix_kvs when soft prefix exists ─────
-            prefix_kvs = soft_prefix.cached_kv if soft_prefix is not None else None
+            # on update steps: recompute KV fresh WITH gradients
+            # on frozen steps: reuse detached cached KV
+            if update_now and soft_prefix is not None:
+                prefix_kvs = []
+                x_p = soft_prefix.P.unsqueeze(0)  # (1, L, n_embd) — has grad
+                for block in model.transformer.h:
+                    B, T, C = x_p.shape
+                    qkv = block.attn.c_attn(x_p)
+                    q, k, v = qkv.split(C, dim=2)
+                    k = k.view(B, T, soft_prefix.n_head, soft_prefix.head_dim).transpose(1, 2)
+                    v = v.view(B, T, soft_prefix.n_head, soft_prefix.head_dim).transpose(1, 2)
+                    prefix_kvs.append((k, v))  # NOT detached — grad flows through
+                    x_p = x_p + block.attn(block.ln_1(x_p))
+                    x_p = x_p + block.mlp(block.ln_2(x_p))
+            else:
+                prefix_kvs = soft_prefix.cached_kv if soft_prefix is not None else None
             logits, loss = model(X, Y, prefix_kvs=prefix_kvs)
-            # ── END CHANGED ──────────────────────────────────────────
             loss = loss / gradient_accumulation_steps
         X, Y = get_batch('train')
         scaler.scale(loss).backward()

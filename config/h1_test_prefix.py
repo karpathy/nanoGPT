@@ -168,8 +168,20 @@ def test_overfitting_risk():
             data[i+1:i+block_size+1].astype(np.int64)) for i in ix]).to(DEVICE)
 
         prefix.invalidate()
-        with torch.no_grad():
-            prefix.build_cache(model)
+        # ── on update steps, recompute KV WITH grad, don't use cache ──
+        prefix.invalidate()
+        # build KV WITH gradients enabled so loss.backward() works
+        kvs = []
+        x_p = prefix.P.unsqueeze(0)  # (1, L, n_embd) — has grad
+        for block in model.transformer.h:
+            B, T, C = x_p.shape
+            qkv = block.attn.c_attn(x_p)
+            q, k, v = qkv.split(C, dim=2)
+            k = k.view(B, T, prefix.n_head, prefix.head_dim).transpose(1, 2)
+            v = v.view(B, T, prefix.n_head, prefix.head_dim).transpose(1, 2)
+            kvs.append((k, v))  # ← NOT detached, grad flows through
+            x_p = x_p + block.attn(block.ln_1(x_p))
+            x_p = x_p + block.mlp(block.ln_2(x_p))
 
         with ctx:
             _, loss = model(X, Y, prefix_kvs=prefix.cached_kv)
