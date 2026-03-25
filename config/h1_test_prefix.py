@@ -184,7 +184,7 @@ def test_overfitting_risk():
             x_p = x_p + block.mlp(block.ln_2(x_p))
 
         with ctx:
-            _, loss = model(X, Y, prefix_kvs=prefix.cached_kv)
+            _, loss = model(X, Y, prefix_kvs=kvs)
 
         optimizer.zero_grad()
         loss.backward()
