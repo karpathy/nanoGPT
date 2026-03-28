@@ -26,73 +26,11 @@ class LayerNorm(nn.Module):
     def forward(self, input):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
-class SoftPrefix(torch.nn.Module):
-    """
-    Learned soft prefix for parameter-efficient tuning.
-    Only P is trained — the GPT-2 LM is frozen.
-
-    Args:
-        prefix_len: number of soft tokens (L)
-        n_layer:    number of transformer layers (12 for GPT-2 small)
-        n_head:     number of attention heads   (12 for GPT-2 small)
-        n_embd:     embedding dimension         (768 for GPT-2 small)
-        device:     cuda or cpu
-    """
-
-    def __init__(self, prefix_len, n_layer, n_head, n_embd, device):
+class SoftPrefix(nn.Module):
+    def __init__(self, prefix_len, n_embd, device):
         super().__init__()
         self.prefix_len = prefix_len
-        self.n_layer    = n_layer
-        self.n_head     = n_head
-        self.n_embd     = n_embd
-        self.head_dim   = n_embd // n_head
-        self.device     = device
-
-        # the only learned parameter — shape (L, d_model)
-        self.P = torch.nn.Parameter(
-            torch.randn(prefix_len, n_embd, device=device) * 0.02
-        )
-
-        # cache slots — not parameters, not saved to ckpt.pt
-        self.cached_kv   = None   # list of (k, v) tuples, one per layer
-        self.cache_valid = False
-
-    @torch.no_grad()
-    def build_cache(self, model):
-        """
-        Forward P through every attention layer once.
-        Stores detached (k, v) per layer in self.cached_kv.
-        Called once per update step, reused for next (m-1) steps.
-        """
-        kvs = []
-        # (1, L, n_embd) — batch size 1, will be expanded later
-        x = self.P.unsqueeze(0)
-
-        for block in model.transformer.h:
-            B, T, C = x.shape
-
-            # use the existing c_attn projection from the frozen model
-            qkv = block.attn.c_attn(block.ln_1(x))          # (1, L, 3*n_embd)
-            q, k, v = qkv.split(C, dim=2)
-
-            # reshape to (1, n_head, L, head_dim)
-            k = k.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
-            v = v.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
-
-            # detach — these must not carry gradients on frozen steps
-            kvs.append((k.detach(), v.detach()))
-
-            # pass through the full block so the next layer
-            # sees the correct transformed representation
-            x = block(x)
-
-        self.cached_kv   = kvs
-        self.cache_valid = True
-
-    def invalidate(self):
-        """Call at the start of every update step to force a cache rebuild."""
-        self.cached_kv   = None
-        self.cache_valid = False
+        self.P = nn.Parameter(torch.randn(prefix_len, n_embd, device=device) * 0.02)
 
 class CausalSelfAttention(nn.Module):
 
@@ -117,7 +55,7 @@ class CausalSelfAttention(nn.Module):
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
 
-    def forward(self, x, prefix_kv=None):
+    def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
@@ -126,33 +64,14 @@ class CausalSelfAttention(nn.Module):
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 
-        if prefix_kv is not None:
-            pk, pv = prefix_kv  # (1, n_head, L, head_dim)
-            pk = pk.expand(B, -1, -1, -1)  # expand to batch size
-            pv = pv.expand(B, -1, -1, -1)
-            k = torch.cat([pk, k], dim=2)  # (B, n_head, L+T, head_dim)
-            v = torch.cat([pv, v], dim=2)
-            L = pk.shape[2]
-            prefix_mask = torch.ones(T, L, dtype=torch.bool, device=x.device)
-            causal_mask = torch.ones(T, T, dtype=torch.bool, device=x.device).tril()
-            full_mask = torch.cat([prefix_mask, causal_mask], dim=1)
-            attn_mask = torch.zeros(T, L + T, device=x.device, dtype=q.dtype)
-            attn_mask = attn_mask.masked_fill(~full_mask, float('-inf'))
-            attn_mask = attn_mask.unsqueeze(0).unsqueeze(0)
-        else:
-            attn_mask = None
-
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
             # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=self.dropout if self.training else 0, is_causal=attn_mask is None)
+            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
         else:
             # manual implementation of attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            if attn_mask is not None:
-                att = att + attn_mask
-            else:
-                att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float('-inf'))
+            att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
             y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
@@ -187,8 +106,8 @@ class Block(nn.Module):
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
-    def forward(self, x, prefix_kv=None):
-        x = x + self.attn(self.ln_1(x), prefix_kv=prefix_kv)
+    def forward(self, x):
+        x = x + self.attn(self.ln_1(x))
         x = x + self.mlp(self.ln_2(x))
         return x
 
@@ -254,22 +173,27 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None, prefix_kvs=None):
+    def forward(self, idx, targets=None,  prefix=None):
         device = idx.device
         b, t = idx.size()
         assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
-        L = prefix_kvs[0][0].shape[2] if prefix_kvs is not None else 0
-        pos = torch.arange(L, L + t, dtype=torch.long, device=device)
+        pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
 
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
 
-        for i, block in enumerate(self.transformer.h):
-            pkv = prefix_kvs[i] if prefix_kvs is not None else None
-            x = block(x, prefix_kv=pkv)
+        if prefix is not None:
+            p = prefix.P.unsqueeze(0).expand(b, -1, -1)  # (b, L, n_embd)
+            x = torch.cat([p, x], dim=1)  # (b, L+t, n_embd)
+
+        for block in self.transformer.h:
+            x = block(x)
         x = self.transformer.ln_f(x)
+
+        if prefix is not None:
+            x = x[:, prefix.prefix_len:, :]  # slice off prefix positions
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
