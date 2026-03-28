@@ -1,7 +1,7 @@
 eval_interval = 250
 eval_iters = 50
 log_interval = 10
-always_save_checkpoint = True
+always_save_checkpoint = False
 
 wandb_log = True
 wandb_project = 'nanoGPT-dissertation'

@@ -132,15 +132,27 @@ class CausalSelfAttention(nn.Module):
             pv = pv.expand(B, -1, -1, -1)
             k = torch.cat([pk, k], dim=2)  # (B, n_head, L+T, head_dim)
             v = torch.cat([pv, v], dim=2)
+            L = pk.shape[2]
+            prefix_mask = torch.ones(T, L, dtype=torch.bool, device=x.device)
+            causal_mask = torch.ones(T, T, dtype=torch.bool, device=x.device).tril()
+            full_mask = torch.cat([prefix_mask, causal_mask], dim=1)
+            attn_mask = torch.zeros(T, L + T, device=x.device, dtype=q.dtype)
+            attn_mask = attn_mask.masked_fill(~full_mask, float('-inf'))
+            attn_mask = attn_mask.unsqueeze(0).unsqueeze(0)
+        else:
+            attn_mask = None
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
             # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
+            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=self.dropout if self.training else 0, is_causal=attn_mask is None)
         else:
             # manual implementation of attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+            if attn_mask is not None:
+                att = att + attn_mask
+            else:
+                att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float('-inf'))
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
             y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)

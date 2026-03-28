@@ -39,7 +39,7 @@ eval_interval = 2000
 log_interval = 1
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
-always_save_checkpoint = True # if True, always save a checkpoint after each eval
+always_save_checkpoint = False # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = True # disabled by default
@@ -261,7 +261,8 @@ def estimate_loss():
         for k in range(eval_iters):
             X, Y = get_batch(split)
             with ctx:
-                logits, loss = model(X, Y)
+                prefix_kvs = soft_prefix.cached_kv if soft_prefix is not None else None
+                logits, loss = model(X, Y, prefix_kvs=prefix_kvs)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -312,7 +313,8 @@ while True:
             with torch.no_grad():
                 soft_prefix.build_cache(model)
     # ── toggle P gradient based on whether this is an update step ──
-    soft_prefix.P.requires_grad_(update_now)
+    if soft_prefix is not None:
+        soft_prefix.P.requires_grad_(update_now)
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
@@ -416,7 +418,7 @@ while True:
             if update_now and soft_prefix is not None:
                 prefix_kvs = []
                 x_p = soft_prefix.P.unsqueeze(0)  # (1, L, n_embd) — has grad
-                for block in model.transformer.h:
+                for block in raw_model.transformer.h:
                     B, T, C = x_p.shape
                     qkv = block.attn.c_attn(x_p)
                     q, k, v = qkv.split(C, dim=2)
