@@ -19,7 +19,7 @@ compile = False
 
 # optimizer
 learning_rate = 3e-5
-max_iters = 5000
+max_iters = 2000
 lr_decay_iters = 5000
 min_lr = 3e-6
 beta2 = 0.99
