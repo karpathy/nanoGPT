@@ -1,5 +1,6 @@
 import torch
 import sys
+import math
 sys.path.insert(0, "/kaggle/working/nanoGPT")
 from model import GPT, GPTConfig, SoftPrefix
 
@@ -213,11 +214,16 @@ def test_overfitting_risk():
     print(f"  gap:                        {gap:.4f}")
 
     # gap > 1.0 at L=512 after only 50 steps is a red flag
-    if gap > 1.0:
+    if math.isnan(avg_train) or math.isnan(avg_val):
+        print(f"  FAIL: loss is NaN — check attn mask, dtype, or grad explosion in P")
+        print("TEST 3 FAILED\n")
+    elif gap > 1.0:
         print(f"  WARNING: large train/val gap ({gap:.2f}) — "
               f"consider dropout on P or reducing L for this dataset")
+        print("TEST 3 PASSED — overfitting risk checked (with warning)\n")
     else:
         print(f"  PASS: train/val gap acceptable ({gap:.4f})")
+        print("TEST 3 PASSED — overfitting risk checked\n")
 
     print("TEST 3 PASSED — overfitting risk checked\n")
 

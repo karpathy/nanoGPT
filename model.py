@@ -72,7 +72,7 @@ class SoftPrefix(torch.nn.Module):
             B, T, C = x.shape
 
             # use the existing c_attn projection from the frozen model
-            qkv = block.attn.c_attn(x)          # (1, L, 3*n_embd)
+            qkv = block.attn.c_attn(block.ln_1(x))          # (1, L, 3*n_embd)
             q, k, v = qkv.split(C, dim=2)
 
             # reshape to (1, n_head, L, head_dim)
@@ -188,7 +188,7 @@ class Block(nn.Module):
         self.mlp = MLP(config)
 
     def forward(self, x, prefix_kv=None):
-        x = x + self.attn(self.ln_1(x), prefix_kv=prefix_kv) 
+        x = x + self.attn(self.ln_1(x), prefix_kv=prefix_kv)
         x = x + self.mlp(self.ln_2(x))
         return x
 
@@ -258,7 +258,8 @@ class GPT(nn.Module):
         device = idx.device
         b, t = idx.size()
         assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
-        pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
+        L = prefix_kvs[0][0].shape[2] if prefix_kvs is not None else 0
+        pos = torch.arange(L, L + t, dtype=torch.long, device=device)
 
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)

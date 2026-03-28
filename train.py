@@ -218,6 +218,14 @@ if block_size < model.config.block_size:
     model_args['block_size'] = block_size # so that the checkpoint will have the right value
 model.to(device)
 
+
+if prefix_len > 0:
+    effective_block_size = model.config.block_size - prefix_len
+    model.crop_block_size(effective_block_size)
+    model_args['block_size'] = effective_block_size
+    block_size = effective_block_size
+    print(f"Effective block_size cropped to {effective_block_size}")
+
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
@@ -256,6 +264,8 @@ if ddp:
 def estimate_loss():
     out = {}
     model.eval()
+    if soft_prefix is not None:
+        soft_prefix.build_cache(raw_model)
     for split in ['train', 'val']:
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
@@ -417,16 +427,15 @@ while True:
             # on frozen steps: reuse detached cached KV
             if update_now and soft_prefix is not None:
                 prefix_kvs = []
-                x_p = soft_prefix.P.unsqueeze(0)  # (1, L, n_embd) — has grad
+                x_p = soft_prefix.P.unsqueeze(0)
                 for block in raw_model.transformer.h:
                     B, T, C = x_p.shape
-                    qkv = block.attn.c_attn(x_p)
+                    qkv = block.attn.c_attn(block.ln_1(x_p))  # ln_1 added, matches build_cache
                     q, k, v = qkv.split(C, dim=2)
                     k = k.view(B, T, soft_prefix.n_head, soft_prefix.head_dim).transpose(1, 2)
                     v = v.view(B, T, soft_prefix.n_head, soft_prefix.head_dim).transpose(1, 2)
-                    prefix_kvs.append((k, v))  # NOT detached — grad flows through
-                    x_p = x_p + block.attn(block.ln_1(x_p))
-                    x_p = x_p + block.mlp(block.ln_2(x_p))
+                    prefix_kvs.append((k, v))
+                    x_p = block(x_p)
             else:
                 prefix_kvs = soft_prefix.cached_kv if soft_prefix is not None else None
             logits, loss = model(X, Y, prefix_kvs=prefix_kvs)
