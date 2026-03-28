@@ -1,6 +1,5 @@
 import torch, sys, os, numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-os.chdir(os.path.join(os.path.dirname(__file__), '..'))
 from model import GPT, GPTConfig, SoftPrefix
 
 device = 'cuda'
