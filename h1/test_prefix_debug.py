@@ -1,27 +1,39 @@
 import torch, sys, os, numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from model import GPT, GPTConfig, SoftPrefix
+import wandb
 
 device = 'cuda'
 
-# load from existing checkpoint — avoids transformers import
-ckpt = torch.load('/kaggle/working/h1_L100_m1/ckpt.pt', map_location=device)
-gptconf = GPTConfig(**ckpt['model_args'])
-model = GPT(gptconf)
-state = {k.replace('_orig_mod.', ''): v for k, v in ckpt['model'].items()}
+# ── download from WandB ───────────────────────────────────────────────
+api       = wandb.Api()
+entity    = api.default_entity
+artifact  = api.artifact(
+    f"{entity}/nanoGPT-dissertation/prefix-L100-m1-wikitext2:latest",
+    type="model"
+)
+local_dir = artifact.download()
+print(f"Downloaded to: {local_dir}")
+print(f"Files: {os.listdir(local_dir)}")
+
+ckpt_path = os.path.join(local_dir, "ckpt.pt")
+ckpt      = torch.load(ckpt_path, map_location=device)
+gptconf   = GPTConfig(**ckpt['model_args'])
+model     = GPT(gptconf)
+state     = {k.replace('_orig_mod.', ''): v for k, v in ckpt['model'].items()}
 model.load_state_dict(state)
 model.eval().to(device)
-print("Model loaded from checkpoint")
+print("Model loaded")
 
-# real WikiText-2 tokens
+# ── real WikiText-2 tokens ────────────────────────────────────────────
 data = np.memmap('data/wikitext2/val.bin', dtype=np.uint16, mode='r')
-X = torch.from_numpy(data[0:512].astype('int64')).unsqueeze(0).to(device)
-Y = torch.from_numpy(data[1:513].astype('int64')).unsqueeze(0).to(device)
+X    = torch.from_numpy(data[0:512].astype('int64')).unsqueeze(0).to(device)
+Y    = torch.from_numpy(data[1:513].astype('int64')).unsqueeze(0).to(device)
 
 # test 1: no prefix
 with torch.no_grad():
     _, loss_no_prefix = model(X, Y)
-print(f"no prefix:     {loss_no_prefix.item():.4f}  ← should be ~3.84")
+print(f"\nno prefix:     {loss_no_prefix.item():.4f}  ← should be ~3.84")
 
 # test 2: cached prefix
 prefix = SoftPrefix(100, gptconf.n_layer, gptconf.n_head, gptconf.n_embd, device)
@@ -36,7 +48,7 @@ x_p = prefix.P.unsqueeze(0)
 with torch.no_grad():
     for block in model.transformer.h:
         B, T, C = x_p.shape
-        qkv = block.attn.c_attn(x_p)
+        qkv     = block.attn.c_attn(x_p)
         q, k, v = qkv.split(C, dim=2)
         k = k.view(B, T, prefix.n_head, prefix.head_dim).transpose(1, 2)
         v = v.view(B, T, prefix.n_head, prefix.head_dim).transpose(1, 2)
@@ -46,15 +58,16 @@ with torch.no_grad():
     _, loss_fresh = model(X, Y, prefix_kvs=prefix_kvs)
 print(f"fresh prefix:  {loss_fresh.item():.4f}  ← should be close to 3.84")
 
-# test 4: mask sanity
+# test 4: mask sanity check (small example)
 T, L = 4, 3
 prefix_mask = torch.ones(T, L, dtype=torch.bool, device=device)
 causal_mask = torch.ones(T, T, dtype=torch.bool, device=device).tril()
-full_mask    = torch.cat([prefix_mask, causal_mask], dim=1)
-attn_mask    = torch.zeros(T, L+T, device=device, dtype=torch.float32)
-attn_mask    = attn_mask.masked_fill(~full_mask, float('-inf'))
+full_mask   = torch.cat([prefix_mask, causal_mask], dim=1)
+attn_mask   = torch.zeros(T, L+T, device=device, dtype=torch.float32)
+attn_mask   = attn_mask.masked_fill(~full_mask, float('-inf'))
 print(f"\nmask row 0: {attn_mask[0].tolist()}")
 print(f"mask row 1: {attn_mask[1].tolist()}")
 print(f"mask row 2: {attn_mask[2].tolist()}")
 print(f"mask row 3: {attn_mask[3].tolist()}")
-print("expected: all prefix cols = 0.0, sequence cols = lower triangular")
+print("prefix cols (0-2) should all be 0.0")
+print("sequence cols (3-6) should be lower triangular")
