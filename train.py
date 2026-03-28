@@ -311,7 +311,7 @@ while True:
             soft_prefix.invalidate()
         if not soft_prefix.cache_valid:
             with torch.no_grad():
-                soft_prefix.build_cache(model)
+                soft_prefix.build_cache(raw_model)
     # ── toggle P gradient based on whether this is an update step ──
     if soft_prefix is not None:
         soft_prefix.P.requires_grad_(update_now)
