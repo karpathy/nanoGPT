@@ -30,9 +30,8 @@ for L in RUN_ORDER:
             "wall_clock_h": 0
         })
         continue
-    block_size = MAX_POSITIONS - L
-    extra_flags = []
-    extra_flags += [f"--block_size={block_size}"]
+
+    extra_flags = [f"--block_size={MAX_POSITIONS}"]
     if L == 0:
         extra_flags += [
             "--eval_only=True",

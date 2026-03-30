@@ -11,7 +11,7 @@ dataset = 'wikitext2'
 
 # T4 settings
 batch_size = 6
-block_size = 512
+block_size = 1024
 gradient_accumulation_steps = 10
 device = 'cuda'
 dtype = 'float16'

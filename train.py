@@ -202,10 +202,7 @@ elif init_from.startswith('gpt2'):
 
 if 'soft_prefix' not in locals():
     soft_prefix = None
-# crop down the model block size if desired, using model surgery
-if block_size < model.config.block_size:
-    model.crop_block_size(block_size)
-    model_args['block_size'] = block_size # so that the checkpoint will have the right value
+
 
 model.to(device)
 if prefix_len > 0:
