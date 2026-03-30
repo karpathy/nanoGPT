@@ -337,19 +337,6 @@ while True:
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
             if iter_num > 0:
-                checkpoint = {
-                    'model': raw_model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'model_args': model_args,
-                    'iter_num': iter_num,
-                    'best_val_loss': best_val_loss,
-                    'config': config,
-                    'prefix_P': soft_prefix.P.detach().cpu() if soft_prefix is not None else None,
-                    'prefix_len': prefix_len,
-                    'prefix_update_period': prefix_update_period,
-                }
-                print(f"saving checkpoint to {out_dir}")
-                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
                 if soft_prefix is not None:
                     prefix_path = os.path.join(out_dir, 'prefix_P.pt')
                     torch.save({
@@ -360,18 +347,37 @@ while True:
                         'iter_num': iter_num,
                         'task': dataset,
                         'model': init_from,
+                        'block_size': block_size,
                     }, prefix_path)
+                    print(f"saving prefix to {prefix_path}")
 
-                if wandb_log:
-                    artifact = wandb.Artifact(
-                        name=wandb_run_name.replace(' ', '-'),
-                        type="model",
-                        metadata={"val_loss": best_val_loss, "iter": iter_num}
-                    )
-                    artifact.add_file(os.path.join(out_dir, 'ckpt.pt'))
-                    if soft_prefix is not None:
+                    if wandb_log:
+                        artifact = wandb.Artifact(
+                            name=wandb_run_name.replace(' ', '-'),
+                            type="model",
+                            metadata={"val_loss": float(best_val_loss), "iter": iter_num}
+                        )
                         artifact.add_file(prefix_path)
-                    wandb.log_artifact(artifact)
+                        wandb.log_artifact(artifact)
+                else:
+                    # L=0 baseline — save a small metadata file
+                    prefix_path = os.path.join(out_dir, 'prefix_P.pt')
+                    torch.save({
+                        'P': None,
+                        'val_loss': float(best_val_loss),
+                        'iter_num': iter_num,
+                        'task': dataset,
+                        'model': init_from,
+                        'block_size': block_size,
+                    }, prefix_path)
+                    if wandb_log:
+                        artifact = wandb.Artifact(
+                            name=wandb_run_name.replace(' ', '-'),
+                            type="model",
+                            metadata={"val_loss": float(best_val_loss), "iter": iter_num}
+                        )
+                        artifact.add_file(prefix_path)
+                        wandb.log_artifact(artifact)
 
     if iter_num == 0 and eval_only:
         break

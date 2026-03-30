@@ -7,10 +7,11 @@ TASK      = "wikitext2"
 
 results         = []
 training_errors = []
-
+N_EMBD = 768
 MAX_POSITIONS = 1024
+
 for L in RUN_ORDER:
-    block_size = MAX_POSITIONS - L
+
 
     run_name = f"prefix-L{L}-m{M_FIXED}-{TASK}"
     out_dir  = f"/kaggle/working/h1_L{L}_m{M_FIXED}"
@@ -29,7 +30,7 @@ for L in RUN_ORDER:
             "wall_clock_h": 0
         })
         continue
-
+    block_size = MAX_POSITIONS - L
     extra_flags = []
     extra_flags += [f"--block_size={block_size}"]
     if L == 0:
@@ -65,10 +66,10 @@ for L in RUN_ORDER:
         })
         continue
 
-    ckpt_path = os.path.join(out_dir, "ckpt.pt")
-    if os.path.exists(ckpt_path):
-        ckpt     = torch.load(ckpt_path, map_location="cpu")
-        val_loss = float(ckpt.get("best_val_loss", float("nan")))
+    prefix_path = os.path.join(out_dir, "prefix_P.pt")
+    if os.path.exists(prefix_path):
+        ckpt     = torch.load(prefix_path, map_location="cpu")
+        val_loss = float(ckpt.get("val_loss", float("nan")))
         val_ppl  = math.exp(val_loss) if not math.isnan(val_loss) else float("nan")
         peak_mem = torch.cuda.max_memory_allocated() / 1e9
 
@@ -77,7 +78,7 @@ for L in RUN_ORDER:
             "m":            M_FIXED,
             "val_loss":     round(val_loss, 4),
             "val_ppl":      round(val_ppl, 2),
-            "param_count":  L * 768,
+            "param_count":  L * N_EMBD,
             "wall_clock_h": round(wall_clock / 3600, 2),
             "peak_mem_gb":  round(peak_mem, 2),
             "status":       "OK",
@@ -85,7 +86,7 @@ for L in RUN_ORDER:
         print(f"  DONE — val_loss={val_loss:.4f}  val_ppl={val_ppl:.2f}  "
               f"time={wall_clock/3600:.2f}h  mem={peak_mem:.2f}GB")
     else:
-        print(f"  WARNING: no checkpoint at {ckpt_path}")
+        print(f"  WARNING: no checkpoint at {prefix_path}")
         results.append({
             "L": L, "status": "NO_CKPT",
             "wall_clock_h": round(wall_clock / 3600, 2)

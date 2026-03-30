@@ -17,7 +17,13 @@ ENTITY  = api.default_entity
 PROJECT = "nanoGPT-dissertation"
 print(f"WandB entity: {ENTITY}")
 
+DROPOUT = 0.0
+MODEL_TYPE = 'gpt2'
+MAX_POSITIONS = 1024
+
 def download_artifact(L, m, task):
+    if L == 0:
+        return "baseline"  # no artifact needed for L=0
     artifact_name = f"{ENTITY}/{PROJECT}/prefix-L{L}-m{m}-{task}:latest"
     try:
         artifact  = api.artifact(artifact_name, type="model")
@@ -29,36 +35,38 @@ def download_artifact(L, m, task):
         return None
 
 def load_checkpoint(L, m, task):
+    if L == 0:
+        # baseline — just frozen GPT-2, no prefix
+        model = GPT.from_pretrained(MODEL_TYPE, dict(dropout=DROPOUT))
+        model.eval().to(DEVICE)
+        for p in model.parameters():
+            p.requires_grad = False
+        return model, None
+
     local_dir = download_artifact(L, m, task)
     if local_dir is None:
         return None, None
 
-    ckpt_path = os.path.join(local_dir, "ckpt.pt")
-    if not os.path.exists(ckpt_path):
-        print(f"  Missing ckpt.pt in {local_dir}")
-        return None, None
+    model = GPT.from_pretrained(MODEL_TYPE, dict(dropout=DROPOUT))
+    if L > 0:
+        effective_block_size = MAX_POSITIONS- L
+        model.crop_block_size(effective_block_size)
 
-    ckpt    = torch.load(ckpt_path, map_location=DEVICE)
-    gptconf = GPTConfig(**ckpt['model_args'])
-    model   = GPT(gptconf)
-    state   = {k.replace('_orig_mod.', ''): v
-               for k, v in ckpt['model'].items()}
-    model.load_state_dict(state)
-    model.eval()
-    model.to(DEVICE)
+    model.eval().to(DEVICE)
+    for p in model.parameters():
+        p.requires_grad = False
 
     soft_prefix = None
     if L > 0:
         prefix_path = os.path.join(local_dir, "prefix_P.pt")
-        if os.path.exists(prefix_path):
-            P_tensor = torch.load(prefix_path, map_location=DEVICE)['P']
-        elif ckpt.get('prefix_P') is not None:
-            P_tensor = ckpt['prefix_P']
-        else:
-            print(f"  No prefix_P found for L={L}")
+        if not os.path.exists(prefix_path):
+            print(f"  No prefix_P.pt found for L={L}")
             return model, None
 
-        soft_prefix = SoftPrefix(L, gptconf.n_embd, DEVICE)
+        saved = torch.load(prefix_path, map_location=DEVICE)
+        P_tensor = saved['P']
+
+        soft_prefix = SoftPrefix(L, model.config.n_embd, DEVICE)
         soft_prefix.P = torch.nn.Parameter(P_tensor.to(DEVICE))
         soft_prefix.to(DEVICE)
 
@@ -128,8 +136,6 @@ def estimate_val_perplexity(model, soft_prefix, data_path,
 
 val_data = "data/wikitext2/val.bin"
 results  = []
-
-MAX_POSITIONS = 1024
 
 for L in L_VALUES:
     if L >= MAX_POSITIONS:
