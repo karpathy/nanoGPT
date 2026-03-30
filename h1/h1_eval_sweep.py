@@ -2,7 +2,6 @@ import torch, math, json, os
 import wandb
 
 L_VALUES  = [0, 64, 100, 256, 512, 1024, 2048]
-#L_VALUES  = [100]
 M_FIXED   = 1
 TASK      = "wikitext2"
 DEVICE    = "cuda"
@@ -13,9 +12,9 @@ from model import GPT, GPTConfig, SoftPrefix
 from contextlib import nullcontext
 import numpy as np
 
-api    = wandb.Api()
-ENTITY = api.default_entity
-PROJECT  = "nanoGPT-dissertation"
+api     = wandb.Api()
+ENTITY  = api.default_entity
+PROJECT = "nanoGPT-dissertation"
 print(f"WandB entity: {ENTITY}")
 
 def download_artifact(L, m, task):
@@ -48,7 +47,6 @@ def load_checkpoint(L, m, task):
     model.eval()
     model.to(DEVICE)
 
-    # load P — prefer prefix_P.pt, fall back to ckpt['prefix_P']
     soft_prefix = None
     if L > 0:
         prefix_path = os.path.join(local_dir, "prefix_P.pt")
@@ -60,20 +58,13 @@ def load_checkpoint(L, m, task):
             print(f"  No prefix_P found for L={L}")
             return model, None
 
-        soft_prefix = SoftPrefix(
-            prefix_len = L,
-            n_layer    = gptconf.n_layer,
-            n_head     = gptconf.n_head,
-            n_embd     = gptconf.n_embd,
-            device     = DEVICE,
-        )
+        soft_prefix = SoftPrefix(L, gptconf.n_embd, DEVICE)
         soft_prefix.P = torch.nn.Parameter(P_tensor.to(DEVICE))
-        soft_prefix.build_cache(model)
+        soft_prefix.to(DEVICE)
 
     return model, soft_prefix
 
 
-# ── pull training metrics from WandB run history ──────
 def get_training_metrics(L, m, task):
     run_name = f"prefix-L{L}-m{m}-{task}"
     try:
@@ -107,12 +98,13 @@ def get_training_metrics(L, m, task):
         print(f"  Could not fetch training metrics for L={L}: {e}")
         return {}
 
-# ── eval function ───
+
 def estimate_val_perplexity(model, soft_prefix, data_path,
-                             block_size=512, batch_size=6, eval_iters=50):
-    data   = np.memmap(data_path, dtype=np.uint16, mode='r')
-    ctx    = torch.amp.autocast(device_type='cuda', dtype=torch.float16)
-    losses = []
+                             batch_size=6, eval_iters=50):
+    block_size = model.config.block_size  # use whatever the model was trained with
+    data       = np.memmap(data_path, dtype=np.uint16, mode='r')
+    ctx        = torch.amp.autocast(device_type='cuda', dtype=torch.float16)
+    losses     = []
 
     with torch.no_grad():
         for _ in range(eval_iters):
@@ -126,23 +118,29 @@ def estimate_val_perplexity(model, soft_prefix, data_path,
                 for i in ix
             ]).to(DEVICE)
 
-            prefix_kvs = soft_prefix.cached_kv if soft_prefix is not None else None
             with ctx:
-                _, loss = model(X, Y, prefix_kvs=prefix_kvs)
+                _, loss = model(X, Y, prefix=soft_prefix)
             losses.append(loss.item())
 
     val_loss = float(np.mean(losses))
     return val_loss, math.exp(val_loss)
 
+
 val_data = "data/wikitext2/val.bin"
 results  = []
 
+MAX_POSITIONS = 1024
+
 for L in L_VALUES:
+    if L >= MAX_POSITIONS:
+        print(f"  SKIP: L={L} — not trained, exceeds wpe table")
+        continue
+
     print(f"\nEvaluating L={L}, m={M_FIXED}...")
     model, soft_prefix = load_checkpoint(L, M_FIXED, TASK)
     if model is None:
         continue
-
+    print(f"  model.config.block_size={model.config.block_size}, prefix_len={L}")
     val_loss, val_ppl = estimate_val_perplexity(model, soft_prefix, val_data)
     param_count       = L * 768
 
@@ -154,14 +152,13 @@ for L in L_VALUES:
         "param_count": param_count,
         "task":        TASK,
     }
-    # enrich with training metrics from WandB
     r.update(get_training_metrics(L, M_FIXED, TASK))
     results.append(r)
 
     print(f"  L={L:5d}  val_loss={val_loss:.4f}  val_ppl={val_ppl:.2f}  "
           f"params={param_count:,}  tok/s={r.get('tokens_per_sec', '—')}")
 
-# ── print summary table ───
+
 print("\n" + "═"*70)
 print(f"  H1 EVAL SUMMARY — task={TASK}, m={M_FIXED}")
 print("═"*70)
@@ -174,7 +171,7 @@ for r in results:
           f"{r.get('peak_mem_gb', 0):>7.2f}  "
           f"{r.get('wall_clock_sec', 0):>8.1f}")
 
-# ── log enriched summary table to WandB ───
+
 eval_run = wandb.init(
     project  = PROJECT,
     name     = f"h1-eval-summary-{TASK}",
@@ -201,7 +198,6 @@ wandb.log({
 })
 wandb.finish()
 
-# ── save locally ──────────────────────────────────────────────────────
 with open("/kaggle/working/h1_eval_summary.json", "w") as f:
     json.dump(results, f, indent=2)
 print("\nSaved to /kaggle/working/h1_eval_summary.json")

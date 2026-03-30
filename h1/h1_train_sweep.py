@@ -8,7 +8,10 @@ TASK      = "wikitext2"
 results         = []
 training_errors = []
 
+MAX_POSITIONS = 1024
 for L in RUN_ORDER:
+    block_size = MAX_POSITIONS - L
+
     run_name = f"prefix-L{L}-m{M_FIXED}-{TASK}"
     out_dir  = f"/kaggle/working/h1_L{L}_m{M_FIXED}"
     os.makedirs(out_dir, exist_ok=True)
@@ -18,15 +21,26 @@ for L in RUN_ORDER:
     print(f"  out_dir:  {out_dir}")
     print(f"{'═'*60}")
 
-    # L=2048 needs reduced batch to avoid OOM on 16GB T4
+    # skip L values that would make effective block_size <= 0
+    if L >= MAX_POSITIONS:
+        print(f"  SKIP: L={L} >= block_size={MAX_POSITIONS} — would give non-positive effective block_size")
+        results.append({
+            "L": L, "status": "SKIPPED",
+            "wall_clock_h": 0
+        })
+        continue
+
     extra_flags = []
-    if L >= 2048:
-        extra_flags = [
-            "--batch_size=4",
-            "--block_size=256",
-            "--gradient_accumulation_steps=20",
+    extra_flags += [f"--block_size={block_size}"]
+    if L == 0:
+        extra_flags += [
+            "--eval_only=True",
+            "--always_save_checkpoint=True",
+            "--eval_interval=1",
         ]
-        print("  NOTE: L=2048 — reduced batch_size=4, block_size=256")
+        print("  NOTE: L=0 baseline — eval only, no training")
+
+
 
     torch.cuda.reset_peak_memory_stats()
     t_start = time.time()
@@ -72,6 +86,10 @@ for L in RUN_ORDER:
               f"time={wall_clock/3600:.2f}h  mem={peak_mem:.2f}GB")
     else:
         print(f"  WARNING: no checkpoint at {ckpt_path}")
+        results.append({
+            "L": L, "status": "NO_CKPT",
+            "wall_clock_h": round(wall_clock / 3600, 2)
+        })
 
 print(f"\n{'═'*60}")
 print("  H1 TRAINING SWEEP COMPLETE")
