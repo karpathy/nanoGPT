@@ -1,7 +1,8 @@
 import torch, math, json, os
 import wandb
-
-L_VALUES  = [0, 64, 100, 256, 512, 1024, 2048]
+#
+# L_VALUES  = [0, 64, 100, 256, 512, 1024, 2048]
+RUN_ORDER = [512]  # L=100 first — smoke test
 M_FIXED   = 1
 TASK      = "wikitext2"
 DEVICE    = "cuda"

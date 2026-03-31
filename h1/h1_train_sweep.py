@@ -1,7 +1,7 @@
 import subprocess, os, time, torch, json, math
 
-RUN_ORDER = [100, 0, 64, 256, 512, 1024, 2048]  # L=100 first — smoke test
-#RUN_ORDER = [100]  # L=100 first — smoke test
+# RUN_ORDER = [100, 0, 64, 256, 512, 1024, 2048]  # L=100 first — smoke test
+RUN_ORDER = [512]  # L=100 first — smoke test
 M_FIXED   = 1
 TASK      = "wikitext2"
 
