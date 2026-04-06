@@ -24,8 +24,9 @@ for arg in sys.argv[1:]:
         config_file = arg
         print(f"Overriding config with {config_file}:")
         with open(config_file) as f:
-            print(f.read())
-        exec(open(config_file).read())
+            config_content = f.read()
+        print(config_content)
+        exec(config_content)
     else:
         # assume it's a --key=value argument
         assert arg.startswith('--')
