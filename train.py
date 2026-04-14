@@ -149,6 +149,8 @@ if os.path.exists(meta_path):
 # model init
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
                   bias=bias, vocab_size=None, dropout=dropout) # start with model_args from command line
+soft_prefix = None
+is_prefix_tuning = False
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -181,6 +183,15 @@ elif init_from == 'resume':
     model.load_state_dict(state_dict)
     iter_num = checkpoint['iter_num']
     best_val_loss = checkpoint['best_val_loss']
+    checkpoint_prefix = checkpoint.get('soft_prefix')
+    if checkpoint_prefix is not None:
+        prefix_len = checkpoint.get('prefix_len', prefix_len)
+        prefix_update_period = checkpoint.get('prefix_update_period', prefix_update_period)
+        for p in model.parameters():
+            p.requires_grad = False
+        soft_prefix = SoftPrefix(prefix_len, model.config.n_embd, device).to(device)
+        soft_prefix.P.data.copy_(checkpoint_prefix.to(device))
+        is_prefix_tuning = True
 elif init_from.startswith('gpt2'):
     print(f"Initializing from OpenAI GPT-2 weights: {init_from}")
     # initialize from OpenAI GPT-2 weights
@@ -193,38 +204,30 @@ elif init_from.startswith('gpt2'):
         for p in model.parameters():
             p.requires_grad = False
         soft_prefix = SoftPrefix(prefix_len, model.config.n_embd, device).to(device)
+        is_prefix_tuning = True
         print(f"Soft prefix: L={prefix_len}, params={prefix_len * model.config.n_embd:,}")
     else:
-        soft_prefix = None
-        for p in model.parameters():
-            p.requires_grad = False
+        print("Finetuning all GPT-2 parameters (prefix_len=0)")
         print("No soft prefix — frozen GPT-2 baseline (L=0)")
 
-if 'soft_prefix' not in locals():
-    soft_prefix = None
-
-
 model.to(device)
-if prefix_len > 0:
+if is_prefix_tuning:
     effective_block_size = model.config.block_size - prefix_len
-    model.crop_block_size(effective_block_size)
-    model_args['block_size'] = effective_block_size
-    block_size = effective_block_size
-    print(f"Effective block_size cropped to {effective_block_size}")
+    assert effective_block_size > 0, "prefix_len must be smaller than the model block size"
+    if block_size > effective_block_size:
+        print(f"Reducing training block_size from {block_size} to {effective_block_size} to fit prefix")
+        block_size = effective_block_size
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
 # optimizer
-if soft_prefix is not None:
+if is_prefix_tuning:
     optimizer = torch.optim.AdamW(
         [soft_prefix.P],
         lr=learning_rate, betas=(beta1, beta2), weight_decay=weight_decay
     )
 else:
-    optimizer = torch.optim.AdamW(
-        [torch.nn.Parameter(torch.zeros(1, device=device))],
-        lr=learning_rate
-    )
+    optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory
@@ -281,7 +284,8 @@ local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
 training_start_time = time.time()
-torch.cuda.reset_peak_memory_stats()
+if device_type == 'cuda':
+    torch.cuda.reset_peak_memory_stats()
 while True:
 
     # determine and set the learning rate for this iteration
@@ -321,10 +325,10 @@ while True:
                 "mfu": running_mfu * 100,
                 "prefix/len": prefix_len,
                 "prefix/update_period": prefix_update_period,
-                "prefix/param_count": prefix_len * model.config.n_embd,
+                "prefix/param_count": prefix_len * raw_model.config.n_embd if is_prefix_tuning else 0,
                 "prefix/cache_hit_ratio": cache_hit_ratio,
                 "efficiency/peak_gpu_mem_gb": (
-                        torch.cuda.max_memory_allocated() / 1e9
+                        torch.cuda.max_memory_allocated() / 1e9 if device_type == 'cuda' else 0.0
                 ),
                 "efficiency/wall_clock_sec": wall_clock_elapsed,
                 "efficiency/tokens_per_sec": tokens_per_sec,
@@ -334,7 +338,22 @@ while True:
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
             if iter_num > 0:
-                if soft_prefix is not None:
+                checkpoint = {
+                    'model': raw_model.state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                    'model_args': model_args,
+                    'iter_num': iter_num,
+                    'best_val_loss': best_val_loss,
+                    'config': config,
+                    'soft_prefix': soft_prefix.P.detach().cpu() if is_prefix_tuning else None,
+                    'prefix_len': prefix_len if is_prefix_tuning else 0,
+                    'prefix_update_period': prefix_update_period if is_prefix_tuning else 1,
+                }
+                if not is_prefix_tuning:
+                    ckpt_path = os.path.join(out_dir, 'ckpt.pt')
+                    print(f"saving checkpoint to {ckpt_path}")
+                    torch.save(checkpoint, ckpt_path)
+                if is_prefix_tuning:
                     prefix_path = os.path.join(out_dir, 'prefix_P.pt')
                     torch.save({
                         'P': soft_prefix.P.detach().cpu(),
@@ -399,7 +418,7 @@ while True:
     if grad_clip != 0.0:
         scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(
-            [soft_prefix.P] if soft_prefix is not None else model.parameters(),
+            [soft_prefix.P] if is_prefix_tuning else model.parameters(),
             grad_clip
         )
     # step the optimizer and scaler if training in fp16
