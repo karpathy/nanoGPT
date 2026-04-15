@@ -10,3 +10,10 @@ __pycache__/
 input.txt
 env/
 venv/
+.venv/
+out*/
+build/
+dist/
+*.so
+*.c
+.pytest_cache/
