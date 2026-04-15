@@ -45,7 +45,7 @@ for L in RUN_ORDER:
         t_start = time.time()
 
         cmd = [
-            "python", "train.py", "config/h2_wikitext2.py",
+            "python", "train.py", "config/h1_wikitext2.py",
             f"--prefix_len={L}",
             f"--prefix_update_period={M}",
             f"--out_dir={out_dir}",
