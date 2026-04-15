@@ -27,7 +27,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from model import GPTConfig, GPT, SoftPrefix
+from model import GPTConfig, GPT, SoftPrefix, DeepPrefix
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -72,9 +72,11 @@ backend = 'nccl' # 'nccl', 'gloo', etc.
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
+prefix_type = 'soft'
 prefix_len = 0              # L: number of soft tokens (0 = no prefix)
 prefix_update_period = 1    # m: update P every m steps (1 = dense)
 prefix_cache = True         # whether to cache prefix KV between updates
+
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
@@ -149,7 +151,8 @@ if os.path.exists(meta_path):
 # model init
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
                   bias=bias, vocab_size=None, dropout=dropout) # start with model_args from command line
-soft_prefix = None
+
+prefix_module = None
 is_prefix_tuning = False
 if init_from == 'scratch':
     # init a new model from scratch
@@ -186,11 +189,15 @@ elif init_from == 'resume':
     checkpoint_prefix = checkpoint.get('soft_prefix')
     if checkpoint_prefix is not None:
         prefix_len = checkpoint.get('prefix_len', prefix_len)
+        prefix_type = checkpoint.get('prefix_type', prefix_type)
         prefix_update_period = checkpoint.get('prefix_update_period', prefix_update_period)
         for p in model.parameters():
             p.requires_grad = False
-        soft_prefix = SoftPrefix(prefix_len, model.config.n_embd, device).to(device)
-        soft_prefix.P.data.copy_(checkpoint_prefix.to(device))
+        if prefix_type == 'soft':
+            prefix_module = SoftPrefix(prefix_len, model.config.n_embd, device).to(device)
+            prefix_module.P.data.copy_(checkpoint_prefix.to(device))
+        elif prefix_type == 'deep':
+            ...
         is_prefix_tuning = True
 elif init_from.startswith('gpt2'):
     print(f"Initializing from OpenAI GPT-2 weights: {init_from}")
@@ -203,9 +210,12 @@ elif init_from.startswith('gpt2'):
     if prefix_len > 0:
         for p in model.parameters():
             p.requires_grad = False
-        soft_prefix = SoftPrefix(prefix_len, model.config.n_embd, device).to(device)
+        if prefix_type == 'soft':
+            prefix_module = SoftPrefix(prefix_len, model.config.n_embd, device).to(device)
+        elif prefix_type == 'deep':
+            prefix_module = DeepPrefix(prefix_len, model.config.n_embd, model.config.n_layer, device).to(device)
         is_prefix_tuning = True
-        print(f"Soft prefix: L={prefix_len}, params={prefix_len * model.config.n_embd:,}")
+        print(f"{prefix_type} prefix: L={prefix_len}")
     else:
         print("Finetuning all GPT-2 parameters (prefix_len=0)")
         print("No soft prefix — frozen GPT-2 baseline (L=0)")
@@ -222,10 +232,8 @@ scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
 # optimizer
 if is_prefix_tuning:
-    optimizer = torch.optim.AdamW(
-        [soft_prefix.P],
-        lr=learning_rate, betas=(beta1, beta2), weight_decay=weight_decay
-    )
+    prefix_params = [prefix_module.P] if isinstance(prefix_module, SoftPrefix) else prefix_module.parameters()
+    optimizer = torch.optim.AdamW(prefix_params, lr=learning_rate, betas=(beta1, beta2), weight_decay=weight_decay)
 else:
     optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
 if init_from == 'resume':
@@ -252,7 +260,7 @@ def estimate_loss():
         for k in range(eval_iters):
             X, Y = get_batch(split)
             with ctx:
-                logits, loss = model(X, Y, prefix=soft_prefix)
+                logits, loss = model(X, Y, prefix=prefix_module)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -312,7 +320,7 @@ while True:
 
             cache_hit_ratio = (
                 1.0 - (1.0 / prefix_update_period)
-                if soft_prefix is not None and prefix_update_period > 1
+                if prefix_module is not None and prefix_update_period > 1
                 else 0.0
             )
             wandb.log({
@@ -345,7 +353,8 @@ while True:
                     'iter_num': iter_num,
                     'best_val_loss': best_val_loss,
                     'config': config,
-                    'soft_prefix': soft_prefix.P.detach().cpu() if is_prefix_tuning else None,
+                    'soft_prefix': prefix_module.P.detach().cpu() if isinstance(prefix_module, SoftPrefix) else None,
+                    'prefix_type': prefix_type if is_prefix_tuning else None,
                     'prefix_len': prefix_len if is_prefix_tuning else 0,
                     'prefix_update_period': prefix_update_period if is_prefix_tuning else 1,
                 }
@@ -356,7 +365,8 @@ while True:
                 if is_prefix_tuning:
                     prefix_path = os.path.join(out_dir, 'prefix_P.pt')
                     torch.save({
-                        'P': soft_prefix.P.detach().cpu(),
+                        'P': prefix_module.P.detach().cpu() if isinstance(prefix_module, SoftPrefix) else None,
+                        'prefix_type': prefix_type,
                         'prefix_len': prefix_len,
                         'prefix_update_period': prefix_update_period,
                         'val_loss': float(best_val_loss),
@@ -408,7 +418,7 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            logits, loss = model(X, Y, prefix=soft_prefix)
+            logits, loss = model(X, Y, prefix=prefix_module)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, Y = get_batch('train')
@@ -418,7 +428,7 @@ while True:
     if grad_clip != 0.0:
         scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(
-            [soft_prefix.P] if is_prefix_tuning else model.parameters(),
+            prefix_module.parameters() if is_prefix_tuning else model.parameters(),
             grad_clip
         )
     # step the optimizer and scaler if training in fp16

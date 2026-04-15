@@ -32,6 +32,11 @@ class SoftPrefix(nn.Module):
         self.prefix_len = prefix_len
         self.P = nn.Parameter(torch.randn(prefix_len, n_embd, device=device) * 0.02)
 
+class DeepPrefix(nn.Module):
+    def __init__(self, prefix_len, n_embd, n_layer, device):
+        super().__init__()
+    ...
+
 class CausalSelfAttention(nn.Module):
 
     def __init__(self, config):
@@ -55,7 +60,7 @@ class CausalSelfAttention(nn.Module):
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
 
-    def forward(self, x):
+    def forward(self, x, deep_prefix=None):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
@@ -64,6 +69,8 @@ class CausalSelfAttention(nn.Module):
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 
+        if deep_prefix is not None:
+            ...
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
             # efficient attention using Flash Attention CUDA kernels
@@ -106,8 +113,8 @@ class Block(nn.Module):
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
-    def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
+    def forward(self, x, deep_prefix=None):
+        x = x + self.attn(self.ln_1(x), deep_prefix = deep_prefix)
         x = x + self.mlp(self.ln_2(x))
         return x
 
@@ -184,15 +191,19 @@ class GPT(nn.Module):
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
 
-        if prefix is not None:
+        if prefix is not None and isinstance(prefix, SoftPrefix):
             p = prefix.P.unsqueeze(0).expand(b, -1, -1)  # (b, L, n_embd)
             x = torch.cat([p, x], dim=1)  # (b, L+t, n_embd)
 
-        for block in self.transformer.h:
-            x = block(x)
+        # DeepPrefix should be threaded per layer inside this loop once implemented.
+        for layer_idx, block in enumerate(self.transformer.h):
+            if prefix is not None and isinstance(prefix, DeepPrefix):
+                x = block(x, deep_prefix=prefix.deep[layer_idx])
+            else:
+                x = block(x)
         x = self.transformer.ln_f(x)
 
-        if prefix is not None:
+        if prefix is not None and isinstance(prefix, SoftPrefix):
             x = x[:, prefix.prefix_len:, :]  # slice off prefix positions
 
         if targets is not None:
