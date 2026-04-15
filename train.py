@@ -300,7 +300,11 @@ while True:
     lr = get_lr(iter_num) if decay_lr else learning_rate
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
-
+    update_now = (iter_num % prefix_update_period == 0)
+    # on m-update steps, prefix gets gradients
+    # on in-between steps, prefix is frozen
+    if is_prefix_tuning:
+        prefix_module.requires_grad_(update_now)
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
@@ -423,19 +427,21 @@ while True:
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, Y = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
-        scaler.scale(loss).backward()
+        if not is_prefix_tuning or update_now:
+            scaler.scale(loss).backward()
     # clip the gradient
-    if grad_clip != 0.0:
+    if grad_clip != 0.0 and (not is_prefix_tuning or update_now):
         scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(
             prefix_module.parameters() if is_prefix_tuning else model.parameters(),
             grad_clip
         )
     # step the optimizer and scaler if training in fp16
-    scaler.step(optimizer)
-    scaler.update()
     # flush the gradients as soon as we can, no need for this memory anymore
-    optimizer.zero_grad(set_to_none=True)
+    if not is_prefix_tuning or update_now:
+        scaler.step(optimizer)
+        scaler.update()
+        optimizer.zero_grad(set_to_none=True)
 
     # timing and logging
     t1 = time.time()
@@ -448,7 +454,7 @@ while True:
         if local_iter_num >= 5: # let the training loop settle a bit
             mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%, update={int(update_now)}")
     iter_num += 1
     local_iter_num += 1
 
