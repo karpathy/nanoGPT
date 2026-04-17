@@ -31,6 +31,15 @@ class SoftPrefix(nn.Module):
         super().__init__()
         self.prefix_len = prefix_len
         self.P = nn.Parameter(torch.randn(prefix_len, n_embd, device=device) * 0.02)
+        self.cached_kv = None
+        self.cache_valid = False
+
+    # prefix changes -> cache must be invalidated
+    # prefix frozen -> you can reuse cached KV
+    def invalidate(self):
+        self.cached_kv = None
+        self.cache_valid = False
+
 
 class DeepPrefix(nn.Module):
     def __init__(self, prefix_len, n_embd, n_layer, device):
@@ -60,7 +69,7 @@ class CausalSelfAttention(nn.Module):
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
 
-    def forward(self, x, deep_prefix=None):
+    def forward(self, x, deep_prefix=None, prefix_kv=None):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
@@ -69,16 +78,36 @@ class CausalSelfAttention(nn.Module):
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 
+        if prefix_kv is not None:
+            prefix_k, prefix_v = prefix_kv
+            k = torch.cat([prefix_k, k], dim=2)
+            v = torch.cat([prefix_v, v], dim=2)
+            L = prefix_k.size(2)
+
         if deep_prefix is not None:
             ...
+
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        if self.flash:
-            # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
+        if self.flash and prefix_kv is None:
+            y = torch.nn.functional.scaled_dot_product_attention(
+                q, k, v,
+                attn_mask=None,
+                dropout_p=self.dropout if self.training else 0,
+                is_causal=True
+            )
+
         else:
             # manual implementation of attention
+
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+            if prefix_kv is not None:
+                prefix_mask = torch.ones(T, L, device=x.device)
+                token_mask = torch.tril(torch.ones(T, T, device=x.device))
+                full_mask = torch.cat([prefix_mask, token_mask], dim=1)  # (T, L+T)
+                mask = full_mask.view(1, 1, T, L + T)
+            else:
+                mask = self.bias[:,:,:T,:T]
+            att = att.masked_fill(mask== 0, float('-inf'))
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
             y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
@@ -87,6 +116,14 @@ class CausalSelfAttention(nn.Module):
         # output projection
         y = self.resid_dropout(self.c_proj(y))
         return y
+
+    def project_qkv(self, x):
+        B, T, C = x.size()
+        q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
+        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+        return q, k, v
 
 class MLP(nn.Module):
 
@@ -113,8 +150,8 @@ class Block(nn.Module):
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
-    def forward(self, x, deep_prefix=None):
-        x = x + self.attn(self.ln_1(x), deep_prefix = deep_prefix)
+    def forward(self, x, deep_prefix=None, prefix_kv=None):
+        x = x + self.attn(self.ln_1(x), deep_prefix = deep_prefix, prefix_kv = prefix_kv)
         x = x + self.mlp(self.ln_2(x))
         return x
 
@@ -180,7 +217,7 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None,  prefix=None):
+    def forward(self, idx, targets=None,  prefix=None, prefix_kv=None):
         device = idx.device
         b, t = idx.size()
         assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
@@ -191,19 +228,22 @@ class GPT(nn.Module):
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
 
-        if prefix is not None and isinstance(prefix, SoftPrefix):
+        # Cache off
+        if prefix is not None and isinstance(prefix, SoftPrefix) and prefix_kv is None:
             p = prefix.P.unsqueeze(0).expand(b, -1, -1)  # (b, L, n_embd)
             x = torch.cat([p, x], dim=1)  # (b, L+t, n_embd)
 
+
         # DeepPrefix should be threaded per layer inside this loop once implemented.
         for layer_idx, block in enumerate(self.transformer.h):
+            layer_prefix_kv = None if prefix_kv is None else prefix_kv[layer_idx]
             if prefix is not None and isinstance(prefix, DeepPrefix):
-                x = block(x, deep_prefix=prefix.deep[layer_idx])
+                x = block(x, deep_prefix=prefix.deep[layer_idx], prefix_kv=layer_prefix_kv)
             else:
-                x = block(x)
+                x = block(x, prefix_kv=layer_prefix_kv)
         x = self.transformer.ln_f(x)
 
-        if prefix is not None and isinstance(prefix, SoftPrefix):
+        if prefix is not None and isinstance(prefix, SoftPrefix) and prefix_kv is None:
             x = x[:, prefix.prefix_len:, :]  # slice off prefix positions
 
         if targets is not None:
@@ -216,6 +256,27 @@ class GPT(nn.Module):
             loss = None
 
         return logits, loss
+
+    @torch.no_grad()
+    def build_prefix_kv(self, prefix_module, batch_size):
+        assert isinstance(prefix_module, SoftPrefix), "build_prefix_kv currently only supports SoftPrefix"
+
+        x = prefix_module.P.unsqueeze(0).expand(batch_size, -1, -1)
+        x = self.transformer.drop(x)
+
+        prefix_kv = []
+        for block in self.transformer.h:
+            ln_x = block.ln_1(x)
+            _, k, v = block.attn.project_qkv(ln_x)
+            prefix_kv.append((k.detach(), v.detach()))
+
+            # Propagate the prefix activations exactly like a normal block so the
+            # next layer sees the correct hidden states for its own KV cache.
+            attn_out = block.attn(ln_x)
+            x = x + attn_out
+            x = x + block.mlp(block.ln_2(x))
+
+        return prefix_kv
 
     def crop_block_size(self, block_size):
         # model surgery to decrease the block size if necessary
@@ -353,3 +414,4 @@ class GPT(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
 
         return idx
+

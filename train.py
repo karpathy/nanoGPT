@@ -305,6 +305,9 @@ while True:
     # on in-between steps, prefix is frozen
     if is_prefix_tuning:
         prefix_module.requires_grad_(update_now)
+        if update_now and prefix_cache:
+            prefix_module.invalidate()
+
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
@@ -342,6 +345,8 @@ while True:
                 "efficiency/peak_gpu_mem_gb": (
                         torch.cuda.max_memory_allocated() / 1e9 if device_type == 'cuda' else 0.0
                 ),
+                "prefix/cache_enabled": int(prefix_cache),
+                "prefix/update_now": int(update_now) if is_prefix_tuning else 0,
                 "efficiency/wall_clock_sec": wall_clock_elapsed,
                 "efficiency/tokens_per_sec": tokens_per_sec,
                 "target/hit_ppl_50": hit_target,
@@ -422,7 +427,14 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            logits, loss = model(X, Y, prefix=prefix_module)
+            if is_prefix_tuning and prefix_cache and not update_now:
+                if not prefix_module.cache_valid:
+                    with torch.no_grad():
+                        prefix_module.cached_kv = raw_model.build_prefix_kv(prefix_module, batch_size=X.size(0))
+                        prefix_module.cache_valid = True
+                logits, loss = model(X, Y, prefix=None, prefix_kv=prefix_module.cached_kv)
+            else:
+                logits, loss = model(X, Y, prefix=prefix_module, prefix_kv=None)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, Y = get_batch('train')
