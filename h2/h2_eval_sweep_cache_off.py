@@ -9,8 +9,7 @@ DEVICE    = "cuda"
 
 import sys
 sys.path.insert(0, "/kaggle/working/nanoGPT")
-from model import GPT, GPTConfig, SoftPrefix
-from contextlib import nullcontext
+from model import GPT, SoftPrefix
 import numpy as np
 
 api     = wandb.Api()
@@ -21,24 +20,24 @@ print(f"WandB entity: {ENTITY}")
 DROPOUT = 0.0
 MODEL_TYPE = 'gpt2'
 MAX_POSITIONS = 1024
-EVAL_WITH_CACHE = True
+EVAL_WITH_CACHE = False
+# it is cache on without modifying
 
 def download_artifact(L, m, task):
     if L == 0:
-        return "baseline"  # no artifact needed for L=0
-    artifact_name = f"{ENTITY}/{PROJECT}/prefix-L{L}-m{m}-{task}:latest"
+        return "baseline"
+    artifact_name = f"{ENTITY}/{PROJECT}/prefix-L{L}-m{m}-cacheoff-{task}:latest"
     try:
         artifact  = api.artifact(artifact_name, type="model")
         local_dir = artifact.download()
-        print(f"  Downloaded: {artifact_name} → {local_dir}")
+        print(f"  Downloaded: {artifact_name} -> {local_dir}")
         return local_dir
     except Exception as e:
-        print(f"  Could not download artifact for L={L}: {e}")
+        print(f"  Could not download artifact for L={L}, m={m}: {e}")
         return None
 
 def load_checkpoint(L, m, task):
     if L == 0:
-        # baseline — just frozen GPT-2, no prefix
         model = GPT.from_pretrained(MODEL_TYPE, dict(dropout=DROPOUT))
         model.eval().to(DEVICE)
         for p in model.parameters():
@@ -56,7 +55,7 @@ def load_checkpoint(L, m, task):
 
     prefix_path = os.path.join(local_dir, "prefix_P.pt")
     if not os.path.exists(prefix_path):
-        print(f"  No prefix_P.pt found for L={L}")
+        print(f"  No prefix_P.pt found for L={L}, m={m}")
         return None, None, None
 
     saved = torch.load(prefix_path, map_location="cpu")
@@ -99,9 +98,8 @@ def load_checkpoint(L, m, task):
         "prefix_update_period": saved_m,
     }
 
-
 def get_training_metrics(L, m, task):
-    run_name = f"prefix-L{L}-m{m}-{task}"
+    run_name = f"prefix-L{L}-m{m}-cacheoff-{task}"
     try:
         runs = api.runs(
             f"{ENTITY}/{PROJECT}",
@@ -130,13 +128,12 @@ def get_training_metrics(L, m, task):
             "mfu":             round(float(last.get("mfu", 0)), 2),
         }
     except Exception as e:
-        print(f"  Could not fetch training metrics for L={L}: {e}")
+        print(f"  Could not fetch training metrics for L={L}, m={m}: {e}")
         return {}
-
 
 def estimate_val_perplexity(model, soft_prefix, data_path,
                              batch_size=6, eval_iters=50, use_cache=False):
-    block_size = model.config.block_size  # use whatever the model was trained with
+    block_size = model.config.block_size
     data       = np.memmap(data_path, dtype=np.uint16, mode='r')
     ctx        = torch.amp.autocast(device_type='cuda', dtype=torch.float16)
     losses     = []
@@ -168,17 +165,16 @@ def estimate_val_perplexity(model, soft_prefix, data_path,
     val_loss = float(np.mean(losses))
     return val_loss, math.exp(val_loss)
 
-
 val_data = "data/wikitext2/val.bin"
 results  = []
 
 for L in L_VALUES:
     for M in M_VALUES:
         if L >= MAX_POSITIONS:
-            print(f"  SKIP: L={L} — not trained, exceeds wpe table")
+            print(f"  SKIP: L={L} - not trained, exceeds wpe table")
             continue
 
-        print(f"\nEvaluating L={L}, m={M}...")
+        print(f"\nEvaluating cache-off run L={L}, m={M}...")
         model, soft_prefix, metadata = load_checkpoint(L, M, TASK)
         if model is None:
             continue
@@ -195,7 +191,7 @@ for L in L_VALUES:
             val_data,
             use_cache=EVAL_WITH_CACHE,
         )
-        param_count       = loaded_L * model.config.n_embd
+        param_count = loaded_L * model.config.n_embd
 
         r = {
             "L":           loaded_L,
@@ -211,13 +207,12 @@ for L in L_VALUES:
         r.update(get_training_metrics(L, M, TASK))
         results.append(r)
 
-        print(f"  L={L:5d}  val_loss={val_loss:.4f}  val_ppl={val_ppl:.2f}  "
-              f"params={param_count:,}  tok/s={r.get('tokens_per_sec', '—')}")
+        print(f"  L={loaded_L:5d}  val_loss={val_loss:.4f}  val_ppl={val_ppl:.2f}  "
+              f"params={param_count:,}  tok/s={r.get('tokens_per_sec', '-')}")
 
-
-print("\n" + "═"*70)
-print(f"  H2 EVAL SUMMARY — task={TASK}, m={M}")
-print("═"*70)
+print("\n" + "="*70)
+print(f"  H2 CACHE-OFF EVAL SUMMARY - task={TASK}")
+print("="*70)
 print(f"{'L':>6}  {'val_ppl':>8}  {'params':>10}  "
       f"{'tok/s':>8}  {'mem_gb':>7}  {'wall(s)':>8}")
 print("-"*70)
@@ -227,14 +222,13 @@ for r in results:
           f"{r.get('peak_mem_gb', 0):>7.2f}  "
           f"{r.get('wall_clock_sec', 0):>8.1f}")
 
-
 eval_run = wandb.init(
     project  = PROJECT,
-    name     = f"h2-eval-summary-{TASK}",
+    name     = f"h2-eval-summary-cacheoff-{TASK}",
     job_type = "eval",
 )
 wandb.log({
-    "h2/summary_table": wandb.Table(
+    "h2_cacheoff/summary_table": wandb.Table(
         columns = [
             "L", "m", "val_loss", "val_ppl", "param_count",
             "model_type", "block_size", "eval_cache",
@@ -256,6 +250,6 @@ wandb.log({
 })
 wandb.finish()
 
-with open("/kaggle/working/h2_eval_summary.json", "w") as f:
+with open("/kaggle/working/h2_eval_cacheoff_summary.json", "w") as f:
     json.dump(results, f, indent=2)
-print("\nSaved to /kaggle/working/h2_eval_summary.json")
+print("\nSaved to /kaggle/working/h2_eval_cacheoff_summary.json")
