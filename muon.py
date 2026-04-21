@@ -153,3 +153,63 @@ class LowRankMuon(Muon):
 
 
 
+class InfrequentMuon(torch.optim.Optimizer):
+    """
+    Muon variant that runs the expensive Newton-Schulz orthogonalization only
+    every `update_freq` steps, reusing the cached update in between.
+ 
+    Args:
+        params: iterable of parameters (should be 2D hidden weights only)
+        lr: learning rate (default: 0.02)
+        momentum: momentum coefficient (default: 0.95)
+        weight_decay: AdamW-style weight decay (default: 0.0)
+        ns_steps: number of Newton-Schulz iterations (default: 5)
+        update_freq: how often to recompute the NS orthogonalization (default: 5)
+    """
+    def __init__(self, params, lr=0.02, momentum=0.95, weight_decay=0.0, ns_steps=5, update_freq=5):
+        defaults = dict(lr=lr, momentum=momentum, weight_decay=weight_decay,
+                        ns_steps=ns_steps, update_freq=update_freq)
+        super().__init__(params, defaults)
+ 
+    @torch.no_grad()
+    def step(self, closure=None):
+        loss = None
+        if closure is not None:
+            with torch.enable_grad():
+                loss = closure()
+ 
+        for group in self.param_groups:
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+ 
+                state = self.state[p]
+                if len(state) == 0:
+                    state['momentum_buffer'] = torch.zeros_like(p)
+                    state['cached_update'] = torch.zeros_like(p)
+                    state['step'] = 0
+ 
+                state['step'] += 1
+                beta = group['momentum']
+                momentum_buf = state['momentum_buffer']
+ 
+                # Update momentum buffer in-place, then build nesterov estimate
+                # from a clone so we don't corrupt the buffer or p.grad
+                momentum_buf.lerp_(p.grad, 1 - beta)
+                base_update = p.grad.clone().lerp_(momentum_buf, beta)
+ 
+                # Run Newton-Schulz on step 1, then every update_freq steps after
+                if state['step'] == 1 or state['step'] % group['update_freq'] == 0:
+                    shape = base_update.shape
+                    flat = base_update.view(len(base_update), -1) if base_update.ndim == 4 else base_update
+ 
+                    assert flat.ndim == 2, f"Expected 2D tensor for NS, got shape {flat.shape}"
+ 
+                    ns_update = zeropower_via_newtonschulz5(flat, steps=group['ns_steps'])
+                    ns_update *= max(1, ns_update.size(0) / ns_update.size(1)) ** 0.5
+                    state['cached_update'].copy_(ns_update.reshape(shape))
+ 
+                p.mul_(1 - group['lr'] * group['weight_decay'])
+                p.add_(state['cached_update'], alpha=-group['lr'])
+ 
+        return loss
