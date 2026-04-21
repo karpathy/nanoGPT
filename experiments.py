@@ -14,7 +14,8 @@ runs = [
     # ('adamw',       'out-adamw'),
     # ('sgd',         'out-sgd'),
     # ('muon',        'out-muon'),
-    ('lowrankmuon', 'out-lowrankmuon'),
+    #('lowrankmuon', 'out-lowrankmuon'),
+    ('infrequentmuon', 'out-infrequentmuon'),
 ]
 
 for optimizer_name, out_dir in runs:
@@ -31,9 +32,9 @@ for optimizer_name, out_dir in runs:
     ], check=True)
 
 # Load CSVs
-optimizers = {'adamw': 'out-adamw', 'sgd': 'out-sgd', 'muon': 'out-muon', 'lowrankmuon': 'out-lowrankmuon'}
-colors = {'adamw': '#1f77b4', 'sgd': '#ff7f0e', 'muon': '#2ca02c', 'lowrankmuon': '#d62728'}
-labels = {'adamw': 'AdamW', 'sgd': 'SGD', 'muon': 'Muon', 'lowrankmuon': 'LowRankMuon'}
+optimizers = {'adamw': 'out-adamw', 'sgd': 'out-sgd', 'muon': 'out-muon', 'lowrankmuon': 'out-lowrankmuon', 'infrequentmuon': 'out-infrequentmuon'}
+colors = {'adamw': '#1f77b4', 'sgd': '#ff7f0e', 'muon': '#2ca02c', 'lowrankmuon': '#d62728', 'infrequentmuon': '#9467bd'}
+labels = {'adamw': 'AdamW', 'sgd': 'SGD', 'muon': 'Muon', 'lowrankmuon': 'LowRankMuon', 'infrequentmuon': 'InfrequentMuon'}
 
 dfs = {}
 for name, d in optimizers.items():
