@@ -1,118 +1,317 @@
 {
-  "generated_at": "2026-04-12T19:29:49Z",
-  "experiment_root": "/users/9/chen8596/nanoGPT/experiment_runs",
-  "entry_count": 2,
+  "experiment_root": "/scratch.global/chen8596/experiment_runs",
+  "entry_count": 5,
   "entries": [
     {
-      "family": "GPT",
-      "model_size": "124M",
-      "size_label": "124M/5B",
-      "method": "Linesearch",
+      "family": "LLAMA",
+      "model_size": "60M",
+      "size_label": "60M",
+      "method": "cosine",
       "selection_rule": "min_loss",
       "selected": {
-        "family": "GPT",
-        "model_size": "124M",
-        "size_label": "124M/5B",
-        "method": "Linesearch",
-        "tuning_time_hours": null,
-        "loss": 3.2586450576782227,
-        "wall_clock_hours": 2.509728064801958,
-        "source_path": "experiment_runs/gpt124m_line_search_stage2_c0.1/final/summary.json",
+        "family": "LLAMA",
+        "model_size": "60M",
+        "size_label": "60M",
+        "method": "cosine",
+        "tuning_time_hours": 2.477443302207523,
+        "loss": 4.697261810302734,
+        "wall_clock_hours": 0.1991310054063797,
+        "total_spent_time_hours": 0.34668501251273687,
+        "source_path": "/scratch.global/chen8596/experiment_runs/llama60m_cosine_lr_search_serial_halving_num_trials_12_maxiters_3600/serial_halving_result.json",
         "metadata": {
-          "kind": "standalone_final",
-          "experiment_name": "gpt124m_line_search",
-          "stage2_result_path": "experiment_runs/gpt124m_line_search_stage2_c0.1/stage2_result.json",
-          "loaded_learning_rate": 1e-06
+          "kind": "serial_halving",
+          "result_path": "",
+          "rung_index": 2,
+          "rung_name": "rung_02",
+          "num_trials": 1,
+          "rung_target_iters": 3600
         }
       },
       "candidates": [
         {
-          "family": "GPT",
-          "model_size": "124M",
-          "size_label": "124M/5B",
-          "method": "Linesearch",
-          "tuning_time_hours": null,
-          "loss": 3.2586450576782227,
-          "wall_clock_hours": 2.509728064801958,
-          "source_path": "experiment_runs/gpt124m_line_search_stage2_c0.1/final/summary.json",
+          "family": "LLAMA",
+          "model_size": "60M",
+          "size_label": "60M",
+          "method": "cosine",
+          "tuning_time_hours": 1.8921773280700047,
+          "loss": 4.737299919128418,
+          "wall_clock_hours": 0.19956711060471005,
+          "total_spent_time_hours": null,
+          "source_path": "/scratch.global/chen8596/experiment_runs/llama60m_cosine_lr_search_serial_halving_num_trials_8_maxiters_3600/serial_halving_result.json",
           "metadata": {
-            "kind": "standalone_final",
-            "experiment_name": "gpt124m_line_search",
-            "stage2_result_path": "experiment_runs/gpt124m_line_search_stage2_c0.1/stage2_result.json",
-            "loaded_learning_rate": 1e-06
+            "kind": "serial_halving",
+            "result_path": "",
+            "rung_index": 2,
+            "rung_name": "rung_02",
+            "num_trials": 1,
+            "rung_target_iters": 3600
+          }
+        },
+        {
+          "family": "LLAMA",
+          "model_size": "60M",
+          "size_label": "60M",
+          "method": "cosine",
+          "tuning_time_hours": 2.477443302207523,
+          "loss": 4.697261810302734,
+          "wall_clock_hours": 0.1991310054063797,
+          "total_spent_time_hours": 0.34668501251273687,
+          "source_path": "/scratch.global/chen8596/experiment_runs/llama60m_cosine_lr_search_serial_halving_num_trials_12_maxiters_3600/serial_halving_result.json",
+          "metadata": {
+            "kind": "serial_halving",
+            "result_path": "",
+            "rung_index": 2,
+            "rung_name": "rung_02",
+            "num_trials": 1,
+            "rung_target_iters": 3600
+          }
+        },
+        {
+          "family": "LLAMA",
+          "model_size": "60M",
+          "size_label": "60M",
+          "method": "cosine",
+          "tuning_time_hours": 3.4675124660465455,
+          "loss": 4.7441301345825195,
+          "wall_clock_hours": 0.19740419069925944,
+          "total_spent_time_hours": 0.37054062763849893,
+          "source_path": "/scratch.global/chen8596/experiment_runs/llama60m_cosine_lr_search_serial_halving_num_trials_16_maxiters_3600/serial_halving_result.json",
+          "metadata": {
+            "kind": "serial_halving",
+            "result_path": "",
+            "rung_index": 2,
+            "rung_name": "rung_02",
+            "num_trials": 1,
+            "rung_target_iters": 3600
           }
         }
       ]
     },
     {
-      "family": "GPT",
-      "model_size": "124M",
-      "size_label": "124M/5B",
-      "method": "cosine",
+      "family": "LLAMA",
+      "model_size": "60M",
+      "size_label": "60M",
+      "method": "linesearch_adam",
       "selection_rule": "min_loss",
       "selected": {
-        "family": "GPT",
-        "model_size": "124M",
-        "size_label": "124M/5B",
-        "method": "cosine",
-        "tuning_time_hours": 15.0,
-        "loss": 3.2945644855499268,
-        "wall_clock_hours": 1.1106890577077866,
-        "source_path": "experiment_runs/gpt124m_lr_search_staged_15h/level_15h/stage2/final/summary.json",
+        "family": "LLAMA",
+        "model_size": "60M",
+        "size_label": "60M",
+        "method": "linesearch_adam",
+        "tuning_time_hours": null,
+        "loss": 3.5172231197357178,
+        "wall_clock_hours": 0.314198476407263,
+        "total_spent_time_hours": 0.314198476407263,
+        "source_path": "/scratch.global/chen8596/experiment_runs/llama60m_line_search_stage2_maxiters_3600/final/summary.json",
         "metadata": {
-          "kind": "staged_search",
-          "experiment_name": "gpt124m_lr_search",
-          "stage2_result_path": "experiment_runs/gpt124m_lr_search_staged_15h/level_15h/stage2/stage2_result.json",
-          "stage1_summary_path": "experiment_runs/gpt124m_lr_search_staged_15h/level_15h/stage1/study_summary.json"
+          "kind": "linesearch_final",
+          "experiment_name": "llama60m_line_search"
         }
       },
       "candidates": [
         {
-          "family": "GPT",
-          "model_size": "124M",
-          "size_label": "124M/5B",
-          "method": "cosine",
-          "tuning_time_hours": 15.0,
-          "loss": 3.2945644855499268,
-          "wall_clock_hours": 1.1106890577077866,
-          "source_path": "experiment_runs/gpt124m_lr_search_staged_15h/level_15h/stage2/final/summary.json",
+          "family": "LLAMA",
+          "model_size": "60M",
+          "size_label": "60M",
+          "method": "linesearch_adam",
+          "tuning_time_hours": null,
+          "loss": 3.5172231197357178,
+          "wall_clock_hours": 0.314198476407263,
+          "total_spent_time_hours": 0.314198476407263,
+          "source_path": "/scratch.global/chen8596/experiment_runs/llama60m_line_search_stage2_maxiters_3600/final/summary.json",
           "metadata": {
-            "kind": "staged_search",
-            "experiment_name": "gpt124m_lr_search",
-            "stage2_result_path": "experiment_runs/gpt124m_lr_search_staged_15h/level_15h/stage2/stage2_result.json",
-            "stage1_summary_path": "experiment_runs/gpt124m_lr_search_staged_15h/level_15h/stage1/study_summary.json"
+            "kind": "linesearch_final",
+            "experiment_name": "llama60m_line_search"
+          }
+        }
+      ]
+    },
+    {
+      "family": "LLAMA",
+      "model_size": "60M",
+      "size_label": "60M",
+      "method": "linesearch_muon",
+      "selection_rule": "min_loss",
+      "selected": {
+        "family": "LLAMA",
+        "model_size": "60M",
+        "size_label": "60M",
+        "method": "linesearch_muon",
+        "tuning_time_hours": null,
+        "loss": 3.432056188583374,
+        "wall_clock_hours": 0.5048533583349651,
+        "total_spent_time_hours": 0.5048533583349651,
+        "source_path": "/scratch.global/chen8596/experiment_runs/llama60m_line_search_muon_stage2_maxiters_3600/final/summary.json",
+        "metadata": {
+          "kind": "linesearch_final",
+          "experiment_name": "llama60m_line_search_muon"
+        }
+      },
+      "candidates": [
+        {
+          "family": "LLAMA",
+          "model_size": "60M",
+          "size_label": "60M",
+          "method": "linesearch_muon",
+          "tuning_time_hours": null,
+          "loss": 3.432056188583374,
+          "wall_clock_hours": 0.5048533583349651,
+          "total_spent_time_hours": 0.5048533583349651,
+          "source_path": "/scratch.global/chen8596/experiment_runs/llama60m_line_search_muon_stage2_maxiters_3600/final/summary.json",
+          "metadata": {
+            "kind": "linesearch_final",
+            "experiment_name": "llama60m_line_search_muon"
+          }
+        }
+      ]
+    },
+    {
+      "family": "LLAMA",
+      "model_size": "60M",
+      "size_label": "60M",
+      "method": "muon",
+      "selection_rule": "min_loss",
+      "selected": {
+        "family": "LLAMA",
+        "model_size": "60M",
+        "size_label": "60M",
+        "method": "muon",
+        "tuning_time_hours": 2.7847713086340162,
+        "loss": 3.4328675270080566,
+        "wall_clock_hours": 0.20550578925344679,
+        "total_spent_time_hours": null,
+        "source_path": "/scratch.global/chen8596/experiment_runs/llama60m_muon_lr_search_serial_halving_num_trials_12_maxiters_3600/serial_halving_result.json",
+        "metadata": {
+          "kind": "serial_halving",
+          "result_path": "",
+          "rung_index": 2,
+          "rung_name": "rung_02",
+          "num_trials": 1,
+          "rung_target_iters": 3600
+        }
+      },
+      "candidates": [
+        {
+          "family": "LLAMA",
+          "model_size": "60M",
+          "size_label": "60M",
+          "method": "muon",
+          "tuning_time_hours": 2.7847713086340162,
+          "loss": 3.4328675270080566,
+          "wall_clock_hours": 0.20550578925344679,
+          "total_spent_time_hours": null,
+          "source_path": "/scratch.global/chen8596/experiment_runs/llama60m_muon_lr_search_serial_halving_num_trials_12_maxiters_3600/serial_halving_result.json",
+          "metadata": {
+            "kind": "serial_halving",
+            "result_path": "",
+            "rung_index": 2,
+            "rung_name": "rung_02",
+            "num_trials": 1,
+            "rung_target_iters": 3600
           }
         },
         {
-          "family": "GPT",
-          "model_size": "124M",
-          "size_label": "124M/5B",
-          "method": "cosine",
-          "tuning_time_hours": 6.0,
-          "loss": 3.439756393432617,
-          "wall_clock_hours": 1.106274413201544,
-          "source_path": "experiment_runs/gpt124m_lr_search_staged_6h/level_6h/stage2/final/summary.json",
+          "family": "LLAMA",
+          "model_size": "60M",
+          "size_label": "60M",
+          "method": "muon",
+          "tuning_time_hours": 3.47560660733117,
+          "loss": 3.4830074310302734,
+          "wall_clock_hours": 0.20734729521804385,
+          "total_spent_time_hours": 0.38200902693801453,
+          "source_path": "/scratch.global/chen8596/experiment_runs/llama60m_muon_lr_search_serial_halving_num_trials_16_maxiters_3600/serial_halving_result.json",
           "metadata": {
-            "kind": "staged_search",
-            "experiment_name": "gpt124m_lr_search",
-            "stage2_result_path": "experiment_runs/gpt124m_lr_search_staged_6h/level_6h/stage2/stage2_result.json",
-            "stage1_summary_path": "experiment_runs/gpt124m_lr_search_staged_6h/level_6h/stage1/study_summary.json"
+            "kind": "serial_halving",
+            "result_path": "",
+            "rung_index": 2,
+            "rung_name": "rung_02",
+            "num_trials": 1,
+            "rung_target_iters": 3600
+          }
+        }
+      ]
+    },
+    {
+      "family": "LLAMA",
+      "model_size": "60M",
+      "size_label": "60M",
+      "method": "schedulefree_adam",
+      "selection_rule": "min_loss",
+      "selected": {
+        "family": "LLAMA",
+        "model_size": "60M",
+        "size_label": "60M",
+        "method": "schedulefree_adam",
+        "tuning_time_hours": 2.2561400002241134,
+        "loss": 4.833662509918213,
+        "wall_clock_hours": 0.20249261948797437,
+        "total_spent_time_hours": 0.3388235918018553,
+        "source_path": "/scratch.global/chen8596/experiment_runs/llama60m_schedulefree_adam_lr_search_serial_halving_num_trials_12_maxiters_3600/serial_halving_result.json",
+        "metadata": {
+          "kind": "serial_halving",
+          "result_path": "",
+          "rung_index": 2,
+          "rung_name": "rung_02",
+          "num_trials": 1,
+          "rung_target_iters": 3600
+        }
+      },
+      "candidates": [
+        {
+          "family": "LLAMA",
+          "model_size": "60M",
+          "size_label": "60M",
+          "method": "schedulefree_adam",
+          "tuning_time_hours": 2.2561400002241134,
+          "loss": 4.833662509918213,
+          "wall_clock_hours": 0.20249261948797437,
+          "total_spent_time_hours": 0.3388235918018553,
+          "source_path": "/scratch.global/chen8596/experiment_runs/llama60m_schedulefree_adam_lr_search_serial_halving_num_trials_12_maxiters_3600/serial_halving_result.json",
+          "metadata": {
+            "kind": "serial_halving",
+            "result_path": "",
+            "rung_index": 2,
+            "rung_name": "rung_02",
+            "num_trials": 1,
+            "rung_target_iters": 3600
           }
         },
         {
-          "family": "GPT",
-          "model_size": "124M",
-          "size_label": "124M/5B",
-          "method": "cosine",
-          "tuning_time_hours": 3.0,
-          "loss": 3.462355375289917,
-          "wall_clock_hours": 1.107730439901352,
-          "source_path": "experiment_runs/gpt124m_lr_search_staged_3h/level_3h/stage2/final/summary.json",
+          "family": "LLAMA",
+          "model_size": "60M",
+          "size_label": "60M",
+          "method": "schedulefree_adam",
+          "tuning_time_hours": 2.5393143918116885,
+          "loss": 5.1110711097717285,
+          "wall_clock_hours": 0.2023665753338072,
+          "total_spent_time_hours": 0.43311133537027574,
+          "source_path": "/scratch.global/chen8596/experiment_runs/llama60m_schedulefree_adam_lr_search_serial_halving_num_trials_8_maxiters_3600/serial_halving_result.json",
           "metadata": {
-            "kind": "staged_search",
-            "experiment_name": "gpt124m_lr_search",
-            "stage2_result_path": "/scratch.global/chen8596/gpt124m_lr_search_staged_3h/level_3h/stage2/stage2_result.json",
-            "stage1_summary_path": "experiment_runs/gpt124m_lr_search_staged_3h/level_3h/stage1/study_summary.json"
+            "kind": "serial_halving",
+            "result_path": "",
+            "rung_index": 2,
+            "rung_name": "rung_02",
+            "num_trials": 1,
+            "rung_target_iters": 3600
+          }
+        },
+        {
+          "family": "LLAMA",
+          "model_size": "60M",
+          "size_label": "60M",
+          "method": "schedulefree_adam",
+          "tuning_time_hours": 3.1065581417083745,
+          "loss": 4.8400959968566895,
+          "wall_clock_hours": 0.2021834260225296,
+          "total_spent_time_hours": 0.3513296492894491,
+          "source_path": "/scratch.global/chen8596/experiment_runs/llama60m_schedulefree_adam_lr_search_serial_halving_num_trials_16_maxiters_3600/serial_halving_result.json",
+          "metadata": {
+            "kind": "serial_halving",
+            "result_path": "",
+            "rung_index": 2,
+            "rung_name": "rung_02",
+            "num_trials": 1,
+            "rung_target_iters": 3600
           }
         }
       ]

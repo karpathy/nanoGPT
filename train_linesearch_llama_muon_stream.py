@@ -89,6 +89,7 @@ experiment_test_target_enabled = False
 max_running_time_hours = 0.0
 save_last_checkpoint = True
 experiment_summary_path = ""
+experiment_records_path = ""
 prune_signal_path = ""
 stop_at_eval_boundary = False
 # -----------------------------------------------------------------------------
@@ -317,7 +318,7 @@ def write_experiment_summary(termination_reason, elapsed_hours, train_start_time
         "best_train_loss": float(best_train_loss),
         "best_val_loss": float(best_val_loss),
         "iter_num": int(iter_num),
-        "learning_rate": float(learning_rate),
+        "learning_rate": float(optimizer.param_groups[0]["lr"]),
         "metric_mode": experiment_metric_mode,
         "wall_clock_hours": float(elapsed_hours),
         "forward_backward_hours": float(elapsed_hours),
@@ -328,6 +329,23 @@ def write_experiment_summary(termination_reason, elapsed_hours, train_start_time
     }
     with open(experiment_summary_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2, sort_keys=True)
+
+
+def append_experiment_record(step, train_loss, val_loss, wall_clock_hours):
+    if not experiment_records_path or not master_process:
+        return
+    record = {
+        "stage": "stage2",
+        "trial_id": trial_id,
+        "step": int(step),
+        "train_loss": float(train_loss),
+        "val_loss": float(val_loss),
+        "wall_clock_hours": float(wall_clock_hours),
+        "learning_rate": float(optimizer.param_groups[0]["lr"]),
+        "muon_lr": float(optimizer.param_groups[muon_group_idx]["lr"]),
+    }
+    with open(experiment_records_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record, sort_keys=True) + "\n")
 
 
 def prune_requested():
@@ -383,12 +401,12 @@ while True:
                         outputs_ls = model(input_ids=x_ls, attention_mask=attention_mask_ls, labels=labels_ls)
                     total_loss += outputs_ls.loss.detach()
                     if require_grad:
-                        (outputs_ls.loss / (linesearch_accum_steps + 1)).backward()
+                        (outputs_ls.loss / (linesearch_accum_steps)).backward()
                         if grad_clip != 0:
                             torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
                 if ddp and require_grad:
                     model.require_backward_grad_sync = True
-                avg_loss = total_loss / (linesearch_accum_steps + 1)
+                avg_loss = total_loss / (linesearch_accum_steps)
                 return avg_loss.item()
 
             return line_search_closure
@@ -413,6 +431,12 @@ while True:
             losses = estimate_loss()
             print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
             best_train_loss = min(best_train_loss, losses["train"].item())
+            append_experiment_record(
+                step=iter_num,
+                train_loss=losses["train"].item(),
+                val_loss=losses["val"].item(),
+                wall_clock_hours=forward_backward_seconds / 3600.0,
+            )
             if losses["val"] < best_val_loss or always_save_checkpoint:
                 best_val_loss = losses["val"]
             if prune_requested():

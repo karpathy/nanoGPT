@@ -26,5 +26,5 @@ echo "Launching or resuming smoke serial halving run at $RUN_ROOT"
 
 python run_stage1_optuna.py "$SMOKE_CONFIG" \
   --num-trials 8 \
-  --reduction-factor 2 \
+  --reduction-factor 4 \
   --run-root "$RUN_ROOT"

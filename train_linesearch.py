@@ -403,7 +403,7 @@ while True:
                     total_loss += loss_ls.detach()
 
                     if require_grad:
-                        (loss_ls / (linesearch_accum_steps + 1)).backward()
+                        (loss_ls / (linesearch_accum_steps)).backward()
 
                         # Clip gradients produced by the closure to keep them consistent
                         # with the main training loop. This prevents excessively large

@@ -35,6 +35,6 @@ echo "Launching or resuming serial halving run at $RUN_ROOT"
 
 python run_stage1_optuna.py config/experiments/optuna_schedulefree_adam_gpt124m.yaml \
   --num-trials 8 \
-  --reduction-factor 2 \
+  --reduction-factor 4 \
   --num-iterations-per-trial "$MAX_ITERS" \
   --run-root "$RUN_ROOT"

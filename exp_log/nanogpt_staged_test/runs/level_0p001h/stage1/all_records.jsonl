@@ -1,2 +1,0 @@
-{"learning_rate": 0.00028616260028661676, "level_hours": 0.001, "stage": "stage1", "step": 0, "train_loss": 3.4491, "trial_id": "trial_0000", "val_loss": 3.4934, "wall_clock_hours": 0.019218113356166414}
-{"learning_rate": 0.00028616260028661676, "level_hours": 0.001, "stage": "stage1", "step": 1, "train_loss": 3.5003, "trial_id": "trial_0000", "val_loss": 3.456, "wall_clock_hours": 0.019301987489064535}

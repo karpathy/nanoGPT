@@ -13,11 +13,7 @@ def parse_args():
     )
     parser.add_argument(
         "--experiment-root",
-<<<<<<< HEAD
-        default="/scratch.global/chen8596//scratch.global/chen8596",
-=======
-        default="/work/nvme/bgop/cchen47/experiment_runs",
->>>>>>> master
+        default="/scratch.global/chen8596/experiment_runs",
         help="Root directory containing experiment outputs.",
     )
     parser.add_argument(
@@ -80,7 +76,9 @@ def infer_method(experiment_name, train_script):
     lowered_name = experiment_name.lower()
     lowered_script = (train_script or "").lower()
     if "line_search" in lowered_name or "linesearch" in lowered_name:
-        return "Linesearch"
+        if "muon" in lowered_name or "muon" in lowered_script:
+            return "linesearch_muon"
+        return "linesearch_adam"
     if "schedulefree" in lowered_name:
         return "schedulefree_adam"
     if "muon" in lowered_name or "muon" in lowered_script:
@@ -88,6 +86,10 @@ def infer_method(experiment_name, train_script):
     if "lr_search" in lowered_name or lowered_script == "train.py":
         return "cosine"
     return experiment_name
+
+
+def is_linesearch_method(method):
+    return method in {"linesearch_adam", "linesearch_muon"}
 
 
 def compute_trial_total_spent_time_hours(trial_dir):
@@ -202,7 +204,7 @@ def collect_linesearch_entries(experiment_root, size_overrides):
         summary = load_json(summary_path)
         experiment_name = summary.get("experiment_name", "")
         method = infer_method(experiment_name, summary.get("train_script", ""))
-        if method != "Linesearch":
+        if not is_linesearch_method(method):
             continue
 
         family = infer_family(experiment_name).upper()
@@ -271,6 +273,10 @@ def aggregate_candidates(candidates):
 def main():
     args = parse_args()
     experiment_root = Path(args.experiment_root)
+    if not experiment_root.exists():
+        raise FileNotFoundError(
+            f"Experiment root does not exist: {experiment_root}"
+        )
     size_overrides = parse_size_overrides(args.size_label)
 
     candidates = []

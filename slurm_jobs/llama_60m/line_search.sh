@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=ls_llama60m
-#SBATCH --time=01:00:00
+#SBATCH --time=03:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=128G

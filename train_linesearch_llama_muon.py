@@ -1,34 +1,34 @@
 """
-Train a LLaMA model with line-search learning rate adaptation for stage2 runs
-using streaming C4 data instead of an offline token cache.
+Train a LLaMA model with Muon line search for stage2 runs using tokenized memmap data.
 """
 
+import json
+import math
 import os
 import time
-import math
-import json
 from contextlib import nullcontext
 
+import numpy as np
 import torch
 import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import destroy_process_group, init_process_group
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 from checkpoint_utils import resolve_resume_checkpoint
-from lr_sched import LineSearchScheduler
 from llama.train_support import (
-    StreamingBatchIterator,
-    build_optimizer,
-    build_c4_dataloader,
     build_llama_model,
     build_tokenizer,
-    prepare_batch,
+    default_tokenized_cache_dir,
+    load_token_data,
+    prepare_token_bin_cache,
     strip_unwanted_prefix,
+    token_bin_cache_is_ready,
+    wait_for_token_bin_cache,
 )
+from lr_sched_muon_split_armijo import LineSearchScheduler
+from muon import MuonWithAuxAdam, SingleDeviceMuonWithAuxAdam
 
 # -----------------------------------------------------------------------------
-# default config values
-# I/O
 out_dir = "/scratch.global/chen8596/out"
 eval_interval = 200
 log_interval = 1
@@ -45,22 +45,33 @@ block_size = 1024
 max_length = 1024
 dataloader_num_workers = 4
 tokenizer_name = "t5-base"
-shuffle_buffer_size = 10000
+tokenized_data_cache_dir = ""
+hf_data_cache_dir = ""
+preprocessing_num_workers = 8
+tokenizer_batch_size = 1000
+overwrite_tokenized_cache = False
+data_backend = "memmap"
 # model
-llama_config_path = "llama_config/llama_60m.json"
-# adamw optimizer
-learning_rate = 1e-6
+llama_config_path = "llama_config/llama_130m.json"
+# optimizer
+learning_rate = 1.0
 max_iters = 5000
 weight_decay = 1e-1
 beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0
-# learning rate decay settings
+muon_lr = 0.05
+muon_momentum = 0.95
+adam_head_lr = 6e-4
+adam_embed_lr = 6e-4
+adam_scalar_lr = 6e-4
+adam_eps = 1e-10
+# lr schedule
 decay_lr = True
 warmup_iters = 100
 lr_decay_iters = 5000
-min_lr = 6e-5
-# line search settings
+min_lr = 0.1
+# line search
 linesearch_interval = 0
 linesearch_accum_steps = 32
 linesearch_num_search = 30
@@ -99,29 +110,46 @@ config["always_save_checkpoint"] = False
 config["save_last_checkpoint"] = False
 linesearch_interval = max(1, int(max_iters * 0.1))
 config["linesearch_interval"] = linesearch_interval
-# -----------------------------------------------------------------------------
 
 if max_length != block_size:
     raise ValueError("max_length and block_size must match for LLaMA experiments.")
 
 ddp = int(os.environ.get("RANK", -1)) != -1
+ddp_rank = int(os.environ.get("RANK", 0))
+ddp_local_rank = int(os.environ.get("LOCAL_RANK", 0))
+ddp_world_size = int(os.environ.get("WORLD_SIZE", 1))
+master_process = ddp_rank == 0
+seed_offset = ddp_rank
+
+tokenizer = build_tokenizer(tokenizer_name=tokenizer_name, max_length=max_length)
+print(f"tokenizer vocab size: {tokenizer.vocab_size}")
+tokenized_data_cache_dir = tokenized_data_cache_dir or default_tokenized_cache_dir(
+    dataset_name=dataset,
+    dataset_config_name=dataset_config_name,
+    tokenizer_name=tokenizer_name,
+    max_length=max_length,
+)
+if master_process:
+    print(f"tokenized cache dir: {tokenized_data_cache_dir}")
+    prepare_token_bin_cache(
+        dataset_name=dataset,
+        dataset_config_name=dataset_config_name,
+        tokenizer=tokenizer,
+        cache_dir=tokenized_data_cache_dir,
+        overwrite_tokenized_cache=overwrite_tokenized_cache,
+        text_batch_size=tokenizer_batch_size,
+        num_proc=preprocessing_num_workers,
+    )
+elif not token_bin_cache_is_ready(tokenized_data_cache_dir):
+    print(f"waiting for token cache to appear: {tokenized_data_cache_dir}")
+    wait_for_token_bin_cache(tokenized_data_cache_dir)
+
 if ddp:
     init_process_group(backend=backend)
-    ddp_rank = int(os.environ["RANK"])
-    ddp_local_rank = int(os.environ["LOCAL_RANK"])
-    ddp_world_size = int(os.environ["WORLD_SIZE"])
     device = f"cuda:{ddp_local_rank}"
     torch.cuda.set_device(device)
-    master_process = ddp_rank == 0
-    seed_offset = ddp_rank
     assert gradient_accumulation_steps % ddp_world_size == 0
     gradient_accumulation_steps //= ddp_world_size
-else:
-    ddp_rank = 0
-    ddp_local_rank = 0
-    ddp_world_size = 1
-    master_process = True
-    seed_offset = 0
 
 tokens_per_iter = gradient_accumulation_steps * ddp_world_size * batch_size * block_size
 print(f"tokens per iteration will be: {tokens_per_iter:,}")
@@ -137,40 +165,27 @@ device_type = "cuda" if "cuda" in device else "cpu"
 ptdtype = {"float32": torch.float32, "bfloat16": torch.bfloat16, "float16": torch.float16}[dtype]
 ctx = nullcontext() if device_type == "cpu" else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
-tokenizer = build_tokenizer(tokenizer_name=tokenizer_name, max_length=max_length)
-print(f"tokenizer vocab size: {tokenizer.vocab_size}")
-
-
-def make_stream_loader(split: str):
-    stream_seed = seed + seed_offset if split == "train" else seed
-    stream_shuffle_buffer = shuffle_buffer_size if split == "train" else 0
-    return build_c4_dataloader(
-        dataset_name=dataset,
-        dataset_config_name=dataset_config_name,
-        split="train" if split == "train" else "validation",
-        tokenizer=tokenizer,
-        batch_size=batch_size,
-        max_length=max_length,
-        seed=stream_seed,
-        shuffle_buffer_size=stream_shuffle_buffer,
-        global_rank=ddp_rank,
-        world_size=ddp_world_size,
-        num_workers=dataloader_num_workers,
-    )
-
-
-train_batch_iter = StreamingBatchIterator(lambda: make_stream_loader("train"))
-val_batch_iter = StreamingBatchIterator(lambda: make_stream_loader("val"))
+train_data, token_meta = load_token_data(tokenized_data_cache_dir, split="train", data_backend=data_backend)
+val_data, _ = load_token_data(tokenized_data_cache_dir, split="val", data_backend=data_backend)
 if master_process:
     print(
-        "using streaming C4 dataloaders "
-        f"(shuffle_buffer_size={shuffle_buffer_size}, num_workers={dataloader_num_workers})"
+        f"loaded token cache backend={data_backend}, "
+        f"train_tokens={token_meta['train_tokens']:,}, val_tokens={token_meta['val_tokens']:,}"
     )
 
 
 def get_batch(split, to_device=True):
-    batch = train_batch_iter.next_batch() if split == "train" else val_batch_iter.next_batch()
-    return prepare_batch(batch=batch, device=device, device_type=device_type, to_device=to_device)
+    data = train_data if split == "train" else val_data
+    ix = torch.randint(0, len(data) - block_size, (batch_size,)).numpy()
+    offsets = np.arange(block_size)
+    x = torch.from_numpy(np.asarray(data[ix[:, None] + offsets], dtype=np.int64))
+    if not to_device:
+        return x, x
+    if device_type == "cuda":
+        x = x.pin_memory().to(device, non_blocking=True)
+    else:
+        x = x.to(device)
+    return x, x
 
 
 iter_num = 0
@@ -183,10 +198,8 @@ model_args = {
     "vocab_size": tokenizer.vocab_size,
     "max_length": max_length,
     "block_size": block_size,
-    "data_backend": "streaming",
-    "dataset": dataset,
-    "dataset_config_name": dataset_config_name,
-    "shuffle_buffer_size": shuffle_buffer_size,
+    "tokenized_data_cache_dir": tokenized_data_cache_dir,
+    "data_backend": data_backend,
 }
 
 checkpoint = None
@@ -209,49 +222,82 @@ elif init_from == "resume":
         tokenizer_vocab_size=int(model_args["vocab_size"]),
         max_length=int(model_args["max_length"]),
     )
-    state_dict = strip_unwanted_prefix(checkpoint["model"])
-    model.load_state_dict(state_dict)
+    model.load_state_dict(strip_unwanted_prefix(checkpoint["model"]))
     iter_num = int(checkpoint["iter_num"])
     best_train_loss = float(checkpoint.get("best_train_loss", best_train_loss))
     best_val_loss = float(checkpoint["best_val_loss"])
 else:
     raise ValueError(f"Unsupported init_from={init_from}")
 
-print(f"model vocab size: {model.config.vocab_size}")
 model.to(device)
-if master_process and device_type == "cuda":
-    flash_enabled = getattr(torch.backends.cuda, "flash_sdp_enabled", lambda: False)()
-    mem_efficient_enabled = getattr(torch.backends.cuda, "mem_efficient_sdp_enabled", lambda: False)()
-    math_enabled = getattr(torch.backends.cuda, "math_sdp_enabled", lambda: False)()
-    print(
-        "sdpa backends: "
-        f"flash={flash_enabled}, mem_efficient={mem_efficient_enabled}, math={math_enabled}"
+scaler = torch.cuda.amp.GradScaler(enabled=(dtype == "float16"))
+
+
+def build_optimizer(model):
+    named_params = list(model.named_parameters())
+    head_params = [p for n, p in named_params if n == "lm_head.weight"]
+    embed_params = [
+        p for n, p in named_params
+        if "embed_tokens" in n and all(id(p) != id(head) for head in head_params)
+    ]
+    scalar_params = [p for _, p in named_params if p.ndim < 2]
+    excluded = {id(p) for p in head_params + embed_params + scalar_params}
+    hidden_matrix_params = [p for _, p in named_params if p.ndim >= 2 and id(p) not in excluded]
+
+    adam_groups = []
+    if head_params:
+        adam_groups.append(dict(params=head_params, lr=adam_head_lr, weight_decay=weight_decay))
+    if embed_params:
+        adam_groups.append(dict(params=embed_params, lr=adam_embed_lr, weight_decay=weight_decay))
+    if scalar_params:
+        adam_groups.append(dict(params=scalar_params, lr=adam_scalar_lr, weight_decay=weight_decay))
+    adam_groups = [
+        dict(**group, betas=(beta1, beta2), eps=adam_eps, use_muon=False)
+        for group in adam_groups
+    ]
+    muon_group = dict(
+        params=hidden_matrix_params,
+        lr=muon_lr,
+        momentum=muon_momentum,
+        weight_decay=weight_decay,
+        use_muon=True,
     )
 
-scaler = torch.cuda.amp.GradScaler(enabled=(dtype == "float16"))
-optimizer = build_optimizer(
-    model=model,
-    learning_rate=learning_rate,
-    weight_decay=weight_decay,
-    betas=(beta1, beta2),
-    device_type=device_type,
-    optimizer_type="AdamW",
-)
+    optimizer_cls = MuonWithAuxAdam if ddp else SingleDeviceMuonWithAuxAdam
+    optimizer = optimizer_cls([*adam_groups, muon_group])
+    base_group_lrs = [group["lr"] for group in optimizer.param_groups]
+    muon_group_idx = len(optimizer.param_groups) - 1
+    return optimizer, base_group_lrs, muon_group_idx
+
+
+optimizer, base_group_lrs, muon_group_idx = build_optimizer(model)
+if init_from == "resume" and checkpoint is not None:
+    optimizer.load_state_dict(checkpoint["optimizer"])
+
 scheduler = LineSearchScheduler(
     optimizer=optimizer,
     model_paras=model.parameters(),
     num_search=linesearch_num_search,
     start_lr=linesearch_start_lr,
-    optimizer_type="AdamW",
+    optimizer_type="Muon",
     injection=False,
     search_mode=linesearch_search_mode,
     warmup_length=warmup_iters,
+    controlled_group_indices=[muon_group_idx],
 )
-if init_from == "resume" and checkpoint is not None:
-    optimizer.load_state_dict(checkpoint["optimizer"])
-    if "scheduler" in checkpoint:
-        scheduler.load_state_dict(checkpoint["scheduler"])
+if init_from == "resume" and checkpoint is not None and "scheduler" in checkpoint:
+    scheduler.load_state_dict(checkpoint["scheduler"])
+    optimizer.param_groups[muon_group_idx]["muon_lr"] = scheduler.line_search_alpha
 checkpoint = None
+
+
+def sync_muon_group_lr():
+    muon_group = optimizer.param_groups[muon_group_idx]
+    if "muon_lr" in muon_group:
+        muon_group["lr"] = float(muon_group["muon_lr"])
+
+
+sync_muon_group_lr()
 
 if compile:
     print("compiling the model... (takes a ~minute)")
@@ -269,13 +315,24 @@ def estimate_loss():
     for split in ["train", "val"]:
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
-            X, attention_mask, labels = get_batch(split)
+            X, labels = get_batch(split)
             with ctx:
-                outputs = eval_model(input_ids=X, attention_mask=attention_mask, labels=labels)
+                outputs = eval_model(input_ids=X, attention_mask=None, labels=labels)
             losses[k] = outputs.loss.item()
         out[split] = losses.mean()
     eval_model.train()
     return out
+
+
+def get_lr(it):
+    if it < warmup_iters:
+        return learning_rate * (it + 1) / (warmup_iters + 1)
+    if it > lr_decay_iters:
+        return min_lr
+    decay_ratio = (it - warmup_iters) / (lr_decay_iters - warmup_iters)
+    assert 0 <= decay_ratio <= 1
+    coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
+    return min_lr + coeff * (learning_rate - min_lr)
 
 
 def save_checkpoint(path):
@@ -300,7 +357,7 @@ def write_experiment_summary(termination_reason, elapsed_hours):
     summary = {
         "experiment_name": experiment_name,
         "trial_id": trial_id,
-        "train_script": "train_linesearch_llama_stream.py",
+        "train_script": "train_linesearch_llama_muon.py",
         "out_dir": out_dir,
         "best_checkpoint_path": os.path.join(out_dir, "ckpt.pt") if os.path.exists(os.path.join(out_dir, "ckpt.pt")) else "",
         "last_checkpoint_path": os.path.join(out_dir, "ckpt_last.pt") if os.path.exists(os.path.join(out_dir, "ckpt_last.pt")) else "",
@@ -308,6 +365,7 @@ def write_experiment_summary(termination_reason, elapsed_hours):
         "best_val_loss": float(best_val_loss),
         "iter_num": int(iter_num),
         "learning_rate": float(optimizer.param_groups[0]["lr"]),
+        "muon_lr": float(optimizer.param_groups[muon_group_idx]["lr"]),
         "metric_mode": experiment_metric_mode,
         "wall_clock_hours": float(elapsed_hours),
         "forward_backward_hours": float(elapsed_hours),
@@ -331,6 +389,7 @@ def append_experiment_record(step, train_loss, val_loss, wall_clock_hours):
         "val_loss": float(val_loss),
         "wall_clock_hours": float(wall_clock_hours),
         "learning_rate": float(optimizer.param_groups[0]["lr"]),
+        "muon_lr": float(optimizer.param_groups[muon_group_idx]["lr"]),
     }
     with open(experiment_records_path, "a", encoding="utf-8") as f:
         f.write(json.dumps(record, sort_keys=True) + "\n")
@@ -352,7 +411,7 @@ def should_stop_at_eval_boundary():
     return (iter_num + eval_interval) > max_iters
 
 
-X, attention_mask, labels = get_batch("train")
+X, labels = get_batch("train")
 train_start_time = time.time()
 forward_backward_seconds = 0.0
 forward_seconds = 0.0
@@ -362,40 +421,32 @@ local_iter_num = 0
 raw_model = model.module if ddp else model
 running_mfu = -1.0
 termination_reason = "max_iters_reached"
-
-
 while True:
+    lr_mult = get_lr(iter_num) if decay_lr else learning_rate
+    for group_idx, (param_group, base_lr) in enumerate(zip(optimizer.param_groups, base_group_lrs)):
+        if group_idx == muon_group_idx:
+            continue
+        param_group["lr"] = base_lr * lr_mult
+
     if iter_num % linesearch_interval == 0 or (warmup_iters > 0 and iter_num <= warmup_iters and iter_num % warmup_iters == 0):
-        print("LINESEARCH!!!")
-        fixed_batches = []
-        for _ in range(linesearch_accum_steps):
-            x_ls, attention_mask_ls, labels_ls = get_batch("train", to_device=False)
-            fixed_batches.append((x_ls, attention_mask_ls, labels_ls))
+        fixed_batches = [get_batch("train", to_device=False) for _ in range(linesearch_accum_steps)]
 
         def make_closure():
             def line_search_closure(require_grad=False):
                 device_for_batch = next(model.parameters()).device
                 total_loss = torch.zeros((), device=device_for_batch)
                 sync_last_micro_step = len(fixed_batches) - 1
-                for micro_step, (x_ls, attention_mask_ls, labels_ls) in enumerate(fixed_batches):
+                for micro_step, (x_ls, _) in enumerate(fixed_batches):
                     if device_type == "cuda":
                         x_ls = x_ls.pin_memory().to(device_for_batch, non_blocking=True)
-                        attention_mask_ls = attention_mask_ls.pin_memory().to(device_for_batch, non_blocking=True)
-                        labels_ls = labels_ls.pin_memory().to(device_for_batch, non_blocking=True)
                     else:
                         x_ls = x_ls.to(device_for_batch)
-                        attention_mask_ls = attention_mask_ls.to(device_for_batch)
-                        labels_ls = labels_ls.to(device_for_batch)
+                    labels_ls = x_ls
                     if ddp and require_grad:
                         model.require_backward_grad_sync = (micro_step == sync_last_micro_step)
                     with ctx:
-                        outputs_ls = model(
-                            input_ids=x_ls,
-                            attention_mask=attention_mask_ls,
-                            labels=labels_ls,
-                        )
+                        outputs_ls = model(input_ids=x_ls, attention_mask=None, labels=labels_ls)
                     total_loss += outputs_ls.loss.detach()
-
                     if require_grad:
                         (outputs_ls.loss / (linesearch_accum_steps)).backward()
                         if grad_clip != 0:
@@ -413,12 +464,14 @@ while True:
     scheduler.step(
         line_search_closure,
         c1=c1_use,
-        factor=linesearch_factor,
         step=iter_num,
         interval=linesearch_interval,
         condition="armijo",
         warmup_length=warmup_iters,
+        factor=linesearch_factor,
+        start_lr=muon_lr,
     )
+    sync_muon_group_lr()
 
     if iter_num % eval_interval == 0:
         should_terminate = False
@@ -457,10 +510,10 @@ while True:
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         forward_start_time = training_clock_now()
         with ctx:
-            outputs = model(input_ids=X, attention_mask=attention_mask, labels=labels)
+            outputs = model(input_ids=X, attention_mask=None, labels=labels)
             loss = outputs.loss / gradient_accumulation_steps
         forward_seconds += training_clock_now() - forward_start_time
-        X, attention_mask, labels = get_batch("train")
+        X, labels = get_batch("train")
         backward_start_time = training_clock_now()
         scaler.scale(loss).backward()
         backward_seconds += training_clock_now() - backward_start_time
@@ -469,7 +522,6 @@ while True:
     if grad_clip != 0.0:
         scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-
     scaler.step(optimizer)
     scaler.update()
     optimizer.zero_grad(set_to_none=True)
@@ -482,7 +534,11 @@ while True:
         if local_iter_num >= 5 and hasattr(raw_model, "estimate_mfu"):
             mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
-        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+        print(
+            f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, "
+            f"mfu {running_mfu*100:.2f}%, head_lr {optimizer.param_groups[0]['lr']:.4f}, "
+            f"muon_lr {optimizer.param_groups[muon_group_idx]['lr']:.4f}"
+        )
     iter_num += 1
     local_iter_num += 1
 

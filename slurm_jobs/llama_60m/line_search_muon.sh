@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=lsmu_llama60m
-#SBATCH --time=01:00:00
+#SBATCH --time=03:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=128G
@@ -34,7 +34,7 @@ RUN_ROOT="/scratch.global/chen8596/experiment_runs/llama60m_line_search_muon_sta
 
 python run_linesearch_stage2.py \
   --run-root "$RUN_ROOT" \
-  --train-script "train_linesearch_llama_muon_stream.py" \
+  --train-script "train_linesearch_llama_muon.py" \
   --config-path "config/train_llama_60m.py" \
   --nproc-per-node 4 \
   --experiment-name "llama60m_line_search_muon" \

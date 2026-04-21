@@ -59,9 +59,9 @@ bias = False # do we use bias inside LayerNorm and Linear layers?
 learning_rate = 1.0 # global multiplier for Adam groups only
 max_iters = 10000 # total number of training iterations
 weight_decay = 1e-1
-beta1 = 0.8
+beta1 = 0.9
 beta2 = 0.95
-grad_clip = 0.0 # clip gradients at this value, or disable if == 0.0
+grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 muon_lr = 0.0
 muon_momentum = 0.95
 # adam_head_lr = 0.22
@@ -371,6 +371,7 @@ def append_experiment_record(step, train_loss, val_loss, wall_clock_hours):
         'learning_rate': float(optimizer.param_groups[0]['lr']),
         'muon_lr': float(optimizer.param_groups[muon_group_idx]['lr']),
     }
+    
     with open(experiment_records_path, 'a', encoding='utf-8') as f:
         f.write(json.dumps(record, sort_keys=True) + '\n')
 
@@ -394,6 +395,10 @@ local_iter_num = 0
 raw_model = model.module if ddp else model
 running_mfu = -1.0
 termination_reason = 'max_iters_reached'
+
+
+
+
 while True:
     lr_mult = get_lr(iter_num) if decay_lr else learning_rate
     for group_idx, (param_group, base_lr) in enumerate(zip(optimizer.param_groups, base_group_lrs)):
@@ -422,12 +427,12 @@ while True:
                         _, loss_ls = model(x_ls, y_ls)
                     total_loss += loss_ls.detach()
                     if require_grad:
-                        (loss_ls / (linesearch_accum_steps + 1)).backward()
+                        (loss_ls / (linesearch_accum_steps)).backward()
                         if grad_clip != 0.0:
                             torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
                 if ddp and require_grad:
                     model.require_backward_grad_sync = True
-                avg_loss = total_loss / (linesearch_accum_steps + 1)
+                avg_loss = total_loss / (linesearch_accum_steps)
                 return avg_loss.item()
             return line_search_closure
 

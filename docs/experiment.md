@@ -153,3 +153,18 @@ Time is defined as forward wall-clock time plus backward wall-clock time.
 
 In practice, report elapsed wall-clock time for the full training run and the time at
 which the configured target metric is first reached.
+
+## Summary Table Labels
+
+When generating the experiment summary table:
+
+- Serial-halving baselines keep their optimizer names such as `cosine`, `muon`, and
+  `schedulefree_adam`.
+- Direct line-search runs must be split into two separate rows:
+  `linesearch_adam` and `linesearch_muon`.
+- These direct line-search rows do not have a tuning phase, so the tuning-time cell is
+  rendered as `Nah`.
+
+
+
+

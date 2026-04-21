@@ -17,7 +17,7 @@ def parse_args():
     )
     parser.add_argument(
         "--experiment-root",
-        default="/work/nvme/bgop/cchen47/experiment_runs",
+        default="/scratch.global/chen8596/experiment_runs",
         help="Experiment output root used when --input is omitted.",
     )
     parser.add_argument("--output", default="", help="Optional output path for the LaTeX table")
@@ -47,8 +47,13 @@ def parse_args():
     )
     parser.add_argument(
         "--linesearch-label",
-        default="Linesearch",
-        help="Row label used for the line search row.",
+        default="linesearch_adam",
+        help="Display label for the Adam line-search row.",
+    )
+    parser.add_argument(
+        "--linesearch-muon-label",
+        default="linesearch_muon",
+        help="Display label for the Muon line-search row.",
     )
     parser.add_argument(
         "--loss-decimals",
@@ -186,18 +191,37 @@ def build_candidate_map(entries):
     return candidate_map
 
 
-def collect_body_methods(entries, linesearch_label, explicit_methods):
+def is_linesearch_method(method):
+    return method in {"linesearch_adam", "linesearch_muon"}
+
+
+def collect_body_methods(entries, explicit_methods):
     if explicit_methods:
-        return explicit_methods
+        return [method for method in explicit_methods if not is_linesearch_method(method)]
     preferred = ["cosine", "muon", "schedulefree_adam"]
     methods = []
     for entry in entries:
         method = entry["method"]
-        if method == linesearch_label:
+        if is_linesearch_method(method):
             continue
         if method not in methods:
             methods.append(method)
     methods.sort(key=lambda method: (preferred.index(method) if method in preferred else len(preferred), method))
+    return methods
+
+
+def collect_linesearch_methods(entries, explicit_methods):
+    if explicit_methods:
+        methods = [method for method in explicit_methods if is_linesearch_method(method)]
+    else:
+        preferred = ["linesearch_adam", "linesearch_muon"]
+        discovered = []
+        for entry in entries:
+            method = entry["method"]
+            if is_linesearch_method(method) and method not in discovered:
+                discovered.append(method)
+        methods = [method for method in preferred if method in discovered]
+        methods.extend([method for method in discovered if method not in methods])
     return methods
 
 
@@ -246,14 +270,14 @@ def method_data_row(method, family, columns, total_columns, candidate_map, row_i
     return " & ".join(cells) + " \\\\"
 
 
-def linesearch_row(label, family, columns, total_columns, entry_map, loss_decimals):
+def linesearch_row(label, method, family, columns, total_columns, entry_map, loss_decimals):
     cells = [f"\\textbf{{{label}}}"]
     padded = list(columns) + [{"model_size": None}] * (total_columns - len(columns))
     for column in padded:
         if not column["model_size"]:
             cells.extend(["Nah", "", ""])
             continue
-        entry = entry_map.get((family, column["model_size"], label))
+        entry = entry_map.get((family, column["model_size"], method))
         loss_value = ""
         spent_time_value = ""
         if entry:
@@ -296,7 +320,9 @@ def infer_method(experiment_name, train_script):
     lowered_name = experiment_name.lower()
     lowered_script = (train_script or "").lower()
     if "line_search" in lowered_name or "linesearch" in lowered_name:
-        return "Linesearch"
+        if "muon" in lowered_name or "muon" in lowered_script:
+            return "linesearch_muon"
+        return "linesearch_adam"
     if "schedulefree" in lowered_name:
         return "schedulefree_adam"
     if "muon" in lowered_name or "muon" in lowered_script:
@@ -415,7 +441,7 @@ def collect_linesearch_entries(experiment_root, size_labels):
         summary = load_json(summary_path)
         experiment_name = summary.get("experiment_name", "")
         method = infer_method(experiment_name, summary.get("train_script", ""))
-        if method != "Linesearch":
+        if not is_linesearch_method(method):
             continue
         family = infer_family(experiment_name).upper()
         model_size = infer_model_size(experiment_name)
@@ -495,13 +521,20 @@ def render_table(
     explicit_columns,
     method_order,
     method_labels,
-    linesearch_label,
     loss_decimals,
     rows_per_method,
 ):
     entries = payload["entries"]
     if not entries:
-        raise ValueError("No experiment entries found to render.")
+        experiment_root = payload.get("experiment_root", "")
+        hint = ""
+        if experiment_root:
+            hint = f" Input payload experiment_root={experiment_root!r}."
+        raise ValueError(
+            "No experiment entries found to render."
+            + hint
+            + " Re-run collect_experiment_table_data.py with the correct --experiment-root."
+        )
     entry_map = build_entry_map(entries)
     candidate_map = build_candidate_map(entries)
     available_families = []
@@ -524,7 +557,8 @@ def render_table(
         family_columns[family] = explicit_columns.get(family, discovered_columns.get(family, []))
 
     total_columns = max([len(columns) for columns in family_columns.values()] or [1])
-    body_methods = collect_body_methods(entries, linesearch_label, method_order)
+    body_methods = collect_body_methods(entries, method_order)
+    linesearch_methods = collect_linesearch_methods(entries, method_order)
 
     lines = []
     lines.append("\\begin{table}[htbp]")
@@ -554,17 +588,19 @@ def render_table(
                 )
                 lines.append("\\hline")
             lines.append("")
-        lines.append(
-            linesearch_row(
-                label=linesearch_label,
-                family=family,
-                columns=family_columns[family],
-                total_columns=total_columns,
-                entry_map=entry_map,
-                loss_decimals=loss_decimals,
+        for method in linesearch_methods:
+            lines.append(
+                linesearch_row(
+                    label=method_labels.get(method, method),
+                    method=method,
+                    family=family,
+                    columns=family_columns[family],
+                    total_columns=total_columns,
+                    entry_map=entry_map,
+                    loss_decimals=loss_decimals,
+                )
             )
-        )
-    lines.append("\\hline")
+            lines.append("\\hline")
 
     lines.append("\\end{tabular}")
     lines.append("\\caption{Comparison with tuning time, loss, and spent time}")
@@ -586,6 +622,8 @@ def main():
         "cosine": "cosine",
         "muon": "muon",
         "schedulefree_adam": "schedulefree_adam",
+        "linesearch_adam": args.linesearch_label,
+        "linesearch_muon": args.linesearch_muon_label,
     }
     method_labels.update(parse_method_labels(args.method_label))
 
@@ -595,7 +633,6 @@ def main():
         explicit_columns=explicit_columns,
         method_order=method_order,
         method_labels=method_labels,
-        linesearch_label=args.linesearch_label,
         loss_decimals=args.loss_decimals,
         rows_per_method=args.rows_per_method,
     )

@@ -265,7 +265,7 @@ def build_command(
     cmd.extend(
         [
             f"--max_iters={num_iterations_per_trial}",
-            f"--lr_decay_iters={num_iterations_per_trial}",
+            f"--lr_decay_iters={task['num_iterations_per_trial']}",
             f"--out_dir={trial_dir}",
             f"--experiment_name={experiment['name']}",
             f"--trial_id={trial_id}",

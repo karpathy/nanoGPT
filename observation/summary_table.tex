@@ -2,28 +2,39 @@
 \centering
 \begin{tabular}{c|c|c|c}
 \hline
-\textbf{GPT} & \multicolumn{3}{c}{124M/5B} \\
+\textbf{LLAMA} & \multicolumn{3}{c}{60M} \\
 \hline
 
 \textbf{cosine} & Tuning time & Loss & Spent time \\
 \hline
- & 4.17h & 3.2669 & 1.18h \\
+ & 1.89h & 4.7373 & 0.20h \\
 \hline
- & 5.21h & 3.2475 & 1.21h \\
+ & 2.48h & 4.6973 & 0.35h \\
 \hline
- & 7.92h & 3.3013 & 1.18h \\
+ & 3.47h & 4.7441 & 0.37h \\
 \hline
 
-\textbf{schedulefree_adam} & Tuning time & Loss & Spent time \\
+\textbf{muon} & Tuning time & Loss & Spent time \\
 \hline
- & 4.17h & 3.7553 & 1.22h \\
+ & 2.78h & 3.4329 & 0.21h \\
 \hline
- & 5.24h & 3.7154 & 1.21h \\
+ & 3.48h & 3.4830 & 0.38h \\
 \hline
  &  &  &  \\
 \hline
 
-\textbf{Linesearch} & Nah & 3.1655 & 1.20h \\
+\textbf{schedulefree_adam} & Tuning time & Loss & Spent time \\
+\hline
+ & 2.26h & 4.8337 & 0.34h \\
+\hline
+ & 2.54h & 5.1111 & 0.43h \\
+\hline
+ & 3.11h & 4.8401 & 0.35h \\
+\hline
+
+\textbf{linesearch_adam} & Nah & 3.5172 & 0.31h \\
+\hline
+\textbf{linesearch_muon} & Nah & 3.4321 & 0.50h \\
 \hline
 \end{tabular}
 \caption{Comparison with tuning time, loss, and spent time}

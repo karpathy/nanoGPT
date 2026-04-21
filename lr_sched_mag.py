@@ -12,8 +12,16 @@ import torch.distributed as dist
 # from absl import logging
 from torch.nn.functional import cosine_similarity
 import matplotlib.pyplot as plt
-import os
-import csv
+
+# Fix random seeds for reproducibility
+_SEED = 42
+random.seed(_SEED)
+np.random.seed(_SEED)
+torch.manual_seed(_SEED)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(_SEED)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 class LineSearchScheduler():
     def __init__(self, optimizer, start_lr, model_paras, num_search=16, optimizer_type="SGD", injection=True, search_mode="backtrack", warmup_length=100, num_perturb_samples=3, rho=0.001):
@@ -43,19 +51,6 @@ class LineSearchScheduler():
         self.paras = model_paras
         # self.injection_distribution = self._generate_long_tail_distribution()
         self.rule = self.get_potential_update_direction()
-        self.log_dir = "./observation"
-        # ensure log directory exists and prepare csv file for observations
-        os.makedirs(self.log_dir, exist_ok=True)
-        self.log_path = os.path.join(self.log_dir, "observations.csv")
-        # Only create/write header from rank 1 when using DDP, or always in single-process
-        use_ddp_init = dist.is_available() and dist.is_initialized()
-        rank_init = dist.get_rank() if use_ddp_init else 0
-        if (not use_ddp_init) or (rank_init == 1):
-            # write header if file does not exist
-            if not os.path.exists(self.log_path):
-                with open(self.log_path, "w", newline='') as f:
-                    writer = csv.writer(f)
-                    writer.writerow(["step", "loss", "lr", "gradient_norm", "dir_norm", "inner", "mag", "ls_loss_decre"])
 
     
     
@@ -345,7 +340,7 @@ class LineSearchScheduler():
 
         
 
-    def step(self, closure, condition="armijo", c1=0.6, factor=0.5, amax=1.0, amin=1e-6, step=0, interval=100, warmup_length=100, log_dir="./"):
+    def step(self, closure, condition="armijo", c1=0.6, factor=0.5, amax=1.0, amin=1e-6, step=0, interval=100, warmup_length=100, log_dir="./", start_lr=1):
         """
         condition: Line Search condition. Option: armijo,
         search_mode: Option: backtracking, forward, interpolate
@@ -355,35 +350,78 @@ class LineSearchScheduler():
         interval: perform line search every {interval} steps.
         """
         k = step % interval 
+        use_ddp = dist.is_initialized() 
         alpha = self.optimizer.param_groups[0]["lr"]
-        if step < warmup_length:
-            interval = warmup_length
-
-        if k != 0 and step != warmup_length: 
-            if self.prev_alpha >= self.line_search_alpha: 
+        if k != 0: 
+            if self.prev_magnitude >= self.line_search_magnitude: 
+                # progress in [0, 1]
                 t = (k + 1) / interval
                 # cosine interpolation (smooth start & end)
                 cosine_frac = 0.5 * (1 - math.cos(math.pi * t))
-                lr = self.prev_alpha + cosine_frac * (
-                    self.line_search_alpha - self.prev_alpha
+                # lr = self.line_search_alpha
+                magnitude = self.prev_magnitude + cosine_frac * (
+                    self.line_search_magnitude - self.prev_magnitude
                 )
-                for param_group in self.optimizer.param_groups: 
-                    param_group['lr'] = lr
-                return
-            # warmup
-            warmup_frac = (k + 1) / interval
-            lr = self.prev_alpha + warmup_frac * (self.line_search_alpha - self.prev_alpha)
-            for param_group in self.optimizer.param_groups: 
-                param_group['lr'] = lr 
-            return
+            else:
+                warmup_frac = (k + 1) / interval
+                magnitude = self.prev_magnitude + warmup_frac * (self.line_search_magnitude - self.prev_magnitude)
+            
+            self.magnitude = magnitude
+    
+
+            # Use magnitude-based learning rate: lr = line_search_magnitude / dir_norm
+            # Fallback to prev_alpha if magnitude not available.
+                # compute current search-direction norm (dir_norm) from rule
+            dir_sq_local = 0.0
+            with torch.no_grad():
+                    for group in self.optimizer.param_groups:
+                        for p in group["params"]:
+                            d = self.rule(p)
+                            dir_sq_local += torch.sum(d * d).item()
+            dir_norm_local = dir_sq_local ** 0.5
+       
+            denom = dir_norm_local if dir_norm_local > 0 else 1e-12
+            
+            lr = self.magnitude / denom
+            rank = dist.get_rank() if use_ddp else 0
+            if rank == 0:
+                print(
+                    f"denom={denom:.6f}, "
+                    f"line_search_magnitude={self.line_search_magnitude:.6f}, "
+                    f"prev={self.prev_magnitude:.6f}, "
+                    f"magnitude={self.magnitude:.6f}, "
+                    f"lr={lr:.6f}"
+                )
+            for param_group in self.optimizer.param_groups:
+                param_group["lr"] = lr
+            return self.magnitude, denom
 
         self.optimizer.zero_grad(set_to_none=True)
+
         loss = closure(require_grad=True)
+
         self.rule = self.get_potential_update_direction()
 
         inner = 0.0
+        with torch.no_grad():
+            for group in self.optimizer.param_groups:
+                    wd = group.get("weight_decay", 0.0)
+                    for p in group["params"]:
+                        if p.grad is None:
+                            continue     
+                        inner += torch.sum(p.grad * self.rule(p))
+                        inner -= wd * torch.sum(p.grad * p)
+        phi0, derphi0 = loss, inner.detach()
+
+     
+        grad_sq = 0.0
+        dir_sq = 0.0
+        param_sq = 0.0
         dot_gd = 0.0
         dot_gp = 0.0
+
+        max_grad = 0.0
+        max_dir = 0.0
 
         with torch.no_grad():
             for group in self.optimizer.param_groups:
@@ -397,6 +435,10 @@ class LineSearchScheduler():
                     d = self.rule(p)
 
 
+                    grad_sq += torch.sum(g * g).item()
+                    dir_sq += torch.sum(d * d).item()
+                    param_sq += torch.sum(p * p).item()
+
                     # ===== dot product =====
                     gd = torch.sum(g * d).item()
                     gp = torch.sum(g * p).item()
@@ -404,19 +446,33 @@ class LineSearchScheduler():
                     dot_gd += gd
                     dot_gp += gp
 
+                    # ===== max element =====
+                    max_grad = max(max_grad, g.abs().max().item())
+                    max_dir = max(max_dir, d.abs().max().item())
 
-        inner = dot_gd - wd * dot_gp
+
+        grad_norm = grad_sq ** 0.5
+        dir_norm = dir_sq ** 0.5
+        param_norm = param_sq ** 0.5
+
+
+        # cos_gd = dot_gd / (grad_norm * dir_norm + 1e-12)
+
+
+        # inner = dot_gd - wd * dot_gp
+
         phi0, derphi0 = loss, inner
 
 
-        # print("\n========== Line Search Debug ==========")
-        # print(f"loss (phi0): {phi0}")
-        # print(f"derphi0: {derphi0}")
+ 
+        print("\n========== Line Search Debug ==========")
+        print(f"loss (phi0): {phi0}")
+        print(f"derphi0: {derphi0}")
 
-        # print("\n--- Norms ---")
-        # print(f"grad_norm: {grad_norm:.6f}")
-        # print(f"dir_norm:  {dir_norm:.6f}")
-        # print(f"param_norm:{param_norm:.6f}")
+        print("\n--- Norms ---")
+        print(f"grad_norm: {grad_norm:.6f}")
+        print(f"dir_norm:  {dir_norm:.6f}")
+        print(f"param_norm:{param_norm:.6f}")
 
         # print("\n--- Dot Products ---")
         # print(f"g·d: {dot_gd:.6f}")
@@ -503,15 +559,17 @@ class LineSearchScheduler():
         #         s += single_phi(a)          
         #     return s / n_samples
         # ## This can be optimized 
-    
-        alpha0 = self.line_search_alpha
+
         # print(f"start searching with alpha = {alpha0}, the prev_alpha is {self.prev_alpha}")
 
-        if step <= warmup_length:
-            alpha0 = 0.1
+        if step < warmup_length:
+            alpha0 = 1
             num_search = self.num_search
         else:
+            search_lr = start_lr 
+            alpha0 = search_lr
             num_search = 1
+    
         
 
         alpha, fc, _ = line_search_armijo(
@@ -527,10 +585,12 @@ class LineSearchScheduler():
                     factor=factor,
                     log_dir=log_dir
                 )
+        # if step < warmup_length and alpha < self.prev_alpha:
+        #     alpha = self.prev_alpha
+        
         # if alpha is None or not np.isfinite(alpha) or alpha <= 0:
-        current_lr = self.optimizer.param_groups[0]["lr"]
-        # if step <= warmup_length and alpha < current_lr:
-        #     alpha = current_lr
+        #     current_lr = self.optimizer.param_groups[0]["lr"]
+        #     alpha = float(current_lr if np.isfinite(current_lr) and current_lr > 0 else self.start_lr)
 
         # print(f"[LineSearchScheduler] alpha={alpha:.6g}, fc={fc}")
         
@@ -538,47 +598,14 @@ class LineSearchScheduler():
         #         param_group['lr'] = alpha
 
         self.line_search_alpha = alpha
-        if (not dist.is_initialized()) or dist.get_rank() == 0:
-            print(f"LINESEARCH LR: {alpha}")
-        # for param_group in self.optimizer.param_groups: 
-        #         param_group['lr'] = alpha
-
-        # print("LINESEARCH LR:", alpha)
-        # # Record observation to CSV (only rank 1 when using DDP; single-process writes too)
-        # try:
-        #     def _to_float(x):
-        #         if torch.is_tensor(x):
-        #             return float(x.detach().cpu().item())
-        #         return float(x)
-
-        #     loss_val = _to_float(phi0)
-        #     lr_val = _to_float(alpha) if alpha is not None else float(self.optimizer.param_groups[0]["lr"])
-        #     grad_norm_val = float(grad_norm)
-        #     dir_norm_val = float(dir_norm)
-        #     inner_val = _to_float(derphi0 if 'derphi0' in locals() else inner)
-        #     mag_val = lr_val * dir_norm_val
-        #     ls_loss_decre_val = inner_val * lr_val
-
-        #     use_ddp = dist.is_available() and dist.is_initialized()
-        #     rank = dist.get_rank() if use_ddp else 0
-        #     # only allow writes from rank 1 in DDP, or from single-process (rank 0)
-        #     if (not use_ddp) or (rank == 1):
-        #         os.makedirs(self.log_dir, exist_ok=True)
-        #         with open(self.log_path, 'a', newline='') as f:
-        #             writer = csv.writer(f)
-        #             writer.writerow([int(step), loss_val, lr_val, grad_norm_val, dir_norm_val, inner_val, mag_val, ls_loss_decre_val])
-        # except Exception:
-        #     # best-effort logging; don't interrupt training on logging failure
-        #     pass
-        # if is_plateau:
-        #    for param_group in self.optimizer.param_groups: 
-        #             param_group['lr'] = alpha
-        # if step <= warmup_length:
-        #     for param_group in self.optimizer.param_groups: 
-        #         param_group['lr'] = alpha
-            
-        self.prev_alpha = self.optimizer.param_groups[0]["lr"]
-
+        self.line_search_magnitude = alpha * dir_norm
+        print("LINESEARCH LR:", alpha, "magnitude:", self.line_search_magnitude)
+        if step < warmup_length:
+            self.prev_magnitude = self.line_search_magnitude 
+        else:
+            self.prev_magnitude = self.magnitude
+        return self.prev_magnitude, dir_norm
+  
 
 
 
@@ -929,6 +956,9 @@ def search_bisection_ddp_visual(phi, phi0, derphi0, c1,
         # -------- Armijo line --------
         armijo_line = phi0_g + c1 * t_vals * derphi0_g
 
+        # ========================================================
+        # ⭐ 截断范围：只显示 1e-3 以内
+        # ========================================================
         t_max = 3e-3
 
         mask = t_vals <= t_max
@@ -1263,12 +1293,21 @@ def search_bisection(phi, phi0, derphi0, c1,
             if new_alpha <= amin:
                 break
             new_phi = phi(new_alpha)
-
+            # loss_list.append(new_phi)
 
         
             if new_phi <= phi0 + c1 * new_alpha * derphi0:
                 break
 
+            # if len(loss_list) >= 3:
+            #             rng = max(loss_list) - min(loss_list)
+            #             r_range = rng / max(abs(phi_a), 1e-12)
+            #             # flat_region = r_range <= flat_eps
+            # else:
+                        # flat_region = False
+            # if flat_region:
+            #             print(f" Flat Region: {flat_region}. loss list: {loss_list}, maxdiff : {max(loss_list) - min(loss_list)}")
+            #             return old_alpha, phi_old 
 
             alpha = new_alpha
             phi_a = new_phi
@@ -1378,3 +1417,97 @@ def search_backtracking_visual(
     return chosen_alpha, chosen_phi
 
 
+
+# def search_backtracking_visual_ddp(
+#     phi, phi0, derphi0,
+#     c1, alpha, shrink,
+#     plot_path="backtracking_ls.png",
+#     t_min=0.0, t_max=1.0, num_points=30,
+#     max_bt=4,
+# ):
+#     import numpy as np
+#     import torch
+#     import torch.distributed as dist
+#     import matplotlib.pyplot as plt
+
+#     # ---------- helpers (inline, no extra functions) ----------
+#     ddp_on = dist.is_available() and dist.is_initialized()
+#     rank = dist.get_rank() if ddp_on else 0
+#     world_size = dist.get_world_size() if ddp_on else 1
+#     is_rank0 = (rank == 0)
+
+#     def reduce_mean_scalar(x):
+#         if not ddp_on:
+#             return float(x) if not torch.is_tensor(x) else float(x.detach().item())
+#         if not torch.is_tensor(x):
+#             x = torch.tensor(float(x), device="cuda" if torch.cuda.is_available() else "cpu")
+#         else:
+#             x = x.detach()
+#             if x.dim() != 0:
+#                 x = x.reshape(())
+#         dist.all_reduce(x, op=dist.ReduceOp.SUM)
+#         x /= world_size
+#         return float(x.item())
+
+#     # ---------- make phi0 / derphi0 globally consistent ----------
+#     phi0_g = reduce_mean_scalar(phi0)
+#     derphi0_g = reduce_mean_scalar(derphi0)
+
+#     explored = []  # only used on rank0
+
+#     # ---------- Backtracking loop (ALL ranks follow same control flow) ----------
+#     phi_a_local = phi(alpha)
+#     phi_a = reduce_mean_scalar(phi_a_local)
+
+#     if is_rank0:
+#         explored.append((alpha, phi_a))
+
+#     count = 0
+#     while phi_a > phi0_g + c1 * alpha * derphi0_g:
+#         count += 1
+#         if count > max_bt:
+#             break
+
+#         alpha *= shrink
+
+#         phi_a_local = phi(alpha)
+#         phi_a = reduce_mean_scalar(phi_a_local)
+
+#         if is_rank0:
+#             explored.append((alpha, phi_a))
+
+#     chosen_alpha, chosen_phi = alpha, phi_a
+
+#     # ---------- Visualization (ONLY rank0) ----------
+#     if is_rank0:
+#         t_vals = np.linspace(t_min, t_max, num_points)
+#         phi_vals = []
+#         for t in t_vals:
+#             v_local = phi(float(t))
+#             v = reduce_mean_scalar(v_local)
+#             phi_vals.append(v)
+#         phi_vals = np.array(phi_vals)
+
+#         armijo_line = phi0_g + c1 * t_vals * derphi0_g
+
+#         plt.figure(figsize=(8, 6))
+#         plt.plot(t_vals, phi_vals, label="phi(t)", linewidth=2)
+#         plt.plot(t_vals, armijo_line, "--", label="Armijo line", linewidth=2)
+
+#         for i, (a, v) in enumerate(explored):
+#             plt.scatter(a, v, color="red", s=60)
+#             plt.annotate("init" if i == 0 else f"bt {i}",
+#                          (a, v), textcoords="offset points", xytext=(5, 5))
+
+#         plt.scatter(chosen_alpha, chosen_phi,
+#                     color="blue", s=120, marker="x", label="chosen alpha")
+
+#         plt.xlabel("t (step size)")
+#         plt.ylabel("phi(t)")
+#         plt.title("Backtracking Line Search Visualization (DDP)")
+#         plt.grid(True)
+#         plt.legend()
+#         plt.savefig(plot_path, dpi=200)
+#         plt.close()
+
+#     return chosen_alpha, chosen_phi# Copyright (c) Meta Platforms, Inc. and affiliates.

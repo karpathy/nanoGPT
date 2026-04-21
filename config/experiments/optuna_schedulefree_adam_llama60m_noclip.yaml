@@ -1,5 +1,5 @@
 experiment:
-  name: llama60m_schedulefree_adam_lr_search
+  name: llama60m_schedulefree_adam_noclip_lr_search
   train_script: train_llama.py
   train_config: config/train_llama_60m.py
   output_root: /scratch.global/chen8596/experiment_runs
@@ -24,6 +24,7 @@ fixed_args:
   always_save_checkpoint: true
   max_iters: 5000
   lr_decay_iters: 5000
+  grad_clip: 0.0
 
 hyperparameters:
   learning_rate:
