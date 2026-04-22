@@ -2,9 +2,10 @@ import subprocess, os, time, torch, json, math
 
 # fill these in after H1/H2 results
 BEST_CONFIGS = [
-    {"L": 100, "m": 1,  "cache": True},
-    {"L": 256, "m": 1,  "cache": True},
-    {"L": 256, "m": 10, "cache": True},
+    {"L": 0,   "m": 1, "cache": True},   # frozen baseline (PPL ~47)
+    {"L": 100, "m": 1, "cache": True},    # classic (PPL 27.99)
+    {"L": 256, "m": 1, "cache": True},    # best (PPL 27.17)
+    {"L": 512, "m": 1, "cache": True},    # large L (PPL 27.55)
 ]
 TASK = "gsm8k"
 
