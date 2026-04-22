@@ -118,22 +118,52 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 # poor man's data loader
 data_dir = os.path.join('data', dataset)
-def get_batch(split):
-    # We recreate np.memmap every batch to avoid a memory leak, as per
-    # https://stackoverflow.com/questions/45132940/numpy-memmap-memory-usage-want-to-iterate-once/61472122#61472122
-    if split == 'train':
-        data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
-    else:
-        data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
-    ix = torch.randint(len(data) - block_size, (batch_size,))
-    x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
-    y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
-    if device_type == 'cuda':
-        # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
-        x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
-    else:
-        x, y = x.to(device), y.to(device)
-    return x, y
+
+# this is used for GSM8K dataset, supervised
+supervised = os.path.exists(os.path.join(data_dir, 'train.pt'))
+
+if supervised:
+    train_data = torch.load(os.path.join(data_dir, 'train.pt'))
+    val_data = torch.load(os.path.join(data_dir, 'val.pt'))
+    test_data = torch.load(os.path.join(data_dir, 'test.pt'))
+
+    def get_batch(split):
+        data = train_data if split == 'train' else val_data
+        ix = torch.randint(len(data), (batch_size,))
+
+        x_batch, y_batch = [], []
+        for i in ix:
+            ex = data[i]
+            ids = ex['input_ids'][:block_size + 1]
+            lab = ex['labels'][:block_size + 1]
+            pad_len = (block_size + 1) - len(ids)
+            ids = ids + [0] * pad_len
+            lab = lab + [-1] * pad_len
+            x_batch.append(torch.tensor(ids[:-1], dtype=torch.long))
+            y_batch.append(torch.tensor(lab[1:], dtype=torch.long))
+
+        x = torch.stack(x_batch)
+        y = torch.stack(y_batch)
+        if device_type == 'cuda':
+            x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
+        else:
+            x, y = x.to(device), y.to(device)
+        return x, y
+
+else:
+    def get_batch(split):
+        if split == 'train':
+            data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
+        else:
+            data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
+        ix = torch.randint(len(data) - block_size, (batch_size,))
+        x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
+        y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
+        if device_type == 'cuda':
+            x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
+        else:
+            x, y = x.to(device), y.to(device)
+        return x, y
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
@@ -285,6 +315,19 @@ if wandb_log and master_process:
     import wandb
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
+def extract_number(text):
+    if "####" in text:
+        after = text.split("####")[-1].strip().replace(",", "")
+        match = re.search(r'-?\d+\.?\d*', after)
+        if match:
+            return match.group()
+    text_clean = text.replace(",", "")
+    numbers = re.findall(r'-?\d+\.?\d*', text_clean)
+    if numbers:
+        return numbers[-1]
+    return None
+
+
 # training loop
 X, Y = get_batch('train') # fetch the very first batch
 t0 = time.time()
@@ -294,6 +337,37 @@ running_mfu = -1.0
 training_start_time = time.time()
 if device_type == 'cuda':
     torch.cuda.reset_peak_memory_stats()
+
+# this is used for gsm8k, in eval mode
+@torch.no_grad()
+def evaluate_em(data, prefix_module, max_new_tokens=128, use_cache=False):
+    model.eval()
+    correct = 0
+    total = 0
+
+    prefix_kv = None
+    if use_cache and soft_prefix is not None:
+        with torch.no_grad():
+            prefix_kv = model.build_prefix_kv(soft_prefix, batch_size=1)
+
+    for ex in data:
+        prompt_ids = ex['input_ids'][:ex['prompt_len']]
+        idx = torch.tensor([prompt_ids], dtype=torch.long, device=device)
+        # temperature=0 would cause a division by zero (logits / 0).
+        # So instead we just use top_k=1 which forces greedy decoding
+        if prefix_kv is not None:
+            out = model.generate(idx, max_new_tokens, temperature=1.0, top_k=1, prefix_kv=prefix_kv)
+        else:
+            out = model.generate(idx, max_new_tokens, temperature=1.0, top_k=1, prefix=soft_prefix)
+        generated_text = enc.decode(out[0].tolist())
+        pred = extract_number(generated_text)
+        gold = extract_number(ex['gold_answer'])
+        if pred is not None and gold is not None and pred == gold:
+            correct += 1
+        total += 1
+    model.train()
+    return correct / total if total > 0 else 0.0
+
 while True:
 
     # determine and set the learning rate for this iteration
@@ -321,21 +395,18 @@ while True:
             tokens_per_sec = tokens_seen / max(wall_clock_elapsed, 1)
 
             #  early-phase target (adjust threshold to your baseline PPL) ──
-            TARGET_PPL = 50.0
-            val_ppl = math.exp(losses['val'])
-            hit_target = 1 if val_ppl <= TARGET_PPL else 0
 
             cache_hit_ratio = (
                 1.0 - (1.0 / prefix_update_period)
                 if prefix_module is not None and prefix_update_period > 1
                 else 0.0
             )
-            wandb.log({
+
+            # common metrics logged for both modes
+            common_metrics = {
                 "iter": iter_num,
                 "train/loss": losses['train'],
                 "val/loss": losses['val'],
-                "val/perplexity": math.exp(losses['val']),
-                "train/perplexity": math.exp(losses['train']),
                 "lr": lr,
                 "mfu": running_mfu * 100,
                 "prefix/len": prefix_len,
@@ -343,15 +414,36 @@ while True:
                 "prefix/param_count": prefix_len * raw_model.config.n_embd if is_prefix_tuning else 0,
                 "prefix/cache_hit_ratio": cache_hit_ratio,
                 "efficiency/peak_gpu_mem_gb": (
-                        torch.cuda.max_memory_allocated() / 1e9 if device_type == 'cuda' else 0.0
+                    torch.cuda.max_memory_allocated() / 1e9 if device_type == 'cuda' else 0.0
                 ),
                 "prefix/cache_enabled": int(prefix_cache),
                 "prefix/update_now": int(update_now) if is_prefix_tuning else 0,
                 "efficiency/wall_clock_sec": wall_clock_elapsed,
                 "efficiency/tokens_per_sec": tokens_per_sec,
-                "target/hit_ppl_50": hit_target,
-                "target/steps_logged": iter_num if hit_target else 0,
-            })
+            }
+
+            if not supervised:
+                # language modeling mode — log perplexity
+                TARGET_PPL = 50.0
+                val_ppl = math.exp(losses['val'])
+                train_ppl = math.exp(losses['train'])
+                hit_target = 1 if val_ppl <= TARGET_PPL else 0
+
+                common_metrics.update({
+                    "val/perplexity": val_ppl,
+                    "train/perplexity": train_ppl,
+                    "target/hit_ppl_50": hit_target,
+                    "target/steps_logged": iter_num if hit_target else 0,
+                })
+
+            else:
+                # supervised mode (gsm8k) — log EM, but not every eval
+                # EM requires generation and is slow, so run it less frequently
+                if iter_num % (eval_interval * 5) == 0 or iter_num >= max_iters:
+                    em_score = evaluate_em(val_data, prefix_module)
+                    common_metrics["val/em"] = em_score
+
+            wandb.log(common_metrics)
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
             if iter_num > 0:
@@ -473,6 +565,13 @@ while True:
     # termination conditions
     if iter_num > max_iters:
         break
+
+if master_process and supervised:
+    final_em = evaluate_em(test_data, prefix_module)
+    print(f"final test EM: {final_em:.4f}")
+    if wandb_log:
+        wandb.log({"test/em": final_em})
+
 
 if ddp:
     destroy_process_group()

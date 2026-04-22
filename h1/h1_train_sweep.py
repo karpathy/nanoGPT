@@ -9,7 +9,7 @@ results         = []
 training_errors = []
 N_EMBD = 768
 MAX_POSITIONS = 1024
-
+# m=1 (dense updates, every step), so caching doesn't matter
 for L in RUN_ORDER:
 
 
