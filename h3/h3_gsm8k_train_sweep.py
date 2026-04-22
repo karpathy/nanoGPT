@@ -32,6 +32,15 @@ for cfg in BEST_CONFIGS:
         results.append({"L": L, "m": M, "status": "SKIPPED", "wall_clock_h": 0})
         continue
 
+    extra_flags = [f"--block_size={MAX_POSITIONS}"]
+    if L == 0:
+        extra_flags += [
+            "--eval_only=True",
+            "--always_save_checkpoint=True",
+            "--eval_interval=1",
+        ]
+        print("  NOTE: L=0 baseline — eval only, no training")
+
     torch.cuda.reset_peak_memory_stats()
     t_start = time.time()
 
@@ -44,7 +53,7 @@ for cfg in BEST_CONFIGS:
         f"--prefix_type=soft",
         f"--wandb_run_name={run_name}",
         f"--block_size={MAX_POSITIONS}",
-    ]
+    ] + extra_flags
 
     proc = subprocess.run(cmd, capture_output=False, text=True)
     wall_clock = time.time() - t_start
