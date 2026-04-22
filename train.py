@@ -341,31 +341,29 @@ if device_type == 'cuda':
 # this is used for gsm8k, in eval mode
 @torch.no_grad()
 def evaluate_em(data, prefix_module, max_new_tokens=128, use_cache=False):
-    model.eval()
+    raw_model.eval()
     correct = 0
     total = 0
 
     prefix_kv = None
-    if use_cache and soft_prefix is not None:
+    if use_cache and prefix_module is not None:
         with torch.no_grad():
-            prefix_kv = model.build_prefix_kv(soft_prefix, batch_size=1)
+            prefix_kv = raw_model.build_prefix_kv(prefix_module, batch_size=1)
 
     for ex in data:
         prompt_ids = ex['input_ids'][:ex['prompt_len']]
         idx = torch.tensor([prompt_ids], dtype=torch.long, device=device)
-        # temperature=0 would cause a division by zero (logits / 0).
-        # So instead we just use top_k=1 which forces greedy decoding
         if prefix_kv is not None:
-            out = model.generate(idx, max_new_tokens, temperature=1.0, top_k=1, prefix_kv=prefix_kv)
+            out = raw_model.generate(idx, max_new_tokens, temperature=1.0, top_k=1, prefix_kv=prefix_kv)
         else:
-            out = model.generate(idx, max_new_tokens, temperature=1.0, top_k=1, prefix=soft_prefix)
+            out = raw_model.generate(idx, max_new_tokens, temperature=1.0, top_k=1, prefix=prefix_module)
         generated_text = enc.decode(out[0].tolist())
         pred = extract_number(generated_text)
         gold = extract_number(ex['gold_answer'])
         if pred is not None and gold is not None and pred == gold:
             correct += 1
         total += 1
-    model.train()
+    raw_model.train()
     return correct / total if total > 0 else 0.0
 
 while True:
