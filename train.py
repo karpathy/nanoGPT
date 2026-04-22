@@ -29,6 +29,10 @@ from torch.distributed import init_process_group, destroy_process_group
 
 from model import GPTConfig, GPT, SoftPrefix, DeepPrefix
 
+import re
+import tiktoken
+
+enc = tiktoken.get_encoding("gpt2")
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
