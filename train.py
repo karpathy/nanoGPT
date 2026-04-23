@@ -46,7 +46,7 @@ dataset = 'openwebtext'
 gradient_accumulation_steps = 4*4 # used to simulate larger batch sizes
 batch_size = 30 # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size = 1024
-data_backend = 'memmap' # 'memmap' keeps files mmaped, 'ram' loads them into process memory
+data_backend = 'ram' # 'memmap' keeps files mmaped, 'ram' loads them into process memory
 # model
 n_layer = 12
 n_head = 12

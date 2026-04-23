@@ -77,7 +77,7 @@ warmup_iters = 100 # how many steps to warm up for
 lr_decay_iters = 10000 # should be ~= max_iters per Chinchilla
 min_lr = 0.1 # minimum lr multiplier
 # line search settings
-linesearch_interval = 1000
+linesearch_interval = 0
 linesearch_accum_steps = 32
 linesearch_num_search = 30
 linesearch_start_lr = 0.0
@@ -113,6 +113,8 @@ always_save_checkpoint = False
 save_last_checkpoint = False
 config['always_save_checkpoint'] = False
 config['save_last_checkpoint'] = False
+linesearch_interval = max(1, int(max_iters * 0.1))
+config['linesearch_interval'] = linesearch_interval
 # -----------------------------------------------------------------------------
 
 # various inits, derived attributes, I/O setup

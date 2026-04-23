@@ -22,7 +22,6 @@ experiment_run/
 wandb/
 data/
 slurm_jobs/
-!slurm_jobs/
 slurm_jobs/*
 !slurm_jobs/gpt2_124m/
 slurm_jobs/gpt2_124m/*

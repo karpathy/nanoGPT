@@ -415,7 +415,7 @@ while True:
                 if ddp and require_grad:
                     model.require_backward_grad_sync = True
 
-                avg_loss = total_loss / (linesearch_accum_steps + 1)
+                avg_loss = total_loss / (linesearch_accum_steps)
                 return avg_loss.item()
             return line_search_closure
         line_search_closure = make_closure()

@@ -710,6 +710,8 @@ class LineSearchScheduler():
                     factor=factor,
                     log_dir=log_dir
                 )
+        if (not dist.is_initialized()) or dist.get_rank() == 0:
+            print(f"LINESEARCH LR: {alpha}")
         # if step < warmup_length and alpha < self.prev_alpha:
         #     alpha = self.prev_alpha
         
@@ -724,7 +726,7 @@ class LineSearchScheduler():
 
         # if alpha is None or not np.isfinite(alpha) or alpha <= 0:
         muon_indices = self._muon_group_indices()
-        # current_lr = self.optimizer.param_groups[muon_indices[0]]["lr"]
+        current_lr = self.optimizer.param_groups[muon_indices[0]]["lr"]
         # if step <= warmup_length and alpha < current_lr:
         #     alpha = current_lr
 
@@ -734,6 +736,14 @@ class LineSearchScheduler():
         #         param_group['lr'] = alpha
 
         self.line_search_alpha = alpha
+
+        # self.line_search_magnitude = alpha * dir_norm
+        # if (not dist.is_initialized()) or dist.get_rank() == 0:
+        #     print("LINESEARCH LR:", alpha, "magnitude:", self.line_search_magnitude)
+        # if step < warmup_length:
+        #     self.prev_magnitude = self.line_search_magnitude 
+        # else:
+        #     self.prev_magnitude = self.magnitude
         if (not dist.is_initialized()) or dist.get_rank() == 0:
             print(f"LINESEARCH LR: {alpha}")
         # self.line_search_magnitude = alpha * dir_norm
@@ -744,6 +754,8 @@ class LineSearchScheduler():
         # else:
         #     self.prev_magnitude = self.magnitude
 
+        prev_lr = self.optimizer.param_groups[muon_indices[0]]["lr"]
+        self.prev_alpha = prev_lr
         prev_lr = self.optimizer.param_groups[muon_indices[0]]["lr"]
         self.prev_alpha = prev_lr
 
@@ -1453,6 +1465,7 @@ def search_backtracking_visual(
     plt.close()
 
     return chosen_alpha, chosen_phi
+
 
 
 
