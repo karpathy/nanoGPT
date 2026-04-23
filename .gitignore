@@ -40,3 +40,4 @@ slurm_jobs/gpt2_124m/muon/*
 !slurm_jobs/gpt2_124m/schedulefree_adam/
 slurm_jobs/gpt2_124m/schedulefree_adam/*
 !slurm_jobs/gpt2_124m/schedulefree_adam/*_smoke.sh
+paper/*

@@ -566,7 +566,7 @@ class LineSearchScheduler():
             alpha0 = 1
             num_search = self.num_search
         else:
-            search_lr = self.prev_magnitude / dir_norm
+            search_lr = start_lr 
             alpha0 = search_lr
             num_search = 1
     
@@ -1510,4 +1510,4 @@ def search_backtracking_visual(
 #         plt.savefig(plot_path, dpi=200)
 #         plt.close()
 
-#     return chosen_alpha, chosen_phi# Copyright (c) Meta Platforms, Inc. and affiliates.
+#     return chosen_alpha, chosen_phi

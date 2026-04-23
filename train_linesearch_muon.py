@@ -332,7 +332,7 @@ def should_stop_at_eval_boundary():
     return (iter_num + eval_interval) > max_iters
 
 
-def write_experiment_summary(termination_reason, elapsed_hours, train_start_time, forward_seconds, backward_seconds):
+def write_experiment_summary(termination_reason, forward_backward_hours, wall_clock_hours, forward_seconds, backward_seconds):
     if not experiment_summary_path or not master_process:
         return
     summary = {
@@ -347,18 +347,18 @@ def write_experiment_summary(termination_reason, elapsed_hours, train_start_time
         'iter_num': int(iter_num),
         'learning_rate': float(optimizer.param_groups[0]['lr']),
         'metric_mode': experiment_metric_mode,
-        'wall_clock_hours': float(elapsed_hours),
-        'forward_backward_hours': float(elapsed_hours),
+        'wall_clock_hours': float(wall_clock_hours),
+        'forward_backward_hours': float(forward_backward_hours),
         'forward_hours': float(forward_seconds / 3600.0),
         'backward_hours': float(backward_seconds / 3600.0),
-        'elapsed_wall_clock_hours': float((time.time() - train_start_time) / 3600.0),
+        'elapsed_wall_clock_hours': float(wall_clock_hours),
         'termination_reason': termination_reason,
     }
     with open(experiment_summary_path, 'w', encoding='utf-8') as f:
         json.dump(summary, f, indent=2, sort_keys=True)
 
 
-def append_experiment_record(step, train_loss, val_loss, wall_clock_hours):
+def append_experiment_record(step, train_loss, val_loss, forward_backward_hours, wall_clock_hours):
     if not experiment_records_path or not master_process:
         return
     record = {
@@ -368,6 +368,7 @@ def append_experiment_record(step, train_loss, val_loss, wall_clock_hours):
         'train_loss': float(train_loss),
         'val_loss': float(val_loss),
         'wall_clock_hours': float(wall_clock_hours),
+        'forward_backward_hours': float(forward_backward_hours),
         'learning_rate': float(optimizer.param_groups[0]['lr']),
         'muon_lr': float(optimizer.param_groups[muon_group_idx]['lr']),
     }
@@ -439,6 +440,7 @@ while True:
         line_search_closure = make_closure()
 
     c1_use = linesearch_c1 + (1 - linesearch_c1) * (iter_num / max_iters)
+    ls_start_time = training_clock_now()
     scheduler.step(
         line_search_closure,
         c1=c1_use,
@@ -449,6 +451,7 @@ while True:
         factor=linesearch_factor,
         start_lr=muon_lr,
     )
+    forward_backward_seconds += training_clock_now() - ls_start_time
 
     if iter_num % eval_interval == 0:
         should_terminate = False
@@ -460,7 +463,8 @@ while True:
                 step=iter_num,
                 train_loss=losses['train'].item(),
                 val_loss=losses['val'].item(),
-                wall_clock_hours=forward_backward_seconds / 3600.0,
+                forward_backward_hours=forward_backward_seconds / 3600.0,
+                wall_clock_hours=(time.time() - train_start_time) / 3600.0,
             )
             if losses['val'] < best_val_loss or always_save_checkpoint:
                 best_val_loss = losses['val']
@@ -528,8 +532,8 @@ while True:
 
 write_experiment_summary(
     termination_reason=termination_reason,
-    elapsed_hours=forward_backward_seconds / 3600.0,
-    train_start_time=train_start_time,
+    forward_backward_hours=forward_backward_seconds / 3600.0,
+    wall_clock_hours=(time.time() - train_start_time) / 3600.0,
     forward_seconds=forward_seconds,
     backward_seconds=backward_seconds,
 )

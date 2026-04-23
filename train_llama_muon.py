@@ -308,7 +308,7 @@ def save_checkpoint(path):
     torch.save(checkpoint_payload, path)
 
 
-def write_experiment_summary(termination_reason, elapsed_hours, train_start_time):
+def write_experiment_summary(termination_reason, forward_backward_hours, wall_clock_hours):
     if not experiment_summary_path or not master_process:
         return
     summary = {
@@ -323,8 +323,11 @@ def write_experiment_summary(termination_reason, elapsed_hours, train_start_time
         "iter_num": int(iter_num),
         "learning_rate": float(learning_rate),
         "metric_mode": experiment_metric_mode,
-        "wall_clock_hours": float(elapsed_hours),
-        "elapsed_wall_clock_hours": float((time.time() - train_start_time) / 3600.0),
+        "wall_clock_hours": float(wall_clock_hours),
+        "forward_backward_hours": float(forward_backward_hours),
+        "forward_hours": float(forward_seconds / 3600.0),
+        "backward_hours": float(backward_seconds / 3600.0),
+        "elapsed_wall_clock_hours": float(wall_clock_hours),
         "termination_reason": termination_reason,
     }
     with open(experiment_summary_path, "w", encoding="utf-8") as f:
@@ -439,8 +442,8 @@ if master_process and save_last_checkpoint and iter_num > 0:
     save_checkpoint(os.path.join(out_dir, "ckpt_last.pt"))
 write_experiment_summary(
     termination_reason=termination_reason,
-    elapsed_hours=forward_backward_seconds / 3600.0,
-    train_start_time=train_start_time,
+    forward_backward_hours=forward_backward_seconds / 3600.0,
+    wall_clock_hours=(time.time() - train_start_time) / 3600.0,
 )
 if ddp:
     destroy_process_group()

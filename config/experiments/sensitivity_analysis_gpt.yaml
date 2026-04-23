@@ -1,16 +1,16 @@
 seed: 42
-output_root: /scratch.global/chen8596/sensitivity_analysis_mag
+output_root: /scratch.global/chen8596/sensitivity_analysis_gpt
 
 launch:
   mode: torchrun
   nproc_per_node: 4
 
 defaults:
-  train_config: config/train_llama_60m.py
-  num_trials: 4
+  train_config: config/train_gpt2.py
+  num_trials: 5
   fixed_overrides:
-    max_iters: 3600
-    lr_decay_iters: 3600
+    max_iters: 5000
+    lr_decay_iters: 5000
 
 linesearch_c1_values: &linesearch_c1_values
   - 0.012976117426635608
@@ -23,7 +23,7 @@ linesearch_c1_values: &linesearch_c1_values
 
 sweeps:
   - name: adamw_lr
-    train_script: train_llama.py
+    train_script: train.py
     sweep_param: learning_rate
     distribution: log_uniform
     range: [1.0e-5, 1.0e-2]
@@ -31,7 +31,7 @@ sweeps:
       decay_lr: true
 
   - name: muon_lr
-    train_script: train_llama_muon.py
+    train_script: train_muon.py
     sweep_param: muon_lr
     distribution: log_uniform
     range: [1.0e-4, 1.0e-1]
@@ -39,7 +39,7 @@ sweeps:
       decay_lr: true
 
   - name: linesearch_adam_c1
-    train_script: train_linesearch_llama_mag.py
+    train_script: train_linesearch.py
     sweep_param: linesearch_c1
     values: *linesearch_c1_values
     extra_overrides:
@@ -47,7 +47,7 @@ sweeps:
       learning_rate: 6.0e-4
 
   - name: linesearch_muon_c1
-    train_script: train_linesearch_llama_muon.py
+    train_script: train_linesearch_muon.py
     sweep_param: linesearch_c1
     values: *linesearch_c1_values
     extra_overrides:

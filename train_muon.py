@@ -325,7 +325,8 @@ def save_checkpoint(path):
 
 def write_experiment_summary(
     termination_reason,
-    elapsed_hours,
+    forward_backward_hours,
+    wall_clock_hours,
 ):
     if not experiment_summary_path or not master_process:
         return
@@ -341,8 +342,9 @@ def write_experiment_summary(
         'iter_num': int(iter_num),
         'learning_rate': float(learning_rate),
         'metric_mode': experiment_metric_mode,
-        'wall_clock_hours': float(elapsed_hours),
-        'elapsed_wall_clock_hours': float((time.time() - train_start_time) / 3600.0),
+        'wall_clock_hours': float(wall_clock_hours),
+        'forward_backward_hours': float(forward_backward_hours),
+        'elapsed_wall_clock_hours': float(wall_clock_hours),
         'termination_reason': termination_reason,
     }
     with open(experiment_summary_path, 'w', encoding='utf-8') as f:
@@ -357,9 +359,18 @@ def should_stop_at_eval_boundary():
         return False
     return (iter_num + eval_interval) > max_iters
 
+
+def training_clock_now():
+    if device_type == 'cuda':
+        torch.cuda.synchronize(device)
+    return time.time()
+
 # training loop
 X, Y = get_batch('train') # fetch the very first batch
 train_start_time = time.time()
+forward_backward_seconds = 0.0
+forward_seconds = 0.0
+backward_seconds = 0.0
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
@@ -405,13 +416,18 @@ while True:
         if ddp:
             # in DDP training we only need to sync gradients at the last micro step.
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
+        forward_start_time = training_clock_now()
         with ctx:
             logits, loss = model(X, Y)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
+        forward_seconds += training_clock_now() - forward_start_time
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, Y = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
+        backward_start_time = training_clock_now()
         scaler.scale(loss).backward()
+        backward_seconds += training_clock_now() - backward_start_time
+    forward_backward_seconds = forward_seconds + backward_seconds
 
     # clip the gradient
     if grad_clip != 0.0:
@@ -456,7 +472,8 @@ if master_process and save_last_checkpoint and iter_num > 0:
     save_checkpoint(os.path.join(out_dir, 'ckpt_last.pt'))
 write_experiment_summary(
     termination_reason=termination_reason,
-    elapsed_hours=(time.time() - train_start_time) / 3600.0,
+    forward_backward_hours=forward_backward_seconds / 3600.0,
+    wall_clock_hours=(time.time() - train_start_time) / 3600.0,
 )
 
 if ddp:

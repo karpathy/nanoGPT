@@ -1,16 +1,16 @@
 seed: 42
-output_root: /scratch.global/chen8596/sensitivity_analysis_mag
+output_root: /scratch.global/chen8596/sensitivity_analysis_llama130m
 
 launch:
   mode: torchrun
   nproc_per_node: 4
 
 defaults:
-  train_config: config/train_llama_60m.py
+  train_config: config/train_llama_130m.py
   num_trials: 4
   fixed_overrides:
-    max_iters: 3600
-    lr_decay_iters: 3600
+    max_iters: 10000
+    lr_decay_iters: 10000
 
 linesearch_c1_values: &linesearch_c1_values
   - 0.012976117426635608
