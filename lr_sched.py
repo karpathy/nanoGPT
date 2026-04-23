@@ -508,7 +508,7 @@ class LineSearchScheduler():
         # print(f"start searching with alpha = {alpha0}, the prev_alpha is {self.prev_alpha}")
 
         if step <= warmup_length:
-            alpha0 = 0.5
+            alpha0 = 0.1
             num_search = self.num_search
         else:
             num_search = 1
@@ -529,8 +529,8 @@ class LineSearchScheduler():
                 )
         # if alpha is None or not np.isfinite(alpha) or alpha <= 0:
         current_lr = self.optimizer.param_groups[0]["lr"]
-        if step <= warmup_length and alpha < current_lr:
-            alpha = current_lr
+        # if step <= warmup_length and alpha < current_lr:
+        #     alpha = current_lr
 
         # print(f"[LineSearchScheduler] alpha={alpha:.6g}, fc={fc}")
         

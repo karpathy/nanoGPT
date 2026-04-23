@@ -58,9 +58,9 @@ bias = False # do we use bias inside LayerNorm and Linear layers?
 learning_rate = 1.0 # global multiplier for the per-group Muon/Adam learning rates
 max_iters = 10000 # total number of training iterations
 weight_decay = 1e-1
-beta1 = 0.8
+beta1 = 0.9
 beta2 = 0.95
-grad_clip = 0.0 # clip gradients at this value, or disable if == 0.0
+grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 muon_lr = 0.05
 muon_momentum = 0.95
 adam_head_lr = 6e-4

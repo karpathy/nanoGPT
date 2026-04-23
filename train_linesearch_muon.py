@@ -59,9 +59,9 @@ bias = False # do we use bias inside LayerNorm and Linear layers?
 learning_rate = 1.0 # global multiplier for Adam groups only
 max_iters = 10000 # total number of training iterations
 weight_decay = 1e-1
-beta1 = 0.8
+beta1 = 0.9
 beta2 = 0.95
-grad_clip = 0.0 # clip gradients at this value, or disable if == 0.0
+grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 muon_lr = 0.0
 muon_momentum = 0.95
 # adam_head_lr = 0.22
@@ -77,7 +77,7 @@ warmup_iters = 100 # how many steps to warm up for
 lr_decay_iters = 10000 # should be ~= max_iters per Chinchilla
 min_lr = 0.1 # minimum lr multiplier
 # line search settings
-linesearch_interval = 1000
+linesearch_interval = 0
 linesearch_accum_steps = 32
 linesearch_num_search = 30
 linesearch_start_lr = 0.0
@@ -113,6 +113,8 @@ always_save_checkpoint = False
 save_last_checkpoint = False
 config['always_save_checkpoint'] = False
 config['save_last_checkpoint'] = False
+linesearch_interval = max(1, int(max_iters * 0.1))
+config['linesearch_interval'] = linesearch_interval
 # -----------------------------------------------------------------------------
 
 # various inits, derived attributes, I/O setup
@@ -422,12 +424,12 @@ while True:
                         _, loss_ls = model(x_ls, y_ls)
                     total_loss += loss_ls.detach()
                     if require_grad:
-                        (loss_ls / (linesearch_accum_steps + 1)).backward()
+                        (loss_ls / (linesearch_accum_steps)).backward()
                         if grad_clip != 0.0:
                             torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
                 if ddp and require_grad:
                     model.require_backward_grad_sync = True
-                avg_loss = total_loss / (linesearch_accum_steps + 1)
+                avg_loss = total_loss / (linesearch_accum_steps)
                 return avg_loss.item()
             return line_search_closure
 

@@ -522,11 +522,12 @@ class LineSearchScheduler():
                 lr = self.prev_alpha + cosine_frac * (
                     self.line_search_alpha - self.prev_alpha
                 )
-            else:
-                warmup_frac = (k + 1) / interval
-                lr = self.prev_alpha + warmup_frac * (self.line_search_alpha - self.prev_alpha)
+                for group_idx in self.controlled_group_indices:
+                    self.optimizer.param_groups[group_idx]["lr"] = lr
+                return
+            warmup_frac = (k + 1) / interval
+            lr = self.prev_alpha + warmup_frac * (self.line_search_alpha - self.prev_alpha)
             
-    
 
             # print("denom", denom, "line_search_magnitude", self.line_search_magnitude, "prev_magnitude", self.prev_magnitude, "magnitude", self.magnitude, "lr", lr)
             for group_idx in self.controlled_group_indices:
@@ -564,47 +565,47 @@ class LineSearchScheduler():
         adam_const = adam_const.detach()
 
      
-        grad_sq = 0.0
-        dir_sq = 0.0
-        param_sq = 0.0
-        dot_gd = 0.0
-        dot_gp = 0.0
+        # grad_sq = 0.0
+        # dir_sq = 0.0
+        # param_sq = 0.0
+        # dot_gd = 0.0
+        # dot_gp = 0.0
 
-        max_grad = 0.0
-        max_dir = 0.0
+        # max_grad = 0.0
+        # max_dir = 0.0
 
-        with torch.no_grad():
-            for group_idx in self._muon_group_indices():
-                group = self.optimizer.param_groups[group_idx]
-                wd = group.get("weight_decay", 0.0)
+        # with torch.no_grad():
+        #     for group_idx in self._muon_group_indices():
+        #         group = self.optimizer.param_groups[group_idx]
+        #         wd = group.get("weight_decay", 0.0)
 
-                for p in group["params"]:
-                    if p.grad is None:
-                        continue
+        #         for p in group["params"]:
+        #             if p.grad is None:
+        #                 continue
 
-                    g = p.grad
-                    d = self.rule(p)
-
-
-                    grad_sq += torch.sum(g * g).item()
-                    dir_sq += torch.sum(d * d).item()
-                    param_sq += torch.sum(p * p).item()
-
-                    # ===== dot product =====
-                    gd = torch.sum(g * d).item()
-                    gp = torch.sum(g * p).item()
-
-                    dot_gd += gd
-                    dot_gp += gp
-
-                    # ===== max element =====
-                    max_grad = max(max_grad, g.abs().max().item())
-                    max_dir = max(max_dir, d.abs().max().item())
+        #             g = p.grad
+        #             d = self.rule(p)
 
 
-        grad_norm = grad_sq ** 0.5
-        dir_norm = dir_sq ** 0.5
-        param_norm = param_sq ** 0.5
+        #             # grad_sq += torch.sum(g * g).item()
+        #             # dir_sq += torch.sum(d * d).item()
+        #             # param_sq += torch.sum(p * p).item()
+
+        #             # ===== dot product =====
+        #             gd = torch.sum(g * d).item()
+        #             gp = torch.sum(g * p).item()
+
+        #             dot_gd += gd
+        #             dot_gp += gp
+
+        #             # ===== max element =====
+        #             max_grad = max(max_grad, g.abs().max().item())
+        #             max_dir = max(max_dir, d.abs().max().item())
+
+
+        # grad_norm = grad_sq ** 0.5
+        # dir_norm = dir_sq ** 0.5
+        # param_norm = param_sq ** 0.5
 
 
         # cos_gd = dot_gd / (grad_norm * dir_norm + 1e-12)
@@ -612,27 +613,27 @@ class LineSearchScheduler():
 
         # inner = dot_gd - wd * dot_gp
 
-        phi0, derphi0 = loss, muon_inner
+        # phi0, derphi0 = loss, muon_inner
 
 
  
-        print("\n========== Line Search Debug ==========")
-        print(f"loss (phi0): {phi0}")
-        print(f"derphi0: {derphi0}")
-        print(f"adam_const: {adam_const}")
+        # print("\n========== Line Search Debug ==========")
+        # print(f"loss (phi0): {phi0}")
+        # print(f"derphi0: {derphi0}")
+        # print(f"adam_const: {adam_const}")
 
-        print("\n--- Norms ---")
-        print(f"grad_norm: {grad_norm:.6f}")
-        print(f"dir_norm:  {dir_norm:.6f}")
-        print(f"param_norm:{param_norm:.6f}")
+        # print("\n--- Norms ---")
+        # print(f"grad_norm: {grad_norm:.6f}")
+        # print(f"dir_norm:  {dir_norm:.6f}")
+        # print(f"param_norm:{param_norm:.6f}")
 
 
 
-        self.test_update_restore_max_diff(alpha=alpha)
-        self.check_optimizer_step_vs_rule(
-            optimizer=self.optimizer,
-            rule_fn=self.rule,
-        )
+        # self.test_update_restore_max_diff(alpha=alpha)
+        # self.check_optimizer_step_vs_rule(
+        #     optimizer=self.optimizer,
+        #     rule_fn=self.rule,
+        # )
         
         if derphi0 > 0: 
             # self.clear_momentum()
@@ -688,7 +689,7 @@ class LineSearchScheduler():
         # print(f"start searching with alpha = {alpha0}, the prev_alpha is {self.prev_alpha}")
         alpha0 = self.line_search_alpha
         if step < warmup_length:
-            alpha0 = 1
+            alpha0 = 0.1
             num_search = self.num_search
         else:
             num_search = 1
@@ -709,6 +710,8 @@ class LineSearchScheduler():
                     factor=factor,
                     log_dir=log_dir
                 )
+        if (not dist.is_initialized()) or dist.get_rank() == 0:
+            print(f"LINESEARCH LR: {alpha}")
         # if step < warmup_length and alpha < self.prev_alpha:
         #     alpha = self.prev_alpha
         
@@ -721,16 +724,29 @@ class LineSearchScheduler():
         # for param_group in self.optimizer.param_groups:
         #         param_group['lr'] = alpha
 
-        self.line_search_alpha = alpha
-        self.prev_alpha = alpha
-        self.line_search_magnitude = alpha * dir_norm
-        if (not dist.is_initialized()) or dist.get_rank() == 0:
-            print("LINESEARCH LR:", alpha, "magnitude:", self.line_search_magnitude)
-        if step < warmup_length:
-            self.prev_magnitude = self.line_search_magnitude 
-        else:
-            self.prev_magnitude = self.magnitude
+        # if alpha is None or not np.isfinite(alpha) or alpha <= 0:
+        muon_indices = self._muon_group_indices()
+        current_lr = self.optimizer.param_groups[muon_indices[0]]["lr"]
+        # if step <= warmup_length and alpha < current_lr:
+        #     alpha = current_lr
 
+        # print(f"[LineSearchScheduler] alpha={alpha:.6g}, fc={fc}")
+        
+        # for param_group in self.optimizer.param_groups:
+        #         param_group['lr'] = alpha
+
+        self.line_search_alpha = alpha
+
+        # self.line_search_magnitude = alpha * dir_norm
+        # if (not dist.is_initialized()) or dist.get_rank() == 0:
+        #     print("LINESEARCH LR:", alpha, "magnitude:", self.line_search_magnitude)
+        # if step < warmup_length:
+        #     self.prev_magnitude = self.line_search_magnitude 
+        # else:
+        #     self.prev_magnitude = self.magnitude
+
+        prev_lr = self.optimizer.param_groups[muon_indices[0]]["lr"]
+        self.prev_alpha = prev_lr
 
 
 
@@ -1438,5 +1454,6 @@ def search_backtracking_visual(
     plt.close()
 
     return chosen_alpha, chosen_phi
+
 
 
