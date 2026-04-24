@@ -1,16 +1,16 @@
 seed: 42
-output_root: /scratch.global/chen8596/sensitivity_analysis
+output_root: /scratch.global/chen8596/sensitivity_analysis_llama350m
 
 launch:
   mode: torchrun
   nproc_per_node: 4
 
 defaults:
-  train_config: config/train_llama_60m.py
+  train_config: config/train_llama_350m.py
   num_trials: 10
   fixed_overrides:
-    max_iters: 3600
-    lr_decay_iters: 3600
+    max_iters: 59600
+    lr_decay_iters: 59600
 
 linesearch_adam_c1_values: &linesearch_adam_c1_values
   - 0.0025460932518409107
@@ -46,7 +46,7 @@ sweeps:
       learning_rate: 6.0e-4
 
   - name: linesearch_muon_c1
-    train_script: train_linesearch_llama_muon.py
+    train_script: train_linesearch_llama_muon_stream.py
     sweep_param: linesearch_c1
     values: *linesearch_muon_c1_values
     extra_overrides:

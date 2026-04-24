@@ -7,17 +7,40 @@ launch:
 
 defaults:
   train_config: config/train_gpt2.py
-  num_trials: 5
+  num_trials: 10
   fixed_overrides:
     max_iters: 5000
     lr_decay_iters: 5000
+
+linesearch_adam_c1_values: &linesearch_adam_c1_values
+  - 0.0025460932518409107
+  - 0.0029687595097638853
+  - 0.006836614776310339
+  - 0.010830005804009226
+  - 0.1070818336700077
+  - 0.2322185323662678
+  - 0.28755815620547975
+  - 0.298033431281647
+  - 0.3772142661719836
+  - 0.4896316169123185
+
+linesearch_muon_c1_values: &linesearch_muon_c1_values
+  - 0.09412645162625297
+  - 0.128888242463071
+  - 0.15191148859959655
+  - 0.2190536338154081
+  - 0.49253086555196196
+  - 0.4941162409542503
+  - 0.6157345091163302
+  - 0.6441151133315725
+  - 0.8433030999672693
+  - 0.9761516606735893
 
 sweeps:
   - name: linesearch_adam_c1
     train_script: train_linesearch.py
     sweep_param: linesearch_c1
-    distribution: log_uniform
-    range: [1.0e-3, 0.5]
+    values: *linesearch_adam_c1_values
     extra_overrides:
       decay_lr: true
       learning_rate: 6.0e-4
@@ -25,8 +48,7 @@ sweeps:
   - name: linesearch_muon_c1
     train_script: train_linesearch_muon.py
     sweep_param: linesearch_c1
-    distribution: uniform
-    range: [5.0e-2, 1.0]
+    values: *linesearch_muon_c1_values
     extra_overrides:
       decay_lr: true
       muon_lr: 0.05

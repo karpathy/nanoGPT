@@ -1,22 +1,28 @@
-"""Sensitivity analysis driver for llama60m.
+"""Sensitivity analysis driver.
 
-Runs four independent parameter sweeps sequentially:
-  - adamw_lr:           learning_rate   log_uniform[1e-5, 1e-2]
-  - muon_lr:            muon_lr         log_uniform[1e-4, 1e-1]
-  - linesearch_adam_c1: linesearch_c1   predefined list (see YAML)
-  - linesearch_muon_c1: linesearch_c1   predefined list (see YAML)
+Runs independent parameter sweeps defined in a YAML config. Current yamls:
+  - config/experiments/sensitivity_analysis.yaml          (llama60m)
+  - config/experiments/sensitivity_analysis_llama130m.yaml (llama130m)
+  - config/experiments/sensitivity_analysis_gpt.yaml      (gpt2_124m)
 
-A sweep uses a predefined list when its config has a `values:` key; otherwise
-values are sampled from `distribution` over `range` with `num_trials` points.
+Each yaml defines one or more sweeps (e.g. linesearch_adam_c1,
+linesearch_muon_c1). A sweep uses a predefined list when its config has a
+`values:` key; otherwise values are sampled from `distribution` over `range`
+with `num_trials` points.
 
 Each trial is a single torchrun launch over 4 GPUs.
-Intentionally independent from run_optuna_experiment / Optuna.
 
 Usage:
+    # full run (all sweeps, all trials, sequential)
     python run_sensitivity.py config/experiments/sensitivity_analysis.yaml
-    python run_sensitivity.py config/experiments/sensitivity_analysis.yaml --only adamw_lr
-    python run_sensitivity.py config/experiments/sensitivity_analysis.yaml --resume
-    python run_sensitivity.py config/experiments/sensitivity_analysis.yaml --smoke
+    # one sweep only, sequential trials
+    python run_sensitivity.py config/experiments/sensitivity_analysis.yaml --only linesearch_adam_c1
+    # single trial (used by slurm array tasks)
+    python run_sensitivity.py <yaml> --only <sweep> --trial-index <k> --resume
+    # skip already-completed trials (idempotent re-run)
+    python run_sensitivity.py <yaml> --resume
+    # 20-iter plumbing check
+    python run_sensitivity.py <yaml> --smoke
 """
 
 import argparse
@@ -135,7 +141,7 @@ def run_trial(cmd, trial_dir, trial_id):
     return proc.returncode
 
 
-def run_sweep(sweep, defaults, launch, output_root, rng, resume, smoke):
+def run_sweep(sweep, defaults, launch, output_root, rng, resume, smoke, trial_index=None):
     name = sweep["name"]
     train_script = sweep["train_script"]
     train_config = sweep.get("train_config", defaults["train_config"])
@@ -177,9 +183,20 @@ def run_sweep(sweep, defaults, launch, output_root, rng, resume, smoke):
     print(f"  param={sweep_param} {source_desc}", flush=True)
     print(f"  values: {values}", flush=True)
 
+    if trial_index is not None:
+        if not (0 <= trial_index < num_trials):
+            raise ValueError(
+                f"--trial-index={trial_index} out of range for sweep '{name}' "
+                f"with num_trials={num_trials}"
+            )
+        selected_indices = [trial_index]
+    else:
+        selected_indices = list(range(num_trials))
+
     want_records = train_script in LINESEARCH_SCRIPTS
     failures = []
-    for i, value in enumerate(values):
+    for i in selected_indices:
+        value = values[i]
         trial_id = trial_id_from_number(i)
         trial_dir = ensure_dir(os.path.join(sweep_dir, trial_id))
         summary_path = os.path.join(trial_dir, "summary.json")
@@ -215,26 +232,33 @@ def run_sweep(sweep, defaults, launch, output_root, rng, resume, smoke):
         if returncode != 0:
             failures.append({"trial_id": trial_id, "returncode": returncode})
 
-    results = [
-        collect_summary_row(
-            os.path.join(sweep_dir, trial_id_from_number(i)),
-            trial_id_from_number(i),
-            sweep_param,
-            values[i],
+    if trial_index is None:
+        results = [
+            collect_summary_row(
+                os.path.join(sweep_dir, trial_id_from_number(i)),
+                trial_id_from_number(i),
+                sweep_param,
+                values[i],
+            )
+            for i in range(num_trials)
+        ]
+        results.sort(key=lambda r: r[sweep_param])
+        write_json(os.path.join(sweep_dir, "sweep_results.json"), results)
+        print(f"[{name}] aggregated results written to {sweep_dir}/sweep_results.json", flush=True)
+    else:
+        print(
+            f"[{name}] trial-index={trial_index} done; skipping aggregation "
+            f"(re-run without --trial-index to collect sweep_results.json).",
+            flush=True,
         )
-        for i in range(num_trials)
-    ]
-    results.sort(key=lambda r: r[sweep_param])
-    write_json(os.path.join(sweep_dir, "sweep_results.json"), results)
 
     if failures:
         print(f"[{name}] WARNING: {len(failures)} trial(s) failed: {failures}", flush=True)
-    print(f"[{name}] aggregated results written to {sweep_dir}/sweep_results.json", flush=True)
     return failures
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Run sensitivity-analysis sweeps for llama60m.")
+    parser = argparse.ArgumentParser(description="Run sensitivity-analysis sweeps.")
     parser.add_argument("config", help="Path to the sensitivity YAML config.")
     parser.add_argument(
         "--only",
@@ -253,6 +277,16 @@ def parse_args():
         "--smoke",
         action="store_true",
         help="Run 2 trials with max_iters=20 per sweep. For plumbing validation only.",
+    )
+    parser.add_argument(
+        "--trial-index",
+        type=int,
+        default=None,
+        help=(
+            "Only run the single trial at this 0-based index within the selected "
+            "sweep. Requires --only with exactly one sweep name. Use this to map "
+            "slurm array tasks to individual trials."
+        ),
     )
     return parser.parse_args()
 
@@ -292,6 +326,12 @@ def main():
     else:
         sweeps = all_sweeps
 
+    if args.trial_index is not None and len(sweeps) != 1:
+        raise ValueError(
+            "--trial-index requires --only with exactly one sweep name; "
+            f"got {len(sweeps)} sweep(s)."
+        )
+
     all_failures = {}
     for sweep in sweeps:
         failures = run_sweep(
@@ -302,6 +342,7 @@ def main():
             rng=sweep_rngs[sweep["name"]],
             resume=args.resume,
             smoke=args.smoke,
+            trial_index=args.trial_index,
         )
         if failures:
             all_failures[sweep["name"]] = failures
