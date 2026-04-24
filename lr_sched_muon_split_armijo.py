@@ -756,8 +756,7 @@ class LineSearchScheduler():
 
         prev_lr = self.optimizer.param_groups[muon_indices[0]]["lr"]
         self.prev_alpha = prev_lr
-        prev_lr = self.optimizer.param_groups[muon_indices[0]]["lr"]
-        self.prev_alpha = prev_lr
+
 
 
 
