@@ -8,8 +8,10 @@ import torch
 import tiktoken
 from model import GPTConfig, GPT
 
+import matplotlib.pyplot as plt #importing library for Assingment
+import torch.nn.functional as F
 # -----------------------------------------------------------------------------
-init_from = 'resume' # either 'resume' (from an out_dir) or a gpt2 variant (e.g. 'gpt2-xl')
+init_from = 'gpt2' # either 'resume' (from an out_dir) or a gpt2 variant (e.g. 'gpt2-xl')
 out_dir = 'out' # ignored if init_from is not 'resume'
 start = "\n" # or "<|endoftext|>" or etc. Can also specify a file, use as: "FILE:prompt.txt"
 num_samples = 10 # number of samples to draw
@@ -17,10 +19,11 @@ max_new_tokens = 500 # number of tokens generated in each sample
 temperature = 0.8 # 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
 top_k = 200 # retain only the top_k most likely tokens, clamp others to have 0 probability
 seed = 1337
-device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
+device = 'cuda' if torch.cuda.is_available() else 'cpu' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32' or 'bfloat16' or 'float16'
 compile = False # use PyTorch 2.0 to compile the model to be faster
-exec(open('configurator.py').read()) # overrides from command line or config file
+show_probs = False  #if True, display a bar chart of top-10 token probabilities at each generation step
+
 # -----------------------------------------------------------------------------
 
 torch.manual_seed(seed)
@@ -84,6 +87,55 @@ x = (torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...])
 with torch.no_grad():
     with ctx:
         for k in range(num_samples):
-            y = model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k)
-            print(decode(y[0].tolist()))
+
+            x_cond = x
+
+            for step in range(max_new_tokens):
+
+                # crop context to model's block size if it has grown too long
+                x_cond = x_cond if x_cond.size(1) <= model.config.block_size \
+                          else x_cond[:, -model.config.block_size:]
+
+                # forward pass, take logits at the last position
+                logits, _ = model(x_cond)
+                logits = logits[:, -1, :] / temperature  # scale by temperature
+
+                # clamp low-probability tokens to zero (top-k filtering)
+                if top_k is not None:
+                    v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                    logits[logits < v[:, [-1]]] = -float('Inf')
+
+                # convert to probabilities
+                probs = F.softmax(logits, dim=-1)
+
+                # sample the next token
+                idx_next = torch.multinomial(probs, num_samples=1)  # shape (1, 1)
+                selected_token = idx_next[0].item()
+
+                # display bar chart of top-10 token probabilities if flag is set
+                if show_probs:
+                    top_probs, top_indices = torch.topk(probs[0], k=10)
+                    top_probs = top_probs.detach().cpu().numpy()
+                    top_indices = top_indices.detach().cpu().numpy()
+
+                    # decode each top token index to a string label
+                    labels = [decode([int(i)]) for i in top_indices]
+
+                    # highlight the selected token in orange, others in steelblue
+                    colors = ['orange' if int(i) == selected_token else 'steelblue'
+                              for i in top_indices]
+
+                    plt.figure(figsize=(10, 4))
+                    plt.bar(labels, top_probs, color=colors)
+                    plt.title(f"Top 10 Token Probabilities (step {step+1}, orange = selected)")
+                    plt.xlabel("Token")
+                    plt.ylabel("Probability")
+                    plt.xticks(rotation=45, ha='right')
+                    plt.tight_layout()
+                    plt.show()
+
+                # append sampled token to the sequence
+                x_cond = torch.cat((x_cond, idx_next), dim=1)
+
+            print(decode(x_cond[0].tolist()))
             print('---------------')

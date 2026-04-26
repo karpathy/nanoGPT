@@ -309,7 +309,10 @@ class GPT(nn.Module):
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
         Most likely you'll want to make sure to be in model.eval() mode of operation for this.
         """
-        for _ in range(max_new_tokens):
+
+        # accumulate log probabilities across all generated tokens
+        log_prob_sum = 0.0
+        for i in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
             idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
             # forward the model to get the logits for the index in the sequence
@@ -322,9 +325,23 @@ class GPT(nn.Module):
                 logits[logits < v[:, [-1]]] = -float('Inf')
             # apply softmax to convert logits to (normalized) probabilities
             probs = F.softmax(logits, dim=-1)
-            # sample from the distribution
-            idx_next = torch.multinomial(probs, num_samples=1)
+
+            if fixed_response is not None:
+                # use the specified token at this step instead of sampling
+                idx_next = torch.tensor([[fixed_response[i]]], dtype=torch.long, device=idx.device)
+            else:
+                # sample from the distribution
+                idx_next = torch.multinomial(probs, num_samples=1)
+
+            # accumulate log probability of the chosen token
+            token_prob = probs[0, idx_next[0, 0]]
+            log_prob_sum += torch.log(token_prob)
+
             # append sampled index to the running sequence and continue
             idx = torch.cat((idx, idx_next), dim=1)
 
-        return idx
+        # convert sum of log probabilities back to a probability
+        sequence_prob = torch.exp(torch.tensor(log_prob_sum)).item()
+
+        return idx, sequence_prob
+
