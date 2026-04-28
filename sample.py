@@ -82,16 +82,21 @@ if start.startswith('FILE:'):
         start = f.read()
 start_ids = encode(start)
 x = (torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...])
-if model_12 == True:
+if model_12:
 
-    idx, sequence_prob = model.generate(
+      idx, sequence_prob = model.generate(
         x,
         max_new_tokens=5,
         temperature=0.0001
     )
 
+    print("Generated text:")
     print(decode(idx[0].tolist()))
+
+    print("\nSequence probability:")
     print(sequence_prob)
+
+    exit()
 # run generation
 with torch.no_grad():
     with ctx:
