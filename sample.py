@@ -23,7 +23,7 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu' # examples: 'cpu', 'cuda
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32' or 'bfloat16' or 'float16'
 compile = False # use PyTorch 2.0 to compile the model to be faster
 show_probs = False  #if True, display a bar chart of top-10 token probabilities at each generation step
-model_1.2 = False #if true then it runs the generation loop for 1.2 of the assignment
+model_12 = False #if true then it runs the generation loop for 1.2 of the assignment
 # -----------------------------------------------------------------------------
 
 torch.manual_seed(seed)
@@ -82,7 +82,7 @@ if start.startswith('FILE:'):
         start = f.read()
 start_ids = encode(start)
 x = (torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...])
-if mode == "1.2":
+if model_12 == True:
 
     idx, sequence_prob = model.generate(
         x,
