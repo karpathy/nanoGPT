@@ -23,7 +23,7 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu' # examples: 'cpu', 'cuda
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32' or 'bfloat16' or 'float16'
 compile = False # use PyTorch 2.0 to compile the model to be faster
 show_probs = False  #if True, display a bar chart of top-10 token probabilities at each generation step
-
+model_1.2 = False #if true then it runs the generation loop for 1.2 of the assignment
 # -----------------------------------------------------------------------------
 
 torch.manual_seed(seed)
@@ -82,7 +82,16 @@ if start.startswith('FILE:'):
         start = f.read()
 start_ids = encode(start)
 x = (torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...])
+if mode == "1.2":
 
+    idx, sequence_prob = model.generate(
+        x,
+        max_new_tokens=5,
+        temperature=0.0001
+    )
+
+    print(decode(idx[0].tolist()))
+    print(sequence_prob)
 # run generation
 with torch.no_grad():
     with ctx:
@@ -94,7 +103,7 @@ with torch.no_grad():
 
                 # crop context to model's block size if it has grown too long
                 x_cond = x_cond if x_cond.size(1) <= model.config.block_size \
-                          else x_cond[:, -model.config.block_size:]
+                        else x_cond[:, -model.config.block_size:]
 
                 # forward pass, take logits at the last position
                 logits, _ = model(x_cond)
@@ -123,7 +132,7 @@ with torch.no_grad():
 
                     # highlight the selected token in orange, others in steelblue
                     colors = ['orange' if int(i) == selected_token else 'steelblue'
-                              for i in top_indices]
+                            for i in top_indices]
 
                     plt.figure(figsize=(10, 4))
                     plt.bar(labels, top_probs, color=colors)
