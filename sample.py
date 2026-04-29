@@ -82,9 +82,10 @@ if start.startswith('FILE:'):
         start = f.read()
 start_ids = encode(start)
 x = (torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...])
-if model_12:
 
-      idx, sequence_prob = model.generate(
+
+if model_12:
+    idx, sequence_prob = model.generate(
         x,
         max_new_tokens=5,
         temperature=0.0001
