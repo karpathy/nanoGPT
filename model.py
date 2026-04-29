@@ -326,13 +326,6 @@ class GPT(nn.Module):
             # apply softmax to convert logits to (normalized) probabilities
             probs = F.softmax(logits, dim=-1)
 
-            if fixed_response is not None:
-                # use the specified token at this step instead of sampling
-                idx_next = torch.tensor([[fixed_response[i]]], dtype=torch.long, device=idx.device)
-            else:
-                # sample from the distribution
-                idx_next = torch.multinomial(probs, num_samples=1)
-
             # accumulate log probability of the chosen token
             token_prob = probs[0, idx_next[0, 0]]
             log_prob_sum += torch.log(token_prob)

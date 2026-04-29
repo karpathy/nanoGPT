@@ -99,6 +99,7 @@ if model_12:
 
     exit()
 # run generation
+if model_12 == False:
 with torch.no_grad():
     with ctx:
         for k in range(num_samples):
