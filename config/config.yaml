@@ -1,0 +1,19 @@
+defaults:
+  - model: nanogpt_small
+  - data: shakespeare
+  - optim: adamw
+  - _self_
+
+seed: 42
+out_dir: /root/autodl-tmp/ckpt
+eval_interval: 9999
+eval_iters: 200
+log_interval: 1
+eval_only: false
+always_save_checkpoint: false
+checkpoint_interval: 500
+init_from: scratch
+compile: false
+wandb_log: false
+wandb_project: nanogpt
+wandb_run_name: nanogpt-run

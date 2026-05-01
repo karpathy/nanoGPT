@@ -1,0 +1,6 @@
+n_layer: 4
+n_head: 4
+n_embd: 128
+block_size: 64
+dropout: 0.0
+bias: false
