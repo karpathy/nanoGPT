@@ -772,3 +772,110 @@ def _mp_fn(index):
 
 if __name__ == "__main__":
     main()
+
+
+# =============================================================================
+# 4.5 代码阅读问题回答
+# =============================================================================
+
+# Q1: ModelArguments / DataTrainingArguments 一共有哪些可调参数？
+#
+# ModelArguments 主要参数：
+#   --model_name_or_path   从哪个 HF Hub 模型或本地路径加载模型
+#   --model_type           如果从零训练，指定模型类型（如 gpt2）
+#   --config_name          单独指定 config（不指定则和 model 一致）
+#   --tokenizer_name       单独指定 tokenizer
+#   --cache_dir            模型权重下载缓存目录
+#   --use_fast_tokenizer   是否使用 fast tokenizer（默认 True）
+#   --model_revision       加载哪个版本的模型
+#   --token                HF Hub 访问 token
+#   --trust_remote_code    是否信任远程自定义代码
+#   --torch_dtype          模型权重精度（auto/float32/float16/bfloat16）
+#   --low_cpu_mem_usage    低内存加载大模型
+#
+# DataTrainingArguments 主要参数：
+#   --dataset_name         HF Hub 数据集名称（如 wikitext）
+#   --dataset_config_name  数据集子集（如 wikitext-2-raw-v1）
+#   --train_file           本地训练文件路径（csv/json/txt）
+#   --validation_file      本地验证文件路径
+#   --block_size           每个训练样本的 token 长度
+#   --max_train_samples    限制训练样本数（调试用）
+#   --max_eval_samples     限制验证样本数
+#   --streaming            是否流式加载数据集（大数据集用）
+#   --validation_split_percentage  没有 val split 时从 train 切多少出来
+#   --preprocessing_num_workers   数据预处理并行进程数
+#   --keep_linebreaks      tokenize 时是否保留换行符
+
+
+# Q2: load_dataset 数据是怎么加载和切分的？
+#
+# 加载：
+#   如果有 --dataset_name，调用 load_dataset(dataset_name, dataset_config_name) 从 HF Hub 下载；
+#   如果没有 --dataset_name，根据 --train_file / --validation_file 扩展名判断格式（csv/json/txt），
+#   用 load_dataset("csv"/"json"/"text", data_files=...) 从本地加载。
+#
+# 切分：
+#   如果数据集本身有 validation split，直接使用；
+#   如果没有 validation split，使用 validation_split_percentage（默认 5%）
+#   从 train 中切出一部分：
+#     train[:5%] -> validation
+#     train[5%:] -> train
+#   streaming=True 时不支持直接切片，使用 split_streaming_dataset() 按序号近似切分。
+
+
+# Q3: 文本怎么变成 token block 的？
+#
+# 分两步：
+#
+# Step 1 - tokenize_function：
+#   读取 text_column_name 对应的原始文本列，
+#   调用 tokenizer() 把字符串转成 input_ids（token id 序列）。
+#   这一步每条样本长度不固定，还不能直接训练。
+#
+# Step 2 - group_texts：
+#   1. 把 batch 内所有样本的 token ids 用 chain() 串接成一条长 token 流；
+#   2. total_length = (total_length // block_size) * block_size，丢掉尾部不足一个 block 的 token；
+#   3. 每隔 block_size 切一次，得到多个等长 input_ids block；
+#   4. result["labels"] = result["input_ids"].copy()。
+#
+# 为什么 labels = input_ids.copy()？
+#   causal LM 的训练目标是预测下一个 token，labels 和 input_ids 是同一序列；
+#   模型内部会自动 shift（labels 向左移一位），所以这里直接复制就行。
+
+
+# Q4: Trainer 实例化接收哪些核心参数？
+#
+# trainer = Trainer(
+#     model=model,                        # 要训练的语言模型（AutoModelForCausalLM）
+#     args=training_args,                 # TrainingArguments：lr、batch_size、epochs、fp16、save 等
+#     train_dataset=train_dataset,        # 经过 tokenize+group_texts 的等长 token blocks
+#     eval_dataset=eval_dataset,          # 同上，用于评估
+#     processing_class=tokenizer,         # 保存模型时一起保存 tokenizer
+#     data_collator=default_data_collator,# 样本已等长，不需要 padding，直接合成 batch
+#     compute_metrics=compute_metrics,    # eval 时计算 accuracy
+#     preprocess_logits_for_metrics=...   # eval 时把 logits 转成预测 token ids
+# )
+
+
+# Q5: 训练循环 pseudo code
+#
+# trainer.train() 内部大致逻辑：
+#
+# model.train()
+# for epoch in range(num_train_epochs):
+#     for batch in train_dataloader:
+#         batch = batch.to(device)
+#         with autocast():                          # 混合精度
+#             outputs = model(**batch)
+#             loss = outputs.loss / gradient_accumulation_steps
+#         loss.backward()
+#         if step % gradient_accumulation_steps == 0:
+#             clip_grad_norm_(model.parameters())
+#             optimizer.step()
+#             lr_scheduler.step()
+#             optimizer.zero_grad()
+#         if step % logging_steps == 0:
+#             log(loss, lr, ...)
+#         if step % save_steps == 0:
+#             save_checkpoint()
+# save_model()
