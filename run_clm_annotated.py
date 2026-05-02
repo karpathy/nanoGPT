@@ -78,10 +78,19 @@ MODEL_CONFIG_CLASSES = list(MODEL_FOR_CAUSAL_LM_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
 
 
-### ModelArguments / DataTrainingArguments ###
-# 模型参数：model_name_or_path, tokenizer, cache_dir 等
-# 数据参数：dataset_name, block_size, max_train_samples 等
-# 训练参数：继承自 TrainingArguments，包含 lr, batch_size, epochs 等
+### ModelArguments / DataTrainingArguments：定义命令行参数 ###
+# ModelArguments 控制模型相关设置：
+#   例如从哪个 checkpoint 加载模型、config、tokenizer；
+#   是否从零训练模型；
+#   cache_dir、model_revision、token、trust_remote_code、dtype 等。
+#
+# DataTrainingArguments 控制数据相关设置：
+#   例如从 Hugging Face Hub 加载 dataset_name，或从本地 train_file / validation_file 加载；
+#   设置 block_size、streaming、validation_split_percentage、max_train_samples、
+#   max_eval_samples、preprocessing_num_workers、keep_linebreaks 等。
+#
+# TrainingArguments 由 Transformers 库提供，不在本文件中定义；
+# 它控制训练超参数，例如 output_dir、learning_rate、batch_size、epochs、fp16、logging、save 等。
 @dataclass
 class ModelArguments:
     """
@@ -328,9 +337,17 @@ def main():
     #
     # For CSV/JSON files, this script will use the column called 'text' or the first column if no column called
     # 'text' is found. You can easily tweak this behavior (see below).
-### load_dataset ###
-# 从 HuggingFace datasets 加载数据集，自动下载并缓存
-# 支持按 split 切分：train/validation/test
+### load_dataset：加载数据集并构造 train / validation split ###
+# 如果提供 --dataset_name，则从 Hugging Face Hub 加载公开数据集；
+# 如果没有 --dataset_name，则根据 --train_file / --validation_file 从本地 csv/json/txt 文件加载。
+#
+# 如果原始数据没有 validation split，脚本会使用 validation_split_percentage
+# 从 train 中切出一部分作为 validation：
+#   train[:5%]  -> validation
+#   train[5%:]  -> train
+#
+# 如果 streaming=True，数据不能像普通 Dataset 那样直接切片，
+# 因此脚本使用 split_streaming_dataset() 按样本序号近似划分 train / validation。
     #
     # In distributed training, the load_dataset function guarantee that only one local process can concurrently
     # download the dataset.
@@ -505,9 +522,12 @@ def main():
 
     # since this will be pickled to avoid _LazyModule error in Hasher force logger loading before tokenize_function
     tok_logger = transformers.utils.logging.get_logger("transformers.tokenization_utils_base")
-### tokenize_function + group_texts ###
-# tokenize_function: 把文本转成 token id
-# group_texts: 把所有 token 拼接后按 block_size 切成等长块，用于语言模型训练
+### tokenize_function：把原始文本转成 token ids ###
+# 这里选择数据集中的文本列 text_column_name。
+# 如果数据集中有名为 "text" 的列，就使用 "text"；否则默认使用第一列。
+#
+# tokenizer(examples[text_column_name]) 把原始字符串转换成 input_ids。
+# 这一步只是 tokenize，还没有把 token 切成固定长度 block。
 
     def tokenize_function(examples):
         with CaptureLogger(tok_logger) as cl:
@@ -561,6 +581,18 @@ def main():
             )
         block_size = min(data_args.block_size, tokenizer.model_max_length)
 
+    ### group_texts：把 token 串接后切成固定长度 causal LM blocks ###
+    # causal language modeling 不是简单地把每一行文本当成一个训练样本。
+    # 这里先把 batch 内所有 token ids 串接成一条长 token 流，再按 block_size 切块。
+    #
+    # 具体步骤：
+    #   1. chain(*examples[k]) 把 token 列表拼接起来；
+    #   2. total_length = (total_length // block_size) * block_size，丢掉不整除的尾部；
+    #   3. 每隔 block_size 切一次，得到固定长度 input_ids blocks；
+    #   4. result["labels"] = result["input_ids"].copy()。
+    #
+    # 对 causal LM 来说，labels 和 input_ids 相同；
+    # 模型内部会自动 shift，训练目标是用前面的 token 预测下一个 token。
     # Main data processing function that will concatenate all texts from our dataset and generate chunks of block_size.
     def group_texts(examples):
         # Concatenate all texts.
@@ -638,9 +670,14 @@ def main():
             preds = preds[:, :-1].reshape(-1)
             return metric.compute(predictions=preds, references=labels)
 
-### Trainer 实例化 ###
-# Trainer 封装了训练循环，接收 model/args/datasets/tokenizer/data_collator
-# 自动处理：梯度累积、混合精度、分布式训练、checkpoint 保存
+### Trainer 实例化：把模型、数据、训练参数交给 Trainer ###
+# Trainer 封装了 PyTorch 训练循环，核心参数包括：
+#   model: 要训练的 AutoModelForCausalLM；
+#   args: TrainingArguments，包含 lr、batch_size、epochs、保存、日志、混合精度等；
+#   train_dataset / eval_dataset: tokenize + group_texts 后得到的固定长度 LM blocks；
+#   processing_class=tokenizer: 保存模型时一起保存 tokenizer；
+#   data_collator=default_data_collator: 因为样本已等长，不需要 padding，直接合成 batch；
+#   compute_metrics / preprocess_logits_for_metrics: eval 时把 logits 转成预测 token 并计算 accuracy。
     # Initialize our Trainer
     trainer = Trainer(
         model=model,
@@ -657,12 +694,23 @@ def main():
     )
 
     # Training
+    ### trainer.train()：启动训练循环 ###
+    # 当 training_args.do_train=True 时，这一块会真正开始训练。
+    # 如果设置了 resume_from_checkpoint，就从已有 checkpoint 继续训练；否则从当前模型参数开始。
+    #
+    # trainer.train() 内部大致执行：
+    #   for epoch in num_train_epochs:
+    #       for batch in train_dataloader:
+    #           outputs = model(**batch)
+    #           loss = outputs.loss
+    #           loss.backward()
+    #           optimizer.step(); lr_scheduler.step(); optimizer.zero_grad()
+    #
+    # Trainer 自动处理梯度累积、混合精度、分布式训练、日志和 checkpoint 保存。
+    # 训练结束后调用 save_model()、log_metrics()、save_metrics()、save_state() 保存结果。
     if training_args.do_train:
         checkpoint = None
         if training_args.resume_from_checkpoint is not None:
-### trainer.train() ###
-# 启动训练循环，支持从 checkpoint 恢复
-# 内部逻辑：for epoch: for batch: forward -> loss -> backward -> step
             checkpoint = training_args.resume_from_checkpoint
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
         trainer.save_model()  # Saves the tokenizer too for easy upload
