@@ -248,7 +248,11 @@ elif init_from.startswith('gpt2'):
         for p in model.parameters():
             p.requires_grad = False
         if prefix_type == 'soft':
-            prefix_module = SoftPrefix(prefix_len, model.config.n_embd, device).to(device)
+            with torch.no_grad():
+                indices = torch.randint(0, model.config.vocab_size, (prefix_len,))
+                init_embeddings = model.transformer.wte.weight[indices].clone()
+            prefix_module = SoftPrefix(prefix_len, model.config.n_embd, device,
+                                       init_embeddings=init_embeddings).to(device)
         elif prefix_type == 'deep':
             prefix_module = DeepPrefix(prefix_len, model.config.n_embd, model.config.n_layer, device).to(device)
         is_prefix_tuning = True
