@@ -27,10 +27,16 @@ class LayerNorm(nn.Module):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
 class SoftPrefix(nn.Module):
-    def __init__(self, prefix_len, n_embd, device):
+    def __init__(self, prefix_len, n_embd, device, init_embeddings=None):
         super().__init__()
         self.prefix_len = prefix_len
-        self.P = nn.Parameter(torch.randn(prefix_len, n_embd, device=device) * 0.02)
+        if init_embeddings is not None:
+            assert init_embeddings.shape == (prefix_len, n_embd), \
+                f"init_embeddings shape {init_embeddings.shape} != ({prefix_len}, {n_embd})"
+            self.P = nn.Parameter(init_embeddings.to(device))
+        else:
+            # fallback to random Gaussian (original behavior)
+            self.P = nn.Parameter(torch.randn(prefix_len, n_embd, device=device) * 0.02)
         self.cached_kv = None
         self.cache_valid = False
 
