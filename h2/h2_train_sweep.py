@@ -10,6 +10,12 @@ training_errors = []
 N_EMBD = 768
 MAX_POSITIONS = 1024
 
+
+base_max_iters = 2000
+base_warmup = 200
+base_lr_decay = 5000
+base_eval_interval = 250
+
 for L in RUN_ORDER:
     for M in M_VALUES:
         run_name = f"prefix-L{L}-m{M}-{TASK}"
@@ -44,14 +50,23 @@ for L in RUN_ORDER:
         torch.cuda.reset_peak_memory_stats()
         t_start = time.time()
 
+        scaled_max_iters = base_max_iters * M
+        scaled_warmup = base_warmup * M
+        scaled_lr_decay = base_lr_decay * M
+        scaled_eval_interval = base_eval_interval * M
+
         cmd = [
             "python", "train.py", "config/h1_wikitext2.py",
             f"--prefix_len={L}",
             f"--prefix_update_period={M}",
+            f"--max_iters={scaled_max_iters}",
+            f"--warmup_iters={scaled_warmup}",
+            f"--lr_decay_iters={scaled_lr_decay}",
+            f"--eval_interval={scaled_eval_interval}",
             f"--out_dir={out_dir}",
             f"--prefix_type=soft",
             f"--wandb_run_name={run_name}",
-        ] + extra_flags
+            ]
 
         proc = subprocess.run(cmd, capture_output=False, text=True)
         wall_clock = time.time() - t_start
