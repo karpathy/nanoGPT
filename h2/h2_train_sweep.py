@@ -51,8 +51,6 @@ for L in RUN_ORDER:
         t_start = time.time()
 
         scaled_max_iters = base_max_iters * M
-        scaled_warmup = base_warmup * M
-        scaled_lr_decay = base_lr_decay * M
         scaled_eval_interval = base_eval_interval * M
 
         cmd = [
@@ -60,8 +58,6 @@ for L in RUN_ORDER:
             f"--prefix_len={L}",
             f"--prefix_update_period={M}",
             f"--max_iters={scaled_max_iters}",
-            f"--warmup_iters={scaled_warmup}",
-            f"--lr_decay_iters={scaled_lr_decay}",
             f"--eval_interval={scaled_eval_interval}",
             f"--out_dir={out_dir}",
             f"--prefix_type=soft",
