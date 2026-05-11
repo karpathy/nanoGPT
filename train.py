@@ -400,7 +400,7 @@ while True:
 
             cache_hit_ratio = (
                 1.0 - (1.0 / prefix_update_period)
-                if prefix_module is not None and prefix_update_period > 1
+                if prefix_module is not None and prefix_cache and prefix_update_period > 1
                 else 0.0
             )
 
@@ -477,6 +477,10 @@ while True:
                         'task': dataset,
                         'model': init_from,
                         'block_size': block_size,
+                        'prefix_cache': prefix_cache,
+                        'peak_gpu_mem_gb': (
+                            torch.cuda.max_memory_allocated() / 1e9 if device_type == 'cuda' else 0.0
+                        ),
                     }, prefix_path)
                     print(f"saving prefix to {prefix_path}")
 
@@ -498,6 +502,10 @@ while True:
                         'task': dataset,
                         'model': init_from,
                         'block_size': block_size,
+                        'prefix_cache': prefix_cache,
+                        'peak_gpu_mem_gb': (
+                            torch.cuda.max_memory_allocated() / 1e9 if device_type == 'cuda' else 0.0
+                        ),
                     }, prefix_path)
                     if wandb_log:
                         artifact = wandb.Artifact(

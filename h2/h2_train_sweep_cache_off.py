@@ -1,8 +1,8 @@
 import subprocess, os, time, torch, json, math
 
 # RUN_ORDER = [100, 0, 64, 256, 512, 1024, 2048]
-RUN_ORDER = [256, 512]
-M_VALUES = [1, 5, 10, 20]
+RUN_ORDER = [64]
+M_VALUES = [10, 20]
 TASK      = "wikitext2"
 
 results         = []
@@ -67,7 +67,7 @@ for L in RUN_ORDER:
             ckpt     = torch.load(prefix_path, map_location="cpu")
             val_loss = float(ckpt.get("val_loss", float("nan")))
             val_ppl  = math.exp(val_loss) if not math.isnan(val_loss) else float("nan")
-            peak_mem = torch.cuda.max_memory_allocated() / 1e9
+            peak_mem = float(ckpt.get("peak_gpu_mem_gb", 0.0))
 
             results.append({
                 "L":            L,

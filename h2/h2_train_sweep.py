@@ -1,7 +1,7 @@
 import subprocess, os, time, torch, json, math
 
 # RUN_ORDER = [100, 0, 64, 256, 512, 1024, 2048]  # L=100 first — smoke test
-RUN_ORDER = [512]  # L=100 first — smoke test
+RUN_ORDER = [64]  # L=100 first — smoke test
 M_VALUES = [10, 20]
 TASK      = "wikitext2"
 
@@ -30,7 +30,7 @@ for L in RUN_ORDER:
             })
             continue
 
-        extra_flags = [f"--block_size={MAX_POSITIONS}"]
+        extra_flags = [f"--block_size={MAX_POSITIONS}", "--prefix_cache=True"]
         if L == 0:
             extra_flags += [
                 "--eval_only=True",
@@ -70,7 +70,7 @@ for L in RUN_ORDER:
             ckpt     = torch.load(prefix_path, map_location="cpu")
             val_loss = float(ckpt.get("val_loss", float("nan")))
             val_ppl  = math.exp(val_loss) if not math.isnan(val_loss) else float("nan")
-            peak_mem = torch.cuda.max_memory_allocated() / 1e9
+            peak_mem = float(ckpt.get("peak_gpu_mem_gb", 0.0))
 
             results.append({
                 "L":            L,
@@ -78,6 +78,7 @@ for L in RUN_ORDER:
                 "val_loss":     round(val_loss, 4),
                 "val_ppl":      round(val_ppl, 2),
                 "param_count":  L * N_EMBD,
+                "cache":        "on",
                 "wall_clock_h": round(wall_clock / 3600, 2),
                 "peak_mem_gb":  round(peak_mem, 2),
                 "status":       "OK",
@@ -94,16 +95,16 @@ for L in RUN_ORDER:
 print(f"\n{'═'*60}")
 print("  H2 TRAINING SWEEP COMPLETE")
 print(f"{'═'*60}")
-print(f"{'L':>6}  {'val_loss':>9}  {'val_ppl':>8}  "
+print(f"{'L':>6}  {'m':>4}  {'val_loss':>9}  {'val_ppl':>8}  "
       f"{'params':>10}  {'mem(GB)':>7}  {'time(h)':>7}  status")
 print("-"*65)
 for r in results:
     if r["status"] == "OK":
-        print(f"{r['L']:>6}  {r['val_loss']:>9.4f}  {r['val_ppl']:>8.2f}  "
+        print(f"{r['L']:>6}  {r['m']:>4}  {r['val_loss']:>9.4f}  {r['val_ppl']:>8.2f}  "
               f"{r['param_count']:>10,}  {r['peak_mem_gb']:>7.2f}  "
               f"{r['wall_clock_h']:>7.2f}  OK")
     else:
-        print(f"{r['L']:>6}  {'—':>9}  {'—':>8}  {'—':>10}  "
+        print(f"{r['L']:>6}  {r.get('m', '—'):>4}  {'—':>9}  {'—':>8}  {'—':>10}  "
               f"{'—':>7}  {r['wall_clock_h']:>7.2f}  FAILED")
 
 if training_errors:
