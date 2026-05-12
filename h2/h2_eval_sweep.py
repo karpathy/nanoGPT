@@ -22,13 +22,14 @@ DROPOUT = 0.0
 MODEL_TYPE = 'gpt2'
 MAX_POSITIONS = 1024
 EVAL_WITH_CACHE = True
+LR_VALUES = [0.001, 0.01, 0.1]
 
-def download_artifact(L, m, task):
+def download_artifact(L, m, lr, task):
     if L == 0:
-        return "baseline"  # no artifact needed for L=0
-    artifact_name = f"{ENTITY}/{PROJECT}/prefix-L{L}-m{m}-{task}:latest"
+        return "baseline"
+    artifact_name = f"{ENTITY}/{PROJECT}/prefix-L{L}-m{m}-lr{lr}-{task}:latest"
     try:
-        artifact  = api.artifact(artifact_name, type="model")
+        artifact = api.artifact(artifact_name, type="model")
         local_dir = artifact.download()
         print(f"  Downloaded: {artifact_name} → {local_dir}")
         return local_dir
@@ -36,7 +37,7 @@ def download_artifact(L, m, task):
         print(f"  Could not download artifact for L={L}: {e}")
         return None
 
-def load_checkpoint(L, m, task):
+def load_checkpoint(L, m, lr, task):
     if L == 0:
         # baseline — just frozen GPT-2, no prefix
         model = GPT.from_pretrained(MODEL_TYPE, dict(dropout=DROPOUT))
@@ -50,7 +51,7 @@ def load_checkpoint(L, m, task):
             "prefix_update_period": 1,
         }
 
-    local_dir = download_artifact(L, m, task)
+    local_dir = download_artifact(L, m, lr, task)
     if local_dir is None:
         return None, None, None
 
@@ -100,8 +101,8 @@ def load_checkpoint(L, m, task):
     }
 
 
-def get_training_metrics(L, m, task):
-    run_name = f"prefix-L{L}-m{m}-{task}"
+def get_training_metrics(L, m, lr, task):
+    run_name = f"prefix-L{L}-m{m}-lr{lr}-{task}"
     try:
         runs = api.runs(
             f"{ENTITY}/{PROJECT}",
@@ -174,45 +175,46 @@ results  = []
 
 for L in L_VALUES:
     for M in M_VALUES:
-        if L >= MAX_POSITIONS:
-            print(f"  SKIP: L={L} — not trained, exceeds wpe table")
-            continue
+        for LR in LR_VALUES:
+            if L == 0 and (M > 1 or LR != LR_VALUES[0]):
+                continue  # only need one baseline eval
 
-        print(f"\nEvaluating L={L}, m={M}...")
-        model, soft_prefix, metadata = load_checkpoint(L, M, TASK)
-        if model is None:
-            continue
-        loaded_L = metadata["prefix_len"]
-        loaded_m = metadata["prefix_update_period"]
-        print(
-            f"  model={metadata['model_type']} "
-            f"block_size={metadata['block_size']} prefix_len={loaded_L} "
-            f"train_m={loaded_m} eval_cache={int(EVAL_WITH_CACHE)}"
-        )
-        val_loss, val_ppl = estimate_val_perplexity(
-            model,
-            soft_prefix,
-            val_data,
-            use_cache=EVAL_WITH_CACHE,
-        )
-        param_count       = loaded_L * model.config.n_embd
+            print(f"\nEvaluating L={L}, m={M}, lr={LR}...")
+            model, soft_prefix, metadata = load_checkpoint(L, M, LR, TASK)
+            if model is None:
+                continue
+            loaded_L = metadata["prefix_len"]
+            loaded_m = metadata["prefix_update_period"]
+            print(
+                f"  model={metadata['model_type']} "
+                f"block_size={metadata['block_size']} prefix_len={loaded_L} "
+                f"train_m={loaded_m} eval_cache={int(EVAL_WITH_CACHE)}"
+            )
+            val_loss, val_ppl = estimate_val_perplexity(
+                model,
+                soft_prefix,
+                val_data,
+                use_cache=EVAL_WITH_CACHE,
+            )
+            param_count       = loaded_L * model.config.n_embd
 
-        r = {
-            "L":           loaded_L,
-            "m":           M,
-            "val_loss":    round(val_loss, 4),
-            "val_ppl":     round(val_ppl, 2),
-            "param_count": param_count,
-            "task":        TASK,
-            "model_type":  metadata["model_type"],
-            "block_size":  metadata["block_size"],
-            "eval_cache":  int(EVAL_WITH_CACHE),
-        }
-        r.update(get_training_metrics(L, M, TASK))
-        results.append(r)
+            r = {
+                "L":           loaded_L,
+                "m":           M,
+                "lr": LR,
+                "val_loss":    round(val_loss, 4),
+                "val_ppl":     round(val_ppl, 2),
+                "param_count": param_count,
+                "task":        TASK,
+                "model_type":  metadata["model_type"],
+                "block_size":  metadata["block_size"],
+                "eval_cache":  int(EVAL_WITH_CACHE),
+            }
+            r.update(get_training_metrics(L, M, LR, TASK))
+            results.append(r)
 
-        print(f"  L={L:5d}  val_loss={val_loss:.4f}  val_ppl={val_ppl:.2f}  "
-              f"params={param_count:,}  tok/s={r.get('tokens_per_sec', '—')}")
+            print(f"  L={L:5d}  val_loss={val_loss:.4f}  val_ppl={val_ppl:.2f}  "
+                  f"params={param_count:,}  tok/s={r.get('tokens_per_sec', '—')}")
 
 
 print("\n" + "═"*70)

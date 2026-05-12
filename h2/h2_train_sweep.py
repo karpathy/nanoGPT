@@ -11,97 +11,96 @@ N_EMBD = 768
 MAX_POSITIONS = 1024
 
 
-base_max_iters = 2000
-base_warmup = 200
-base_lr_decay = 5000
-base_eval_interval = 250
+# base_warmup = 200
+# base_lr_decay = 5000
+# base_eval_interval = 250
 
 for L in RUN_ORDER:
     for M in M_VALUES:
-        run_name = f"prefix-L{L}-m{M}-{TASK}"
-        out_dir  = f"/kaggle/working/h2_L{L}_m{M}"
-        os.makedirs(out_dir, exist_ok=True)
+        for LR in [0.001, 0.01, 0.1]:
+            run_name = f"prefix-L{L}-m{M}-lr{LR}-{TASK}"
+            out_dir = f"/kaggle/working/h2_L{L}_m{M}_lr{LR}"
+            os.makedirs(out_dir, exist_ok=True)
 
-        print(f"\n{'═'*60}")
-        print(f"  RUN: L={L}  m={M}  task={TASK}")
-        print(f"  out_dir:  {out_dir}")
-        print(f"{'═'*60}")
+            print(f"\n{'═'*60}")
+            print(f"  RUN: L={L}  m={M}  task={TASK}")
+            print(f"  out_dir:  {out_dir}")
+            print(f"{'═'*60}")
 
-        # skip L values that would make effective block_size <= 0
-        if L >= MAX_POSITIONS:
-            print(f"  SKIP: L={L} >= block_size={MAX_POSITIONS} — would give non-positive effective block_size")
-            results.append({
-                "L": L, "status": "SKIPPED",
-                "wall_clock_h": 0
-            })
-            continue
+            # skip L values that would make effective block_size <= 0
+            if L >= MAX_POSITIONS:
+                print(f"  SKIP: L={L} >= block_size={MAX_POSITIONS} — would give non-positive effective block_size")
+                results.append({
+                    "L": L, "status": "SKIPPED",
+                    "wall_clock_h": 0
+                })
+                continue
 
-        extra_flags = [f"--block_size={MAX_POSITIONS}", "--prefix_cache=True"]
-        if L == 0:
-            extra_flags += [
-                "--eval_only=True",
-                "--always_save_checkpoint=True",
-                "--eval_interval=1",
-            ]
-            print("  NOTE: L=0 baseline — eval only, no training")
+            extra_flags = [f"--block_size={MAX_POSITIONS}", "--prefix_cache=True"]
+            if L == 0:
+                extra_flags += [
+                    "--eval_only=True",
+                    "--always_save_checkpoint=True",
+                    "--eval_interval=1",
+                ]
+                print("  NOTE: L=0 baseline — eval only, no training")
 
 
 
-        torch.cuda.reset_peak_memory_stats()
-        t_start = time.time()
+            torch.cuda.reset_peak_memory_stats()
+            t_start = time.time()
 
-        scaled_max_iters = base_max_iters * M
-        scaled_eval_interval = base_eval_interval * M
+            cmd = [
+                "python", "train.py", "config/h1_wikitext2.py",
+                f"--prefix_len={L}",
+                f"--prefix_update_period={M}",
+                f"--max_iters=2500",
+                f"--learning_rate={LR}",
+                f"--eval_interval=250",
+                f"--out_dir={out_dir}",
+                f"--prefix_type=soft",
+                f"--wandb_run_name={run_name}",
+                f"--prefix_cache=True",
+                ]
 
-        cmd = [
-            "python", "train.py", "config/h1_wikitext2.py",
-            f"--prefix_len={L}",
-            f"--prefix_update_period={M}",
-            f"--max_iters={scaled_max_iters}",
-            f"--eval_interval={scaled_eval_interval}",
-            f"--out_dir={out_dir}",
-            f"--prefix_type=soft",
-            f"--wandb_run_name={run_name}",
-            ]
+            proc = subprocess.run(cmd, capture_output=False, text=True)
+            wall_clock = time.time() - t_start
 
-        proc = subprocess.run(cmd, capture_output=False, text=True)
-        wall_clock = time.time() - t_start
+            if proc.returncode != 0:
+                print(f"  FAILED — returncode {proc.returncode}")
+                training_errors.append(L)
+                results.append({
+                    "L": L, "status": "FAILED",
+                    "wall_clock_h": round(wall_clock / 3600, 2)
+                })
+                continue
 
-        if proc.returncode != 0:
-            print(f"  FAILED — returncode {proc.returncode}")
-            training_errors.append(L)
-            results.append({
-                "L": L, "status": "FAILED",
-                "wall_clock_h": round(wall_clock / 3600, 2)
-            })
-            continue
+            prefix_path = os.path.join(out_dir, "prefix_P.pt")
+            if os.path.exists(prefix_path):
+                ckpt     = torch.load(prefix_path, map_location="cpu")
+                val_loss = float(ckpt.get("val_loss", float("nan")))
+                val_ppl  = math.exp(val_loss) if not math.isnan(val_loss) else float("nan")
+                peak_mem = float(ckpt.get("peak_gpu_mem_gb", 0.0))
 
-        prefix_path = os.path.join(out_dir, "prefix_P.pt")
-        if os.path.exists(prefix_path):
-            ckpt     = torch.load(prefix_path, map_location="cpu")
-            val_loss = float(ckpt.get("val_loss", float("nan")))
-            val_ppl  = math.exp(val_loss) if not math.isnan(val_loss) else float("nan")
-            peak_mem = float(ckpt.get("peak_gpu_mem_gb", 0.0))
-
-            results.append({
-                "L":            L,
-                "m":            M,
-                "val_loss":     round(val_loss, 4),
-                "val_ppl":      round(val_ppl, 2),
-                "param_count":  L * N_EMBD,
-                "cache":        "on",
-                "wall_clock_h": round(wall_clock / 3600, 2),
-                "peak_mem_gb":  round(peak_mem, 2),
-                "status":       "OK",
-            })
-            print(f"  DONE — val_loss={val_loss:.4f}  val_ppl={val_ppl:.2f}  "
-                  f"time={wall_clock/3600:.2f}h  mem={peak_mem:.2f}GB")
-        else:
-            print(f"  WARNING: no checkpoint at {prefix_path}")
-            results.append({
-                "L": L, "status": "NO_CKPT",
-                "wall_clock_h": round(wall_clock / 3600, 2)
-            })
+                results.append({
+                    "L":            L,
+                    "m":            M,
+                    "val_loss":     round(val_loss, 4),
+                    "val_ppl":      round(val_ppl, 2),
+                    "param_count":  L * N_EMBD,
+                    "cache":        "on",
+                    "wall_clock_h": round(wall_clock / 3600, 2),
+                    "peak_mem_gb":  round(peak_mem, 2),
+                    "status":       "OK",
+                })
+                print(f"  DONE — val_loss={val_loss:.4f}  val_ppl={val_ppl:.2f}  "
+                      f"time={wall_clock/3600:.2f}h  mem={peak_mem:.2f}GB")
+            else:
+                print(f"  WARNING: no checkpoint at {prefix_path}")
+                results.append({
+                    "L": L, "status": "NO_CKPT",
+                    "wall_clock_h": round(wall_clock / 3600, 2)
+                })
 
 print(f"\n{'═'*60}")
 print("  H2 TRAINING SWEEP COMPLETE")
