@@ -2,8 +2,8 @@ import torch, math, json, os
 import wandb
 
 # L_VALUES  = [0, 64, 100, 256, 512, 1024, 2048]
-L_VALUES  = [0, 64, 100, 256, 512]
-M_VALUES = [20]
+L_VALUES  = [100, 0, 16, 32 ,64, 80, 256, 340, 512]
+M_VALUES = [1, 5, 10, 20]
 TASK      = "wikitext2"
 DEVICE    = "cuda"
 
@@ -22,12 +22,12 @@ DROPOUT = 0.0
 MODEL_TYPE = 'gpt2'
 MAX_POSITIONS = 1024
 EVAL_WITH_CACHE = True
-LR_VALUES = [0.001, 0.01, 0.1]
+LR = 0.1 # established as best from LR sweep
 
-def download_artifact(L, m, lr, task):
-    if L == 0:
+def download_artifact(L, m, task):
+    if L == 0 and M > M_VALUES[0]:
         return "baseline"
-    artifact_name = f"{ENTITY}/{PROJECT}/prefix-L{L}-m{m}-lr{lr}-{task}:latest"
+    artifact_name = f"{ENTITY}/{PROJECT}/prefix-L{L}-m{m}-{task}:latest"
     try:
         artifact = api.artifact(artifact_name, type="model")
         local_dir = artifact.download()
@@ -37,7 +37,7 @@ def download_artifact(L, m, lr, task):
         print(f"  Could not download artifact for L={L}: {e}")
         return None
 
-def load_checkpoint(L, m, lr, task):
+def load_checkpoint(L, m, task):
     if L == 0:
         # baseline — just frozen GPT-2, no prefix
         model = GPT.from_pretrained(MODEL_TYPE, dict(dropout=DROPOUT))
@@ -51,7 +51,7 @@ def load_checkpoint(L, m, lr, task):
             "prefix_update_period": 1,
         }
 
-    local_dir = download_artifact(L, m, lr, task)
+    local_dir = download_artifact(L, m, task)
     if local_dir is None:
         return None, None, None
 
@@ -101,8 +101,8 @@ def load_checkpoint(L, m, lr, task):
     }
 
 
-def get_training_metrics(L, m, lr, task):
-    run_name = f"prefix-L{L}-m{m}-lr{lr}-{task}"
+def get_training_metrics(L, m, task):
+    run_name = f"prefix-L{L}-m{m}-{task}"
     try:
         runs = api.runs(
             f"{ENTITY}/{PROJECT}",
@@ -175,12 +175,11 @@ results  = []
 
 for L in L_VALUES:
     for M in M_VALUES:
-        for LR in LR_VALUES:
-            if L == 0 and (M > 1 or LR != LR_VALUES[0]):
+            if L == 0:
                 continue  # only need one baseline eval
 
             print(f"\nEvaluating L={L}, m={M}, lr={LR}...")
-            model, soft_prefix, metadata = load_checkpoint(L, M, LR, TASK)
+            model, soft_prefix, metadata = load_checkpoint(L, M, TASK)
             if model is None:
                 continue
             loaded_L = metadata["prefix_len"]
@@ -210,7 +209,7 @@ for L in L_VALUES:
                 "block_size":  metadata["block_size"],
                 "eval_cache":  int(EVAL_WITH_CACHE),
             }
-            r.update(get_training_metrics(L, M, LR, TASK))
+            r.update(get_training_metrics(L, M, TASK))
             results.append(r)
 
             print(f"  L={L:5d}  val_loss={val_loss:.4f}  val_ppl={val_ppl:.2f}  "
