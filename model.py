@@ -79,17 +79,62 @@ class MLP(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
-        self.gelu    = nn.GELU()
-        self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
+        self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
+        self.activation_name = config.activation
+        if self.activation_name == "gelu":
+            self.activation = nn.GELU()
+        elif self.activation_name == "relu":
+            self.activation = nn.ReLU()
+        elif self.activation_name == "silu":
+            self.activation = nn.SiLU()
+        else:
+            raise ValueError(f"unknown activation: {self.activation_name}")
+        self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
         x = self.c_fc(x)
-        x = self.gelu(x)
+        x = self.activation(x)
         x = self.c_proj(x)
         x = self.dropout(x)
         return x
+
+
+def load_balancing_loss(gate_probs, topk_idx, n_experts):
+    """Switch-style auxiliary loss that encourages uniform expert usage."""
+    one_hot = F.one_hot(topk_idx, num_classes=n_experts).float()
+    f_i = one_hot.sum(dim=(0, 1, 2)) / one_hot.sum().clamp_min(1.0)
+    p_i = gate_probs.mean(dim=(0, 1))
+    return n_experts * (f_i * p_i).sum()
+
+
+class ToyMoEMLP(nn.Module):
+
+    def __init__(self, config):
+        super().__init__()
+        self.n_experts = config.moe_n_experts
+        self.top_k = config.moe_top_k
+        if self.top_k < 1 or self.top_k > self.n_experts:
+            raise ValueError(f"moe_top_k must be in [1, {self.n_experts}], got {self.top_k}")
+        self.gate = nn.Linear(config.n_embd, self.n_experts, bias=False)
+        self.experts = nn.ModuleList([MLP(config) for _ in range(self.n_experts)])
+        self.aux_loss = torch.tensor(0.0)
+
+    def forward(self, x):
+        gate_logits = self.gate(x)
+        gate_probs = F.softmax(gate_logits, dim=-1)
+        topk_w, topk_i = gate_probs.topk(self.top_k, dim=-1)
+        topk_w = topk_w / topk_w.sum(dim=-1, keepdim=True).clamp_min(1e-9)
+
+        out = torch.zeros_like(x)
+        for eid in range(self.n_experts):
+            weight = (topk_w * (topk_i == eid)).sum(dim=-1, keepdim=True)
+            if torch.count_nonzero(weight) == 0:
+                continue
+            out = out + self.experts[eid](x) * weight
+
+        self.aux_loss = load_balancing_loss(gate_probs, topk_i, self.n_experts)
+        return out
 
 class Block(nn.Module):
 
@@ -98,11 +143,18 @@ class Block(nn.Module):
         self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
         self.attn = CausalSelfAttention(config)
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
-        self.mlp = MLP(config)
+        self.mlp = ToyMoEMLP(config) if config.use_moe else MLP(config)
+        self.norm_position = config.norm_position
 
     def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
-        x = x + self.mlp(self.ln_2(x))
+        if self.norm_position == "pre":
+            x = x + self.attn(self.ln_1(x))
+            x = x + self.mlp(self.ln_2(x))
+        elif self.norm_position == "post":
+            x = self.ln_1(x + self.attn(x))
+            x = self.ln_2(x + self.mlp(x))
+        else:
+            raise ValueError(f"unknown norm_position: {self.norm_position}")
         return x
 
 @dataclass
@@ -114,6 +166,12 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    activation: str = "gelu"
+    norm_position: str = "pre"
+    use_moe: bool = False
+    moe_n_experts: int = 4
+    moe_top_k: int = 2
+    moe_aux_loss_weight: float = 0.01
 
 class GPT(nn.Module):
 
@@ -122,6 +180,8 @@ class GPT(nn.Module):
         assert config.vocab_size is not None
         assert config.block_size is not None
         self.config = config
+        self.last_ce_loss = None
+        self.last_aux_loss = torch.tensor(0.0)
 
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
@@ -184,13 +244,27 @@ class GPT(nn.Module):
         if targets is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
+            ce_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
+            aux_loss = self.get_moe_aux_loss()
+            loss = ce_loss + self.config.moe_aux_loss_weight * aux_loss
+            self.last_ce_loss = ce_loss.detach()
+            self.last_aux_loss = aux_loss.detach()
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(x[:, [-1], :]) # note: using list [-1] to preserve the time dim
             loss = None
 
         return logits, loss
+
+    def get_moe_aux_loss(self):
+        losses = []
+        for block in self.transformer.h:
+            aux_loss = getattr(block.mlp, "aux_loss", None)
+            if aux_loss is not None:
+                losses.append(aux_loss)
+        if not losses:
+            return torch.tensor(0.0, device=self.lm_head.weight.device)
+        return torch.stack(losses).mean()
 
     def crop_block_size(self, block_size):
         # model surgery to decrease the block size if necessary
@@ -260,7 +334,7 @@ class GPT(nn.Module):
 
         return model
 
-    def configure_optimizers(self, weight_decay, learning_rate, betas, device_type):
+    def configure_optimizers(self, weight_decay, learning_rate, betas, device_type, optimizer_name="adamw", momentum=0.9):
         # start with all of the candidate parameters
         param_dict = {pn: p for pn, p in self.named_parameters()}
         # filter out those that do not require grad
@@ -277,12 +351,18 @@ class GPT(nn.Module):
         num_nodecay_params = sum(p.numel() for p in nodecay_params)
         print(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
         print(f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
-        # Create AdamW optimizer and use the fused version if it is available
-        fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
-        use_fused = fused_available and device_type == 'cuda'
-        extra_args = dict(fused=True) if use_fused else dict()
-        optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
-        print(f"using fused AdamW: {use_fused}")
+        if optimizer_name == "adamw":
+            # Create AdamW optimizer and use the fused version if it is available
+            fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
+            use_fused = fused_available and device_type == 'cuda'
+            extra_args = dict(fused=True) if use_fused else dict()
+            optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
+            print(f"using fused AdamW: {use_fused}")
+        elif optimizer_name == "sgd":
+            optimizer = torch.optim.SGD(optim_groups, lr=learning_rate, momentum=momentum)
+            print(f"using SGD with momentum={momentum}")
+        else:
+            raise ValueError(f"unknown optimizer: {optimizer_name}")
 
         return optimizer
 

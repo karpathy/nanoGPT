@@ -1,0 +1,3 @@
+dataset: shakespeare_char
+batch_size: 8
+gradient_accumulation_steps: 1
