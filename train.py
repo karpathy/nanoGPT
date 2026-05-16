@@ -85,6 +85,9 @@ prefix_cache = True         # whether to cache prefix KV between updates
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
 config = {k: globals()[k] for k in config_keys} # will be useful for logging
+# Fix: ensure eval_only is a proper boolean
+if isinstance(eval_only, str):
+    eval_only = eval_only.lower() in ('true', '1', 'yes')
 # -----------------------------------------------------------------------------
 
 # various inits, derived attributes, I/O setup
