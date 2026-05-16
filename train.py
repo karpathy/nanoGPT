@@ -97,6 +97,12 @@ def main(cfg: DictConfig):
         bias=cfg.model.bias,
         vocab_size=meta_vocab_size if meta_vocab_size is not None else 50304,
         dropout=cfg.model.dropout,
+        activation=cfg.model.activation,
+        norm_position=cfg.model.norm_position,
+        use_moe=cfg.model.use_moe,
+        moe_n_experts=cfg.model.moe_n_experts,
+        moe_top_k=cfg.model.moe_top_k,
+        moe_aux_loss_weight=cfg.model.moe_aux_loss_weight,
     )
     print("Initializing a new model from scratch")
     gptconf = GPTConfig(**model_args)
@@ -109,6 +115,8 @@ def main(cfg: DictConfig):
         cfg.optim.learning_rate,
         (cfg.optim.beta1, cfg.optim.beta2),
         device_type,
+        cfg.optim.name,
+        cfg.optim.momentum,
     )
 
     if cfg.compile:
@@ -146,11 +154,16 @@ def main(cfg: DictConfig):
 
     if cfg.wandb_log and master_process:
         import wandb
+        run_notes = f"hydra config: {hydra_cfg_path}"
+        if cfg.wandb_notes:
+            run_notes = f"{cfg.wandb_notes}\n{run_notes}"
         wandb.init(
             project=cfg.wandb_project,
             name=cfg.wandb_run_name,
+            group=cfg.wandb_group,
+            tags=list(cfg.wandb_tags),
             config=OmegaConf.to_container(cfg, resolve=True),
-            notes=f"hydra config: {hydra_cfg_path}",
+            notes=run_notes,
         )
 
     raw_model = model.module if ddp else model
@@ -169,7 +182,11 @@ def main(cfg: DictConfig):
             print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
             if cfg.wandb_log:
                 import wandb
-                wandb.log({"iter": iter_num, "train/loss": losses["train"], "val/loss": losses["val"], "lr": lr})
+                aux_loss = getattr(raw_model, "last_aux_loss", None)
+                log_payload = {"iter": iter_num, "train/loss": losses["train"], "val/loss": losses["val"], "lr": lr}
+                if aux_loss is not None:
+                    log_payload["moe/aux_loss"] = float(aux_loss.item())
+                wandb.log(log_payload)
             if losses["val"] < best_val_loss:
                 best_val_loss = losses["val"]
                 if iter_num > 0:
@@ -208,7 +225,14 @@ def main(cfg: DictConfig):
             print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
             if cfg.wandb_log and master_process:
                 import wandb
-                wandb.log({"iter": iter_num, "train/loss": lossf, "lr": lr, "mfu": running_mfu * 100})
+                aux_loss = getattr(raw_model, "last_aux_loss", None)
+                ce_loss = getattr(raw_model, "last_ce_loss", None)
+                log_payload = {"iter": iter_num, "train/loss": lossf, "lr": lr, "mfu": running_mfu * 100}
+                if ce_loss is not None:
+                    log_payload["train/ce_loss"] = float(ce_loss.item())
+                if aux_loss is not None:
+                    log_payload["moe/aux_loss"] = float(aux_loss.item())
+                wandb.log(log_payload)
 
         if iter_num > 0 and iter_num % cfg.checkpoint_interval == 0 and master_process:
             ckpt = {"model": raw_model.state_dict(), "optimizer": optimizer.state_dict(),

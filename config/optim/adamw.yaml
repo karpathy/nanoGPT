@@ -1,3 +1,4 @@
+name: adamw
 learning_rate: 6e-4
 max_iters: 500
 weight_decay: 0.1
@@ -8,3 +9,4 @@ decay_lr: true
 warmup_iters: 100
 lr_decay_iters: 500
 min_lr: 6e-5
+momentum: 0.9

@@ -17,3 +17,6 @@ compile: false
 wandb_log: false
 wandb_project: nanogpt
 wandb_run_name: nanogpt-run
+wandb_group: week3
+wandb_tags: []
+wandb_notes: ""
