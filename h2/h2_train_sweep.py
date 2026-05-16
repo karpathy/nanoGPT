@@ -37,7 +37,7 @@ for L in RUN_ORDER:
                 })
                 continue
 
-            extra_flags = [f"--block_size={MAX_POSITIONS}", "--prefix_cache=True"]
+            extra_flags = []
             if L == 0:
                 extra_flags += [
                     "--eval_only=True",
@@ -59,10 +59,11 @@ for L in RUN_ORDER:
                 f"--learning_rate={LR}",
                 f"--eval_interval=250",
                 f"--out_dir={out_dir}",
+                f"--block_size={MAX_POSITIONS}",
                 f"--prefix_type=soft",
                 f"--wandb_run_name={run_name}",
                 f"--prefix_cache=True",
-                ]
+                ] + extra_flags
 
             proc = subprocess.run(cmd, capture_output=False, text=True)
             wall_clock = time.time() - t_start
