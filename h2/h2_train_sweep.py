@@ -57,7 +57,6 @@ for L in RUN_ORDER:
                 f"--prefix_update_period={M}",
                 f"--max_iters=2500",
                 f"--learning_rate={LR}",
-                f"--eval_interval=250",
                 f"--out_dir={out_dir}",
                 f"--block_size={MAX_POSITIONS}",
                 f"--prefix_type=soft",
