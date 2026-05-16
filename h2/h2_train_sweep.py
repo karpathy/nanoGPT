@@ -1,7 +1,7 @@
 import subprocess, os, time, torch, json, math
 
 # RUN_ORDER = [100, 0, 64, 256, 512, 1024, 2048]  # L=100 first — smoke test
-RUN_ORDER = [100, 0, 16, 32 ,64, 80, 256, 340, 512]  # L=100 first — smoke test
+RUN_ORDER = [0, 16, 32 ,64, 80, 256, 340, 512]  # L=100 first — smoke test
 M_VALUES = [1, 5, 10, 20]
 TASK      = "wikitext2"
 
@@ -17,6 +17,8 @@ LR = 0.1 # established as best from LR sweep
 
 for L in RUN_ORDER:
     for M in M_VALUES:
+            if L == 0 and M > M_VALUES[0]:
+                continue
             run_name = f"prefix-L{L}-m{M}-{TASK}"
             out_dir = f"/kaggle/working/h2_L{L}_m{M}"
             os.makedirs(out_dir, exist_ok=True)

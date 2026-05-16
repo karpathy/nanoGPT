@@ -2,7 +2,7 @@ import torch, math, json, os
 import wandb
 
 # L_VALUES  = [0, 64, 100, 256, 512, 1024, 2048]
-L_VALUES  = [100, 0, 16, 32 ,64, 80, 256, 340, 512]
+L_VALUES  = [ 0, 16, 32 ,64, 80, 256, 340, 512]
 M_VALUES = [1, 5, 10, 20]
 TASK      = "wikitext2"
 DEVICE    = "cuda"
@@ -25,7 +25,7 @@ EVAL_WITH_CACHE = True
 LR = 0.1 # established as best from LR sweep
 
 def download_artifact(L, m, task):
-    if L == 0 and M > M_VALUES[0]:
+    if L == 0:
         return "baseline"
     artifact_name = f"{ENTITY}/{PROJECT}/prefix-L{L}-m{m}-{task}:latest"
     try:
@@ -175,8 +175,8 @@ results  = []
 
 for L in L_VALUES:
     for M in M_VALUES:
-            if L == 0:
-                continue  # only need one baseline eval
+            if L == 0 and M > M_VALUES[0]:
+                continue
 
             print(f"\nEvaluating L={L}, m={M}, lr={LR}...")
             model, soft_prefix, metadata = load_checkpoint(L, M, TASK)
