@@ -554,51 +554,38 @@ def _log_pass(d): pass_log_f.write(json.dumps(d) + '\n')
 # -----------------------------------------------------------------------------
 # resume detection
 # -----------------------------------------------------------------------------
+# For the dual-source scheme, per-pass snapshots are NOT the attribution
+# objects — the model's {W_s, W_w} state IS the per-source decomposition.
+# So we only keep a rolling latest.pt.zst (overwritten at each pass boundary,
+# bundles model + optimizer + iter_num) plus a final.pt.zst at iter=max_iters.
+# Total disk for a full run: ~160 MB instead of ~13 GB.
 resume_from_pass_idx = 0
 resume_iter_num = 0
 running_total_bytes = 0
-existing_snaps = sorted(glob.glob(os.path.join(out_dir, 'pass_[0-9]*_*.pt.zst')))
-if existing_snaps:
-    latest_path = existing_snaps[-1]
-    m = re.search(r'pass_(\d+)_', os.path.basename(latest_path))
-    if not m:
-        raise RuntimeError(f"cannot parse pass index from {latest_path}")
-    latest_pass_idx = int(m.group(1))
-    latest_end_iter = min((latest_pass_idx + 1) * iters_per_pass, max_iters)
-    if latest_end_iter >= max_iters:
-        print(f"[resume] {out_dir} already contains a completed run "
-              f"({len(existing_snaps)} passes). Nothing to do.")
-        sys.exit(0)
-    print(f"[resume] found {len(existing_snaps)} existing pass snapshots; "
-          f"latest is pass {latest_pass_idx} ending at iter {latest_end_iter}")
+final_path = os.path.join(out_dir, 'final.pt.zst')
+latest_path = os.path.join(out_dir, 'latest.pt.zst')
+if os.path.exists(final_path):
+    print(f"[resume] {out_dir} already contains final.pt.zst — run complete. Nothing to do.")
+    sys.exit(0)
+elif os.path.exists(latest_path):
+    print(f"[resume] loading latest.pt.zst")
     with open(latest_path, 'rb') as f:
         payload = torch.load(io.BytesIO(_decompress(f.read())),
                              map_location=device, weights_only=False)
     raw_model = model._orig_mod if hasattr(model, '_orig_mod') else model
     raw_model.load_state_dict(payload['state_dict'])
-    opt_path = os.path.join(out_dir, 'latest_optimizer.pt.zst')
-    if os.path.exists(opt_path):
-        with open(opt_path, 'rb') as f:
-            opt_payload = torch.load(io.BytesIO(_decompress(f.read())),
-                                     map_location=device, weights_only=False)
-        optimizer.load_state_dict(opt_payload['state_dict'])
-        print(f"[resume] restored optimizer state from {opt_path}")
-    else:
-        print(f"[resume] WARNING: no latest_optimizer.pt.zst -- optimizer momentum re-warms")
-    resume_from_pass_idx = latest_pass_idx + 1
-    resume_iter_num = latest_end_iter
-    running_total_bytes = sum(os.path.getsize(p)
-                              for p in glob.glob(os.path.join(out_dir, '*.pt.zst')))
+    if 'optimizer' in payload:
+        optimizer.load_state_dict(payload['optimizer'])
+        print(f"[resume] restored optimizer state")
+    resume_from_pass_idx = payload['pass_idx'] + 1
+    resume_iter_num = payload['iter_num']
+    running_total_bytes = os.path.getsize(latest_path)
     print(f"[resume] continuing from pass {resume_from_pass_idx}, iter {resume_iter_num + 1}")
 else:
-    # fresh run: dump the init snapshot so the (alpha=1, beta=0) starting point
-    # is recoverable. W_w is all zeros here so this snapshot doubles as a
-    # "vanilla nanoGPT init" checkpoint.
-    init_sd = _state_dict_cpu_fp32(model._orig_mod if hasattr(model, '_orig_mod') else model)
-    init_path = os.path.join(out_dir, 'pass_init.pt.zst')
-    init_bytes = _save_snapshot(init_sd, init_path)
-    print(f"[init] init snapshot: {init_bytes/1e6:.2f} MB -> {init_path}")
-    running_total_bytes = init_bytes
+    # Fresh run: no init snapshot needed. At iter 0 W_s == W_w byte-identically
+    # so the model is the vanilla nanoGPT init at every alpha — fully reproducible
+    # from `DualGPT(cfg)` with `torch.manual_seed(seed)`. No disk cost on start.
+    pass
 
 t_run_start = time.time()
 t_last_100 = t_run_start
@@ -643,19 +630,31 @@ for pass_idx in range(resume_from_pass_idx, total_passes):
         snapshot_bytes = 0
         snapshot_path = None
         if iter_num == end_iter:
+            # Save at every pass boundary, but to a single rolling file
+            # (latest.pt.zst) that's overwritten each time. At iter=max_iters
+            # also write a separate final.pt.zst. Combined payload: model
+            # state_dict + optimizer state + iter/pass pointer + config.
             raw_model = model._orig_mod if hasattr(model, '_orig_mod') else model
             curr_sd = _state_dict_cpu_fp32(raw_model)
+            is_final = (iter_num == max_iters)
             snapshot_path = os.path.join(
-                out_dir, f'pass_{pass_idx:04d}_{corpus}.pt.zst')
-            snapshot_bytes = _save_snapshot(curr_sd, snapshot_path)
-            running_total_bytes += snapshot_bytes
-            # rolling optimizer state for resume
-            opt_path = os.path.join(out_dir, 'latest_optimizer.pt.zst')
+                out_dir, 'final.pt.zst' if is_final else 'latest.pt.zst')
             buf = io.BytesIO()
-            torch.save({'state_dict': optimizer.state_dict(),
-                        'pass_idx': pass_idx, 'iter_num': iter_num}, buf)
-            with open(opt_path, 'wb') as f:
-                f.write(_compress(buf.getvalue()))
+            torch.save({'kind': 'dual_checkpoint',
+                        'state_dict': curr_sd,
+                        'optimizer': optimizer.state_dict(),
+                        'iter_num': iter_num,
+                        'pass_idx': pass_idx,
+                        'corpus_at_save': corpus,
+                        'config': config}, buf)
+            blob = _compress(buf.getvalue())
+            with open(snapshot_path, 'wb') as f:
+                f.write(blob)
+            snapshot_bytes = len(blob)
+            # latest.pt.zst is overwritten, so don't accumulate its size into
+            # running_total_bytes; only final.pt.zst adds to disk.
+            if is_final:
+                running_total_bytes += snapshot_bytes
 
         t1 = time.time()
         elapsed = t1 - t_run_start
