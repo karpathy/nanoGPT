@@ -1,4 +1,50 @@
 
+# abcGPT
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/iamtrask/abcGPT/blob/main/train.py)
+
+abcGPT is a fork of [karpathy/nanoGPT](https://github.com/karpathy/nanoGPT) (forked at commit [`3adf61e`](https://github.com/karpathy/nanoGPT/commit/3adf61e154c3fe3fca428ad6bc3818b27a3b8291)) that adds a char-level training variant trained on **Shakespeare + Wikipedia combined** instead of Shakespeare alone. It is a companion to Chapter II of [attribution-based-control.ai](https://attribution-based-control.ai/), which uses it for per-source attribution research.
+
+To train the new variant:
+
+```sh
+python data/shakespeare_wiki_char/prepare.py
+python train.py config/train_shakespeare_wiki_char.py
+```
+
+The new prepare script downloads tinyshakespeare and the first ~1.5 MB of the wiki-abc 100MB tier (HTTP range), normalizes Shakespeare to wiki-abc's lowercased + space-padded-punctuation surface form (while preserving newlines so play-script structure survives), concatenates the two with a `===` separator, and writes `train.bin`/`val.bin`/`meta.pkl` exactly like nanoGPT's `shakespeare_char/prepare.py`. The combined corpus is ~2.7M chars / 57-char ASCII vocab; training is sized to stay in the Colab T4 ballpark of nanoGPT's shakespeare_char run.
+
+## per-pass alternating trainer with per-iter weight-diff logging
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/iamtrask/abcGPT/blob/main/notebooks/train_diff_logging.ipynb)
+
+`train_diff_logging.py` is an additive trainer that runs `shakespeare_wiki_char` in **per-pass alternation**: a "pass" is a fixed-length block of iters drawn entirely from one corpus. The default schedule is `iters_per_pass=250` and `max_iters=7500`, giving 30 passes total — `shake -> wiki -> shake -> ...` (15 of each). At the end of every pass a full fp32 `state_dict` is written to `pass_PPPP_<corpus>.pt.zst`; these snapshots are the **primary attribution objects**. Configure the alternation with `--iters_per_pass` and `--first_pass_corpus={shake,wiki}` (default `shake`).
+
+Two log files are emitted: `pass_log.jsonl` (one row per pass: `pass_idx, corpus, start_iter, end_iter, train_loss_mean, val_loss_at_pass_end, snapshot_path, snapshot_size_bytes, elapsed_seconds`) and `iter_log.jsonl` (one row per iter, including the `corpus` it drew from).
+
+As a **side artifact** for fine-grained "how far back can attribution reach" sweeps, the trainer also writes a compressed `state_dict_k - state_dict_{k-1}` per iter, so any iter's state can be reconstructed by loading the nearest preceding pass snapshot and applying diffs forward. Defaults are lossless fp32 + zstd-3; `--quantize_diffs=True` switches to int8 per-tensor quantized diffs (pass snapshots stay fp32 so rolling error can't accumulate). A 5-iter warmup reports step time vs save overhead before the main loop. The Colab notebook above mounts Google Drive and writes each run to `MyDrive/abcGPT/runs/<timestamp>/`.
+
+Disk cost (10.7M-param model, 7500-iter run, defaults):
+
+| artifact | count | size each | total |
+| --- | ---: | ---: | ---: |
+| pass snapshots (fp32 zstd) | 30 | ~43 MB | ~1.3 GB |
+| per-iter diffs, fp32 (default) | 7500 | ~35 MB | ~260 GB |
+| per-iter diffs, int8 (`--quantize_diffs=True`) | 7500 | ~9 MB | ~70 GB |
+
+zstd on dense fp32 noise compresses only ~1.2x, which is why per-iter diffs dominate. The trainer prints a running disk total every 100 iters so you can ctrl-C if the projection blows your quota.
+
+```sh
+python data/shakespeare_wiki_char/prepare.py
+python train_diff_logging.py config/train_shakespeare_wiki_char.py --out_dir=runs/$(date +%Y%m%d-%H%M%S)
+# round-trip sanity check (no GPU needed): 3 passes x 2 iters on a tiny model
+python train_diff_logging.py --verify_roundtrip=True
+```
+
+Everything below is upstream nanoGPT.
+
+---
+
 # nanoGPT
 
 ![nanoGPT](assets/nanogpt.jpg)

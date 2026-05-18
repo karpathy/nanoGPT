@@ -8,5 +8,7 @@ __pycache__/
 *.pt
 *.pyc
 input.txt
+data/shakespeare_wiki_char/shakespeare.txt
+data/shakespeare_wiki_char/wiki.txt
 env/
 venv/
