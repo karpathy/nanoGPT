@@ -316,6 +316,69 @@ def _build_val_loader(data_dir, block_size, batch_size, device, device_type):
     return loader
 
 
+def _build_per_corpus_val_loaders(data_dir, block_size, batch_size, device, device_type,
+                                   shake_val_fraction=0.1):
+    """Build separate shake-val and wiki-val loaders.
+
+    The shake-val loader samples random windows from the last `shake_val_fraction`
+    of shake's range in train.bin. The wiki-val loader uses val.bin (which is the
+    last 10% of the combined train+val stream — under prepare.py's shake-then-wiki
+    concatenation, this is exclusively wiki tokens).
+
+    Caveat: training currently does NOT exclude the shake-val range, so there is
+    some leakage in shake-val for in-flight runs. The wiki-val region is properly
+    disjoint from training because it lives in val.bin, not train.bin.
+    """
+    train_path = os.path.join(data_dir, 'train.bin')
+    val_path = os.path.join(data_dir, 'val.bin')
+    meta_path = os.path.join(data_dir, 'meta.pkl')
+    with open(meta_path, 'rb') as f:
+        meta = pickle.load(f)
+    stoi = meta['stoi']
+    SEPARATOR = "\n\n===\n\n"
+    sep_ids = np.array([stoi[c] for c in SEPARATOR], dtype=np.uint16)
+    train_ids = np.memmap(train_path, dtype=np.uint16, mode='r')
+    sep_idx = _find_separator_index(np.asarray(train_ids), sep_ids)
+    if sep_idx < 0:
+        raise RuntimeError("could not locate SEPARATOR in train.bin")
+
+    shake_end = sep_idx
+    shake_val_size = int(shake_end * shake_val_fraction)
+    shake_val_start = shake_end - shake_val_size
+    shake_val_end = shake_end
+
+    def shake_val():
+        data = np.memmap(train_path, dtype=np.uint16, mode='r')
+        length = shake_val_end - shake_val_start
+        ix = torch.randint(length - block_size, (batch_size,)) + shake_val_start
+        x = torch.stack([torch.from_numpy(
+            data[int(i):int(i) + block_size].astype(np.int64)) for i in ix])
+        y = torch.stack([torch.from_numpy(
+            data[int(i) + 1:int(i) + 1 + block_size].astype(np.int64)) for i in ix])
+        if device_type == 'cuda':
+            x = x.pin_memory().to(device, non_blocking=True)
+            y = y.pin_memory().to(device, non_blocking=True)
+        else:
+            x = x.to(device); y = y.to(device)
+        return x, y
+
+    def wiki_val():
+        data = np.memmap(val_path, dtype=np.uint16, mode='r')
+        ix = torch.randint(len(data) - block_size, (batch_size,))
+        x = torch.stack([torch.from_numpy(
+            data[int(i):int(i) + block_size].astype(np.int64)) for i in ix])
+        y = torch.stack([torch.from_numpy(
+            data[int(i) + 1:int(i) + 1 + block_size].astype(np.int64)) for i in ix])
+        if device_type == 'cuda':
+            x = x.pin_memory().to(device, non_blocking=True)
+            y = y.pin_memory().to(device, non_blocking=True)
+        else:
+            x = x.to(device); y = y.to(device)
+        return x, y
+
+    return shake_val, wiki_val
+
+
 # -----------------------------------------------------------------------------
 # main
 # -----------------------------------------------------------------------------
@@ -349,6 +412,8 @@ if os.path.exists(meta_path):
 wiki_batch, shake_batch = _build_split_loaders(
     data_dir, block_size, batch_size, device, device_type)
 val_batch = _build_val_loader(data_dir, block_size, batch_size, device, device_type)
+shake_val_batch, wiki_val_batch = _build_per_corpus_val_loaders(
+    data_dir, block_size, batch_size, device, device_type)
 
 
 # Mixed-mode loaders: half-size batches from each corpus, concatenated per iter.
@@ -554,20 +619,33 @@ if verify_dual:
 
 
 def estimate_val_loss():
-    """Pass-boundary eval on val.bin at (alpha=0.5, beta=0.5) — the centroid
-    of the alpha + beta = 1 line; the equally-mixed model is the natural
-    reference point for the dual-slot scheme."""
+    """Per-corpus val eval at (alpha=0.5, beta=0.5). Returns dict
+    {'shake': ..., 'wiki': ..., 'mean': ...}.
+
+    Note: under the prepare.py concatenation (shake + separator + wiki + 90/10
+    split), val.bin is the all-wiki tail. To get a shake val signal we sample
+    from the last 10% of shake's range in train.bin via shake_val_batch. There
+    is some training leakage in the shake-val region for runs that didn't
+    explicitly carve out a shake-val split during prepare; the wiki-val signal
+    is properly disjoint because it lives in val.bin."""
     model.eval()
-    losses = torch.zeros(eval_iters)
+    s_losses = torch.zeros(eval_iters)
+    w_losses = torch.zeros(eval_iters)
     set_mix(model, 0.5, 0.5)
     with torch.no_grad():
         for k in range(eval_iters):
-            X, Y = val_batch()
+            X, Y = shake_val_batch()
             with ctx:
                 _, loss = model(X, Y)
-            losses[k] = loss.item()
+            s_losses[k] = loss.item()
+            X, Y = wiki_val_batch()
+            with ctx:
+                _, loss = model(X, Y)
+            w_losses[k] = loss.item()
     model.train()
-    return float(losses.mean())
+    s = float(s_losses.mean())
+    w = float(w_losses.mean())
+    return {'shake': s, 'wiki': w, 'mean': 0.5 * (s + w)}
 
 
 def get_lr(it):
@@ -590,13 +668,16 @@ meta_out = {
     'param_count': sum(p.numel() for p in {id(p): p for p in model.parameters()}.values()),
     'have_zstd': _HAVE_ZSTD,
     'created': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
-    'scheme': 'dual-slot-per-pass-alternation',
+    'scheme': ('dual-slot-mixed-batch' if batch_mode == 'mixed'
+               else 'dual-slot-per-pass-alternation'),
+    'batch_mode': batch_mode,
     'total_passes': total_passes,
     'iters_per_pass': iters_per_pass,
     'first_pass_corpus': first_pass_corpus,
     'mix_distribution': mix_distribution,
     'mix_sampling': mix_sampling,  # legacy alias retained
     'sample_alpha_beta_every': sample_alpha_beta_every,
+    'save_every_passes': save_every_passes,
 }
 with open(os.path.join(out_dir, 'run_meta.json'), 'w') as f:
     json.dump(meta_out, f, indent=2)
@@ -684,6 +765,8 @@ for pass_idx in range(resume_from_pass_idx, total_passes):
             current_alpha, current_beta = _sample_alpha_beta(_active_mix)
         set_mix(model, current_alpha, current_beta)
 
+        loss_shake_val = None
+        loss_wiki_val = None
         if batch_mode == 'mixed':
             # Single forward over half-shake + half-wiki. Two backward calls,
             # each routed to its slot via inputs=, so the gradient accounting
@@ -699,7 +782,9 @@ for pass_idx in range(resume_from_pass_idx, total_passes):
                 per_ex = per_tok.mean(dim=1)
                 loss_s = per_ex[:half].mean()
                 loss_w = per_ex[half:].mean()
-                loss_value = float(((loss_s + loss_w) * 0.5).item())
+                loss_shake_val = float(loss_s.item())
+                loss_wiki_val = float(loss_w.item())
+                loss_value = 0.5 * (loss_shake_val + loss_wiki_val)
             pass_losses.append(loss_value)
             optimizer.zero_grad(set_to_none=True)
             scaler.scale(loss_s).backward(inputs=W_s_params, retain_graph=True)
@@ -710,12 +795,18 @@ for pass_idx in range(resume_from_pass_idx, total_passes):
             scaler.step(optimizer)
             scaler.update()
         else:
-            # alternating: single-corpus batch, mask the off-corpus slot
+            # alternating: single-corpus batch, mask the off-corpus slot.
+            # The single loss IS the corpus's loss; record it on the
+            # corresponding field so iter_log carries the same shape as mixed.
             X, Y = get_train_batch(corpus)
             with ctx:
                 _, loss = model(X, Y)
                 loss_value = float(loss.item())
             pass_losses.append(loss_value)
+            if corpus == 'shake':
+                loss_shake_val = loss_value
+            elif corpus == 'wiki':
+                loss_wiki_val = loss_value
             scaler.scale(loss).backward()
             if grad_clip != 0.0:
                 scaler.unscale_(optimizer)
@@ -764,6 +855,12 @@ for pass_idx in range(resume_from_pass_idx, total_passes):
             'alpha': current_alpha,
             'beta': current_beta,
             'loss': loss_value,
+            # Per-corpus losses. In mixed mode both populated; in alternating
+            # mode only the one matching the pass's corpus is set, the other
+            # is null. Loss curves grouped by 'loss_shake' / 'loss_wiki' can
+            # be plotted across both modes uniformly.
+            'loss_shake': loss_shake_val,
+            'loss_wiki': loss_wiki_val,
             'lr': lr,
             'elapsed_seconds': elapsed,
         })
@@ -771,12 +868,16 @@ for pass_idx in range(resume_from_pass_idx, total_passes):
         if iter_num % 100 == 0:
             dt = (t1 - t_last_100) / 100
             t_last_100 = t1
+            if batch_mode == 'mixed' and loss_shake_val is not None and loss_wiki_val is not None:
+                loss_field = f"loss s={loss_shake_val:.4f} w={loss_wiki_val:.4f}"
+            else:
+                loss_field = f"loss {loss_value:.4f}"
             print(f"[iter {iter_num:06d}] pass {pass_idx} ({corpus}) "
-                  f"loss {loss_value:.4f} lr {lr:.4g} (a,b)=({current_alpha:.3f},{current_beta:.3f}) "
+                  f"{loss_field} lr {lr:.4g} (a,b)=({current_alpha:.3f},{current_beta:.3f}) "
                   f"dt {dt*1000:.1f} ms disk {running_total_bytes/1e9:.2f} GB")
 
     pass_t1 = time.time()
-    val_loss = estimate_val_loss()
+    val_loss = estimate_val_loss()  # dict: shake / wiki / mean
     train_loss_mean = float(np.mean(pass_losses)) if pass_losses else float('nan')
     _log_pass({
         'pass_idx': pass_idx,
@@ -784,7 +885,9 @@ for pass_idx in range(resume_from_pass_idx, total_passes):
         'start_iter': start_iter,
         'end_iter': end_iter,
         'train_loss_mean': train_loss_mean,
-        'val_loss_at_pass_end': val_loss,
+        'val_loss_at_pass_end': val_loss['mean'],
+        'val_loss_shake': val_loss['shake'],
+        'val_loss_wiki': val_loss['wiki'],
         'snapshot_path': snapshot_path,
         'snapshot_size_bytes': snapshot_bytes,
         'elapsed_seconds': pass_t1 - pass_t0,
@@ -792,7 +895,8 @@ for pass_idx in range(resume_from_pass_idx, total_passes):
     snapshot_field = (f"snapshot {snapshot_bytes/1e6:.2f} MB"
                       if snapshot_bytes > 0 else "snapshot --")
     print(f"[pass {pass_idx:04d}] corpus={corpus} iters {start_iter}..{end_iter} "
-          f"train_mean {train_loss_mean:.4f} val@(.5,.5) {val_loss:.4f} "
+          f"train_mean {train_loss_mean:.4f} "
+          f"val@(.5,.5) shake={val_loss['shake']:.4f} wiki={val_loss['wiki']:.4f} "
           f"{snapshot_field} pass_elapsed {pass_t1 - pass_t0:.1f}s")
 
     if iter_num >= max_iters:
