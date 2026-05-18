@@ -113,6 +113,13 @@ mix_distribution = 'beta_half'
 mix_sampling = 'beta_half'
 sample_alpha_beta_every = 1      # resample alpha every N iters; 1 = every iter
 
+# checkpointing cadence: write latest.pt.zst at every Nth pass boundary plus at
+# max_iters. Default 7 ≈ every ~5 min on T4 (each pass ~40 s). Set to 1 for
+# every-pass saves (only useful if you really want sub-minute resume granularity
+# at the cost of ~5x more Drive I/O), or set high (e.g., 999) for a single
+# end-of-run save.
+save_every_passes = 7
+
 # mini-run verification mode — runs the 4-invariant check on CPU and exits.
 # Used to confirm gradient routing and byte-identical init before kicking off
 # a full training run. Set --verify_dual=True at the command line.
@@ -630,31 +637,32 @@ for pass_idx in range(resume_from_pass_idx, total_passes):
         snapshot_bytes = 0
         snapshot_path = None
         if iter_num == end_iter:
-            # Save at every pass boundary, but to a single rolling file
-            # (latest.pt.zst) that's overwritten each time. At iter=max_iters
-            # also write a separate final.pt.zst. Combined payload: model
-            # state_dict + optimizer state + iter/pass pointer + config.
-            raw_model = model._orig_mod if hasattr(model, '_orig_mod') else model
-            curr_sd = _state_dict_cpu_fp32(raw_model)
             is_final = (iter_num == max_iters)
-            snapshot_path = os.path.join(
-                out_dir, 'final.pt.zst' if is_final else 'latest.pt.zst')
-            buf = io.BytesIO()
-            torch.save({'kind': 'dual_checkpoint',
-                        'state_dict': curr_sd,
-                        'optimizer': optimizer.state_dict(),
-                        'iter_num': iter_num,
-                        'pass_idx': pass_idx,
-                        'corpus_at_save': corpus,
-                        'config': config}, buf)
-            blob = _compress(buf.getvalue())
-            with open(snapshot_path, 'wb') as f:
-                f.write(blob)
-            snapshot_bytes = len(blob)
-            # latest.pt.zst is overwritten, so don't accumulate its size into
-            # running_total_bytes; only final.pt.zst adds to disk.
-            if is_final:
-                running_total_bytes += snapshot_bytes
+            # Only save at every save_every_passes-th pass boundary (or final).
+            # Each save writes ~160-240 MB to Drive; saving every pass on a fast
+            # GPU spends a meaningful fraction of total wall-time on I/O.
+            should_save = is_final or ((pass_idx + 1) % save_every_passes == 0)
+            if should_save:
+                raw_model = model._orig_mod if hasattr(model, '_orig_mod') else model
+                curr_sd = _state_dict_cpu_fp32(raw_model)
+                snapshot_path = os.path.join(
+                    out_dir, 'final.pt.zst' if is_final else 'latest.pt.zst')
+                buf = io.BytesIO()
+                torch.save({'kind': 'dual_checkpoint',
+                            'state_dict': curr_sd,
+                            'optimizer': optimizer.state_dict(),
+                            'iter_num': iter_num,
+                            'pass_idx': pass_idx,
+                            'corpus_at_save': corpus,
+                            'config': config}, buf)
+                blob = _compress(buf.getvalue())
+                with open(snapshot_path, 'wb') as f:
+                    f.write(blob)
+                snapshot_bytes = len(blob)
+                # latest.pt.zst is overwritten, so don't accumulate its size into
+                # running_total_bytes; only final.pt.zst adds to disk.
+                if is_final:
+                    running_total_bytes += snapshot_bytes
 
         t1 = time.time()
         elapsed = t1 - t_run_start
@@ -690,9 +698,11 @@ for pass_idx in range(resume_from_pass_idx, total_passes):
         'snapshot_size_bytes': snapshot_bytes,
         'elapsed_seconds': pass_t1 - pass_t0,
     })
+    snapshot_field = (f"snapshot {snapshot_bytes/1e6:.2f} MB"
+                      if snapshot_bytes > 0 else "snapshot --")
     print(f"[pass {pass_idx:04d}] corpus={corpus} iters {start_iter}..{end_iter} "
           f"train_mean {train_loss_mean:.4f} val@(.5,.5) {val_loss:.4f} "
-          f"snapshot {snapshot_bytes/1e6:.2f} MB pass_elapsed {pass_t1 - pass_t0:.1f}s")
+          f"{snapshot_field} pass_elapsed {pass_t1 - pass_t0:.1f}s")
 
     if iter_num >= max_iters:
         break
