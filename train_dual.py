@@ -120,6 +120,30 @@ sample_alpha_beta_every = 1      # resample alpha every N iters; 1 = every iter
 # end-of-run save.
 save_every_passes = 7
 
+# In 'mixed' batch mode (see below) we don't have meaningful pass boundaries to
+# anchor saves on, so we save every N iters instead. Default 500 ≈ every ~7-8 min
+# at T4 + fused AdamW. Final snapshot still lands at iter == max_iters.
+save_every_iters = 500
+
+# batch_mode controls whether shake/wiki batches alternate at pass granularity
+# (the original scheme, where each batch is one corpus and gradients are routed
+# by masking after backward) or whether each batch contains examples from BOTH
+# corpora (the mixed scheme, where two backward calls each route to one slot
+# via PyTorch's `Tensor.backward(inputs=...)` argument).
+#
+#   'alternating' -> the trainer alternates wiki/shake passes; within a pass
+#                    every batch is from one corpus; mask_grads zeros the
+#                    off-corpus slot after backward.
+#   'mixed'       -> every batch is half-shake + half-wiki, single forward,
+#                    two backward calls (one per half) each routed to its slot
+#                    via inputs=W_X_params. No mask_grads. No per-pass corpus
+#                    drift, no oscillation in the loss curve.
+#
+# The mixed scheme costs ~1.5x per iter (1 forward + 2 backwards vs 1+1) but
+# converges more smoothly because every step's gradient reflects both corpora
+# at the current (alpha, beta), not the last 73 iters of one corpus.
+batch_mode = 'alternating'
+
 # mini-run verification mode — runs the 4-invariant check on CPU and exits.
 # Used to confirm gradient routing and byte-identical init before kicking off
 # a full training run. Set --verify_dual=True at the command line.
@@ -326,6 +350,12 @@ wiki_batch, shake_batch = _build_split_loaders(
 val_batch = _build_val_loader(data_dir, block_size, batch_size, device, device_type)
 
 
+# Mixed-mode loaders: half-size batches from each corpus, concatenated per iter.
+mixed_half = batch_size // 2
+wiki_half_batch, shake_half_batch = _build_split_loaders(
+    data_dir, block_size, mixed_half, device, device_type)
+
+
 def _corpus_for_pass(pass_idx: int) -> str:
     if pass_idx % 2 == 0:
         return first_pass_corpus
@@ -337,6 +367,28 @@ def get_train_batch(corpus: str):
         return wiki_batch()
     if corpus == 'shake':
         return shake_batch()
+
+
+def get_mixed_batch():
+    """Returns (X, Y, half) where the first `half` rows are shake examples
+    and the remaining `batch_size - half` rows are wiki. Single concatenated
+    batch suitable for one forward pass."""
+    Xs, Ys = shake_half_batch()
+    Xw, Yw = wiki_half_batch()
+    return torch.cat([Xs, Xw], dim=0), torch.cat([Ys, Yw], dim=0), Xs.shape[0]
+
+
+def _get_slot_params(raw_model, slot):
+    """Enumerate all W_<slot> and b_<slot> parameters across the dual model.
+    `slot` is 's' or 'w'."""
+    params = []
+    for m in raw_model.modules():
+        for attr_name in (f'W_{slot}', f'b_{slot}'):
+            if hasattr(m, attr_name):
+                p = getattr(m, attr_name)
+                if isinstance(p, torch.nn.Parameter):
+                    params.append(p)
+    return params
     raise ValueError(f"unknown corpus: {corpus!r}")
 
 
@@ -597,6 +649,15 @@ else:
 t_run_start = time.time()
 t_last_100 = t_run_start
 
+# For mixed batch_mode we need the per-slot parameter lists once so each
+# backward call can be routed via inputs=. In 'alternating' mode these are
+# unused; the gradient routing happens via mask_grads after backward.
+_raw_model = model._orig_mod if hasattr(model, '_orig_mod') else model
+W_s_params = _get_slot_params(_raw_model, 's')
+W_w_params = _get_slot_params(_raw_model, 'w')
+if batch_mode not in ('alternating', 'mixed'):
+    raise ValueError(f"batch_mode must be 'alternating' or 'mixed', got {batch_mode!r}")
+
 # main per-pass loop
 iter_num = resume_iter_num
 current_alpha, current_beta = _sample_alpha_beta(_active_mix)
@@ -617,22 +678,46 @@ for pass_idx in range(resume_from_pass_idx, total_passes):
             current_alpha, current_beta = _sample_alpha_beta(_active_mix)
         set_mix(model, current_alpha, current_beta)
 
-        X, Y = get_train_batch(corpus)
-        with ctx:
-            _, loss = model(X, Y)
-            loss_value = float(loss.item())
-        pass_losses.append(loss_value)
-        scaler.scale(loss).backward()
-        if grad_clip != 0.0:
-            scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-        # Gradient routing: null out the slot that does NOT match the corpus,
-        # AFTER backward() and BEFORE optimizer.step(). This is the heart of
-        # the dual-source scheme.
-        mask_grads(model._orig_mod if hasattr(model, '_orig_mod') else model, corpus)
-        scaler.step(optimizer)
-        scaler.update()
-        optimizer.zero_grad(set_to_none=True)
+        if batch_mode == 'mixed':
+            # Single forward over half-shake + half-wiki. Two backward calls,
+            # each routed to its slot via inputs=, so the gradient accounting
+            # is exact at the per-example level. No mask_grads needed.
+            X, Y, half = get_mixed_batch()
+            with ctx:
+                logits, _ = model(X, Y)
+                B, T, V = logits.shape
+                per_tok = torch.nn.functional.cross_entropy(
+                    logits.view(-1, V), Y.view(-1),
+                    ignore_index=-1, reduction='none'
+                ).view(B, T)
+                per_ex = per_tok.mean(dim=1)
+                loss_s = per_ex[:half].mean()
+                loss_w = per_ex[half:].mean()
+                loss_value = float(((loss_s + loss_w) * 0.5).item())
+            pass_losses.append(loss_value)
+            optimizer.zero_grad(set_to_none=True)
+            scaler.scale(loss_s).backward(inputs=W_s_params, retain_graph=True)
+            scaler.scale(loss_w).backward(inputs=W_w_params)
+            if grad_clip != 0.0:
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            # alternating: single-corpus batch, mask the off-corpus slot
+            X, Y = get_train_batch(corpus)
+            with ctx:
+                _, loss = model(X, Y)
+                loss_value = float(loss.item())
+            pass_losses.append(loss_value)
+            scaler.scale(loss).backward()
+            if grad_clip != 0.0:
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+            mask_grads(_raw_model, corpus)
+            scaler.step(optimizer)
+            scaler.update()
+            optimizer.zero_grad(set_to_none=True)
 
         snapshot_bytes = 0
         snapshot_path = None
