@@ -247,7 +247,7 @@ def _find_separator_index(train_ids: np.ndarray, sep_ids: np.ndarray) -> int:
     return -1
 
 
-def _build_split_loaders(data_dir, block_size, batch_size, device, device_type):
+def _build_split_loaders(data_dir, block_size, batch_size, device, device_type, verbose=True):
     train_path = os.path.join(data_dir, 'train.bin')
     meta_path = os.path.join(data_dir, 'meta.pkl')
     with open(meta_path, 'rb') as f:
@@ -268,8 +268,9 @@ def _build_split_loaders(data_dir, block_size, batch_size, device, device_type):
     wiki_start = sep_idx + len(sep_ids)
     shake_len = shake_end
     wiki_len = len(train_ids) - wiki_start
-    print(f"split: shake={shake_len:,} chars [0:{shake_end}], "
-          f"wiki={wiki_len:,} chars [{wiki_start}:{len(train_ids)}]")
+    if verbose:
+        print(f"split: shake={shake_len:,} chars [0:{shake_end}], "
+              f"wiki={wiki_len:,} chars [{wiki_start}:{len(train_ids)}]")
     if shake_len <= block_size + 1 or wiki_len <= block_size + 1:
         raise RuntimeError(f"one of the halves is shorter than block_size+1")
 
@@ -351,9 +352,10 @@ val_batch = _build_val_loader(data_dir, block_size, batch_size, device, device_t
 
 
 # Mixed-mode loaders: half-size batches from each corpus, concatenated per iter.
+# verbose=False because the full-size build above already printed the split.
 mixed_half = batch_size // 2
 wiki_half_batch, shake_half_batch = _build_split_loaders(
-    data_dir, block_size, mixed_half, device, device_type)
+    data_dir, block_size, mixed_half, device, device_type, verbose=False)
 
 
 def _corpus_for_pass(pass_idx: int) -> str:
@@ -662,7 +664,11 @@ if batch_mode not in ('alternating', 'mixed'):
 iter_num = resume_iter_num
 current_alpha, current_beta = _sample_alpha_beta(_active_mix)
 for pass_idx in range(resume_from_pass_idx, total_passes):
-    corpus = _corpus_for_pass(pass_idx)
+    # In alternating mode the pass corpus drives both batch selection and the
+    # log label. In mixed mode every iter sees both corpora, so the per-pass
+    # corpus label is meaningless — we report 'mixed' in logs to keep the
+    # iter_log / pass_log honest about what the trainer is actually doing.
+    corpus = 'mixed' if batch_mode == 'mixed' else _corpus_for_pass(pass_idx)
     start_iter = pass_idx * iters_per_pass + 1
     end_iter = min((pass_idx + 1) * iters_per_pass, max_iters)
     pass_t0 = time.time()
