@@ -39,8 +39,17 @@ warmup_iters = 100
 iters_per_pass = 73
 first_pass_corpus = 'shake'
 
-# dual-slot mixing — alpha + beta = 1, alpha ~ Beta(0.5, 0.5)
-mix_distribution = 'beta_half'
+# dual-slot mixing — alpha + beta = 1.
+#
+# Default is now 'uniform' (α ~ U[0, 1]). The original Beta(0.5, 0.5) choice
+# placed too much mass at α=0 and α=1, which made the per-iter gradient
+# magnitude on each slot swing wildly (near-zero on the "off" corner, full on
+# the "on" corner). AdamW's v_t (second moment) calibrated to the spikes and
+# damped the in-between updates, causing the optimizer to plateau. Uniform
+# keeps the gradient magnitudes roughly consistent across iters so Adam can
+# adapt cleanly. Set mix_distribution='arcsine' (or the legacy 'beta_half'
+# alias) to recover the original corner-emphasizing distribution for ablations.
+mix_distribution = 'uniform'
 sample_alpha_beta_every = 1
 
 # THE NEW BIT vs train_shakespeare_wiki_dual.py: every batch is half-shake +
