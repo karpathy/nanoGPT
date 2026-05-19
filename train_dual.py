@@ -104,10 +104,27 @@ first_pass_corpus = 'shake'
 # dual-trainer specific
 # Under the alpha + beta = 1 constraint there is one knob: alpha in [0, 1].
 # mix_distribution sets the sampling law over alpha; beta is always 1 - alpha.
-#   'beta_half' -> alpha ~ Beta(0.5, 0.5)   (default; mass at corners + interior)
-#   'uniform'   -> alpha ~ U[0, 1]
-#   'arcsine'   -> equivalent to Beta(0.5, 0.5) but expressed via sin^2(pi*U/2)
+#   'beta_half'       -> alpha ~ Beta(0.5, 0.5)        (mass at corners + interior)
+#   'uniform'         -> alpha ~ U[0, 1]               (== Beta(1, 1))
+#   'arcsine'         -> equivalent to Beta(0.5, 0.5) but expressed via sin^2(pi*U/2)
+#   'symmetric_beta'  -> alpha ~ Beta(c, c) where c = mix_concentration; c=1 is
+#                        Uniform, c->inf collapses to delta at 0.5. The std is
+#                        1/(2*sqrt(2c+1)), so the variance dial is monotone in c.
+#                        Equivalent shortcut: set mix_std and leave concentration
+#                        to be inferred.
 mix_distribution = 'beta_half'
+# Knobs for 'symmetric_beta'. Either set mix_concentration directly, or set
+# mix_std (target standard deviation) and we'll solve for c. mix_std wins if
+# both are set. Reference points for std:
+#   c=1     -> std 0.2887  (Uniform)
+#   c=2     -> std 0.2236
+#   c=5     -> std 0.1508
+#   c=10    -> std 0.1091
+#   c=50    -> std 0.0498
+#   c=100   -> std 0.0353
+#   c=1000  -> std 0.0112
+mix_concentration = 1.0
+mix_std = None  # set to a float in (0, 0.2887] to override mix_concentration
 # legacy alias kept for backwards-compat with older configs that set
 # mix_sampling explicitly. If both are set, mix_distribution wins.
 mix_sampling = 'beta_half'
@@ -209,13 +226,28 @@ def _save_snapshot(sd: dict, path: str) -> int:
 _rng = np.random.default_rng(seed + 9991)
 
 
-def _sample_alpha_beta(strategy: str):
+def _std_to_concentration(target_std: float) -> float:
+    """Invert Beta(c, c) variance formula: std = 1/(2*sqrt(2c+1)).
+    Solving for c: c = ((1/(2*std))^2 - 1) / 2."""
+    if target_std <= 0:
+        raise ValueError(f"mix_std must be > 0, got {target_std}")
+    max_std = 1.0 / math.sqrt(12.0)  # Uniform[0,1]'s std
+    if target_std > max_std + 1e-9:
+        raise ValueError(
+            f"mix_std={target_std} exceeds the Uniform[0,1] std of {max_std:.6f}; "
+            f"Beta(c,c) with c>=1 cannot have higher variance than Uniform.")
+    return ((1.0 / (2.0 * target_std)) ** 2 - 1.0) / 2.0
+
+
+def _sample_alpha_beta(strategy: str, concentration: float = 1.0):
     """Sample (alpha, beta) with alpha + beta == 1.
 
-      'beta_half' -> alpha ~ Beta(0.5, 0.5)            (default)
-      'arcsine'   -> alpha = sin^2(pi/2 * U[0,1])      (same law as Beta(0.5, 0.5))
-      'uniform'   -> alpha ~ U[0, 1]
-      'fixed_half'-> alpha = 0.5                       (degenerate, for debugging)
+      'beta_half'      -> alpha ~ Beta(0.5, 0.5)
+      'arcsine'        -> alpha = sin^2(pi/2 * U[0,1])  (same law as Beta(0.5, 0.5))
+      'uniform'        -> alpha ~ U[0, 1]
+      'symmetric_beta' -> alpha ~ Beta(c, c) with c = `concentration`
+                          (c=1 is Uniform; c->inf collapses to alpha=0.5)
+      'fixed_half'     -> alpha = 0.5  (degenerate, for debugging)
     """
     if strategy == 'beta_half':
         a = float(_rng.beta(0.5, 0.5))
@@ -224,6 +256,11 @@ def _sample_alpha_beta(strategy: str):
         a = math.sin(math.pi * u / 2.0) ** 2
     elif strategy == 'uniform':
         a = float(_rng.uniform(0.0, 1.0))
+    elif strategy == 'symmetric_beta':
+        if concentration <= 0:
+            raise ValueError(
+                f"mix_concentration must be > 0, got {concentration}")
+        a = float(_rng.beta(concentration, concentration))
     elif strategy == 'fixed_half':
         a = 0.5
     else:
@@ -491,8 +528,21 @@ if compile:
 # of the supported values, honor that instead.
 _active_mix = mix_distribution
 if _active_mix == 'beta_half' and mix_sampling != 'beta_half' and \
-        mix_sampling in ('beta_half', 'arcsine', 'uniform', 'fixed_half'):
+        mix_sampling in ('beta_half', 'arcsine', 'uniform', 'fixed_half',
+                         'symmetric_beta'):
     _active_mix = mix_sampling
+
+# For symmetric_beta, resolve the concentration: mix_std (if set) overrides
+# mix_concentration. Surface the final std so it shows up in run_meta.json.
+_active_concentration = float(mix_concentration)
+if _active_mix == 'symmetric_beta':
+    if mix_std is not None:
+        _active_concentration = _std_to_concentration(float(mix_std))
+    _active_std = 1.0 / (2.0 * math.sqrt(2.0 * _active_concentration + 1.0))
+    print(f"mix_distribution=symmetric_beta  concentration={_active_concentration:.4f}  "
+          f"std={_active_std:.4f}")
+else:
+    _active_std = None
 
 
 # -----------------------------------------------------------------------------
@@ -553,7 +603,7 @@ if verify_dual:
         b_s_grad, b_w_grad) as cloned tensors / None."""
         captured = {'W_s': None, 'W_w': None, 'b_s': None, 'b_w': None}
         for k in range(n_iters):
-            current_alpha, current_beta = _sample_alpha_beta(_active_mix)
+            current_alpha, current_beta = _sample_alpha_beta(_active_mix, _active_concentration)
             set_mix(raw, current_alpha, current_beta)
             X, Y = get_train_batch(corpus)
             _, loss = raw(X, Y)
@@ -619,8 +669,15 @@ if verify_dual:
 
 
 def estimate_val_loss():
-    """Per-corpus val eval at (alpha=0.5, beta=0.5). Returns dict
-    {'shake': ..., 'wiki': ..., 'mean': ...}.
+    """Per-corpus val eval at THREE mixes:
+      - (alpha=0.5, beta=0.5) — the balance midpoint (the "headline" number)
+      - (alpha=1.0, beta=0.0) — W_s alone, evaluated on shake
+      - (alpha=0.0, beta=1.0) — W_w alone, evaluated on wiki
+
+    The corner evals are diagnostic: if the corners descend but the midpoint
+    plateaus, the two slots ARE learning their own corpora and the averaging
+    is what's broken (a parameterization problem). If the corners plateau
+    too, the gradient flow itself is the issue.
 
     Note: under the prepare.py concatenation (shake + separator + wiki + 90/10
     split), val.bin is the all-wiki tail. To get a shake val signal we sample
@@ -629,23 +686,83 @@ def estimate_val_loss():
     explicitly carve out a shake-val split during prepare; the wiki-val signal
     is properly disjoint because it lives in val.bin."""
     model.eval()
-    s_losses = torch.zeros(eval_iters)
-    w_losses = torch.zeros(eval_iters)
+    s_mid_losses = torch.zeros(eval_iters)
+    w_mid_losses = torch.zeros(eval_iters)
+    s_corner_losses = torch.zeros(eval_iters)
+    w_corner_losses = torch.zeros(eval_iters)
+
+    # midpoint (0.5, 0.5)
     set_mix(model, 0.5, 0.5)
     with torch.no_grad():
         for k in range(eval_iters):
             X, Y = shake_val_batch()
             with ctx:
                 _, loss = model(X, Y)
-            s_losses[k] = loss.item()
+            s_mid_losses[k] = loss.item()
             X, Y = wiki_val_batch()
             with ctx:
                 _, loss = model(X, Y)
-            w_losses[k] = loss.item()
+            w_mid_losses[k] = loss.item()
+
+    # shake corner (alpha=1, beta=0) — W_s alone on shake
+    set_mix(model, 1.0, 0.0)
+    with torch.no_grad():
+        for k in range(eval_iters):
+            X, Y = shake_val_batch()
+            with ctx:
+                _, loss = model(X, Y)
+            s_corner_losses[k] = loss.item()
+
+    # wiki corner (alpha=0, beta=1) — W_w alone on wiki
+    set_mix(model, 0.0, 1.0)
+    with torch.no_grad():
+        for k in range(eval_iters):
+            X, Y = wiki_val_batch()
+            with ctx:
+                _, loss = model(X, Y)
+            w_corner_losses[k] = loss.item()
+
+    # restore mix to whatever the trainer expects next (set to 0.5, 0.5; the
+    # next iter will re-sample anyway)
+    set_mix(model, 0.5, 0.5)
     model.train()
-    s = float(s_losses.mean())
-    w = float(w_losses.mean())
-    return {'shake': s, 'wiki': w, 'mean': 0.5 * (s + w)}
+
+    s_mid = float(s_mid_losses.mean())
+    w_mid = float(w_mid_losses.mean())
+    s_corner = float(s_corner_losses.mean())
+    w_corner = float(w_corner_losses.mean())
+    return {
+        'shake': s_mid, 'wiki': w_mid, 'mean': 0.5 * (s_mid + w_mid),
+        'shake_corner': s_corner, 'wiki_corner': w_corner,
+    }
+
+
+def slot_divergence():
+    """Sum of ||W_s - W_w||_F across all dual-slot tensor pairs, plus the
+    relative divergence ||W_s - W_w||_F / ||W_s||_F. Diagnostic: if slots are
+    NOT diverging across passes, the dual scheme is collapsing to a single
+    model. If they ARE diverging, the slots are specializing.
+
+    Naming in model_dual.py: paired params live as `<module>.W_s` / `<module>.W_w`
+    and `<module>.b_s` / `<module>.b_w`."""
+    abs_sq = 0.0
+    norm_s_sq = 0.0
+    params = dict(model.named_parameters())
+    with torch.no_grad():
+        for name, param in params.items():
+            if name.endswith('.W_s'):
+                w_w = params.get(name[:-4] + '.W_w')
+            elif name.endswith('.b_s'):
+                w_w = params.get(name[:-4] + '.b_w')
+            else:
+                continue
+            if w_w is None:
+                continue
+            abs_sq += float(((param - w_w) ** 2).sum().item())
+            norm_s_sq += float((param ** 2).sum().item())
+    abs_norm = abs_sq ** 0.5
+    rel = (abs_sq / norm_s_sq) ** 0.5 if norm_s_sq > 0 else 0.0
+    return {'abs': abs_norm, 'rel': rel}
 
 
 def get_lr(it):
@@ -676,6 +793,9 @@ meta_out = {
     'first_pass_corpus': first_pass_corpus,
     'mix_distribution': mix_distribution,
     'mix_sampling': mix_sampling,  # legacy alias retained
+    'active_mix': _active_mix,
+    'mix_concentration': _active_concentration,
+    'mix_std': _active_std,
     'sample_alpha_beta_every': sample_alpha_beta_every,
     'save_every_passes': save_every_passes,
 }
@@ -743,7 +863,7 @@ if batch_mode not in ('alternating', 'mixed'):
 
 # main per-pass loop
 iter_num = resume_iter_num
-current_alpha, current_beta = _sample_alpha_beta(_active_mix)
+current_alpha, current_beta = _sample_alpha_beta(_active_mix, _active_concentration)
 for pass_idx in range(resume_from_pass_idx, total_passes):
     # In alternating mode the pass corpus drives both batch selection and the
     # log label. In mixed mode every iter sees both corpora, so the per-pass
@@ -762,7 +882,7 @@ for pass_idx in range(resume_from_pass_idx, total_passes):
 
         # Resample (alpha, beta) every sample_alpha_beta_every iters.
         if (iter_num - 1) % sample_alpha_beta_every == 0:
-            current_alpha, current_beta = _sample_alpha_beta(_active_mix)
+            current_alpha, current_beta = _sample_alpha_beta(_active_mix, _active_concentration)
         set_mix(model, current_alpha, current_beta)
 
         loss_shake_val = None
@@ -877,7 +997,8 @@ for pass_idx in range(resume_from_pass_idx, total_passes):
                   f"dt {dt*1000:.1f} ms disk {running_total_bytes/1e9:.2f} GB")
 
     pass_t1 = time.time()
-    val_loss = estimate_val_loss()  # dict: shake / wiki / mean
+    val_loss = estimate_val_loss()  # midpoint + corner evals
+    divg = slot_divergence()
     train_loss_mean = float(np.mean(pass_losses)) if pass_losses else float('nan')
     _log_pass({
         'pass_idx': pass_idx,
@@ -888,6 +1009,10 @@ for pass_idx in range(resume_from_pass_idx, total_passes):
         'val_loss_at_pass_end': val_loss['mean'],
         'val_loss_shake': val_loss['shake'],
         'val_loss_wiki': val_loss['wiki'],
+        'val_loss_shake_corner': val_loss['shake_corner'],
+        'val_loss_wiki_corner': val_loss['wiki_corner'],
+        'slot_divergence_abs': divg['abs'],
+        'slot_divergence_rel': divg['rel'],
         'snapshot_path': snapshot_path,
         'snapshot_size_bytes': snapshot_bytes,
         'elapsed_seconds': pass_t1 - pass_t0,
@@ -896,7 +1021,9 @@ for pass_idx in range(resume_from_pass_idx, total_passes):
                       if snapshot_bytes > 0 else "snapshot --")
     print(f"[pass {pass_idx:04d}] corpus={corpus} iters {start_iter}..{end_iter} "
           f"train_mean {train_loss_mean:.4f} "
-          f"val@(.5,.5) shake={val_loss['shake']:.4f} wiki={val_loss['wiki']:.4f} "
+          f"mid shake={val_loss['shake']:.4f} wiki={val_loss['wiki']:.4f} "
+          f"corner shake={val_loss['shake_corner']:.4f} wiki={val_loss['wiki_corner']:.4f} "
+          f"||Ws-Ww||/||Ws||={divg['rel']:.4f} "
           f"{snapshot_field} pass_elapsed {pass_t1 - pass_t0:.1f}s")
 
     if iter_num >= max_iters:
