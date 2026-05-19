@@ -798,6 +798,7 @@ meta_out = {
     'have_zstd': _HAVE_ZSTD,
     'created': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
     'scheme': ('dual-slot-mixed-batch' if batch_mode == 'mixed'
+               else 'dual-slot-alt-mixed' if batch_mode == 'alt_mixed'
                else 'dual-slot-per-pass-alternation'),
     'batch_mode': batch_mode,
     'total_passes': total_passes,
@@ -872,8 +873,46 @@ t_last_100 = t_run_start
 _raw_model = model._orig_mod if hasattr(model, '_orig_mod') else model
 W_s_params = _get_slot_params(_raw_model, 's')
 W_w_params = _get_slot_params(_raw_model, 'w')
-if batch_mode not in ('alternating', 'mixed'):
-    raise ValueError(f"batch_mode must be 'alternating' or 'mixed', got {batch_mode!r}")
+if batch_mode not in ('alternating', 'mixed', 'alt_mixed'):
+    raise ValueError(f"batch_mode must be 'alternating', 'mixed', or 'alt_mixed', got {batch_mode!r}")
+
+# 'alt_mixed' mode: mixed batches every iter (each batch is half-shake + half-wiki)
+# BUT pass-level alternation of WHICH slot gets updated, with two separate
+# optimizers so the off-slot's Adam state is entirely frozen during its off
+# pass (no zero-grad steps, no m_t/v_t decay).
+#
+# Hypothesis: combines mixed-batch's "each slot sees both corpora in forward at
+# every alpha" with alternating-mode's "clean per-slot Adam-state training
+# windows". If alternating's advantage was both the per-pass corpus selection
+# AND the per-slot Adam isolation, this mode tests whether dropping the
+# corpus-selection part (keeping mixed forwards) still works.
+if batch_mode == 'alt_mixed':
+    # Replicate the weight_decay grouping from configure_optimizers but split
+    # by slot. Decay params: ndim >= 2 (typically W_*); no-decay: ndim < 2 (b_*).
+    def _split_decay(params):
+        decay, no_decay = [], []
+        for p in params:
+            if p.dim() >= 2:
+                decay.append(p)
+            else:
+                no_decay.append(p)
+        return decay, no_decay
+    _ws_d, _ws_nd = _split_decay(W_s_params)
+    _ww_d, _ww_nd = _split_decay(W_w_params)
+    fused_avail = device_type == 'cuda'
+    optim_s = torch.optim.AdamW(
+        [{'params': _ws_d, 'weight_decay': weight_decay},
+         {'params': _ws_nd, 'weight_decay': 0.0}],
+        lr=learning_rate, betas=(beta1, beta2), fused=fused_avail)
+    optim_w = torch.optim.AdamW(
+        [{'params': _ww_d, 'weight_decay': weight_decay},
+         {'params': _ww_nd, 'weight_decay': 0.0}],
+        lr=learning_rate, betas=(beta1, beta2), fused=fused_avail)
+    print(f"alt_mixed: two AdamW optimizers initialized "
+          f"(W_s: {len(_ws_d)+len(_ws_nd)} tensors, W_w: {len(_ww_d)+len(_ww_nd)} tensors)")
+else:
+    optim_s = None
+    optim_w = None
 
 # main per-pass loop
 iter_num = resume_iter_num
@@ -889,10 +928,22 @@ for pass_idx in range(resume_from_pass_idx, total_passes):
     pass_t0 = time.time()
     pass_losses = []
 
+    # alt_mixed: which slot trains this pass. Alternates between 's' and 'w'.
+    # first_pass_corpus selects the initial slot; subsequent passes flip.
+    if batch_mode == 'alt_mixed':
+        alt_slot = 's' if (pass_idx % 2 == 0) == (first_pass_corpus == 'shake') else 'w'
+        # Override the corpus label for logging — meaningful in alt_mixed.
+        corpus = f'mixed_alt_{alt_slot}'
+    else:
+        alt_slot = None
+
     for iter_num in range(start_iter, end_iter + 1):
         lr = get_lr(iter_num) if decay_lr else learning_rate
         for pg in optimizer.param_groups:
             pg['lr'] = lr
+        if batch_mode == 'alt_mixed':
+            for pg in optim_s.param_groups: pg['lr'] = lr
+            for pg in optim_w.param_groups: pg['lr'] = lr
 
         # Resample (alpha, beta) every sample_alpha_beta_every iters.
         if (iter_num - 1) % sample_alpha_beta_every == 0:
@@ -941,6 +992,41 @@ for pass_idx in range(resume_from_pass_idx, total_passes):
                 torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
             scaler.step(optimizer)
             scaler.update()
+        elif batch_mode == 'alt_mixed':
+            # Mixed batch every iter; but only one slot's optimizer steps this pass.
+            # The other slot's parameters AND its Adam state are completely
+            # untouched until its turn comes.
+            X, Y, half = get_mixed_batch()
+            with ctx:
+                logits, _ = model(X, Y)
+                B, T, V = logits.shape
+                per_tok = torch.nn.functional.cross_entropy(
+                    logits.view(-1, V), Y.view(-1),
+                    ignore_index=-1, reduction='none'
+                ).view(B, T)
+                per_ex = per_tok.mean(dim=1)
+                loss_s = per_ex[:half].mean()
+                loss_w = per_ex[half:].mean()
+                loss_shake_val = float(loss_s.item())
+                loss_wiki_val = float(loss_w.item())
+                loss_value = 0.5 * (loss_shake_val + loss_wiki_val)
+            pass_losses.append(loss_value)
+            if alt_slot == 's':
+                optim_s.zero_grad(set_to_none=True)
+                scaler.scale(loss_s).backward(inputs=W_s_params)
+                if grad_clip != 0.0:
+                    scaler.unscale_(optim_s)
+                    torch.nn.utils.clip_grad_norm_(W_s_params, grad_clip)
+                scaler.step(optim_s)
+                scaler.update()
+            else:  # alt_slot == 'w'
+                optim_w.zero_grad(set_to_none=True)
+                scaler.scale(loss_w).backward(inputs=W_w_params)
+                if grad_clip != 0.0:
+                    scaler.unscale_(optim_w)
+                    torch.nn.utils.clip_grad_norm_(W_w_params, grad_clip)
+                scaler.step(optim_w)
+                scaler.update()
         else:
             # alternating: single-corpus batch, mask the off-corpus slot.
             # The single loss IS the corpus's loss; record it on the
@@ -1015,7 +1101,7 @@ for pass_idx in range(resume_from_pass_idx, total_passes):
         if iter_num % 100 == 0:
             dt = (t1 - t_last_100) / 100
             t_last_100 = t1
-            if batch_mode == 'mixed' and loss_shake_val is not None and loss_wiki_val is not None:
+            if batch_mode in ('mixed', 'alt_mixed') and loss_shake_val is not None and loss_wiki_val is not None:
                 loss_field = f"loss s={loss_shake_val:.4f} w={loss_wiki_val:.4f}"
             else:
                 loss_field = f"loss {loss_value:.4f}"
