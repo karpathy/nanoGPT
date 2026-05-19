@@ -130,6 +130,18 @@ mix_std = None  # set to a float in (0, 0.2887] to override mix_concentration
 mix_sampling = 'beta_half'
 sample_alpha_beta_every = 1      # resample alpha every N iters; 1 = every iter
 
+# Gradient normalization for mixed-batch mode. When True, before the per-slot
+# backward calls we divide loss_s by max(alpha, grad_norm_floor) and loss_w by
+# max(beta, grad_norm_floor). This cancels out the chain-rule alpha-scaling
+# (since W = alpha*W_s + beta*W_w means dL/dW_s = alpha * dL/dW), so each slot
+# sees a "unit-magnitude" gradient regardless of the per-iter mixing weight.
+# Without this, Adam's v_t gets calibrated to the per-iter alpha-variance, not
+# to the loss-landscape geometry, which appears to be why mixed-batch mode's
+# slot extremes (alpha=0, alpha=1) produce gibberish even when midpoint val
+# looks reasonable.
+gradient_normalize = False
+grad_norm_floor = 0.05
+
 # checkpointing cadence: write latest.pt.zst at every Nth pass boundary plus at
 # max_iters. Default 7 ≈ every ~5 min on T4 (each pass ~40 s). Set to 1 for
 # every-pass saves (only useful if you really want sub-minute resume granularity
@@ -798,6 +810,8 @@ meta_out = {
     'mix_std': _active_std,
     'sample_alpha_beta_every': sample_alpha_beta_every,
     'save_every_passes': save_every_passes,
+    'gradient_normalize': gradient_normalize,
+    'grad_norm_floor': grad_norm_floor,
 }
 with open(os.path.join(out_dir, 'run_meta.json'), 'w') as f:
     json.dump(meta_out, f, indent=2)
@@ -907,8 +921,21 @@ for pass_idx in range(resume_from_pass_idx, total_passes):
                 loss_value = 0.5 * (loss_shake_val + loss_wiki_val)
             pass_losses.append(loss_value)
             optimizer.zero_grad(set_to_none=True)
-            scaler.scale(loss_s).backward(inputs=W_s_params, retain_graph=True)
-            scaler.scale(loss_w).backward(inputs=W_w_params)
+            # Gradient normalization: cancel out the chain-rule alpha-scaling
+            # so each slot sees a unit-magnitude gradient regardless of the
+            # current iter's (alpha, beta). Floored at grad_norm_floor to
+            # prevent division-by-tiny-alpha amplifying noise. See the config
+            # comment for the diagnosis.
+            if gradient_normalize:
+                a_scale = max(current_alpha, grad_norm_floor)
+                b_scale = max(current_beta, grad_norm_floor)
+                loss_s_for_grad = loss_s / a_scale
+                loss_w_for_grad = loss_w / b_scale
+            else:
+                loss_s_for_grad = loss_s
+                loss_w_for_grad = loss_w
+            scaler.scale(loss_s_for_grad).backward(inputs=W_s_params, retain_graph=True)
+            scaler.scale(loss_w_for_grad).backward(inputs=W_w_params)
             if grad_clip != 0.0:
                 scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
