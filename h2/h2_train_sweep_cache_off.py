@@ -1,17 +1,20 @@
 import subprocess, os, time, torch, json, math
 
 # RUN_ORDER = [100, 0, 64, 256, 512, 1024, 2048]
-RUN_ORDER = [64]
-M_VALUES = [10, 20]
+RUN_ORDER = [0, 16, 32, 80, 100, 256, 512, 760]
+M_VALUES = [1, 5, 10, 20]
 TASK      = "wikitext2"
 
 results         = []
 training_errors = []
 N_EMBD = 768
 MAX_POSITIONS = 1024
+LR = 0.1 # established as best from LR sweep
 
 for L in RUN_ORDER:
     for M in M_VALUES:
+        if L == 0 and M > M_VALUES[0]:
+            continue
         run_name = f"prefix-L{L}-m{M}-cacheoff-{TASK}"
         out_dir  = f"/kaggle/working/h2_cacheoff_L{L}_m{M}"
         os.makedirs(out_dir, exist_ok=True)
@@ -46,6 +49,8 @@ for L in RUN_ORDER:
             f"--prefix_len={L}",
             f"--prefix_update_period={M}",
             f"--out_dir={out_dir}",
+            f"--max_iters=2500",
+            f"--learning_rate={LR}",
             f"--prefix_type=soft",
             f"--wandb_run_name={run_name}",
         ] + extra_flags
