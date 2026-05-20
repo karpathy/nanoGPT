@@ -17,14 +17,22 @@ heavy U-shape, ~20% mass near 0, ~20% near 1, the rest in middle):
   - M_attn[i] (n_head,):    per-layer attention-head mask. Applied to each
                             head's output before c_proj.
 
-During forward, a scalar alpha controls each mask's gate:
+During forward, a scalar alpha gates each unit by a tent/bell function
+peaked at alpha=m with adaptive span:
 
-    gate(unit, alpha) = alpha * m + (1 - alpha) * (1 - m)
+    span(m) = max(m, 1 - m)                       # 1 for specialists, 0.5 for halfsies
+    gate(unit, alpha) = cos^2(pi/2 * |alpha - m| / span(m))
 
-At alpha=1: m=1 specialists fire fully, m=0 specialists are silent, m=0.5
-halfsies fire at 0.5. At alpha=0 the roles flip. At alpha=0.5 halfsies
-dominate. LayerNorms stay un-gated by design: per-channel gating BEFORE LN
-is partially undone by LN's mean subtraction and variance renormalization,
+For specialists (m=0 or m=1) span=1 gives a smooth ramp from 0 at the
+opposite corner to 1 at the matched corner. For halfsies (m=0.5) span=0.5
+gives a bell peaked at alpha=0.5 with EXACTLY zero at alpha=0 and alpha=1.
+For m in between, an asymmetric bell peaks at alpha=m with exactly zero at
+the further endpoint. At the extremes alpha=0 and alpha=1, ONLY the
+respective specialists fire; halfsies (and all blended neurons) are
+smoothly turned off.
+
+LayerNorms stay un-gated by design: per-channel gating BEFORE LN is
+partially undone by LN's mean subtraction and variance renormalization,
 so we gate AFTER LN where it matters (residual-stream gating is on the
 things that WRITE to the residual stream, not on LN's output that goes
 into Q/K/V inside the block).
@@ -79,6 +87,24 @@ def sample_beta_half_mask(shape, seed):
 # At eval time (no backward, or no corpus passed), the gate is just a
 # scalar multiply with the smooth alpha-gate — no autograd indirection.
 
+def _smooth_tent(alpha, M):
+    """Tent/bell gate centered at α=m with adaptive span max(m, 1-m).
+
+    For m ∈ {0, 1} (specialists), span=1: smooth ramp on [0, 1] from 0 at
+    the opposite corner to 1 at the matched corner.
+    For m = 0.5 (halfsies), span=0.5: smooth bell peaked at α=0.5 with
+    exact zero at both endpoints.
+    For m in between, asymmetric bell peaked at α=m with exact zero at the
+    further endpoint of [0, 1] from m.
+
+    Uses cos²(π/2 · |α-m|/span(m)) for C^∞ smoothness inside support; rel
+    stays in [0, 1] for α ∈ [0, 1] so no clamping is needed.
+    """
+    span = torch.maximum(M, 1.0 - M)
+    rel = (alpha - M).abs() / span
+    return torch.cos(math.pi * 0.5 * rel).pow(2)
+
+
 class _CorpusRoutedGate(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, M, alpha, corpus):
@@ -86,7 +112,7 @@ class _CorpusRoutedGate(torch.autograd.Function):
         ctx.save_for_backward(M)
         ctx.alpha = float(alpha)
         ctx.corpus = float(corpus)
-        return x * (alpha * M + (1.0 - alpha) * (1.0 - M))
+        return x * _smooth_tent(alpha, M)
 
     @staticmethod
     def backward(ctx, grad_output):
@@ -101,14 +127,14 @@ class _CorpusRoutedGate(torch.autograd.Function):
 
 
 def gate_with_corpus(x, M, alpha, corpus):
-    """Smooth alpha-gate in forward, corpus-routed gate in backward.
+    """Smooth tent-gate in forward, corpus-routed gate in backward.
 
     If `corpus is None` (or x doesn't need grad), reduces to a plain multiply
-    with the smooth alpha-gate (used at eval time so we don't pay for
+    with the smooth tent-gate (used at eval time so we don't pay for
     autograd-function overhead).
     """
     if corpus is None or not torch.is_grad_enabled():
-        return x * (alpha * M + (1.0 - alpha) * (1.0 - M))
+        return x * _smooth_tent(alpha, M)
     return _CorpusRoutedGate.apply(x, M, alpha, corpus)
 
 
