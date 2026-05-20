@@ -2,19 +2,32 @@
 
 The third design (after dual-slot and BTM) for the dual-source slider.
 
-Each MLP inner unit (4*n_embd per layer) and each attention head (n_head
-per layer) gets a fixed mask value m in [0, 1], sampled once at init from
-Beta(0.5, 0.5) (arcsine — most mass near 0 or 1, some at 0.5). The mask
-encodes that unit's specialty between two corpora.
+Three mask groups, each fixed at init from Beta(0.5, 0.5) (arcsine — tail-
+heavy U-shape, ~20% mass near 0, ~20% near 1, the rest in middle):
 
-During forward, a scalar alpha controls per-unit gating:
+  - M_embd (n_embd,):       GLOBAL per-residual-stream-channel mask.
+                            Applied at: wte+wpe output, every attn c_proj
+                            output, every mlp c_proj output, and ln_f
+                            output before lm_head. The residual stream is
+                            implicitly per-channel-gated because every
+                            write to it is gated. lm_head sees only the
+                            active channels at any given alpha.
+  - M_mlp[i] (4*n_embd,):   per-layer MLP-inner-unit mask. Applied to the
+                            post-GELU hidden activations of each block.
+  - M_attn[i] (n_head,):    per-layer attention-head mask. Applied to each
+                            head's output before c_proj.
+
+During forward, a scalar alpha controls each mask's gate:
 
     gate(unit, alpha) = alpha * m + (1 - alpha) * (1 - m)
 
-At alpha=1, m=1 specialists fire fully, m=0 specialists are silent, halfsies
-(m=0.5) fire at 0.5. At alpha=0, the roles flip. At alpha=0.5, halfsies
-dominate. The residual stream, embeddings, LayerNorms and lm_head are NOT
-gated — they are shared infrastructure across all alpha.
+At alpha=1: m=1 specialists fire fully, m=0 specialists are silent, m=0.5
+halfsies fire at 0.5. At alpha=0 the roles flip. At alpha=0.5 halfsies
+dominate. LayerNorms stay un-gated by design: per-channel gating BEFORE LN
+is partially undone by LN's mean subtraction and variance renormalization,
+so we gate AFTER LN where it matters (residual-stream gating is on the
+things that WRITE to the residual stream, not on LN's output that goes
+into Q/K/V inside the block).
 
 During training, alpha is sampled per iter from Beta(0.5, 0.5) (concentrating
 on corners), and the corpus the batch is drawn from is chosen by Bernoulli(alpha)
@@ -53,6 +66,53 @@ def sample_beta_half_mask(shape, seed):
 
 
 # ============================================================================
+# Corpus-routed gate (straight-through estimator)
+# ============================================================================
+#
+# Forward uses the smooth alpha-gate (so the model is exposed to mid-alpha
+# behavior at training time). Backward routes gradient through the *hard*
+# corpus-based gate: M for shake batches, 1-M for ts batches. Specialists
+# (m=1 for shake) get full gradient from their own corpus regardless of
+# alpha, and zero from the other corpus. Halfsies (m=0.5) get half from
+# either. Cross-corpus leakage on specialists is plugged.
+#
+# At eval time (no backward, or no corpus passed), the gate is just a
+# scalar multiply with the smooth alpha-gate — no autograd indirection.
+
+class _CorpusRoutedGate(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, M, alpha, corpus):
+        # corpus: 1.0 for shake, 0.0 for ts. Stored as a Python float on ctx.
+        ctx.save_for_backward(M)
+        ctx.alpha = float(alpha)
+        ctx.corpus = float(corpus)
+        return x * (alpha * M + (1.0 - alpha) * (1.0 - M))
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        M, = ctx.saved_tensors
+        if ctx.corpus >= 0.5:
+            # shake: only m near 1 get gradient
+            gate_bwd = M
+        else:
+            # ts: only m near 0 get gradient (i.e., 1 - M near 1)
+            gate_bwd = 1.0 - M
+        return grad_output * gate_bwd, None, None, None
+
+
+def gate_with_corpus(x, M, alpha, corpus):
+    """Smooth alpha-gate in forward, corpus-routed gate in backward.
+
+    If `corpus is None` (or x doesn't need grad), reduces to a plain multiply
+    with the smooth alpha-gate (used at eval time so we don't pay for
+    autograd-function overhead).
+    """
+    if corpus is None or not torch.is_grad_enabled():
+        return x * (alpha * M + (1.0 - alpha) * (1.0 - M))
+    return _CorpusRoutedGate.apply(x, M, alpha, corpus)
+
+
+# ============================================================================
 # Model
 # ============================================================================
 
@@ -69,7 +129,7 @@ class GatedGPTConfig:
 
 
 class GatedSelfAttention(nn.Module):
-    def __init__(self, config: GatedGPTConfig, layer_idx: int):
+    def __init__(self, config: GatedGPTConfig, layer_idx: int, M_embd: torch.Tensor):
         super().__init__()
         assert config.n_embd % config.n_head == 0
         self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
@@ -79,16 +139,14 @@ class GatedSelfAttention(nn.Module):
         self.n_embd = config.n_embd
         self.head_dim = config.n_embd // config.n_head
         self.dropout = config.dropout
-        # Per-head mask, distinct seed per (layer, attn-vs-mlp) so the masks
-        # are uncorrelated across modules even though they share the same
-        # parent mask_seed.
+        # Per-head mask, distinct seed per (layer, attn-vs-mlp)
         mask = sample_beta_half_mask((config.n_head,), seed=config.mask_seed + 100 * layer_idx + 1)
-        self.register_buffer('M', mask)
+        self.register_buffer('M_head', mask)
+        # Shared n_embd-channel mask (same tensor across all blocks; registered
+        # as a buffer for state_dict portability)
+        self.register_buffer('M_embd', M_embd)
 
-    def gate(self, alpha: float) -> torch.Tensor:
-        return alpha * self.M + (1.0 - alpha) * (1.0 - self.M)  # (H,)
-
-    def forward(self, x: torch.Tensor, alpha: float) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, alpha: float, corpus) -> torch.Tensor:
         B, T, C = x.size()
         q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
         q = q.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
@@ -99,42 +157,44 @@ class GatedSelfAttention(nn.Module):
             dropout_p=self.dropout if self.training else 0.0,
             is_causal=True,
         )  # (B, H, T, hd)
-        # Gate per head: multiply each head's output by its gate value
-        y = y * self.gate(alpha).view(1, self.n_head, 1, 1)
+        # Per-head gate: broadcast (H,) over (B, H, T, hd)
+        y = gate_with_corpus(y, self.M_head.view(1, self.n_head, 1, 1), alpha, corpus)
         y = y.transpose(1, 2).contiguous().view(B, T, C)
-        return self.resid_dropout(self.c_proj(y))
+        out = self.c_proj(y)
+        # Per-channel residual-stream gate
+        out = gate_with_corpus(out, self.M_embd, alpha, corpus)
+        return self.resid_dropout(out)
 
 
 class GatedMLP(nn.Module):
-    def __init__(self, config: GatedGPTConfig, layer_idx: int):
+    def __init__(self, config: GatedGPTConfig, layer_idx: int, M_embd: torch.Tensor):
         super().__init__()
         self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
         self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
         mask = sample_beta_half_mask((4 * config.n_embd,), seed=config.mask_seed + 100 * layer_idx + 2)
-        self.register_buffer('M', mask)
+        self.register_buffer('M_inner', mask)
+        self.register_buffer('M_embd', M_embd)
 
-    def gate(self, alpha: float) -> torch.Tensor:
-        return alpha * self.M + (1.0 - alpha) * (1.0 - self.M)  # (4D,)
-
-    def forward(self, x: torch.Tensor, alpha: float) -> torch.Tensor:
-        h = F.gelu(self.c_fc(x))         # (B, T, 4D)
-        h = h * self.gate(alpha)         # broadcast: (1, 1, 4D) * (B, T, 4D)
+    def forward(self, x: torch.Tensor, alpha: float, corpus) -> torch.Tensor:
+        h = F.gelu(self.c_fc(x))                                         # (B, T, 4D)
+        h = gate_with_corpus(h, self.M_inner, alpha, corpus)             # MLP-inner gate
         h = self.c_proj(h)
+        h = gate_with_corpus(h, self.M_embd, alpha, corpus)              # residual-stream gate
         return self.dropout(h)
 
 
 class GatedBlock(nn.Module):
-    def __init__(self, config: GatedGPTConfig, layer_idx: int):
+    def __init__(self, config: GatedGPTConfig, layer_idx: int, M_embd: torch.Tensor):
         super().__init__()
         self.ln_1 = nn.LayerNorm(config.n_embd, bias=config.bias)
-        self.attn = GatedSelfAttention(config, layer_idx)
+        self.attn = GatedSelfAttention(config, layer_idx, M_embd)
         self.ln_2 = nn.LayerNorm(config.n_embd, bias=config.bias)
-        self.mlp = GatedMLP(config, layer_idx)
+        self.mlp = GatedMLP(config, layer_idx, M_embd)
 
-    def forward(self, x: torch.Tensor, alpha: float) -> torch.Tensor:
-        x = x + self.attn(self.ln_1(x), alpha)
-        x = x + self.mlp(self.ln_2(x), alpha)
+    def forward(self, x: torch.Tensor, alpha: float, corpus) -> torch.Tensor:
+        x = x + self.attn(self.ln_1(x), alpha, corpus)
+        x = x + self.mlp(self.ln_2(x), alpha, corpus)
         return x
 
 
@@ -142,11 +202,18 @@ class GatedGPT(nn.Module):
     def __init__(self, config: GatedGPTConfig):
         super().__init__()
         self.config = config
+        # Global per-channel mask for the residual-stream (n_embd) dimension.
+        # Sampled once with a layer-independent seed so re-runs reproduce it.
+        # Shared across every module that touches the residual stream
+        # (embeddings, every block's c_proj output, and ln_f output before lm_head).
+        M_embd = sample_beta_half_mask((config.n_embd,), seed=config.mask_seed)
+        self.register_buffer('M_embd', M_embd)
+
         self.transformer = nn.ModuleDict(dict(
             wte=nn.Embedding(config.vocab_size, config.n_embd),
             wpe=nn.Embedding(config.block_size, config.n_embd),
             drop=nn.Dropout(config.dropout),
-            h=nn.ModuleList([GatedBlock(config, i) for i in range(config.n_layer)]),
+            h=nn.ModuleList([GatedBlock(config, i, M_embd) for i in range(config.n_layer)]),
             ln_f=nn.LayerNorm(config.n_embd, bias=config.bias),
         ))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
@@ -157,6 +224,7 @@ class GatedGPT(nn.Module):
             if pn.endswith('c_proj.weight'):
                 torch.nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layer))
 
+
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
@@ -165,13 +233,26 @@ class GatedGPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx: torch.Tensor, alpha: float, targets=None):
+    def forward(self, idx: torch.Tensor, alpha: float, targets=None, corpus=None):
+        """Forward pass.
+
+        `corpus` controls the backward routing: 1.0 = shake (specialists with
+        m near 1 receive gradient), 0.0 = ts (specialists with m near 0
+        receive gradient), None = eval / smooth gate everywhere (no routing
+        autograd overhead).
+        """
         B, T = idx.size()
         pos = torch.arange(0, T, dtype=torch.long, device=idx.device)
-        x = self.transformer.drop(self.transformer.wte(idx) + self.transformer.wpe(pos))
+        # Gate the initial residual stream (embedding output)
+        x = self.transformer.wte(idx) + self.transformer.wpe(pos)
+        x = gate_with_corpus(x, self.M_embd, alpha, corpus)
+        x = self.transformer.drop(x)
         for block in self.transformer.h:
-            x = block(x, alpha)
+            x = block(x, alpha, corpus)
+        # ln_f normalizes the residual stream; gate again so lm_head only sees
+        # the active channels at this alpha
         x = self.transformer.ln_f(x)
+        x = gate_with_corpus(x, self.M_embd, alpha, corpus)
         if targets is not None:
             logits = self.lm_head(x)
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
@@ -183,10 +264,11 @@ class GatedGPT(nn.Module):
     @torch.no_grad()
     def generate(self, idx: torch.Tensor, alpha: float, max_new_tokens: int,
                  temperature: float = 1.0, top_k=None):
+        # eval / generation: corpus=None so the gate is just a multiply (no autograd routing)
         self.eval()
         for _ in range(max_new_tokens):
             idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
-            logits, _ = self(idx_cond, alpha)
+            logits, _ = self(idx_cond, alpha, corpus=None)
             logits = logits[:, -1, :] / temperature
             if top_k is not None:
                 v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
@@ -197,17 +279,19 @@ class GatedGPT(nn.Module):
         return idx
 
     def mask_summary(self):
-        """Quick per-layer histogram of mask values for a sanity check."""
-        out = {}
+        """Quick per-mask histogram for sanity-checking the Beta(0.5,0.5) sample."""
+        def stats(M):
+            return {
+                'mean': float(M.mean()),
+                'shake_specialist (m>0.9)': int((M > 0.9).sum()),
+                'ts_specialist (m<0.1)':    int((M < 0.1).sum()),
+                'halfsies (0.1..0.9)':      int(((M >= 0.1) & (M <= 0.9)).sum()),
+                'total': int(M.numel()),
+            }
+        out = {'M_embd (global residual-stream)': stats(self.M_embd)}
         for i, block in enumerate(self.transformer.h):
-            for label, M in [('attn', block.attn.M), ('mlp', block.mlp.M)]:
-                out[f'layer_{i}_{label}'] = {
-                    'mean': float(M.mean()),
-                    'shake_specialist (m>0.9)': int((M > 0.9).sum()),
-                    'ts_specialist (m<0.1)':    int((M < 0.1).sum()),
-                    'halfsies (0.1..0.9)':      int(((M >= 0.1) & (M <= 0.9)).sum()),
-                    'total': int(M.numel()),
-                }
+            out[f'layer_{i}_attn_heads'] = stats(block.attn.M_head)
+            out[f'layer_{i}_mlp_inner']  = stats(block.mlp.M_inner)
         return out
 
 
@@ -269,7 +353,7 @@ def train_gated(model, get_shake_batch, get_ts_batch, n_iters,
         for k in range(eval_iters):
             X, Y = get_batch_fn()
             with torch.amp.autocast(device_type=device, dtype=amp_dtype):
-                _, loss = model(X, alpha, Y)
+                _, loss = model(X, alpha, Y, corpus=None)  # eval: smooth gate, no routing
             losses[k] = loss.item()
         model.train()
         return losses.mean().item()
