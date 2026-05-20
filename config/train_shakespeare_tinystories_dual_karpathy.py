@@ -14,12 +14,16 @@
 # capacity bump.
 #
 # Iter budget: Karpathy's 5000 iters are all shake-batch optimizer steps.
-# Under alt_mixed Uniform, W_s only steps every other pass, so 10000 total
-# iters gives W_s the same 5000 effective updates Karpathy used. lr_decay
+# Under alternating, W_s only steps every other pass, so 10000 total iters
+# gives W_s the same 5000 effective updates Karpathy used. lr_decay
 # proportionally extended.
 #
-# Trained with alt_mixed Uniform — the winning recipe from the wiki
-# experiments (clean per-slot Adam isolation + mixed-batch forwards).
+# Trained with alternating + Uniform alpha — Andrew's preferred recipe:
+# pure-per-corpus passes (mask_grads slot routing) with alpha sampled from
+# Uniform[0,1] at every iter for the forward composition. Inferred-best
+# (alternating beats alt_mixed on prior wiki runs; Uniform beats Beta_half
+# inside alt_mixed) but the alternating+Uniform combo has not been fully
+# end-to-end tested as of 2026-05-19; this is its first full run.
 
 out_dir = 'out-shakespeare-tinystories-dual-karpathy'
 eval_interval = 250
@@ -51,7 +55,7 @@ first_pass_corpus = 'shake'
 mix_distribution = 'uniform'
 sample_alpha_beta_every = 1
 
-batch_mode = 'alt_mixed'
+batch_mode = 'alternating'
 
 gradient_normalize = False
 grad_norm_floor = 0.05
