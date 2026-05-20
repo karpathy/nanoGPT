@@ -36,9 +36,18 @@ if init_from == 'resume':
     # init from a model saved in a specific directory
     ckpt_path = os.path.join(out_dir, 'ckpt.pt')
     checkpoint = torch.load(ckpt_path, map_location=device)
-    gptconf = GPTConfig(**checkpoint['model_args'])
+    # IMPLICIT CONTRACT with train.py (Hokmah architectural audit):
+    #   checkpoint['model_args'] is a dict of GPTConfig field values serialised by train.py.
+    #   The contract requires that the keys match GPTConfig's fields exactly. We use
+    #   GPTConfig.from_checkpoint() instead of GPTConfig(**checkpoint['model_args']) so that:
+    #     - unknown keys (newer codebase) are warned about and ignored rather than raising TypeError
+    #     - missing keys (older checkpoint) are warned about and filled with dataclass defaults
+    #   The state_dict key fix below is the companion contract: train.py saves raw_model.state_dict()
+    #   which, when compile=True, carries the '_orig_mod.' prefix added by torch.compile().
+    gptconf = GPTConfig.from_checkpoint(checkpoint['model_args'])
     model = GPT(gptconf)
     state_dict = checkpoint['model']
+    # Strip the '_orig_mod.' prefix injected by torch.compile() (see train.py for full explanation).
     unwanted_prefix = '_orig_mod.'
     for k,v in list(state_dict.items()):
         if k.startswith(unwanted_prefix):

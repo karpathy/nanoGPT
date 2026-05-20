@@ -48,6 +48,13 @@ class CausalSelfAttention(nn.Module):
             # causal mask to ensure that attention is only applied to the left in the input sequence
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
+        elif config.dropout > 0.0:
+            # NOTE (Hokmah audit): Flash Attention's fused kernel handles dropout internally via
+            # dropout_p=self.dropout when self.training=True, and dropout_p=0 at eval time.
+            # This is the active codepath — slow manual attention is NOT used even with dropout > 0.
+            # (Older PyTorch versions had a bug here; it was fixed in PyTorch >= 2.1.)
+            print(f"NOTE: Flash Attention active with fused dropout_p={config.dropout} during training "
+                  f"(dropout_p=0 at eval). Slow attention fallback is NOT used.")
 
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
@@ -114,6 +121,49 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+
+    @classmethod
+    def from_checkpoint(cls, model_args: dict) -> 'GPTConfig':
+        """
+        Safely reconstruct a GPTConfig from a checkpoint's model_args dict.
+
+        IMPLICIT CONTRACT with train.py (Hokmah architectural audit):
+            train.py serialises model_args = {field: value, ...} into checkpoint['model_args'].
+            The keys must match exactly the fields of GPTConfig.__init__. If GPTConfig gains a
+            new required field (no default), or if a field is renamed, all existing checkpoints
+            break on load. Using this classmethod instead of GPTConfig(**model_args) directly
+            makes that contract explicit and degrades gracefully:
+
+            - Unknown keys in the checkpoint  → UserWarning (ignored, not TypeError)
+            - Missing keys in the checkpoint  → UserWarning (dataclass defaults are used)
+
+        Use this everywhere a checkpoint is loaded (sample.py, train.py resume path).
+        """
+        import dataclasses
+        import warnings
+
+        valid_fields = {f.name for f in dataclasses.fields(cls)}
+
+        unknown = set(model_args) - valid_fields
+        if unknown:
+            warnings.warn(
+                f"GPTConfig.from_checkpoint: checkpoint model_args contains unrecognised keys "
+                f"(likely from a newer codebase version) — ignoring: {sorted(unknown)}",
+                UserWarning,
+                stacklevel=2,
+            )
+
+        missing = valid_fields - set(model_args)
+        if missing:
+            warnings.warn(
+                f"GPTConfig.from_checkpoint: checkpoint model_args is missing keys "
+                f"(likely from an older codebase version) — using dataclass defaults: {sorted(missing)}",
+                UserWarning,
+                stacklevel=2,
+            )
+
+        filtered = {k: v for k, v in model_args.items() if k in valid_fields}
+        return cls(**filtered)
 
 class GPT(nn.Module):
 

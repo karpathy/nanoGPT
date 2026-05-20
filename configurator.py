@@ -12,6 +12,17 @@ The code in this script then overrides the globals()
 I know people are not going to love this, I just really dislike configuration
 complexity and having to prepend config. to every single variable. If someone
 comes up with a better simple Python solution I am all ears.
+
+IMPLICIT CONTRACT / RISK (Hokmah architectural audit):
+    This file is exec()'d inside the caller's global scope (train.py, sample.py,
+    bench.py). It mutates the caller's globals() directly. Two silent failure modes:
+
+    1. GHOST VARIABLE: a typo in a config file (e.g. "learing_rate = 1e-4" instead
+       of "learning_rate = 1e-4") introduces a brand-new global that overrides nothing
+       and raises no error. train.py now detects and warns about this pattern.
+
+    2. TYPE MISMATCH: a --key=value override whose inferred type doesn't match the
+       default will now raise a descriptive ValueError instead of a bare AssertionError.
 """
 
 import sys
@@ -38,9 +49,16 @@ for arg in sys.argv[1:]:
             except (SyntaxError, ValueError):
                 # if that goes wrong, just use the string
                 attempt = val
-            # ensure the types match ok
-            assert type(attempt) == type(globals()[key])
-            # cross fingers
+            # ensure the types match — raise a descriptive error instead of a bare
+            # AssertionError so the caller knows exactly what went wrong
+            if type(attempt) != type(globals()[key]):
+                raise ValueError(
+                    f"Type mismatch for config key '{key}': "
+                    f"expected {type(globals()[key]).__name__} "
+                    f"(current value: {globals()[key]!r}), "
+                    f"got {type(attempt).__name__} (override value: {attempt!r}). "
+                    f"Fix your --{key}= argument or config file."
+                )
             print(f"Overriding: {key} = {attempt}")
             globals()[key] = attempt
         else:
