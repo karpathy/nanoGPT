@@ -87,32 +87,37 @@ def sample_beta_half_mask(shape, seed):
 # At eval time (no backward, or no corpus passed), the gate is just a
 # scalar multiply with the smooth alpha-gate — no autograd indirection.
 
-def _smooth_tent(alpha, M):
-    """Tent/bell gate centered at α=m with adaptive span max(m, 1-m).
+def _smooth_tent(alpha, M, narrowness=1.0):
+    """Tent/bell gate centered at α=m with adaptive span = max(m, 1-m) · narrowness.
 
-    For m ∈ {0, 1} (specialists), span=1: smooth ramp on [0, 1] from 0 at
-    the opposite corner to 1 at the matched corner.
-    For m = 0.5 (halfsies), span=0.5: smooth bell peaked at α=0.5 with
-    exact zero at both endpoints.
-    For m in between, asymmetric bell peaked at α=m with exact zero at the
-    further endpoint of [0, 1] from m.
+    `narrowness=1.0` (default): each neuron fires across the full α∈[0,1]:
+      - m=0 / m=1 (specialists): span=1, smooth ramp 0→1 from opposite to matched corner.
+      - m=0.5 (halfsies): span=0.5, bell peaked at α=0.5, exactly 0 at both endpoints.
 
-    Uses cos²(π/2 · |α-m|/span(m)) for C^∞ smoothness inside support; rel
-    stays in [0, 1] for α ∈ [0, 1] so no clamping is needed.
+    `narrowness < 1`: each neuron's fire zone is correspondingly narrow.
+      - At narrowness=0.25, m=1 fires only at α > ~0.83 (only the strong specialists
+        fire near the corners); halfsies fire only in α ∈ [0.4, 0.6]; etc.
+      - This produces the "more neurons at the corners" property when combined
+        with the Beta(0.5,0.5) mask distribution: at α=1, only m>0.8-ish units
+        fire (~30% of total per Beta(0.5,0.5)); at α=0.5, only m≈0.5 fires (~13%).
+
+    Uses cos²(π/2 · |α-m|/span) for C^∞ smoothness; outside the support the rel
+    is clamped to 1 so cos²(π/2) = 0 (exactly off).
     """
-    span = torch.maximum(M, 1.0 - M)
-    rel = (alpha - M).abs() / span
+    span = torch.maximum(M, 1.0 - M) * narrowness
+    rel = ((alpha - M).abs() / span).clamp(max=1.0)
     return torch.cos(math.pi * 0.5 * rel).pow(2)
 
 
 class _CorpusRoutedGate(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x, M, alpha, corpus):
+    def forward(ctx, x, M, alpha, corpus, narrowness):
         # corpus: 1.0 for shake, 0.0 for ts. Stored as a Python float on ctx.
         ctx.save_for_backward(M)
         ctx.alpha = float(alpha)
         ctx.corpus = float(corpus)
-        return x * _smooth_tent(alpha, M)
+        ctx.narrowness = float(narrowness)
+        return x * _smooth_tent(alpha, M, narrowness)
 
     @staticmethod
     def backward(ctx, grad_output):
@@ -123,10 +128,12 @@ class _CorpusRoutedGate(torch.autograd.Function):
         else:
             # ts: only m near 0 get gradient (i.e., 1 - M near 1)
             gate_bwd = 1.0 - M
-        return grad_output * gate_bwd, None, None, None
+        # backward gate is independent of narrowness (it's the hard corpus mask,
+        # not the smooth forward shape)
+        return grad_output * gate_bwd, None, None, None, None
 
 
-def gate_with_corpus(x, M, alpha, corpus):
+def gate_with_corpus(x, M, alpha, corpus, narrowness=1.0):
     """Smooth tent-gate in forward, corpus-routed gate in backward.
 
     If `corpus is None` (or x doesn't need grad), reduces to a plain multiply
@@ -134,8 +141,8 @@ def gate_with_corpus(x, M, alpha, corpus):
     autograd-function overhead).
     """
     if corpus is None or not torch.is_grad_enabled():
-        return x * _smooth_tent(alpha, M)
-    return _CorpusRoutedGate.apply(x, M, alpha, corpus)
+        return x * _smooth_tent(alpha, M, narrowness)
+    return _CorpusRoutedGate.apply(x, M, alpha, corpus, narrowness)
 
 
 # ============================================================================
@@ -151,7 +158,8 @@ class GatedGPTConfig:
     block_size: int = 256
     dropout: float = 0.2
     bias: bool = False
-    mask_seed: int = 1337  # fixed seed for reproducible mask sampling
+    mask_seed: int = 1337       # fixed seed for reproducible mask sampling
+    tent_narrowness: float = 1.0  # 1.0 = full-width tent; <1 narrows each neuron's fire-zone
 
 
 class GatedSelfAttention(nn.Module):
@@ -165,11 +173,9 @@ class GatedSelfAttention(nn.Module):
         self.n_embd = config.n_embd
         self.head_dim = config.n_embd // config.n_head
         self.dropout = config.dropout
-        # Per-head mask, distinct seed per (layer, attn-vs-mlp)
+        self.narrowness = config.tent_narrowness
         mask = sample_beta_half_mask((config.n_head,), seed=config.mask_seed + 100 * layer_idx + 1)
         self.register_buffer('M_head', mask)
-        # Shared n_embd-channel mask (same tensor across all blocks; registered
-        # as a buffer for state_dict portability)
         self.register_buffer('M_embd', M_embd)
 
     def forward(self, x: torch.Tensor, alpha: float, corpus) -> torch.Tensor:
@@ -183,12 +189,10 @@ class GatedSelfAttention(nn.Module):
             dropout_p=self.dropout if self.training else 0.0,
             is_causal=True,
         )  # (B, H, T, hd)
-        # Per-head gate: broadcast (H,) over (B, H, T, hd)
-        y = gate_with_corpus(y, self.M_head.view(1, self.n_head, 1, 1), alpha, corpus)
+        y = gate_with_corpus(y, self.M_head.view(1, self.n_head, 1, 1), alpha, corpus, self.narrowness)
         y = y.transpose(1, 2).contiguous().view(B, T, C)
         out = self.c_proj(y)
-        # Per-channel residual-stream gate
-        out = gate_with_corpus(out, self.M_embd, alpha, corpus)
+        out = gate_with_corpus(out, self.M_embd, alpha, corpus, self.narrowness)
         return self.resid_dropout(out)
 
 
@@ -198,15 +202,16 @@ class GatedMLP(nn.Module):
         self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
         self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
+        self.narrowness = config.tent_narrowness
         mask = sample_beta_half_mask((4 * config.n_embd,), seed=config.mask_seed + 100 * layer_idx + 2)
         self.register_buffer('M_inner', mask)
         self.register_buffer('M_embd', M_embd)
 
     def forward(self, x: torch.Tensor, alpha: float, corpus) -> torch.Tensor:
-        h = F.gelu(self.c_fc(x))                                         # (B, T, 4D)
-        h = gate_with_corpus(h, self.M_inner, alpha, corpus)             # MLP-inner gate
+        h = F.gelu(self.c_fc(x))                                                            # (B, T, 4D)
+        h = gate_with_corpus(h, self.M_inner, alpha, corpus, self.narrowness)               # MLP-inner gate
         h = self.c_proj(h)
-        h = gate_with_corpus(h, self.M_embd, alpha, corpus)              # residual-stream gate
+        h = gate_with_corpus(h, self.M_embd, alpha, corpus, self.narrowness)                # residual-stream gate
         return self.dropout(h)
 
 
@@ -234,6 +239,7 @@ class GatedGPT(nn.Module):
         # (embeddings, every block's c_proj output, and ln_f output before lm_head).
         M_embd = sample_beta_half_mask((config.n_embd,), seed=config.mask_seed)
         self.register_buffer('M_embd', M_embd)
+        self.narrowness = config.tent_narrowness
 
         self.transformer = nn.ModuleDict(dict(
             wte=nn.Embedding(config.vocab_size, config.n_embd),
@@ -271,14 +277,14 @@ class GatedGPT(nn.Module):
         pos = torch.arange(0, T, dtype=torch.long, device=idx.device)
         # Gate the initial residual stream (embedding output)
         x = self.transformer.wte(idx) + self.transformer.wpe(pos)
-        x = gate_with_corpus(x, self.M_embd, alpha, corpus)
+        x = gate_with_corpus(x, self.M_embd, alpha, corpus, self.narrowness)
         x = self.transformer.drop(x)
         for block in self.transformer.h:
             x = block(x, alpha, corpus)
         # ln_f normalizes the residual stream; gate again so lm_head only sees
         # the active channels at this alpha
         x = self.transformer.ln_f(x)
-        x = gate_with_corpus(x, self.M_embd, alpha, corpus)
+        x = gate_with_corpus(x, self.M_embd, alpha, corpus, self.narrowness)
         if targets is not None:
             logits = self.lm_head(x)
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
