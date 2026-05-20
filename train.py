@@ -74,7 +74,29 @@ dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported
 compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
+# Ghost-variable detection (Hokmah audit): snapshot globals() before running the configurator
+# so we can detect typos in config files. A misspelled key (e.g. "learing_rate = 1e-4") silently
+# creates a new orphan global that overrides nothing and causes hard-to-debug divergences.
+_globals_before_configurator = set(globals().keys())
 exec(open('configurator.py').read()) # overrides from command line or config file
+# Warn on any new scalar globals introduced by the config file that are not recognised config keys.
+# These are almost certainly typos (ghost variables).
+_new_globals = set(globals().keys()) - _globals_before_configurator - {'_globals_before_configurator'}
+_ghost_vars = [
+    k for k in _new_globals
+    if not k.startswith('_') and isinstance(globals()[k], (int, float, bool, str))
+    and k not in config_keys
+]
+if _ghost_vars:
+    import warnings as _warnings
+    _warnings.warn(
+        f"configurator: the config file introduced new variables that are NOT recognised config keys — "
+        f"possible typos: {_ghost_vars}. "
+        f"Known config keys are: {config_keys}. "
+        f"If intentional, add the variable to the defaults block in train.py.",
+        UserWarning,
+        stacklevel=1,
+    )
 config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
 
@@ -169,8 +191,13 @@ elif init_from == 'resume':
     gptconf = GPTConfig(**model_args)
     model = GPT(gptconf)
     state_dict = checkpoint['model']
-    # fix the keys of the state dictionary :(
-    # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+    # fix the keys of the state dictionary
+    # EXPLANATION (Hokmah audit): the '_orig_mod.' prefix is injected by torch.compile().
+    # When compile=True, torch.compile() wraps the model in an OptimizedModule whose
+    # state_dict() prefixes every key with '_orig_mod.' to reflect the internal structure.
+    # Because we save raw_model.state_dict() (unwrapped from DDP but still wrapped by
+    # torch.compile), checkpoints produced with compile=True carry this prefix and must
+    # be stripped before load_state_dict(). Checkpoints from compile=False are unaffected.
     unwanted_prefix = '_orig_mod.'
     for k,v in list(state_dict.items()):
         if k.startswith(unwanted_prefix):
