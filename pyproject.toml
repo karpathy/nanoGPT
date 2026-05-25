@@ -1,0 +1,29 @@
+[project]
+name = "nanogpt"
+version = "0.1.0"
+description = "The simplest, fastest repository for training/finetuning medium-sized GPTs."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+dependencies = [
+    "torch",
+    "numpy",
+    "transformers",
+    "datasets",
+    "tiktoken",
+    "wandb",
+    "tqdm",
+    "tensorboard",
+    "plotly>=6.7.0",
+    "anywidget>=0.9.21",
+]
+
+[project.optional-dependencies]
+notebooks = [
+    "jupyter",
+    "ipywidgets",
+    "anywidget",
+]
+
+[tool.uv]
+package = false
