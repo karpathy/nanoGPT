@@ -243,13 +243,13 @@ wandb.log({
     "h2/summary_table": wandb.Table(
         columns = [
             "L", "m", "val_loss", "val_ppl", "param_count",
-            "model_type", "block_size", "eval_cache",
+            "model_type", "block_size", "eval_time_sec", "eval_cache",
             "tokens_per_sec", "peak_mem_gb", "wall_clock_sec",
             "cache_hit_ratio", "hit_ppl_50", "steps_to_target", "mfu",
         ],
         data = [[
             r["L"], r["m"], r["val_loss"], r["val_ppl"], r["param_count"],
-            r["model_type"], r["block_size"], r["eval_cache"],
+            r["model_type"], r["block_size"], r["eval_time_sec"], r["eval_cache"],
             r.get("tokens_per_sec",  0),
             r.get("peak_mem_gb",     0),
             r.get("wall_clock_sec",  0),
