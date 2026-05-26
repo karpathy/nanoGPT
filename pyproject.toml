@@ -16,6 +16,8 @@ dependencies = [
     "tensorboard",
     "plotly>=6.7.0",
     "anywidget>=0.9.21",
+    "torchvision>=0.23.0",
+    "ipycanvas>=0.14.3",
 ]
 
 [project.optional-dependencies]
@@ -23,6 +25,8 @@ notebooks = [
     "jupyter",
     "ipywidgets",
     "anywidget",
+    "ipycanvas>=0.13",
+    "pillow",
 ]
 
 [tool.uv]
