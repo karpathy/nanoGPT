@@ -316,6 +316,7 @@ def estimate_loss():
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
+    return out
 
 # learning rate decay scheduler (cosine with warmup)
 def get_lr(it):
