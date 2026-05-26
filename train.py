@@ -299,16 +299,23 @@ if ddp:
 def estimate_loss():
     out = {}
     model.eval()
+    # Build prefix KV once for all eval batches
+    prefix_kv = None
+    if prefix_module is not None and prefix_cache:
+        prefix_kv = raw_model.build_prefix_kv(prefix_module, batch_size=batch_size)
+
     for split in ['train', 'val']:
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = get_batch(split)
             with ctx:
-                logits, loss = model(X, Y, prefix=prefix_module)
+                if prefix_kv is not None:
+                    logits, loss = model(X, Y, prefix=None, prefix_kv=prefix_kv)
+                else:
+                    logits, loss = model(X, Y, prefix=prefix_module)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
-    return out
 
 # learning rate decay scheduler (cosine with warmup)
 def get_lr(it):
