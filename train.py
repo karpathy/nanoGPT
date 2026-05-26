@@ -403,7 +403,9 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
+        eval_start = time.time()
         losses = estimate_loss()
+        eval_time = time.time() - eval_start
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
         if wandb_log:
             import math
@@ -426,6 +428,7 @@ while True:
                 "iter": iter_num,
                 "train/loss": losses['train'],
                 "val/loss": losses['val'],
+                "efficiency/eval_time_sec": eval_time,
                 "lr": lr,
                 "mfu": running_mfu * 100,
                 "prefix/len": prefix_len,
@@ -453,6 +456,7 @@ while True:
                     "train/perplexity": train_ppl,
                     "target/hit_ppl_50": hit_target,
                     "target/steps_logged": iter_num if hit_target else 0,
+
                 })
 
             else:
