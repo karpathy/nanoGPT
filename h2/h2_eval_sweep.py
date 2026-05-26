@@ -1,3 +1,5 @@
+from datetime import time
+
 import torch, math, json, os
 import wandb
 
@@ -189,12 +191,14 @@ for L in L_VALUES:
                 f"block_size={metadata['block_size']} prefix_len={loaded_L} "
                 f"train_m={loaded_m} eval_cache={int(EVAL_WITH_CACHE)}"
             )
+            eval_start = time.time()
             val_loss, val_ppl = estimate_val_perplexity(
                 model,
                 soft_prefix,
                 val_data,
                 use_cache=EVAL_WITH_CACHE,
             )
+            eval_time = time.time() - eval_start
             param_count       = loaded_L * model.config.n_embd
 
             r = {
@@ -204,6 +208,7 @@ for L in L_VALUES:
                 "val_loss":    round(val_loss, 4),
                 "val_ppl":     round(val_ppl, 2),
                 "param_count": param_count,
+                "eval_time_sec": round(eval_time, 2),
                 "task":        TASK,
                 "model_type":  metadata["model_type"],
                 "block_size":  metadata["block_size"],
