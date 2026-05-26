@@ -2,7 +2,7 @@ import torch, math, json, os
 import wandb
 
 # L_VALUES  = [0, 64, 100, 256, 512, 1024, 2048]
-L_VALUES  = [0, 64, 100, 256, 512]
+L_VALUES  = [0, 16, 32, 64, 80, 100, 256, 512, 760]
 M_VALUES = [1, 5, 10, 20]
 TASK      = "wikitext2"
 DEVICE    = "cuda"
