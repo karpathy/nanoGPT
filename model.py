@@ -94,29 +94,99 @@ class CausalSelfAttention(nn.Module):
             ...
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        if self.flash and prefix_kv is None:
-            y = torch.nn.functional.scaled_dot_product_attention(
-                q, k, v,
-                attn_mask=None,
-                dropout_p=self.dropout if self.training else 0,
-                is_causal=True
-            )
+        # if self.flash and prefix_kv is None:
+        #     y = torch.nn.functional.scaled_dot_product_attention(
+        #         q, k, v,
+        #         attn_mask=None,
+        #         dropout_p=self.dropout if self.training else 0,
+        #         is_causal=True
+        #     )
+        #
+        # else:
+        #     # manual implementation of attention
+        #
+        #     att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+        #     if prefix_kv is not None:
+        #         prefix_mask = torch.ones(T, L, device=x.device)
+        #         token_mask = torch.tril(torch.ones(T, T, device=x.device))
+        #         full_mask = torch.cat([prefix_mask, token_mask], dim=1)  # (T, L+T)
+        #         mask = full_mask.view(1, 1, T, L + T)
+        #     else:
+        #         mask = self.bias[:,:,:T,:T]
+        #     att = att.masked_fill(mask== 0, float('-inf'))
+        #     att = F.softmax(att, dim=-1)
+        #     att = self.attn_dropout(att)
+        #     y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
 
+        # FlashAttention path
+        if self.flash:
+            # Standard causal attention (cache OFF)
+            if prefix_kv is None:
+                y = torch.nn.functional.scaled_dot_product_attention(
+                    q,
+                    k,
+                    v,
+                    attn_mask=None,
+                    dropout_p=self.dropout if self.training else 0,
+                    is_causal=True
+                )
+            # Prefix-cache attention (cache ON)
+            else:
+                # prefix tokens are fully visible
+                prefix_mask = torch.ones(
+                    T,
+                    L,
+                    device=x.device,
+                    dtype=torch.bool
+                )
+
+                # causal mask for normal tokens
+                token_mask = torch.tril(
+                    torch.ones(
+                        T,
+                        T,
+                        device=x.device,
+                        dtype=torch.bool
+                    )
+                )
+
+                full_mask = torch.cat(
+                    [prefix_mask, token_mask],
+                    dim=1
+                )
+
+                full_mask = full_mask.view(1, 1, T, L + T)
+
+                y = torch.nn.functional.scaled_dot_product_attention(
+                    q,
+                    k,
+                    v,
+                    attn_mask=full_mask,
+                    dropout_p=self.dropout if self.training else 0,
+                    is_causal=False
+                )
         else:
-            # manual implementation of attention
-
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+            att = (q @ k.transpose(-2, -1)) * (
+                    1.0 / math.sqrt(k.size(-1))
+            )
             if prefix_kv is not None:
                 prefix_mask = torch.ones(T, L, device=x.device)
-                token_mask = torch.tril(torch.ones(T, T, device=x.device))
-                full_mask = torch.cat([prefix_mask, token_mask], dim=1)  # (T, L+T)
+                token_mask = torch.tril(
+                    torch.ones(T, T, device=x.device)
+                )
+                full_mask = torch.cat(
+                    [prefix_mask, token_mask],
+                    dim=1
+                )
                 mask = full_mask.view(1, 1, T, L + T)
             else:
-                mask = self.bias[:,:,:T,:T]
-            att = att.masked_fill(mask== 0, float('-inf'))
+                mask = self.bias[:, :, :T, :T]
+
+            att = att.masked_fill(mask == 0, float('-inf'))
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
-            y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+
+            y = att @ v
         y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
 
         # output projection
