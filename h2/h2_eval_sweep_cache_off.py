@@ -1,11 +1,13 @@
+import datetime
 import time
 
 import torch, math, json, os
 import wandb
 
 # L_VALUES  = [0, 64, 100, 256, 512, 1024, 2048]
-L_VALUES  = [0, 16, 32, 64, 80, 100, 256, 512, 760]
-M_VALUES = [1, 5, 10, 20]
+# L_VALUES  = [0, 16, 32, 64, 80, 100, 256, 512, 760]
+L_VALUES  = [760]
+M_VALUES = [20]
 TASK      = "wikitext2"
 DEVICE    = "cuda"
 
@@ -227,9 +229,10 @@ for r in results:
           f"{r.get('peak_mem_gb', 0):>7.2f}  "
           f"{r.get('wall_clock_sec', 0):>8.1f}")
 
+timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
 eval_run = wandb.init(
     project  = PROJECT,
-    name     = f"h2-eval-summary-cacheoff-{TASK}",
+    name     = f"h2-eval-summary-{TASK}-cache-{EVAL_WITH_CACHE}-{timestamp}",
     job_type = "eval",
 )
 wandb.log({
