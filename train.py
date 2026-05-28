@@ -81,6 +81,9 @@ prefix_len = 0              # L: number of soft tokens (0 = no prefix)
 prefix_update_period = 1    # m: update P every m steps (1 = dense)
 prefix_cache = True         # whether to cache prefix KV between updates
 
+run_final_em = True
+em_eval_examples = 0   # 0 means full split
+em_max_new_tokens = 128
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
@@ -463,8 +466,8 @@ while True:
             else:
                 # supervised mode (gsm8k) — log EM, but not every eval
                 # EM requires generation and is slow, so run it less frequently
-                if iter_num % (eval_interval * 5) == 0 or iter_num >= max_iters:
-                    em_score = evaluate_em(val_data, prefix_module)
+                if iter_num % (eval_interval) == 0 or iter_num >= max_iters:
+                    em_score = evaluate_em(val_data, prefix_module, use_cache=prefix_cache,)
                     common_metrics["val/em"] = em_score
 
             wandb.log(common_metrics)
@@ -598,8 +601,14 @@ while True:
     if iter_num > max_iters:
         break
 
-if master_process and supervised:
-    final_em = evaluate_em(test_data, prefix_module)
+if master_process and supervised and run_final_em:
+    em_data = test_data if em_eval_examples == 0 else test_data[:em_eval_examples]
+    final_em = evaluate_em(
+        em_data,
+        prefix_module,
+        max_new_tokens=em_max_new_tokens,
+        use_cache=prefix_cache,
+    )
     print(f"final test EM: {final_em:.4f}")
     if wandb_log:
         wandb.log({"test/em": final_em})

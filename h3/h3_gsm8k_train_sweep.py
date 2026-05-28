@@ -47,6 +47,7 @@ for cfg in BEST_CONFIGS:
         "python", "train.py", "config/h3_gsm8k.py",
         f"--prefix_len={L}",
         f"--prefix_update_period={M}",
+        f"--run_final_em=False",
         f"--out_dir={out_dir}",
         f"--prefix_cache={cfg['cache']}",
         f"--prefix_type=soft",
