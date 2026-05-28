@@ -18,7 +18,7 @@ dtype = 'float16'
 compile = False
 
 # optimizer
-learning_rate = 3e-5
+learning_rate = 0.1
 max_iters = 2000
 lr_decay_iters = 5000
 min_lr = 3e-6

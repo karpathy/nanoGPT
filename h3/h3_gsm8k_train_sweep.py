@@ -2,10 +2,9 @@ import subprocess, os, time, torch, json, math
 
 # fill these in after H1/H2 results
 BEST_CONFIGS = [
-    {"L": 0,   "m": 1, "cache": True},   # frozen baseline (PPL ~47)
-    {"L": 100, "m": 1, "cache": True},    # classic (PPL 27.99)
-    {"L": 256, "m": 1, "cache": True},    # best (PPL 27.17)
-    {"L": 512, "m": 1, "cache": True},    # large L (PPL 27.55)
+    {"L": 100, "m": 5, "cache": True},
+    {"L": 256, "m": 5, "cache": False},
+    {"L": 512, "m": 10, "cache": True},
 ]
 TASK = "gsm8k"
 
@@ -71,7 +70,7 @@ for cfg in BEST_CONFIGS:
     if os.path.exists(prefix_path):
         ckpt = torch.load(prefix_path, map_location="cpu")
         val_loss = float(ckpt.get("val_loss", float("nan")))
-        peak_mem = torch.cuda.max_memory_allocated() / 1e9
+        peak_mem = float(ckpt.get("peak_gpu_mem_gb", float("nan")))
 
         results.append({
             "L": L,

@@ -293,34 +293,48 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None,  prefix=None, prefix_kv=None):
+    def forward(self, idx, targets=None, prefix=None, prefix_kv=None):
         device = idx.device
         b, t = idx.size()
-        assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
-        pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
 
-        # forward the GPT model itself
-        tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
-        pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
-        x = self.transformer.drop(tok_emb + pos_emb)
+        has_soft_prefix = prefix is not None and isinstance(prefix, SoftPrefix)
+        has_deep_prefix = prefix is not None and isinstance(prefix, DeepPrefix)
+        using_uncached_soft_prefix = has_soft_prefix and prefix_kv is None
+        cached_prefix_len = 0 if prefix_kv is None else prefix_kv[0][0].size(2)
+        effective_prefix_len = prefix.prefix_len if using_uncached_soft_prefix else cached_prefix_len
 
-        # Cache off
-        if prefix is not None and isinstance(prefix, SoftPrefix) and prefix_kv is None:
-            p = prefix.P.unsqueeze(0).expand(b, -1, -1)  # (b, L, n_embd)
-            x = torch.cat([p, x], dim=1)  # (b, L+t, n_embd)
+        assert effective_prefix_len + t <= self.config.block_size, (
+            f"Cannot forward sequence of length {t} with prefix length {effective_prefix_len}; "
+            f"block size is only {self.config.block_size}"
+        )
 
+        tok_emb = self.transformer.wte(idx)
+
+        if using_uncached_soft_prefix:
+            prefix_pos = torch.arange(0, effective_prefix_len, dtype=torch.long, device=device)
+            token_pos = torch.arange(effective_prefix_len, effective_prefix_len + t, dtype=torch.long, device=device)
+
+            prefix_emb = prefix.P + self.transformer.wpe(prefix_pos)
+            prefix_emb = prefix_emb.unsqueeze(0).expand(b, -1, -1)
+            token_emb = tok_emb + self.transformer.wpe(token_pos)
+            x = torch.cat([prefix_emb, token_emb], dim=1)
+        else:
+            token_pos = torch.arange(effective_prefix_len, effective_prefix_len + t, dtype=torch.long, device=device)
+            x = tok_emb + self.transformer.wpe(token_pos)
+
+        x = self.transformer.drop(x)
 
         # DeepPrefix should be threaded per layer inside this loop once implemented.
         for layer_idx, block in enumerate(self.transformer.h):
             layer_prefix_kv = None if prefix_kv is None else prefix_kv[layer_idx]
-            if prefix is not None and isinstance(prefix, DeepPrefix):
+            if has_deep_prefix:
                 x = block(x, deep_prefix=prefix.deep[layer_idx], prefix_kv=layer_prefix_kv)
             else:
                 x = block(x, prefix_kv=layer_prefix_kv)
         x = self.transformer.ln_f(x)
 
-        if prefix is not None and isinstance(prefix, SoftPrefix) and prefix_kv is None:
-            x = x[:, prefix.prefix_len:, :]  # slice off prefix positions
+        if using_uncached_soft_prefix:
+            x = x[:, effective_prefix_len:, :]
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
@@ -337,7 +351,14 @@ class GPT(nn.Module):
     def build_prefix_kv(self, prefix_module, batch_size):
         assert isinstance(prefix_module, SoftPrefix), "build_prefix_kv currently only supports SoftPrefix"
 
-        x = prefix_module.P.unsqueeze(0).expand(batch_size, -1, -1)
+        L = prefix_module.prefix_len
+        assert L <= self.config.block_size, (
+            f"Cannot build prefix cache of length {L}; block size is only {self.config.block_size}"
+        )
+
+        pos = torch.arange(0, L, dtype=torch.long, device=prefix_module.P.device)
+        x = prefix_module.P + self.transformer.wpe(pos)
+        x = x.unsqueeze(0).expand(batch_size, -1, -1)
         x = self.transformer.drop(x)
 
         prefix_kv = []
@@ -471,9 +492,17 @@ class GPT(nn.Module):
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
         Most likely you'll want to make sure to be in model.eval() mode of operation for this.
         """
+        prefix_len = 0
+        if prefix is not None and isinstance(prefix, SoftPrefix):
+            prefix_len = prefix.prefix_len
+        elif prefix_kv is not None:
+            prefix_len = prefix_kv[0][0].size(2)
+
+        max_token_len = self.config.block_size - prefix_len
+        assert max_token_len > 0, "prefix length must be smaller than the model block size"
         for _ in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
-            idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
+            idx_cond = idx if idx.size(1) <= max_token_len else idx[:, -max_token_len:]
             # forward the model to get the logits for the index in the sequence
             logits, _ = self(idx_cond, prefix=prefix, prefix_kv=prefix_kv)
             # pluck the logits at the final step and scale by desired temperature
@@ -490,4 +519,3 @@ class GPT(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
 
         return idx
-

@@ -3,10 +3,9 @@ import wandb
 import tiktoken
 
 BEST_CONFIGS = [
-    {"L": 0,   "m": 1,  "cache": False},  # frozen baseline
-    {"L": 100, "m": 1,  "cache": False},  # classic baseline
-    {"L": 256, "m": 1,  "cache": False},  # best overall PPL
-    {"L": 100, "m": 5,  "cache": True},   # best sparse
+    {"L": 100, "m": 5, "cache": True},
+    {"L": 256, "m": 5, "cache": False},
+    {"L": 512, "m": 10, "cache": True},
 ]
 TASK = "gsm8k"
 DEVICE = "cuda"
@@ -41,7 +40,7 @@ def extract_number(text):
     return None
 
 
-def download_artifact(L, m, task):
+def download_artifact(L, m, cache, task):
     if L == 0:
         return "baseline"
     cache_tag = "cacheon" if cache else "cacheoff"
@@ -56,7 +55,7 @@ def download_artifact(L, m, task):
         return None
 
 
-def load_checkpoint(L, m, task):
+def load_checkpoint(L, m, cache,  task):
     if L == 0:
         model = GPT.from_pretrained(MODEL_TYPE, dict(dropout=DROPOUT))
         model.eval().to(DEVICE)
@@ -69,7 +68,7 @@ def load_checkpoint(L, m, task):
             "prefix_update_period": 1,
         }
 
-    local_dir = download_artifact(L, m, task)
+    local_dir = download_artifact(L, m, cache, task)
     if local_dir is None:
         return None, None, None
 
@@ -113,7 +112,7 @@ def load_checkpoint(L, m, task):
     }
 
 
-def get_training_metrics(L, m, task):
+def get_training_metrics(L, m, cache, task):
     cache_tag = "cacheon" if cache else "cacheoff"
     run_name = f"prefix-L{L}-m{m}-{cache_tag}-{task}"
 
@@ -190,7 +189,7 @@ for cfg in BEST_CONFIGS:
         continue
 
     print(f"\nEvaluating L={L}, m={M}, cache={use_cache} on {TASK}...")
-    model, soft_prefix, metadata = load_checkpoint(L, M, TASK)
+    model, soft_prefix, metadata = load_checkpoint(L, M, use_cache, TASK)
     if model is None:
         continue
 
@@ -210,7 +209,7 @@ for cfg in BEST_CONFIGS:
         "model_type": metadata["model_type"],
         "block_size": metadata["block_size"],
     }
-    r.update(get_training_metrics(L, M, TASK))
+    r.update(get_training_metrics(L, M, use_cache, TASK))
     results.append(r)
 
     print(f"  L={L:5d}  test_EM={em_score:.4f}  "
