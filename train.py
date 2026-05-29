@@ -82,8 +82,10 @@ prefix_update_period = 1    # m: update P every m steps (1 = dense)
 prefix_cache = True         # whether to cache prefix KV between updates
 
 run_final_em = True
-em_eval_examples = 0   # 0 means full split
-em_max_new_tokens = 128
+em_eval_interval = 1000     # supervised tasks: run generation EM every N steps
+em_eval_examples = 0        # 0 = full split, otherwise evaluate first N examples
+em_max_new_tokens = 128     # max tokens generated per example for EM
+em_progress_interval = 25   # print EM progress every N examples
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
@@ -178,6 +180,7 @@ else:
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
 best_val_loss = 1e9
+best_val_em = -1.0
 
 # attempt to derive vocab_size from the dataset
 meta_path = os.path.join(data_dir, 'meta.pkl')
@@ -339,6 +342,13 @@ def get_lr(it):
 if wandb_log and master_process:
     import wandb
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
+    wandb.define_metric("iter")
+    wandb.define_metric("train/*", step_metric="iter")
+    wandb.define_metric("val/*", step_metric="iter")
+    wandb.define_metric("efficiency/*", step_metric="iter")
+    wandb.define_metric("prefix/*", step_metric="iter")
+    wandb.define_metric("val/em", summary="max")
+    wandb.define_metric("val/best_em", summary="max")
 
 def extract_number(text):
     if "####" in text:
@@ -375,7 +385,9 @@ def evaluate_em(data, prefix_module, max_new_tokens=128, use_cache=False):
         with torch.no_grad():
             prefix_kv = raw_model.build_prefix_kv(prefix_module, batch_size=1)
 
-    for ex in data:
+    for i, ex in enumerate(data):
+        if em_progress_interval > 0 and i % em_progress_interval == 0:
+            print(f"EM eval: {i}/{len(data)}", flush=True)
         prompt_ids = ex['input_ids'][:ex['prompt_len']]
         idx = torch.tensor([prompt_ids], dtype=torch.long, device=device)
         if prefix_kv is not None:
@@ -466,11 +478,19 @@ while True:
             else:
                 # supervised mode (gsm8k) — log EM, but not every eval
                 # EM requires generation and is slow, so run it less frequently
-                if iter_num % (eval_interval) == 0 or iter_num >= max_iters:
-                    em_score = evaluate_em(val_data, prefix_module, use_cache=prefix_cache,)
+                if (iter_num > 0 and iter_num % em_eval_interval == 0) or iter_num >= max_iters:
+                    em_data = val_data if em_eval_examples == 0 else val_data[:em_eval_examples]
+                    em_score = evaluate_em(
+                        em_data,
+                        prefix_module,
+                        max_new_tokens=em_max_new_tokens,
+                        use_cache=prefix_cache,
+                    )
+                    best_val_em = max(best_val_em, em_score)
                     common_metrics["val/em"] = em_score
+                    common_metrics["val/best_em"] = best_val_em
 
-            wandb.log(common_metrics)
+            wandb.log(common_metrics, step=iter_num)
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
             if iter_num > 0:
@@ -485,6 +505,7 @@ while True:
                     'prefix_type': prefix_type if is_prefix_tuning else None,
                     'prefix_len': prefix_len if is_prefix_tuning else 0,
                     'prefix_update_period': prefix_update_period if is_prefix_tuning else 1,
+                    'best_val_em': float(best_val_em),
                 }
                 if not is_prefix_tuning:
                     ckpt_path = os.path.join(out_dir, 'ckpt.pt')
@@ -503,6 +524,7 @@ while True:
                         'model': init_from,
                         'block_size': block_size,
                         'prefix_cache': prefix_cache,
+                        'best_val_em': float(best_val_em),
                         'peak_gpu_mem_gb': (
                             torch.cuda.max_memory_allocated() / 1e9 if device_type == 'cuda' else 0.0
                         ),
@@ -513,7 +535,11 @@ while True:
                         artifact = wandb.Artifact(
                             name=wandb_run_name.replace(' ', '-'),
                             type="model",
-                            metadata={"val_loss": float(best_val_loss), "iter": iter_num}
+                            metadata={
+                                "val_loss": float(best_val_loss),
+                                "best_val_em": float(best_val_em),
+                                "iter": iter_num,
+                            }
                         )
                         artifact.add_file(prefix_path)
                         wandb.log_artifact(artifact)
@@ -528,6 +554,7 @@ while True:
                         'model': init_from,
                         'block_size': block_size,
                         'prefix_cache': prefix_cache,
+                        'best_val_em': float(best_val_em),
                         'peak_gpu_mem_gb': (
                             torch.cuda.max_memory_allocated() / 1e9 if device_type == 'cuda' else 0.0
                         ),
@@ -536,7 +563,11 @@ while True:
                         artifact = wandb.Artifact(
                             name=wandb_run_name.replace(' ', '-'),
                             type="model",
-                            metadata={"val_loss": float(best_val_loss), "iter": iter_num}
+                            metadata={
+                                "val_loss": float(best_val_loss),
+                                "best_val_em": float(best_val_em),
+                                "iter": iter_num,
+                            }
                         )
                         artifact.add_file(prefix_path)
                         wandb.log_artifact(artifact)
@@ -611,7 +642,7 @@ if master_process and supervised and run_final_em:
     )
     print(f"final test EM: {final_em:.4f}")
     if wandb_log:
-        wandb.log({"test/em": final_em})
+        wandb.log({"test/em": final_em}, step=iter_num)
 
 
 if ddp:
