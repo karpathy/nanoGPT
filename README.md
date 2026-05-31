@@ -5,7 +5,7 @@ What if you could control *which pre-training data* a GPT was leaning on, at inf
 
 ![demo: dragging the slider from 0 to 1](assets/sh_vs_ts.gif)
 
-In the demo above, alpha=0 is TinyStories ("Once upon a time...") and alpha=1 is tinyshakespeare ("KING HENRY VI: ..."). Everything in between is a continuous interpolation between the two. Same model, same weights. The slider just changes which neurons get to fire.
+In the demo above, alpha=0 is [TinyStories](https://huggingface.co/datasets/roneneldan/TinyStories) ("Once upon a time...") and alpha=1 is [tinyshakespeare](https://github.com/karpathy/char-rnn/blob/master/data/tinyshakespeare/input.txt) ("KING HENRY VI: ..."). Everything in between is a continuous interpolation between the two. Same model, same weights. The slider just changes which neurons get to fire.
 
 ## what's going on
 
