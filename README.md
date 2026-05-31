@@ -3,43 +3,43 @@
 
 What if you could control *which pre-training data* a GPT was leaning on, at inference time?
 
-abcGPT is an experimental fork of [Karpathy's nanoGPT](https://github.com/karpathy/nanoGPT) that adds a slider to the generator. Drag it from 0 to 1 and the model smoothly morphs from one training corpus to another — using a single set of weights, no model swap.
+abcGPT is an experimental fork of [Karpathy's nanoGPT](https://github.com/karpathy/nanoGPT) that adds a slider to the generator. You drag it from 0 to 1 and the model smoothly morphs from one training corpus to another, using a single set of weights (no model swap).
 
 ![demo: dragging the slider from 0 to 1](assets/sh_vs_ts.gif)
 
-In the demo above, alpha=0 is TinyStories ("Once upon a time..."), alpha=1 is tinyshakespeare ("KING HENRY VI: ..."), and everything in between is a continuous interpolation between the two. Same model, same weights. The slider just changes which neurons get to fire.
+In the demo above, alpha=0 is TinyStories ("Once upon a time...") and alpha=1 is tinyshakespeare ("KING HENRY VI: ..."). Everything in between is a continuous interpolation between the two. Same model, same weights. The slider just changes which neurons get to fire.
 
 ## what's going on
 
-Train a regular GPT on Shakespeare + TinyStories and it sounds like a blend of both, with no way to dial up one side or the other. This fork adds the knob.
+The basic problem is this: if we just train a regular GPT on Shakespeare + TinyStories, it ends up sounding like a blend of both, and there's no obvious knob we can twist to dial up one side or the other. abcGPT adds that knob, and the way it works is by assigning each neuron to a corpus *before training even starts*, so that each neuron grows up specialized to one of the two.
 
-The mechanism is per-neuron. For every gated unit in the network (residual stream channels, MLP inner units, attention heads), we draw a number `m ~ Beta(0.5, 0.5)` once, at init, and freeze it. The distribution is U-shaped on purpose:
+Specifically, for every gated unit in the network (residual stream channels, MLP inner units, attention heads), we sample a number `m ~ Beta(0.5, 0.5)` once at init and then freeze it. Beta(0.5, 0.5) is U-shaped on purpose, so most units land very near 0 or very near 1, with a thinner population in the middle:
 
 ![mask histogram across all 9636 gated units](assets/mask_histogram.png)
 
-About 20% of units land near 0 — those become TinyStories specialists. About 20% land near 1 — Shakespeare specialists. The rest live in the middle; call them halfsies. Each unit's `m` is its permanent specialty label and never updates during training.
+So we end up with roughly 20% of units sitting near 0 (these will be TinyStories specialists), another 20% sitting near 1 (Shakespeare specialists), and the rest scattered in the middle (call them halfsies). Each unit's `m` is its permanent specialty label, and it doesn't change during training.
 
-At inference, you pass in `α ∈ [0, 1]` and gate every unit by a tent peaked at `α = m`:
+Now at inference time, the user passes in an alpha in [0, 1] and we gate every unit's activation by a smooth tent peaked at α = m:
 
 ```
 gate(α, m) = cos²(π/2 · |α - m| / max(m, 1-m))
 ```
 
-At α=1, the m≈1 units fire and the m≈0 units are off. At α=0, the opposite. The halfsies peak in the middle and hand off smoothly as the slider moves.
+So at α=1, the m≈1 units fire full strength and the m≈0 units are completely off. At α=0, the opposite. The halfsies peak somewhere in the middle and hand off smoothly as you slide α around.
 
-Training pairs the gate with the data. Every iter we sample a random α, then draw a batch corpus from Bernoulli(α). The backward pass propagates through the *hard* corpus-aligned mask, not the soft tent — so a Shakespeare batch only updates Shakespeare-aligned and halfsies units, never TinyStories specialists. The soft tent comes out at inference, where it makes the slider feel continuous.
+During training, every iter we just sample a random α and then draw a batch corpus from Bernoulli(α), so high α gives us mostly Shakespeare batches. Crucially the backward pass propagates through the *hard* corpus-aligned mask rather than the soft tent, so a Shakespeare batch only ever updates Shakespeare-aligned and halfsies units, never TinyStories specialists. The soft tent only comes out at inference, where it's what makes the slider feel continuous as you drag it.
 
-And it works. After 10k iters on a T4, per-corpus held-out loss tracks the slider:
+And it works. After 10k iters on a T4, per-corpus held-out val loss tracks the slider quite nicely:
 
 ![val loss across alpha, per corpus](assets/val_loss_vs_alpha.png)
 
-Shakespeare loss is highest at α=0 and lowest near α=1. TinyStories does the mirror. One set of weights, ~10.7M params, trained on tinyshakespeare + a 1.5MB slice of TinyStories. The slider just routes which neurons get to talk.
+Shakespeare val loss is highest at α=0 and lowest near α=1. TinyStories val loss does exactly the mirror. One set of weights, around 10.7M params, trained on tinyshakespeare plus a 1.5MB slice of TinyStories. The slider really does just route which neurons get to talk.
 
 ## run it
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/iamtrask/abcGPT/blob/main/notebooks/train_gated_tent_karpathy_sts.ipynb)
 
-The notebook is sized so that a single Colab T4 trains the model to the demo above in ~90 minutes. The final cell drops an ipywidgets slider in front of the trained model so you can drag it around in-browser and see the output morph live.
+The notebook is sized so that a single Colab T4 trains the model to the demo above in about 90 minutes. The final cell drops an ipywidgets slider in front of the trained model so you can drag it around in-browser and watch the output morph live.
 
 Companion to [attribution-based-control.ai](https://attribution-based-control.ai/).
 
