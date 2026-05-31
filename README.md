@@ -1,7 +1,7 @@
 
 # abcGPT
 
-What if you could control *which training data* a GPT was leaning on, at inference time?
+What if you could control *which pre-training data* a GPT was leaning on, at inference time?
 
 abcGPT is an experimental fork of [Karpathy's nanoGPT](https://github.com/karpathy/nanoGPT) that adds a slider to the generator: drag from 0 to 1 and the model smoothly morphs from one training corpus to another, using a single set of weights.
 
