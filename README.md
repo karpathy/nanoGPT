@@ -1,11 +1,43 @@
 
 # abcGPT
 
-Experimental fork of [Karpathy's nanoGPT](https://github.com/karpathy/nanoGPT) modifying the architecture and training loop to make per-source influence over predictions identifiable and controllable.
+What if you could control *which training data* a GPT was leaning on, at inference time?
 
-Research code, expect breakage. Companion to [attribution-based-control.ai](https://attribution-based-control.ai/).
+abcGPT is an experimental fork of [Karpathy's nanoGPT](https://github.com/karpathy/nanoGPT) that adds a slider to the generator: drag from 0 to 1 and the model smoothly morphs from one training corpus to another, using a single set of weights.
 
-Everything below is upstream nanoGPT.
+
+https://github.com/iamtrask/abcGPT/raw/main/assets/sh_vs_ts.mov
+
+
+In the demo: alpha=0 is TinyStories ("Once upon a time..."), alpha=1 is tinyshakespeare ("KING HENRY VI: ..."), and everything in between is a continuous interpolation. Same model, same weights — the slider just changes which neurons get to fire.
+
+## what's going on
+
+A normal GPT trained on Shakespeare + TinyStories sounds like a blend of both. Mostly inseparable: ask it for "70% Shakespeare" and you get Average.
+
+The trick: **assign neurons to corpora at initialization**, before training starts. For every gated unit in the network (residual stream channels, MLP inner units, attention heads), draw a random number `m ~ Beta(0.5, 0.5)`. That's a U-shaped distribution — about 20% of units land near 0 (TinyStories specialists), about 20% near 1 (Shakespeare specialists), and the remaining ~60% in the middle (halfsies).
+
+At inference, the user supplies `α ∈ [0, 1]` and each unit's activation gets multiplied by a smooth tent peaked at `α = m`:
+
+```
+gate(α, m) = cos²(π/2 · |α - m| / max(m, 1-m))
+```
+
+At α=1, only Shake specialists fire. At α=0, only TS specialists fire. At α=0.5, only halfsies. Slide α between and you get continuous interpolations.
+
+During training, every iter samples a random α, then samples a corpus from Bernoulli(α). The backward pass flows through the **hard** corpus-aligned mask, so each unit only ever learns from "its" corpus. At inference the soft tent makes the slider feel continuous.
+
+One set of weights. The slider routes which neurons get to talk.
+
+## run it
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/iamtrask/abcGPT/blob/main/notebooks/train_gated_tent_karpathy_sts.ipynb)
+
+Karpathy-sized model (6 layers, 6 heads, 384 channels, ~10.7M params), char-level vocab, trained on tinyshakespeare (~1.2M chars) + a 1.5MB slice of TinyStories. T4 trains to a usable demo in ~90 minutes. The final cell drops an ipywidgets slider into the notebook so you can drag it around in-browser.
+
+Companion to [attribution-based-control.ai](https://attribution-based-control.ai/).
+
+Everything below is upstream nanoGPT, kept verbatim so you can also use this repo as a regular nanoGPT.
 
 ---
 
