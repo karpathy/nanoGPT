@@ -3,41 +3,47 @@
 
 What if you could control *which pre-training data* a GPT was leaning on, at inference time?
 
-abcGPT is an experimental fork of [Karpathy's nanoGPT](https://github.com/karpathy/nanoGPT) that adds a slider to the generator: drag from 0 to 1 and the model smoothly morphs from one training corpus to another, using a single set of weights.
+abcGPT is an experimental fork of [Karpathy's nanoGPT](https://github.com/karpathy/nanoGPT) that adds a slider to the generator. Drag it from 0 to 1 and the model smoothly morphs from one training corpus to another — using a single set of weights, no model swap.
 
+<video src="https://github.com/iamtrask/abcGPT/raw/main/assets/sh_vs_ts.mov" autoplay loop muted playsinline controls width="720"></video>
 
-https://github.com/iamtrask/abcGPT/raw/main/assets/sh_vs_ts.mov
-
-
-In the demo: alpha=0 is TinyStories ("Once upon a time..."), alpha=1 is tinyshakespeare ("KING HENRY VI: ..."), and everything in between is a continuous interpolation. Same model, same weights — the slider just changes which neurons get to fire.
+In the demo above, alpha=0 is TinyStories ("Once upon a time..."), alpha=1 is tinyshakespeare ("KING HENRY VI: ..."), and everything in between is a continuous interpolation between the two. Same model, same weights — the slider just changes which neurons get to fire.
 
 ## what's going on
 
-A normal GPT trained on Shakespeare + TinyStories sounds like a blend of both. Mostly inseparable: ask it for "70% Shakespeare" and you get Average.
+OK so a normal GPT trained on Shakespeare + TinyStories sounds like... a blend of both. Mostly inseparable. You can't ask it for "70% Shakespeare please" — it has no idea what you mean. It just speaks Average.
 
-The trick: **assign neurons to corpora at initialization**, before training starts. For every gated unit in the network (residual stream channels, MLP inner units, attention heads), draw a random number `m ~ Beta(0.5, 0.5)`. That's a U-shaped distribution — about 20% of units land near 0 (TinyStories specialists), about 20% near 1 (Shakespeare specialists), and the remaining ~60% in the middle (halfsies).
+We want something better. We'd like to assign neurons to corpora *before* training starts, so each neuron grows up specialized for one corpus or the other. Then at inference we can pick which specialists get to fire, and the network's output follows along.
 
-At inference, the user supplies `α ∈ [0, 1]` and each unit's activation gets multiplied by a smooth tent peaked at `α = m`:
+Here's the trick. For every gated unit in the network (residual stream channels, MLP inner units, attention heads), draw a random number `m ~ Beta(0.5, 0.5)`. That's a U-shaped distribution, so most units land near 0 or near 1, with some in the middle:
+
+- ~20% land near 0 → TinyStories specialists
+- ~20% land near 1 → Shakespeare specialists
+- ~60% land in between → "halfsies" that learn from both corpora
+
+These `m` values are fixed at init and never move. They're each unit's permanent specialty assignment.
+
+Now at inference, the user supplies `α ∈ [0, 1]` and each unit's activation gets multiplied by a smooth tent peaked at `α = m`:
 
 ```
 gate(α, m) = cos²(π/2 · |α - m| / max(m, 1-m))
 ```
 
-At α=1, only Shake specialists fire. At α=0, only TS specialists fire. At α=0.5, only halfsies. Slide α between and you get continuous interpolations.
+At α=1, only Shake specialists fire (their tents peak there). At α=0, only TS specialists fire. At α=0.5, only halfsies. Drag α anywhere in between and you smoothly interpolate.
 
-During training, every iter samples a random α, then samples a corpus from Bernoulli(α). The backward pass flows through the **hard** corpus-aligned mask, so each unit only ever learns from "its" corpus. At inference the soft tent makes the slider feel continuous.
+During training, every iter samples a random α and then picks a corpus from Bernoulli(α) — high α → more Shakespeare batches. The backward pass uses the *hard* corpus-aligned mask (not the smooth tent), so each unit only ever learns from "its" corpus. The smooth tent only comes out at inference, where it makes the slider feel continuous.
 
-One set of weights. The slider routes which neurons get to talk.
+And that's basically the whole thing. One set of weights, ~10.7M params, char-level vocab, trained on tinyshakespeare + a 1.5MB slice of TinyStories. The slider just routes which neurons get to talk.
 
 ## run it
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/iamtrask/abcGPT/blob/main/notebooks/train_gated_tent_karpathy_sts.ipynb)
 
-Karpathy-sized model (6 layers, 6 heads, 384 channels, ~10.7M params), char-level vocab, trained on tinyshakespeare (~1.2M chars) + a 1.5MB slice of TinyStories. T4 trains to a usable demo in ~90 minutes. The final cell drops an ipywidgets slider into the notebook so you can drag it around in-browser.
+The notebook is sized so that a single Colab T4 trains the model to the demo above in ~90 minutes. The final cell drops an ipywidgets slider in front of the trained model so you can drag it around in-browser and see the output morph live.
 
 Companion to [attribution-based-control.ai](https://attribution-based-control.ai/).
 
-Everything below is upstream nanoGPT, kept verbatim so you can also use this repo as a regular nanoGPT.
+Everything below is upstream nanoGPT, kept verbatim so this repo also works as a regular nanoGPT.
 
 ---
 
