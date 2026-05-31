@@ -21,12 +21,12 @@ for L in RUN_ORDER:
     for M in M_VALUES:
             if L == 0 and M > M_VALUES[0]:
                 continue
-            run_name = f"prefix-L{L}-m{M}-{TASK}"
-            out_dir = f"/kaggle/working/h2_L{L}_m{M}"
+            run_name = f"prefix-L{L}-m{M}-cacheon-{TASK}"
+            out_dir = f"/kaggle/working/h2_cacheon_L{L}_m{M}"
             os.makedirs(out_dir, exist_ok=True)
 
             print(f"\n{'═'*60}")
-            print(f"  RUN: L={L}  m={M}  task={TASK}")
+            print(f"  RUN: L={L}  m={M}  cache=on  task={TASK}")
             print(f"  out_dir:  {out_dir}")
             print(f"{'═'*60}")
 
@@ -123,6 +123,6 @@ for r in results:
 if training_errors:
     print(f"\nFailed L values: {training_errors}")
 
-with open("/kaggle/working/h2_summary.json", "w") as f:
+with open("/kaggle/working/h2_cacheon_summary.json", "w") as f:
     json.dump(results, f, indent=2)
-print("\nSaved: /kaggle/working/h2_summary.json")
+print("\nSaved: /kaggle/working/h2_cacheon_summary.json")

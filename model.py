@@ -493,10 +493,10 @@ class GPT(nn.Module):
         Most likely you'll want to make sure to be in model.eval() mode of operation for this.
         """
         prefix_len = 0
-        if prefix is not None and isinstance(prefix, SoftPrefix):
-            prefix_len = prefix.prefix_len
-        elif prefix_kv is not None:
+        if prefix_kv is not None:
             prefix_len = prefix_kv[0][0].size(2)
+        elif prefix is not None and isinstance(prefix, SoftPrefix):
+            prefix_len = prefix.prefix_len
 
         max_token_len = self.config.block_size - prefix_len
         assert max_token_len > 0, "prefix length must be smaller than the model block size"

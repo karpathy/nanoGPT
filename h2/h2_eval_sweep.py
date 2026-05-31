@@ -29,7 +29,7 @@ LR = 0.1 # established as best from LR sweep
 def download_artifact(L, m, task):
     if L == 0:
         return "baseline"
-    artifact_name = f"{ENTITY}/{PROJECT}/prefix-L{L}-m{m}-{task}:latest"
+    artifact_name = f"{ENTITY}/{PROJECT}/prefix-L{L}-m{m}-cacheon-{task}:latest"
     try:
         artifact = api.artifact(artifact_name, type="model")
         local_dir = artifact.download()
@@ -69,7 +69,6 @@ def load_checkpoint(L, m, task):
     saved_m = int(saved.get("prefix_update_period", m))
 
     model = GPT.from_pretrained(saved_model_type, dict(dropout=DROPOUT))
-    model.crop_block_size(saved_block_size)
     model.eval().to(DEVICE)
     for p in model.parameters():
         p.requires_grad = False
@@ -104,7 +103,7 @@ def load_checkpoint(L, m, task):
 
 
 def get_training_metrics(L, m, task):
-    run_name = f"prefix-L{L}-m{m}-{task}"
+    run_name = f"prefix-L{L}-m{m}-cacheon-{task}"
     try:
         runs = api.runs(
             f"{ENTITY}/{PROJECT}",
@@ -138,8 +137,13 @@ def get_training_metrics(L, m, task):
 
 
 def estimate_val_perplexity(model, soft_prefix, data_path,
+                             token_block_size=None,
                              batch_size=6, eval_iters=50, use_cache=False):
-    block_size = model.config.block_size  # use whatever the model was trained with
+    prefix_len = 0 if soft_prefix is None else soft_prefix.prefix_len
+    max_token_block_size = model.config.block_size - prefix_len
+    block_size = token_block_size or max_token_block_size
+    block_size = min(block_size, max_token_block_size)
+    assert block_size > 0, "prefix length must be smaller than the model block size"
     data       = np.memmap(data_path, dtype=np.uint16, mode='r')
     ctx        = torch.amp.autocast(device_type='cuda', dtype=torch.float16)
     losses     = []
@@ -196,6 +200,7 @@ for L in L_VALUES:
                 model,
                 soft_prefix,
                 val_data,
+                token_block_size=metadata["block_size"],
                 use_cache=EVAL_WITH_CACHE,
             )
             eval_time = time.time() - eval_start

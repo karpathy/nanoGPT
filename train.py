@@ -86,6 +86,12 @@ em_eval_interval = 1000     # supervised tasks: run generation EM every N steps
 em_eval_examples = 0        # 0 = full split, otherwise evaluate first N examples
 em_max_new_tokens = 128     # max tokens generated per example for EM
 em_progress_interval = 25   # print EM progress every N examples
+
+generation_eval = 'em'      # 'em', 'rouge', or 'none'
+rouge_eval_interval = 1000
+rouge_eval_examples = 5000
+rouge_max_new_tokens = 64
+rouge_progress_interval = 25
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
@@ -181,6 +187,7 @@ else:
 iter_num = 0
 best_val_loss = 1e9
 best_val_em = -1.0
+best_val_rougeL = -1.0
 
 # attempt to derive vocab_size from the dataset
 meta_path = os.path.join(data_dir, 'meta.pkl')
@@ -349,6 +356,10 @@ if wandb_log and master_process:
     wandb.define_metric("prefix/*", step_metric="iter")
     wandb.define_metric("val/em", summary="max")
     wandb.define_metric("val/best_em", summary="max")
+    wandb.define_metric("val/rouge1", summary="max")
+    wandb.define_metric("val/rouge2", summary="max")
+    wandb.define_metric("val/rougeL", summary="max")
+    wandb.define_metric("val/best_rougeL", summary="max")
 
 def extract_number(text):
     if "####" in text:
@@ -402,6 +413,74 @@ def evaluate_em(data, prefix_module, max_new_tokens=128, use_cache=False):
         total += 1
     raw_model.train()
     return correct / total if total > 0 else 0.0
+
+@torch.no_grad()
+def evaluate_rouge(data, prefix_module, max_new_tokens=64, use_cache=False):
+    try:
+        from rouge_score import rouge_scorer, scoring
+    except ImportError as e:
+        raise ImportError(
+            "ROUGE eval requires rouge-score. In Kaggle, run: pip install rouge-score"
+        ) from e
+
+    raw_model.eval()
+
+    scorer = rouge_scorer.RougeScorer(
+        ["rouge1", "rouge2", "rougeL"],
+        use_stemmer=True,
+    )
+    aggregator = scoring.BootstrapAggregator()
+
+    prefix_kv = None
+    if use_cache and prefix_module is not None:
+        prefix_kv = raw_model.build_prefix_kv(prefix_module, batch_size=1)
+
+    for i, ex in enumerate(data):
+        if rouge_progress_interval > 0 and i % rouge_progress_interval == 0:
+            print(f"ROUGE eval: {i}/{len(data)}", flush=True)
+
+        prompt_ids = ex["input_ids"][:ex["prompt_len"]]
+        prefix_len = 0 if prefix_module is None else prefix_module.prefix_len
+        max_prompt_len = raw_model.config.block_size - prefix_len
+        prompt_ids = prompt_ids[-max_prompt_len:]
+        idx = torch.tensor([prompt_ids], dtype=torch.long, device=device)
+        prompt_len_used = idx.size(1)
+
+        if prefix_kv is not None:
+            out = raw_model.generate(
+                idx,
+                max_new_tokens,
+                temperature=1.0,
+                top_k=1,
+                prefix_kv=prefix_kv,
+            )
+        else:
+            out = raw_model.generate(
+                idx,
+                max_new_tokens,
+                temperature=1.0,
+                top_k=1,
+                prefix=prefix_module,
+            )
+
+        generated_ids = out[0, prompt_len_used:].tolist()
+        pred = enc.decode(generated_ids)
+        pred = pred.split("<|endoftext|>")[0].strip()
+
+        gold = ex["gold_summary"].strip()
+
+        scores = scorer.score(gold, pred)
+        aggregator.add_scores(scores)
+
+    result = aggregator.aggregate()
+
+    raw_model.train()
+
+    return {
+        "rouge1": result["rouge1"].mid.fmeasure,
+        "rouge2": result["rouge2"].mid.fmeasure,
+        "rougeL": result["rougeL"].mid.fmeasure,
+    }
 
 while True:
 
@@ -478,17 +557,33 @@ while True:
             else:
                 # supervised mode (gsm8k) — log EM, but not every eval
                 # EM requires generation and is slow, so run it less frequently
-                if (iter_num > 0 and iter_num % em_eval_interval == 0) or iter_num >= max_iters:
-                    em_data = val_data if em_eval_examples == 0 else val_data[:em_eval_examples]
-                    em_score = evaluate_em(
-                        em_data,
-                        prefix_module,
-                        max_new_tokens=em_max_new_tokens,
-                        use_cache=prefix_cache,
-                    )
-                    best_val_em = max(best_val_em, em_score)
-                    common_metrics["val/em"] = em_score
-                    common_metrics["val/best_em"] = best_val_em
+                if generation_eval == 'em':
+                    if (iter_num > 0 and iter_num % em_eval_interval == 0) or iter_num >= max_iters:
+                        em_data = val_data if em_eval_examples == 0 else val_data[:em_eval_examples]
+                        em_score = evaluate_em(
+                            em_data,
+                            prefix_module,
+                            max_new_tokens=em_max_new_tokens,
+                            use_cache=prefix_cache,
+                        )
+                        best_val_em = max(best_val_em, em_score)
+                        common_metrics["val/em"] = em_score
+                        common_metrics["val/best_em"] = best_val_em
+
+                elif generation_eval == 'rouge':
+                    if (iter_num > 0 and iter_num % rouge_eval_interval == 0) or iter_num >= max_iters:
+                        rouge_data = val_data if rouge_eval_examples == 0 else val_data[:rouge_eval_examples]
+                        rouge_scores = evaluate_rouge(
+                            rouge_data,
+                            prefix_module,
+                            max_new_tokens=rouge_max_new_tokens,
+                            use_cache=prefix_cache,
+                        )
+                        best_val_rougeL = max(best_val_rougeL, rouge_scores["rougeL"])
+                        common_metrics["val/rouge1"] = rouge_scores["rouge1"]
+                        common_metrics["val/rouge2"] = rouge_scores["rouge2"]
+                        common_metrics["val/rougeL"] = rouge_scores["rougeL"]
+                        common_metrics["val/best_rougeL"] = best_val_rougeL
 
             wandb.log(common_metrics, step=iter_num)
         if losses['val'] < best_val_loss or always_save_checkpoint:
@@ -506,6 +601,7 @@ while True:
                     'prefix_len': prefix_len if is_prefix_tuning else 0,
                     'prefix_update_period': prefix_update_period if is_prefix_tuning else 1,
                     'best_val_em': float(best_val_em),
+                    'best_val_rougeL': float(best_val_rougeL)
                 }
                 if not is_prefix_tuning:
                     ckpt_path = os.path.join(out_dir, 'ckpt.pt')
@@ -525,6 +621,7 @@ while True:
                         'block_size': block_size,
                         'prefix_cache': prefix_cache,
                         'best_val_em': float(best_val_em),
+                        'best_val_rougeL': float(best_val_rougeL),
                         'peak_gpu_mem_gb': (
                             torch.cuda.max_memory_allocated() / 1e9 if device_type == 'cuda' else 0.0
                         ),
@@ -538,6 +635,7 @@ while True:
                             metadata={
                                 "val_loss": float(best_val_loss),
                                 "best_val_em": float(best_val_em),
+                                "best_val_rougeL": float(best_val_rougeL),
                                 "iter": iter_num,
                             }
                         )
@@ -555,6 +653,7 @@ while True:
                         'block_size': block_size,
                         'prefix_cache': prefix_cache,
                         'best_val_em': float(best_val_em),
+                        'best_val_rougeL': float(best_val_rougeL),
                         'peak_gpu_mem_gb': (
                             torch.cuda.max_memory_allocated() / 1e9 if device_type == 'cuda' else 0.0
                         ),
@@ -566,6 +665,7 @@ while True:
                             metadata={
                                 "val_loss": float(best_val_loss),
                                 "best_val_em": float(best_val_em),
+                                "best_val_rougeL": float(best_val_rougeL),
                                 "iter": iter_num,
                             }
                         )
@@ -632,7 +732,7 @@ while True:
     if iter_num > max_iters:
         break
 
-if master_process and supervised and run_final_em:
+if master_process and supervised and run_final_em and generation_eval == 'em':
     em_data = test_data if em_eval_examples == 0 else test_data[:em_eval_examples]
     final_em = evaluate_em(
         em_data,
