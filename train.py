@@ -152,8 +152,14 @@ if supervised:
         x_batch, y_batch = [], []
         for i in ix:
             ex = data[i]
-            ids = ex['input_ids'][:block_size + 1]
-            lab = ex['labels'][:block_size + 1]
+            ids = ex['input_ids']
+            lab = ex['labels']
+            if 'gold_summary' in ex and len(ids) > block_size + 1:
+                ids = ids[-(block_size + 1):]
+                lab = lab[-(block_size + 1):]
+            else:
+                ids = ids[:block_size + 1]
+                lab = lab[:block_size + 1]
             pad_len = (block_size + 1) - len(ids)
             ids = ids + [0] * pad_len
             lab = lab + [-1] * pad_len
@@ -497,7 +503,7 @@ while True:
             prefix_module.invalidate()
 
     # evaluate the loss on train/val sets and write checkpoints
-    if iter_num % eval_interval == 0 and master_process:
+    if (iter_num % eval_interval == 0 or iter_num >= max_iters) and master_process:
         eval_start = time.time()
         losses = estimate_loss()
         eval_time = time.time() - eval_start
@@ -725,6 +731,13 @@ while True:
             mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
         print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%, update={int(update_now)}")
+        if wandb_log:
+            wandb.log({
+                "iter": iter_num,
+                "train/iter_loss": lossf,
+                "mfu": running_mfu * 100,
+                "prefix/update_now": int(update_now),
+            }, step=iter_num)
     iter_num += 1
     local_iter_num += 1
 

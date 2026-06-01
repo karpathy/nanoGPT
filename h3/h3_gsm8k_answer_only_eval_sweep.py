@@ -101,7 +101,6 @@ def load_checkpoint(L, m, cache, task):
     saved_m = int(saved.get("prefix_update_period", m))
 
     model = GPT.from_pretrained(saved_model_type, dict(dropout=DROPOUT))
-    model.crop_block_size(saved_block_size)
     model.eval().to(DEVICE)
     for p in model.parameters():
         p.requires_grad = False

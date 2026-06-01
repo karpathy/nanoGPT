@@ -1,3 +1,4 @@
+from rouge_score import scoring, rouge_scorer
 import torch, math, json, os, re
 import wandb
 import tiktoken
@@ -7,7 +8,10 @@ BEST_CONFIGS = [
     {"L": 256, "m": 5, "cache": False},
     {"L": 512, "m": 10, "cache": True},
 ]
-TASK = "gsm8k"
+
+TASK = "xsum"
+test_data = torch.load("data/xsum/test.pt")
+MAX_NEW_TOKENS = 64
 DEVICE = "cuda"
 
 import sys
@@ -26,18 +30,6 @@ MAX_POSITIONS = 1024
 
 enc = tiktoken.get_encoding("gpt2")
 
-
-def extract_number(text):
-    if "####" in text:
-        after = text.split("####")[-1].strip().replace(",", "")
-        match = re.search(r'-?\d+\.?\d*', after)
-        if match:
-            return match.group()
-    text_clean = text.replace(",", "")
-    numbers = re.findall(r'-?\d+\.?\d*', text_clean)
-    if numbers:
-        return numbers[-1]
-    return None
 
 
 def download_artifact(L, m, cache, task):
@@ -127,28 +119,42 @@ def get_training_metrics(L, m, cache, task):
             "efficiency/wall_clock_sec",
             "prefix/cache_hit_ratio",
             "mfu",
-            "val/em",
+            "val/rouge1",
+            "val/rouge2",
+            "val/rougeL",
+            "val/best_rougeL"
         ])
         if hist.empty:
             return {}
         last = hist.iloc[-1]
+        best_val_rougeL = 0.0
+        if "val/rougeL" in hist and not hist["val/rougeL"].dropna().empty:
+            best_val_rougeL = hist["val/rougeL"].dropna().max()
+        if "val/best_rougeL" in hist and not hist["val/best_rougeL"].dropna().empty:
+            best_val_rougeL = hist["val/best_rougeL"].dropna().max()
         return {
             "tokens_per_sec": round(float(last.get("efficiency/tokens_per_sec", 0)), 1),
             "peak_mem_gb": round(float(last.get("efficiency/peak_gpu_mem_gb", 0)), 2),
             "wall_clock_sec": round(float(last.get("efficiency/wall_clock_sec", 0)), 1),
             "cache_hit_ratio": round(float(last.get("prefix/cache_hit_ratio", 0)), 3),
             "mfu": round(float(last.get("mfu", 0)), 2),
-            "train_em": round(float(last.get("val/em", 0)), 4),
+            "val_rouge1": round(float(last.get("val/rouge1", 0)), 4),
+            "val_rouge2": round(float(last.get("val/rouge2", 0)), 4),
+            "val_rougeL": round(float(last.get("val/rougeL", 0)), 4),
+            "best_val_rougeL": round(float(best_val_rougeL), 4),
         }
     except Exception as e:
         print(f"  Could not fetch training metrics for L={L}, m={m}: {e}")
         return {}
 
-
-def evaluate_em(model, soft_prefix, test_data, max_new_tokens=128, use_cache=False):
+def evaluate_rouge(model, soft_prefix, test_data, max_new_tokens=64, use_cache=False):
     model.eval()
-    correct = 0
-    total = 0
+
+    scorer = rouge_scorer.RougeScorer(
+        ["rouge1", "rouge2", "rougeL"],
+        use_stemmer=True,
+    )
+    aggregator = scoring.BootstrapAggregator()
 
     prefix_kv = None
     if use_cache and soft_prefix is not None:
@@ -156,25 +162,55 @@ def evaluate_em(model, soft_prefix, test_data, max_new_tokens=128, use_cache=Fal
             prefix_kv = model.build_prefix_kv(soft_prefix, batch_size=1)
 
     with torch.no_grad():
-        for ex in test_data:
-            prompt_ids = ex['input_ids'][:ex['prompt_len']]
-            idx = torch.tensor([prompt_ids], dtype=torch.long, device=DEVICE)
-            if prefix_kv is not None:
-                out = model.generate(idx, max_new_tokens, temperature=1.0, top_k=1, prefix_kv=prefix_kv)
-            else:
-                out = model.generate(idx, max_new_tokens, temperature=1.0, top_k=1, prefix=soft_prefix)
-            generated_text = enc.decode(out[0].tolist())
-            pred = extract_number(generated_text)
-            gold = extract_number(ex['gold_answer'])
-            if pred is not None and gold is not None and pred == gold:
-                correct += 1
-            total += 1
-    return correct / total if total > 0 else 0.0
+        for i, ex in enumerate(test_data):
+            if i % 25 == 0:
+                print(f"  ROUGE eval: {i}/{len(test_data)}", flush=True)
 
+            prefix_len = 0 if soft_prefix is None else soft_prefix.prefix_len
+            max_prompt_len = model.config.block_size - prefix_len
+
+            prompt_ids = ex["input_ids"][:ex["prompt_len"]]
+            prompt_ids = prompt_ids[-max_prompt_len:]
+
+            idx = torch.tensor([prompt_ids], dtype=torch.long, device=DEVICE)
+            prompt_len_used = idx.size(1)
+
+            if prefix_kv is not None:
+                out = model.generate(
+                    idx,
+                    max_new_tokens,
+                    temperature=1.0,
+                    top_k=1,
+                    prefix_kv=prefix_kv,
+                )
+            else:
+                out = model.generate(
+                    idx,
+                    max_new_tokens,
+                    temperature=1.0,
+                    top_k=1,
+                    prefix=soft_prefix,
+                )
+
+            generated_ids = out[0, prompt_len_used:].tolist()
+            pred = enc.decode(generated_ids)
+            pred = pred.split("<|endoftext|>")[0].strip()
+
+            gold = ex["gold_summary"].strip()
+
+            scores = scorer.score(gold, pred)
+            aggregator.add_scores(scores)
+
+    result = aggregator.aggregate()
+
+    return {
+        "rouge1": result["rouge1"].mid.fmeasure,
+        "rouge2": result["rouge2"].mid.fmeasure,
+        "rougeL": result["rougeL"].mid.fmeasure,
+    }
 
 # load test data
-test_data = torch.load("data/gsm8k/test.pt")
-print(f"Loaded {len(test_data)} test examples")
+print(f"Loaded {len(test_data)} {TASK} test examples")
 
 results = []
 
@@ -195,14 +231,22 @@ for cfg in BEST_CONFIGS:
     print(f"  model={metadata['model_type']} "
           f"block_size={metadata['block_size']} prefix_len={metadata['prefix_len']}")
 
-    em_score = evaluate_em(model, soft_prefix, test_data, use_cache=use_cache)
+    rouge_scores = evaluate_rouge(
+        model,
+        soft_prefix,
+        test_data,
+        max_new_tokens=MAX_NEW_TOKENS,
+        use_cache=use_cache,
+    )
     param_count = metadata["prefix_len"] * model.config.n_embd
 
     r = {
         "L": metadata["prefix_len"],
         "m": M,
         "cache": use_cache,
-        "test_em": round(em_score, 4),
+        "test_rouge1": round(rouge_scores["rouge1"], 4),
+        "test_rouge2": round(rouge_scores["rouge2"], 4),
+        "test_rougeL": round(rouge_scores["rougeL"], 4),
         "param_count": param_count,
         "task": TASK,
         "model_type": metadata["model_type"],
@@ -211,21 +255,32 @@ for cfg in BEST_CONFIGS:
     r.update(get_training_metrics(L, M, use_cache, TASK))
     results.append(r)
 
-    print(f"  L={L:5d}  test_EM={em_score:.4f}  "
-          f"params={param_count:,}  tok/s={r.get('tokens_per_sec', '—')}")
+    print(f"  L={L:5d}  R1={r['test_rouge1']:.4f}  "
+          f"R2={r['test_rouge2']:.4f}  RL={r['test_rougeL']:.4f}  "
+          f"best_val_RL={r.get('best_val_rougeL', 0):.4f}  "
+          f"params={param_count:,}  tok/s={r.get('tokens_per_sec', '-')}")
 
 print("\n" + "═" * 70)
 print(f"  H3 EVAL SUMMARY — task={TASK}")
 print("═" * 70)
-print(f"{'L':>6}  {'m':>4}  {'cache':>6}  {'test_EM':>8}  {'train_EM':>9}  {'params':>10}  "
-      f"{'tok/s':>8}  {'mem_gb':>7}  {'wall(s)':>8}")
-print("-" * 80)
+print(
+    f"{'L':>6}  {'m':>4}  {'cache':>6}  "
+    f"{'R1':>8}  {'R2':>8}  {'RL':>8}  {'best_val_RL':>11}  "
+    f"{'params':>10}  {'tok/s':>8}  {'mem_gb':>7}  {'wall(s)':>8}"
+)
+print("-" * 105)
 for r in results:
-    print(f"{r['L']:>6}  {r['m']:>4}  {str(r['cache']):>6}  {r['test_em']:>8.4f}  "
-          f"{r.get('train_em', 0):>9.4f}  {r['param_count']:>10,}  "
-          f"{r.get('tokens_per_sec', 0):>8.1f}  "
-          f"{r.get('peak_mem_gb', 0):>7.2f}  "
-          f"{r.get('wall_clock_sec', 0):>8.1f}")
+    print(
+        f"{r['L']:>6}  {r['m']:>4}  {str(r['cache']):>6}  "
+        f"{r['test_rouge1']:>8.4f}  "
+        f"{r['test_rouge2']:>8.4f}  "
+        f"{r['test_rougeL']:>8.4f}  "
+        f"{r.get('best_val_rougeL', 0):>11.4f}  "
+        f"{r['param_count']:>10,}  "
+        f"{r.get('tokens_per_sec', 0):>8.1f}  "
+        f"{r.get('peak_mem_gb', 0):>7.2f}  "
+        f"{r.get('wall_clock_sec', 0):>8.1f}"
+    )
 
 eval_run = wandb.init(
     project=PROJECT,
@@ -235,14 +290,20 @@ eval_run = wandb.init(
 wandb.log({
     "h3/summary_table": wandb.Table(
         columns=[
-            "L", "m", "cache", "test_em", "train_em", "param_count",
+            "L", "m", "cache",
+            "test_rouge1", "test_rouge2", "test_rougeL",
+            "val_rouge1", "val_rouge2", "val_rougeL", "best_val_rougeL",
+            "param_count",
             "model_type", "block_size",
             "tokens_per_sec", "peak_mem_gb", "wall_clock_sec",
             "cache_hit_ratio", "mfu",
         ],
         data=[[
-            r["L"], r["m"], r["cache"], r["test_em"],
-            r.get("train_em", 0), r["param_count"],
+            r["L"], r["m"], r["cache"],
+            r["test_rouge1"], r["test_rouge2"], r["test_rougeL"],
+            r.get("val_rouge1", 0), r.get("val_rouge2", 0),
+            r.get("val_rougeL", 0), r.get("best_val_rougeL", 0),
+            r["param_count"],
             r["model_type"], r["block_size"],
             r.get("tokens_per_sec", 0),
             r.get("peak_mem_gb", 0),
@@ -254,6 +315,6 @@ wandb.log({
 })
 wandb.finish()
 
-with open("/kaggle/working/h3_eval_summary.json", "w") as f:
+with open("/kaggle/working/h3_xsum_eval_summary.json", "w") as f:
     json.dump(results, f, indent=2)
-print("\nSaved to /kaggle/working/h3_eval_summary.json")
+print("\nSaved to /kaggle/working/h3_xsum_eval_summary.json")
