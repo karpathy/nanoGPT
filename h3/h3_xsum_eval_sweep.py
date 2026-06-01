@@ -11,6 +11,9 @@ BEST_CONFIGS = [
 
 TASK = "xsum"
 test_data = torch.load("data/xsum/test.pt")
+MAX_EVAL_EXAMPLES = 1000
+if MAX_EVAL_EXAMPLES is not None:
+    test_data = test_data[:MAX_EVAL_EXAMPLES]
 MAX_NEW_TOKENS = 64
 DEVICE = "cuda"
 
