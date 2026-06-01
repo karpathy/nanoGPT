@@ -96,6 +96,14 @@ rouge_progress_interval = 25
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
 config = {k: globals()[k] for k in config_keys} # will be useful for logging
+if generation_eval == 'rouge':
+    for k in ("run_final_em", "em_eval_interval", "em_eval_examples",
+              "em_max_new_tokens", "em_progress_interval"):
+        config.pop(k, None)
+elif generation_eval == 'em':
+    for k in ("rouge_eval_interval", "rouge_eval_examples",
+              "rouge_max_new_tokens", "rouge_progress_interval"):
+        config.pop(k, None)
 # Fix: ensure eval_only is a proper boolean
 if isinstance(eval_only, str):
     eval_only = eval_only.lower() in ('true', '1', 'yes')
@@ -358,14 +366,19 @@ if wandb_log and master_process:
     wandb.define_metric("iter")
     wandb.define_metric("train/*", step_metric="iter")
     wandb.define_metric("val/*", step_metric="iter")
+    wandb.define_metric("test/*", step_metric="iter")
     wandb.define_metric("efficiency/*", step_metric="iter")
     wandb.define_metric("prefix/*", step_metric="iter")
     wandb.define_metric("val/em", summary="max")
     wandb.define_metric("val/best_em", summary="max")
+    wandb.define_metric("test/em", summary="max")
     wandb.define_metric("val/rouge1", summary="max")
     wandb.define_metric("val/rouge2", summary="max")
     wandb.define_metric("val/rougeL", summary="max")
     wandb.define_metric("val/best_rougeL", summary="max")
+    wandb.define_metric("test/rouge1", summary="max")
+    wandb.define_metric("test/rouge2", summary="max")
+    wandb.define_metric("test/rougeL", summary="max")
 
 def extract_number(text):
     if "####" in text:
@@ -756,6 +769,27 @@ if master_process and supervised and run_final_em and generation_eval == 'em':
     print(f"final test EM: {final_em:.4f}")
     if wandb_log:
         wandb.log({"test/em": final_em}, step=iter_num)
+
+if master_process and supervised and generation_eval == 'rouge':
+    rouge_data = test_data if rouge_eval_examples == 0 else test_data[:rouge_eval_examples]
+    final_rouge = evaluate_rouge(
+        rouge_data,
+        prefix_module,
+        max_new_tokens=rouge_max_new_tokens,
+        use_cache=prefix_cache,
+    )
+    print(
+        f"final test ROUGE: "
+        f"R1={final_rouge['rouge1']:.4f}, "
+        f"R2={final_rouge['rouge2']:.4f}, "
+        f"RL={final_rouge['rougeL']:.4f}"
+    )
+    if wandb_log:
+        wandb.log({
+            "test/rouge1": final_rouge["rouge1"],
+            "test/rouge2": final_rouge["rouge2"],
+            "test/rougeL": final_rouge["rougeL"],
+        }, step=iter_num)
 
 
 if ddp:
