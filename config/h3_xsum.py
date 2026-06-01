@@ -1,6 +1,6 @@
 eval_interval = 250
 eval_iters = 50
-log_interval = 10
+log_interval = 1
 always_save_checkpoint = False
 
 wandb_log = True
@@ -30,5 +30,10 @@ prefix_len = 0
 prefix_update_period = 1
 prefix_cache = False
 
-generation_eval = 'none'
+generation_eval = 'rouge'
+rouge_eval_interval = 1000
+rouge_eval_examples = 5000
+rouge_max_new_tokens = 64
+rouge_progress_interval = 25
+
 run_final_em = False
