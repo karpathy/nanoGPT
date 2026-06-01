@@ -369,16 +369,23 @@ if wandb_log and master_process:
     wandb.define_metric("test/*", step_metric="iter")
     wandb.define_metric("efficiency/*", step_metric="iter")
     wandb.define_metric("prefix/*", step_metric="iter")
-    wandb.define_metric("val/em", summary="max")
-    wandb.define_metric("val/best_em", summary="max")
-    wandb.define_metric("test/em", summary="max")
-    wandb.define_metric("val/rouge1", summary="max")
-    wandb.define_metric("val/rouge2", summary="max")
-    wandb.define_metric("val/rougeL", summary="max")
-    wandb.define_metric("val/best_rougeL", summary="max")
-    wandb.define_metric("test/rouge1", summary="max")
-    wandb.define_metric("test/rouge2", summary="max")
-    wandb.define_metric("test/rougeL", summary="max")
+
+    if generation_eval == 'rouge':
+        wandb.log({
+            "iter": 0,
+            "val/rouge1": 0.0,
+            "val/rouge2": 0.0,
+            "val/rougeL": 0.0,
+            "val/best_rougeL": 0.0,
+            "test/rouge1": 0.0,
+            "test/rouge2": 0.0,
+            "test/rougeL": 0.0,
+        }, step=0)
+    elif generation_eval == 'em':
+        wandb.define_metric("val/em", summary="max")
+        wandb.define_metric("val/best_em", summary="max")
+        wandb.define_metric("test/em", summary="max")
+
 
 def extract_number(text):
     if "####" in text:
@@ -603,6 +610,9 @@ while True:
                         common_metrics["val/rouge2"] = rouge_scores["rouge2"]
                         common_metrics["val/rougeL"] = rouge_scores["rougeL"]
                         common_metrics["val/best_rougeL"] = best_val_rougeL
+                        print(f"  val/rouge1 {rouge_scores['rouge1']:.4f}, "
+                              f"val/rouge2 {rouge_scores['rouge2']:.4f}, "
+                              f"val/rougeL {rouge_scores['rougeL']:.4f}")
 
             wandb.log(common_metrics, step=iter_num)
         if losses['val'] < best_val_loss or always_save_checkpoint:
