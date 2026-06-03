@@ -24,7 +24,7 @@ print(f"WandB entity: {ENTITY}")
 DROPOUT = 0.0
 MODEL_TYPE = "gpt2"
 MAX_POSITIONS = 1024
-MAX_NEW_TOKENS = 16
+MAX_NEW_TOKENS = 32
 
 enc = tiktoken.get_encoding("gpt2")
 

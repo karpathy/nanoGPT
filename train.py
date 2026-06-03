@@ -81,17 +81,19 @@ prefix_len = 0              # L: number of soft tokens (0 = no prefix)
 prefix_update_period = 1    # m: update P every m steps (1 = dense)
 prefix_cache = True         # whether to cache prefix KV between updates
 
-run_final_em = True
 em_eval_interval = 1000     # supervised tasks: run generation EM every N steps
 em_eval_examples = 0        # 0 = full split, otherwise evaluate first N examples
 em_max_new_tokens = 128     # max tokens generated per example for EM
 em_progress_interval = 25   # print EM progress every N examples
 
-generation_eval = 'em'      # 'em', 'rouge', or 'none'
 rouge_eval_interval = 1000
 rouge_eval_examples = 5000
 rouge_max_new_tokens = 64
 rouge_progress_interval = 25
+
+
+generation_eval = 'none'
+run_final_em = False
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
@@ -100,8 +102,17 @@ if generation_eval == 'rouge':
     for k in ("run_final_em", "em_eval_interval", "em_eval_examples",
               "em_max_new_tokens", "em_progress_interval"):
         config.pop(k, None)
+
 elif generation_eval == 'em':
     for k in ("rouge_eval_interval", "rouge_eval_examples",
+              "rouge_max_new_tokens", "rouge_progress_interval"):
+        config.pop(k, None)
+
+elif generation_eval == 'none':
+    for k in ("run_final_em",
+              "em_eval_interval", "em_eval_examples",
+              "em_max_new_tokens", "em_progress_interval",
+              "rouge_eval_interval", "rouge_eval_examples",
               "rouge_max_new_tokens", "rouge_progress_interval"):
         config.pop(k, None)
 # Fix: ensure eval_only is a proper boolean
@@ -135,7 +146,7 @@ print(f"tokens per iteration will be: {tokens_per_iter:,}")
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
 torch.manual_seed(1337 + seed_offset)
-torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
+torch.backends.cuda.matmul.allow_tf32= True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
 # note: float16 data type will automatically use a GradScaler

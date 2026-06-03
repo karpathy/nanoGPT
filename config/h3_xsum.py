@@ -30,11 +30,14 @@ prefix_len = 0
 prefix_update_period = 1
 prefix_cache = False
 
-
-generation_eval = 'rouge'
-rouge_eval_interval = 250        # Match loss eval frequency
-rouge_eval_examples = 0          # Use full validation set
-rouge_max_new_tokens = 64
-rouge_progress_interval = 25
-
+# XSum uses ROUGE, but full generation eval is very slow during training.
+# Keep training fast and run h3/h3_xsum_eval_sweep.py afterwards for final ROUGE.
+generation_eval = 'none'
 run_final_em = False
+
+# Optional CLI overrides for small validation ROUGE during a monitored run:
+# --generation_eval=rouge --rouge_eval_interval=1000 --rouge_eval_examples=200
+# rouge_eval_interval = 1000
+# rouge_eval_examples = 200
+# rouge_max_new_tokens = 48
+# rouge_progress_interval = 25

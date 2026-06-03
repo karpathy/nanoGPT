@@ -49,6 +49,7 @@ for cfg in BEST_CONFIGS:
         f"--prefix_len={L}",
         f"--prefix_update_period={M}",
         f"--run_final_em=False",
+        f"--generation_eval=none"
         f"--out_dir={out_dir}",
         f"--prefix_cache={cfg['cache']}",
         f"--prefix_type=soft",
@@ -110,6 +111,6 @@ for r in results:
 if training_errors:
     print(f"\nFailed (L, m) pairs: {training_errors}")
 
-with open("/kaggle/working/h3_summary.json", "w") as f:
+with open("/kaggle/working/h3_gsm8k_answer_only_summary.json", "w") as f:
     json.dump(results, f, indent=2)
 print("\nSaved: /kaggle/working/h3_summary.json")

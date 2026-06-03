@@ -14,7 +14,7 @@ test_data = torch.load("data/xsum/test.pt")
 MAX_EVAL_EXAMPLES = 1000
 if MAX_EVAL_EXAMPLES is not None:
     test_data = test_data[:MAX_EVAL_EXAMPLES]
-MAX_NEW_TOKENS = 64
+MAX_NEW_TOKENS = 32 # should match from config em_max_new_tokens = 32
 DEVICE = "cuda"
 
 import sys

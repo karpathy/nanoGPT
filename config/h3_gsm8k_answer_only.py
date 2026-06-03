@@ -32,3 +32,12 @@ grad_clip = 1.0
 prefix_len = 0
 prefix_update_period = 1
 prefix_cache = False
+
+generation_eval = 'none'
+run_final_em = False
+
+# generation_eval = 'em'
+# run_final_em = True
+# em_eval_interval = 1000
+# em_eval_examples = 200
+# em_max_new_tokens = 32
