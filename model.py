@@ -74,7 +74,27 @@ class CausalSelfAttention(nn.Module):
             # causal mask to ensure that attention is only applied to the left in the input sequence
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
+        # Cache for prefix attention masks to avoid recreation overhead
+        self._prefix_mask_cache = {}
 
+    def _get_prefix_mask(self, T, L, device, dtype=torch.bool):
+        """Get or create prefix attention mask with caching.
+
+        Masks are cached by (T, L, dtype) key to avoid recreating them every forward pass.
+        """
+        cache_key = (T, L, dtype)
+
+        if cache_key not in self._prefix_mask_cache:
+            # Create the mask: prefix tokens fully visible + causal for new tokens
+            prefix_mask = torch.ones(T, L, device=device, dtype=dtype)
+            token_mask = torch.tril(torch.ones(T, T, device=device, dtype=dtype))
+            full_mask = torch.cat([prefix_mask, token_mask], dim=1)
+            full_mask = full_mask.view(1, 1, T, L + T)
+
+            # Cache it
+            self._prefix_mask_cache[cache_key] = full_mask
+
+        return self._prefix_mask_cache[cache_key]
     def forward(self, x, deep_prefix=None, prefix_kv=None):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
@@ -132,30 +152,9 @@ class CausalSelfAttention(nn.Module):
                 )
             # Prefix-cache attention (cache ON)
             else:
-                # prefix tokens are fully visible
-                prefix_mask = torch.ones(
-                    T,
-                    L,
-                    device=x.device,
-                    dtype=torch.bool
-                )
+                # Use cached mask to avoid recreation overhead every forward pass
+                full_mask = self._get_prefix_mask(T, L, x.device)
 
-                # causal mask for normal tokens
-                token_mask = torch.tril(
-                    torch.ones(
-                        T,
-                        T,
-                        device=x.device,
-                        dtype=torch.bool
-                    )
-                )
-
-                full_mask = torch.cat(
-                    [prefix_mask, token_mask],
-                    dim=1
-                )
-
-                full_mask = full_mask.view(1, 1, T, L + T)
 
                 y = torch.nn.functional.scaled_dot_product_attention(
                     q,
@@ -170,15 +169,8 @@ class CausalSelfAttention(nn.Module):
                     1.0 / math.sqrt(k.size(-1))
             )
             if prefix_kv is not None:
-                prefix_mask = torch.ones(T, L, device=x.device)
-                token_mask = torch.tril(
-                    torch.ones(T, T, device=x.device)
-                )
-                full_mask = torch.cat(
-                    [prefix_mask, token_mask],
-                    dim=1
-                )
-                mask = full_mask.view(1, 1, T, L + T)
+                # Use cached mask (default dtype for non-flash is float32)
+                mask = self._get_prefix_mask(T, L, x.device, dtype=torch.float32)
             else:
                 mask = self.bias[:, :, :T, :T]
 
