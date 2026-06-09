@@ -5,6 +5,7 @@ import wandb
 L_VALUES  = [0, 64, 100, 256, 512]
 M_FIXED   = 1
 TASK      = "wikitext2"
+METHOD_TAG = "positional"
 DEVICE    = "cuda"
 
 import sys
@@ -25,7 +26,10 @@ MAX_POSITIONS = 1024
 def download_artifact(L, m, task):
     if L == 0:
         return "baseline"  # no artifact needed for L=0
-    artifact_name = f"{ENTITY}/{PROJECT}/prefix-L{L}-m{m}-{task}:latest"
+    artifact_name = (
+        f"{ENTITY}/{PROJECT}/"
+        f"prefix-{METHOD_TAG}-L{L}-m{m}-{task}:latest"
+    )
     try:
         artifact  = api.artifact(artifact_name, type="model")
         local_dir = artifact.download()
@@ -75,7 +79,7 @@ def load_checkpoint(L, m, task):
 
 
 def get_training_metrics(L, m, task):
-    run_name = f"prefix-L{L}-m{m}-{task}"
+    run_name = f"prefix-{METHOD_TAG}-L{L}-m{m}-{task}"
     try:
         runs = api.runs(
             f"{ENTITY}/{PROJECT}",

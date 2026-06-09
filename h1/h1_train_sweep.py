@@ -4,6 +4,7 @@ import subprocess, os, time, torch, json, math
 RUN_ORDER = [0,100]  # L=100 first — smoke test
 M_FIXED   = 1
 TASK      = "wikitext2"
+METHOD_TAG = "positional"
 
 results         = []
 training_errors = []
@@ -13,8 +14,8 @@ MAX_POSITIONS = 1024
 for L in RUN_ORDER:
 
 
-    run_name = f"prefix-L{L}-m{M_FIXED}-{TASK}"
-    out_dir  = f"/kaggle/working/h1_L{L}_m{M_FIXED}"
+    run_name = f"prefix-{METHOD_TAG}-L{L}-m{M_FIXED}-{TASK}"
+    out_dir  = f"/kaggle/working/h1_{METHOD_TAG}_L{L}_m{M_FIXED}"
     os.makedirs(out_dir, exist_ok=True)
 
     print(f"\n{'═'*60}")
@@ -49,6 +50,9 @@ for L in RUN_ORDER:
         "python", "train.py", "config/h1_wikitext2.py",
         f"--prefix_len={L}",
         f"--prefix_update_period={M_FIXED}",
+        "--prefix_cache=False",
+        "--prefix_type=soft",
+        "--generation_eval=none",
         f"--out_dir={out_dir}",
         f"--wandb_run_name={run_name}",
     ] + extra_flags
@@ -70,7 +74,7 @@ for L in RUN_ORDER:
         ckpt     = torch.load(prefix_path, map_location="cpu")
         val_loss = float(ckpt.get("val_loss", float("nan")))
         val_ppl  = math.exp(val_loss) if not math.isnan(val_loss) else float("nan")
-        peak_mem = torch.cuda.max_memory_allocated() / 1e9
+        peak_mem = float(ckpt.get("peak_gpu_mem_gb", float("nan")))
 
         results.append({
             "L":            L,
@@ -109,6 +113,7 @@ for r in results:
 if training_errors:
     print(f"\nFailed L values: {training_errors}")
 
-with open("/kaggle/working/h1_summary.json", "w") as f:
+summary_path = f"/kaggle/working/h1_{METHOD_TAG}_summary.json"
+with open(summary_path, "w") as f:
     json.dump(results, f, indent=2)
-print("\nSaved: /kaggle/working/h1_summary.json")
+print(f"\nSaved: {summary_path}")
