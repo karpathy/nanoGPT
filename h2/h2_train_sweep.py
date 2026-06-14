@@ -5,8 +5,8 @@ import subprocess, os, time, torch, json, math
 
 # RUN_ORDER  = [0, 16, 32, 64, 80, 100, 256, 512, 760]
 
-RUN_ORDER  = [256]
-M_VALUES = [20]
+RUN_ORDER  = [100]
+M_VALUES = [20, 10, 5, 1]
 TASK      = "wikitext2"
 
 results         = []
