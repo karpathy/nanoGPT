@@ -1,0 +1,5 @@
+run_name,Mean best iter,Std best iter
+A1_no_pos_encoding,3000.0,408.2
+A2_rope,1500.0,288.7
+A3_alibi,1312.5,125.0
+baseline,1687.5,239.4

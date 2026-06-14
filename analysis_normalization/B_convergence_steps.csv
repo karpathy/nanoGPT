@@ -1,0 +1,4 @@
+run_name,Mean best iter,Std best iter
+B1_rmsnorm,1812.5,125.0
+B2_post_ln,2250.0,204.1
+baseline,1687.5,239.4

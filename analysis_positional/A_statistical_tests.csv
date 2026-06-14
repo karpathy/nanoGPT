@@ -1,0 +1,4 @@
+Variant,t-statistic,p-value,significant
+A1_no_pos_encoding,12.146,0.0004,True
+A2_rope,-6.432,0.0012,True
+A3_alibi,-24.548,0.0000,True

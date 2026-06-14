@@ -1,0 +1,4 @@
+Configuration,Mean Val Loss,Std Loss,Mean Time (s),Std Time (s),Number of Seeds
+Pre-LN (baseline),1.6944,0.0072,728.0,70.2,4
+RMSNorm,1.6915,0.0082,954.5,103.6,4
+Post-LN,1.5717,0.0105,735.2,73.0,4

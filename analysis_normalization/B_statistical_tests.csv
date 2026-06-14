@@ -1,0 +1,3 @@
+Variant,t-statistic,p-value,significant
+B1_rmsnorm,0.533,0.6135,False
+B2_post_ln,19.227,0.0000,True

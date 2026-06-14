@@ -1,0 +1,5 @@
+Configuration,Mean Val Loss,Std Loss,Mean Time (s),Std Time (s),Number of Seeds
+Baseline (learned pos),1.6944,0.0072,728.0,70.2,4
+No positional encoding,1.5668,0.0197,752.2,95.3,4
+RoPE,1.7367,0.011,900.2,97.1,4
+ALiBi,1.8134,0.0064,1374.5,118.5,4
