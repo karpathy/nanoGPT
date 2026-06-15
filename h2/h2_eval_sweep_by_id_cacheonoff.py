@@ -24,6 +24,12 @@ RUN_IDS = [
     "tcb4odl2",  # m=5
     "g89cvglz", # m=1
 
+    # cache on: L=100
+    "i9chd58m", # m = 20
+    "4snfh2xu", #m=10
+    "gmzkhs0u", # m=5
+    "eosffsx5", # m=1
+    
     # cache on: L=64
     "szkvt3w0",  # m=20
     "bnvkjq07",  # m=10
