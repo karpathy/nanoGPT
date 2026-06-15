@@ -4,8 +4,8 @@ import torch, math, json, os
 import wandb
 import datetime
 # L_VALUES  = [0, 64, 100, 256, 512, 1024, 2048]
-L_VALUES  = [64]
-M_VALUES = [20]
+L_VALUES  = [760,100,16]
+M_VALUES = [1]
 TASK      = "wikitext2"
 DEVICE    = "cuda"
 
