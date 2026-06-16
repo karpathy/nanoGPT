@@ -12,42 +12,8 @@ import wandb
 
 
 RUN_IDS = [
-    # cache on: L=760
-    "wah5y719",  # m=20
-    "hy19iy7g",  # m=10
-    "efbe5ioq",  # m=5
-    "18zt8g31",  # m=1
 
-    # cache on: L=256
-    "z5c80orx",  # m=20
-    "w167iii8",  # m=10
-    "tcb4odl2",  # m=5
-    "g89cvglz", # m=1
-
-    # cache on: L=100
-    "i9chd58m", # m = 20
-    "4snfh2xu", #m=10
-    "gmzkhs0u", # m=5
-    "eosffsx5", # m=1
-    
-    # cache on: L=64
-    "szkvt3w0",  # m=20
-    "bnvkjq07",  # m=10
-    "rrrhqh8s",  # m=5
-    "oc6cluzg", # m=1
-
-    # cache on: L=32
-    "j56obwel",  # m=20
-    "7i12x9a1",  # m=10
-    "sdc71ir5",  # m=5
-
-   # cache on: L=16
-    "khg3i8re", # m=20
-    "n2izc5s6", # m=10
-    "f2mw7od6", # m=5
-
-    #cache on: L = 0
-    "f2mw7od6"
+    "h9arvics" # 16, 1, off
 ]
 PROJECT = "nanoGPT-dissertation"
 TASK = "wikitext2"
