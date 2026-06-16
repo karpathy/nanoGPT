@@ -48,7 +48,7 @@ for cfg in BEST_CONFIGS:
         f"--prefix_len={L}",
         f"--prefix_update_period={M}",
         f"--run_final_em=False",
-        f"--generation_eval=none"
+        f"--generation_eval=none",
         f"--out_dir={out_dir}",
         f"--prefix_cache={cfg['cache']}",
         f"--prefix_type=soft",
