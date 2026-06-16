@@ -5,7 +5,7 @@ import tiktoken
 
 BEST_CONFIGS = [
     {"L": 0, "m": 1, "cache": False},
-    {"L": 100, "m": 5, "cache": True},
+    {"L": 100, "m": 5, "cache": False},
 ]
 
 TASK = "xsum"
