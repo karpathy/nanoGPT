@@ -2,9 +2,8 @@ import subprocess, os, time, torch, json, math
 
 # fill these in after H1/H2 results
 BEST_CONFIGS = [
-    {"L": 100, "m": 5, "cache": True},
-    {"L": 256, "m": 5, "cache": False},
-    {"L": 512, "m": 10, "cache": True},
+    {"L": 0, "m": 1, "cache": False},
+    {"L": 100, "m": 5, "cache": False},
 ]
 TASK = "gsm8k_answer_only"
 CONFIG = "config/h3_gsm8k_answer_only.py"
