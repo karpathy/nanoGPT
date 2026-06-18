@@ -5,8 +5,8 @@ import torch, math, json, os
 import wandb
 
 
-L_VALUES  = [0]
-M_VALUES = [1]
+L_VALUES  = [64]
+M_VALUES = [20]
 
 TASK      = "wikitext2"
 DEVICE    = "cuda"

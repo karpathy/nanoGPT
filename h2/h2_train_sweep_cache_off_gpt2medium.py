@@ -4,8 +4,8 @@ import subprocess, os, time, torch, json, math
 # RUN_ORDER  = [0, 16, 32, 64, 80, 100, 256, 512, 760]
 # M_VALUES = [1, 5, 10, 20]
 
-RUN_ORDER = [0]  # L=100 first — smoke test
-M_VALUES = [1]
+RUN_ORDER = [64]  # L=100 first — smoke test
+M_VALUES = [20]
 
 TASK      = "wikitext2"
 
