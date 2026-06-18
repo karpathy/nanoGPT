@@ -27,8 +27,12 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from model import GPTConfig, GPT
+from model import GPTConfig, GPT, SoftPrefix, DeepPrefix
 
+import re
+import tiktoken
+
+enc = tiktoken.get_encoding("gpt2")
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
@@ -72,10 +76,48 @@ backend = 'nccl' # 'nccl', 'gloo', etc.
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True # use PyTorch 2.0 to compile the model to be faster
+prefix_type = 'soft'
+prefix_len = 0              # L: number of soft tokens (0 = no prefix)
+prefix_update_period = 1    # m: update P every m steps (1 = dense)
+prefix_cache = True         # whether to cache prefix KV between updates
+
+em_eval_interval = 1000     # supervised tasks: run generation EM every N steps
+em_eval_examples = 0        # 0 = full split, otherwise evaluate first N examples
+em_max_new_tokens = 128     # max tokens generated per example for EM
+em_progress_interval = 25   # print EM progress every N examples
+
+rouge_eval_interval = 1000
+rouge_eval_examples = 5000
+rouge_max_new_tokens = 64
+rouge_progress_interval = 25
+
+
+generation_eval = 'none'
+run_final_em = False
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
 config = {k: globals()[k] for k in config_keys} # will be useful for logging
+if generation_eval == 'rouge':
+    for k in ("run_final_em", "em_eval_interval", "em_eval_examples",
+              "em_max_new_tokens", "em_progress_interval"):
+        config.pop(k, None)
+
+elif generation_eval == 'em':
+    for k in ("rouge_eval_interval", "rouge_eval_examples",
+              "rouge_max_new_tokens", "rouge_progress_interval"):
+        config.pop(k, None)
+
+elif generation_eval == 'none':
+    for k in ("run_final_em",
+              "em_eval_interval", "em_eval_examples",
+              "em_max_new_tokens", "em_progress_interval",
+              "rouge_eval_interval", "rouge_eval_examples",
+              "rouge_max_new_tokens", "rouge_progress_interval"):
+        config.pop(k, None)
+# Fix: ensure eval_only is a proper boolean
+if isinstance(eval_only, str):
+    eval_only = eval_only.lower() in ('true', '1', 'yes')
 # -----------------------------------------------------------------------------
 
 # various inits, derived attributes, I/O setup
@@ -104,7 +146,7 @@ print(f"tokens per iteration will be: {tokens_per_iter:,}")
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
 torch.manual_seed(1337 + seed_offset)
-torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
+torch.backends.cuda.matmul.allow_tf32= True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
 # note: float16 data type will automatically use a GradScaler
@@ -113,26 +155,64 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 # poor man's data loader
 data_dir = os.path.join('data', dataset)
-def get_batch(split):
-    # We recreate np.memmap every batch to avoid a memory leak, as per
-    # https://stackoverflow.com/questions/45132940/numpy-memmap-memory-usage-want-to-iterate-once/61472122#61472122
-    if split == 'train':
-        data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
-    else:
-        data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
-    ix = torch.randint(len(data) - block_size, (batch_size,))
-    x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
-    y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
-    if device_type == 'cuda':
-        # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
-        x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
-    else:
-        x, y = x.to(device), y.to(device)
-    return x, y
+
+# this is used for GSM8K dataset, supervised
+supervised = os.path.exists(os.path.join(data_dir, 'train.pt'))
+
+if supervised:
+    train_data = torch.load(os.path.join(data_dir, 'train.pt'))
+    val_data = torch.load(os.path.join(data_dir, 'val.pt'))
+    test_data = torch.load(os.path.join(data_dir, 'test.pt'))
+
+    def get_batch(split):
+        data = train_data if split == 'train' else val_data
+        ix = torch.randint(len(data), (batch_size,))
+
+        x_batch, y_batch = [], []
+        for i in ix:
+            ex = data[i]
+            ids = ex['input_ids']
+            lab = ex['labels']
+            if 'gold_summary' in ex and len(ids) > block_size + 1:
+                ids = ids[-(block_size + 1):]
+                lab = lab[-(block_size + 1):]
+            else:
+                ids = ids[:block_size + 1]
+                lab = lab[:block_size + 1]
+            pad_len = (block_size + 1) - len(ids)
+            ids = ids + [0] * pad_len
+            lab = lab + [-1] * pad_len
+            x_batch.append(torch.tensor(ids[:-1], dtype=torch.long))
+            y_batch.append(torch.tensor(lab[1:], dtype=torch.long))
+
+        x = torch.stack(x_batch)
+        y = torch.stack(y_batch)
+        if device_type == 'cuda':
+            x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
+        else:
+            x, y = x.to(device), y.to(device)
+        return x, y
+
+else:
+    def get_batch(split):
+        if split == 'train':
+            data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
+        else:
+            data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
+        ix = torch.randint(len(data) - block_size, (batch_size,))
+        x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
+        y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
+        if device_type == 'cuda':
+            x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
+        else:
+            x, y = x.to(device), y.to(device)
+        return x, y
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
 best_val_loss = 1e9
+best_val_em = -1.0
+best_val_rougeL = -1.0
 
 # attempt to derive vocab_size from the dataset
 meta_path = os.path.join(data_dir, 'meta.pkl')
@@ -146,6 +226,9 @@ if os.path.exists(meta_path):
 # model init
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
                   bias=bias, vocab_size=None, dropout=dropout) # start with model_args from command line
+
+prefix_module = None
+is_prefix_tuning = False
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -178,6 +261,22 @@ elif init_from == 'resume':
     model.load_state_dict(state_dict)
     iter_num = checkpoint['iter_num']
     best_val_loss = checkpoint['best_val_loss']
+    checkpoint_prefix = checkpoint.get('soft_prefix')
+    if checkpoint_prefix is not None:
+        prefix_len = checkpoint.get('prefix_len', prefix_len)
+        prefix_type = checkpoint.get('prefix_type', prefix_type)
+        prefix_update_period = checkpoint.get('prefix_update_period', prefix_update_period)
+        for p in model.parameters():
+            p.requires_grad = False
+        if prefix_type == 'soft':
+            with torch.no_grad():
+                indices = torch.randint(0, model.config.vocab_size, (prefix_len,))
+                init_embeddings = model.transformer.wte.weight[indices].clone()
+            prefix_module = SoftPrefix(prefix_len, model.config.n_embd, device,
+                                       init_embeddings=init_embeddings).to(device)
+        elif prefix_type == 'deep':
+            ...
+        is_prefix_tuning = True
 elif init_from.startswith('gpt2'):
     print(f"Initializing from OpenAI GPT-2 weights: {init_from}")
     # initialize from OpenAI GPT-2 weights
@@ -186,17 +285,39 @@ elif init_from.startswith('gpt2'):
     # read off the created config params, so we can store them into checkpoint correctly
     for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
         model_args[k] = getattr(model.config, k)
-# crop down the model block size if desired, using model surgery
-if block_size < model.config.block_size:
-    model.crop_block_size(block_size)
-    model_args['block_size'] = block_size # so that the checkpoint will have the right value
-model.to(device)
+    if prefix_len > 0:
+        for p in model.parameters():
+            p.requires_grad = False
+        if prefix_type == 'soft':
+            with torch.no_grad():
+                indices = torch.randint(0, model.config.vocab_size, (prefix_len,))
+                init_embeddings = model.transformer.wte.weight[indices].clone()
+            prefix_module = SoftPrefix(prefix_len, model.config.n_embd, device,
+                                       init_embeddings=init_embeddings).to(device)
+        elif prefix_type == 'deep':
+            prefix_module = DeepPrefix(prefix_len, model.config.n_embd, model.config.n_layer, device).to(device)
+        is_prefix_tuning = True
+        print(f"{prefix_type} prefix: L={prefix_len}")
+    else:
+        print("Finetuning all GPT-2 parameters (prefix_len=0)")
+        print("No soft prefix — frozen GPT-2 baseline (L=0)")
 
+model.to(device)
+if is_prefix_tuning:
+    effective_block_size = model.config.block_size - prefix_len
+    assert effective_block_size > 0, "prefix_len must be smaller than the model block size"
+    if block_size > effective_block_size:
+        print(f"Reducing training block_size from {block_size} to {effective_block_size} to fit prefix")
+        block_size = effective_block_size
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
 # optimizer
-optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
+if is_prefix_tuning:
+    prefix_params = [prefix_module.P] if isinstance(prefix_module, SoftPrefix) else prefix_module.parameters()
+    optimizer = torch.optim.AdamW(prefix_params, lr=learning_rate, betas=(beta1, beta2), weight_decay=weight_decay)
+else:
+    optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory
@@ -216,12 +337,20 @@ if ddp:
 def estimate_loss():
     out = {}
     model.eval()
+    # Build prefix KV once for all eval batches
+    prefix_kv = None
+    if prefix_module is not None and prefix_cache:
+        prefix_kv = raw_model.build_prefix_kv(prefix_module, batch_size=batch_size)
+
     for split in ['train', 'val']:
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = get_batch(split)
             with ctx:
-                logits, loss = model(X, Y)
+                if prefix_kv is not None:
+                    logits, loss = model(X, Y, prefix=None, prefix_kv=prefix_kv)
+                else:
+                    logits, loss = model(X, Y, prefix=prefix_module)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -245,6 +374,42 @@ def get_lr(it):
 if wandb_log and master_process:
     import wandb
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
+    wandb.define_metric("iter")
+    wandb.define_metric("train/*", step_metric="iter")
+    wandb.define_metric("val/*", step_metric="iter")
+    wandb.define_metric("test/*", step_metric="iter")
+    wandb.define_metric("efficiency/*", step_metric="iter")
+    wandb.define_metric("prefix/*", step_metric="iter")
+
+    if generation_eval == 'rouge':
+        wandb.log({
+            "iter": 0,
+            "val/rouge1": 0.0,
+            "val/rouge2": 0.0,
+            "val/rougeL": 0.0,
+            "val/best_rougeL": 0.0,
+            "test/rouge1": 0.0,
+            "test/rouge2": 0.0,
+            "test/rougeL": 0.0,
+        }, step=0)
+    elif generation_eval == 'em':
+        wandb.define_metric("val/em", summary="max")
+        wandb.define_metric("val/best_em", summary="max")
+        wandb.define_metric("test/em", summary="max")
+
+
+def extract_number(text):
+    if "####" in text:
+        after = text.split("####")[-1].strip().replace(",", "")
+        match = re.search(r'-?\d+\.?\d*', after)
+        if match:
+            return match.group()
+    text_clean = text.replace(",", "")
+    numbers = re.findall(r'-?\d+\.?\d*', text_clean)
+    if numbers:
+        return numbers[-1]
+    return None
+
 
 # training loop
 X, Y = get_batch('train') # fetch the very first batch
@@ -252,25 +417,215 @@ t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
+training_start_time = time.time()
+if device_type == 'cuda':
+    torch.cuda.reset_peak_memory_stats()
+
+# this is used for gsm8k, in eval mode
+@torch.no_grad()
+def evaluate_em(data, prefix_module, max_new_tokens=128, use_cache=False):
+    raw_model.eval()
+    correct = 0
+    total = 0
+
+    prefix_kv = None
+    if use_cache and prefix_module is not None:
+        with torch.no_grad():
+            prefix_kv = raw_model.build_prefix_kv(prefix_module, batch_size=1)
+
+    for i, ex in enumerate(data):
+        if em_progress_interval > 0 and i % em_progress_interval == 0:
+            print(f"EM eval: {i}/{len(data)}", flush=True)
+        prompt_ids = ex['input_ids'][:ex['prompt_len']]
+        idx = torch.tensor([prompt_ids], dtype=torch.long, device=device)
+        if prefix_kv is not None:
+            out = raw_model.generate(idx, max_new_tokens, temperature=1.0, top_k=1, prefix_kv=prefix_kv)
+        else:
+            out = raw_model.generate(idx, max_new_tokens, temperature=1.0, top_k=1, prefix=prefix_module)
+        generated_text = enc.decode(out[0].tolist())
+        pred = extract_number(generated_text)
+        gold = extract_number(ex['gold_answer'])
+        if pred is not None and gold is not None and pred == gold:
+            correct += 1
+        total += 1
+    raw_model.train()
+    return correct / total if total > 0 else 0.0
+
+@torch.no_grad()
+def evaluate_rouge(data, prefix_module, max_new_tokens=64, use_cache=False):
+    try:
+        from rouge_score import rouge_scorer, scoring
+    except ImportError as e:
+        raise ImportError(
+            "ROUGE eval requires rouge-score. In Kaggle, run: pip install rouge-score"
+        ) from e
+
+    raw_model.eval()
+
+    scorer = rouge_scorer.RougeScorer(
+        ["rouge1", "rouge2", "rougeL"],
+        use_stemmer=True,
+    )
+    aggregator = scoring.BootstrapAggregator()
+
+    prefix_kv = None
+    if use_cache and prefix_module is not None:
+        prefix_kv = raw_model.build_prefix_kv(prefix_module, batch_size=1)
+
+    for i, ex in enumerate(data):
+        if rouge_progress_interval > 0 and i % rouge_progress_interval == 0:
+            print(f"ROUGE eval: {i}/{len(data)}", flush=True)
+
+        prompt_ids = ex["input_ids"][:ex["prompt_len"]]
+        prefix_len = 0 if prefix_module is None else prefix_module.prefix_len
+        max_prompt_len = raw_model.config.block_size - prefix_len
+        prompt_ids = prompt_ids[-max_prompt_len:]
+        idx = torch.tensor([prompt_ids], dtype=torch.long, device=device)
+        prompt_len_used = idx.size(1)
+
+        if prefix_kv is not None:
+            out = raw_model.generate(
+                idx,
+                max_new_tokens,
+                temperature=1.0,
+                top_k=1,
+                prefix_kv=prefix_kv,
+            )
+        else:
+            out = raw_model.generate(
+                idx,
+                max_new_tokens,
+                temperature=1.0,
+                top_k=1,
+                prefix=prefix_module,
+            )
+
+        generated_ids = out[0, prompt_len_used:].tolist()
+        pred = enc.decode(generated_ids)
+        pred = pred.split("<|endoftext|>")[0].strip()
+
+        gold = ex["gold_summary"].strip()
+
+        scores = scorer.score(gold, pred)
+        aggregator.add_scores(scores)
+
+    result = aggregator.aggregate()
+
+    raw_model.train()
+
+    return {
+        "rouge1": result["rouge1"].mid.fmeasure,
+        "rouge2": result["rouge2"].mid.fmeasure,
+        "rougeL": result["rougeL"].mid.fmeasure,
+    }
+
 while True:
 
     # determine and set the learning rate for this iteration
     lr = get_lr(iter_num) if decay_lr else learning_rate
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
+    update_now = (iter_num % prefix_update_period == 0)
+    # on m-update steps, prefix gets gradients
+    # on in-between steps, prefix is frozen
+    if is_prefix_tuning:
+        prefix_module.requires_grad_(update_now)
+        if update_now and prefix_cache:
+            prefix_module.invalidate()
 
     # evaluate the loss on train/val sets and write checkpoints
-    if iter_num % eval_interval == 0 and master_process:
+    if (iter_num % eval_interval == 0 or iter_num >= max_iters) and master_process:
+        eval_start = time.time()
         losses = estimate_loss()
+        eval_time = time.time() - eval_start
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
         if wandb_log:
-            wandb.log({
+            import math
+
+            # wall-clock and throughput ───────────────────────
+            wall_clock_elapsed = time.time() - training_start_time
+            tokens_seen = iter_num * batch_size * block_size * gradient_accumulation_steps
+            tokens_per_sec = tokens_seen / max(wall_clock_elapsed, 1)
+
+            #  early-phase target (adjust threshold to your baseline PPL) ──
+
+            cache_hit_ratio = (
+                1.0 - (1.0 / prefix_update_period)
+                if prefix_module is not None and prefix_cache and prefix_update_period > 1
+                else 0.0
+            )
+
+            # common metrics logged for both modes
+            common_metrics = {
                 "iter": iter_num,
                 "train/loss": losses['train'],
                 "val/loss": losses['val'],
+                "efficiency/eval_time_sec": eval_time,
                 "lr": lr,
-                "mfu": running_mfu*100, # convert to percentage
-            })
+                "mfu": running_mfu * 100,
+                "prefix/len": prefix_len,
+                "prefix/update_period": prefix_update_period,
+                "prefix/param_count": prefix_len * raw_model.config.n_embd if is_prefix_tuning else 0,
+                "prefix/cache_hit_ratio": cache_hit_ratio,
+                "efficiency/peak_gpu_mem_gb": (
+                    torch.cuda.max_memory_allocated() / 1e9 if device_type == 'cuda' else 0.0
+                ),
+                "prefix/cache_enabled": int(prefix_cache),
+                "prefix/update_now": int(update_now) if is_prefix_tuning else 0,
+                "efficiency/wall_clock_sec": wall_clock_elapsed,
+                "efficiency/tokens_per_sec": tokens_per_sec,
+            }
+
+            if not supervised:
+                # language modeling mode — log perplexity
+                TARGET_PPL = 50.0
+                val_ppl = math.exp(losses['val'])
+                train_ppl = math.exp(losses['train'])
+                hit_target = 1 if val_ppl <= TARGET_PPL else 0
+
+                common_metrics.update({
+                    "val/perplexity": val_ppl,
+                    "train/perplexity": train_ppl,
+                    "target/hit_ppl_50": hit_target,
+                    "target/steps_logged": iter_num if hit_target else 0,
+
+                })
+
+            else:
+                # supervised mode (gsm8k) — log EM, but not every eval
+                # EM requires generation and is slow, so run it less frequently
+                if generation_eval == 'em':
+                    if (iter_num > 0 and iter_num % em_eval_interval == 0) or iter_num >= max_iters:
+                        em_data = val_data if em_eval_examples == 0 else val_data[:em_eval_examples]
+                        em_score = evaluate_em(
+                            em_data,
+                            prefix_module,
+                            max_new_tokens=em_max_new_tokens,
+                            use_cache=prefix_cache,
+                        )
+                        best_val_em = max(best_val_em, em_score)
+                        common_metrics["val/em"] = em_score
+                        common_metrics["val/best_em"] = best_val_em
+
+                elif generation_eval == 'rouge':
+                    if (iter_num > 0 and iter_num % rouge_eval_interval == 0) or iter_num >= max_iters:
+                        rouge_data = val_data if rouge_eval_examples == 0 else val_data[:rouge_eval_examples]
+                        rouge_scores = evaluate_rouge(
+                            rouge_data,
+                            prefix_module,
+                            max_new_tokens=rouge_max_new_tokens,
+                            use_cache=prefix_cache,
+                        )
+                        best_val_rougeL = max(best_val_rougeL, rouge_scores["rougeL"])
+                        common_metrics["val/rouge1"] = rouge_scores["rouge1"]
+                        common_metrics["val/rouge2"] = rouge_scores["rouge2"]
+                        common_metrics["val/rougeL"] = rouge_scores["rougeL"]
+                        common_metrics["val/best_rougeL"] = best_val_rougeL
+                        print(f"  val/rouge1 {rouge_scores['rouge1']:.4f}, "
+                              f"val/rouge2 {rouge_scores['rouge2']:.4f}, "
+                              f"val/rougeL {rouge_scores['rougeL']:.4f}")
+
+            wandb.log(common_metrics, step=iter_num)
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
             if iter_num > 0:
@@ -281,9 +636,82 @@ while True:
                     'iter_num': iter_num,
                     'best_val_loss': best_val_loss,
                     'config': config,
+                    'soft_prefix': prefix_module.P.detach().cpu() if isinstance(prefix_module, SoftPrefix) else None,
+                    'prefix_type': prefix_type if is_prefix_tuning else None,
+                    'prefix_len': prefix_len if is_prefix_tuning else 0,
+                    'prefix_update_period': prefix_update_period if is_prefix_tuning else 1,
+                    'best_val_em': float(best_val_em),
+                    'best_val_rougeL': float(best_val_rougeL)
                 }
-                print(f"saving checkpoint to {out_dir}")
-                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+                if not is_prefix_tuning:
+                    ckpt_path = os.path.join(out_dir, 'ckpt.pt')
+                    print(f"saving checkpoint to {ckpt_path}")
+                    torch.save(checkpoint, ckpt_path)
+                if is_prefix_tuning:
+                    prefix_path = os.path.join(out_dir, 'prefix_P.pt')
+                    torch.save({
+                        'P': prefix_module.P.detach().cpu() if isinstance(prefix_module, SoftPrefix) else None,
+                        'prefix_type': prefix_type,
+                        'prefix_len': prefix_len,
+                        'prefix_update_period': prefix_update_period,
+                        'val_loss': float(best_val_loss),
+                        'iter_num': iter_num,
+                        'task': dataset,
+                        'model': init_from,
+                        'block_size': block_size,
+                        'prefix_cache': prefix_cache,
+                        'best_val_em': float(best_val_em),
+                        'best_val_rougeL': float(best_val_rougeL),
+                        'peak_gpu_mem_gb': (
+                            torch.cuda.max_memory_allocated() / 1e9 if device_type == 'cuda' else 0.0
+                        ),
+                    }, prefix_path)
+                    print(f"saving prefix to {prefix_path}")
+
+                    if wandb_log:
+                        artifact = wandb.Artifact(
+                            name=wandb_run_name.replace(' ', '-'),
+                            type="model",
+                            metadata={
+                                "val_loss": float(best_val_loss),
+                                "best_val_em": float(best_val_em),
+                                "best_val_rougeL": float(best_val_rougeL),
+                                "iter": iter_num,
+                            }
+                        )
+                        artifact.add_file(prefix_path)
+                        wandb.log_artifact(artifact)
+                else:
+                    # L=0 baseline — save a small metadata file
+                    prefix_path = os.path.join(out_dir, 'prefix_P.pt')
+                    torch.save({
+                        'P': None,
+                        'val_loss': float(best_val_loss),
+                        'iter_num': iter_num,
+                        'task': dataset,
+                        'model': init_from,
+                        'block_size': block_size,
+                        'prefix_cache': prefix_cache,
+                        'best_val_em': float(best_val_em),
+                        'best_val_rougeL': float(best_val_rougeL),
+                        'peak_gpu_mem_gb': (
+                            torch.cuda.max_memory_allocated() / 1e9 if device_type == 'cuda' else 0.0
+                        ),
+                    }, prefix_path)
+                    if wandb_log:
+                        artifact = wandb.Artifact(
+                            name=wandb_run_name.replace(' ', '-'),
+                            type="model",
+                            metadata={
+                                "val_loss": float(best_val_loss),
+                                "best_val_em": float(best_val_em),
+                                "best_val_rougeL": float(best_val_rougeL),
+                                "iter": iter_num,
+                            }
+                        )
+                        artifact.add_file(prefix_path)
+                        wandb.log_artifact(artifact)
+
     if iter_num == 0 and eval_only:
         break
 
@@ -297,21 +725,33 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            logits, loss = model(X, Y)
+            if is_prefix_tuning and prefix_cache and not update_now:
+                if not prefix_module.cache_valid:
+                    with torch.no_grad():
+                        prefix_module.cached_kv = raw_model.build_prefix_kv(prefix_module, batch_size=X.size(0))
+                        prefix_module.cache_valid = True
+                logits, loss = model(X, Y, prefix=None, prefix_kv=prefix_module.cached_kv)
+            else:
+                logits, loss = model(X, Y, prefix=prefix_module, prefix_kv=None)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, Y = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
-        scaler.scale(loss).backward()
+        if not is_prefix_tuning or update_now:
+            scaler.scale(loss).backward()
     # clip the gradient
-    if grad_clip != 0.0:
+    if grad_clip != 0.0 and (not is_prefix_tuning or update_now):
         scaler.unscale_(optimizer)
-        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+        torch.nn.utils.clip_grad_norm_(
+            prefix_module.parameters() if is_prefix_tuning else model.parameters(),
+            grad_clip
+        )
     # step the optimizer and scaler if training in fp16
-    scaler.step(optimizer)
-    scaler.update()
     # flush the gradients as soon as we can, no need for this memory anymore
-    optimizer.zero_grad(set_to_none=True)
+    if not is_prefix_tuning or update_now:
+        scaler.step(optimizer)
+        scaler.update()
+        optimizer.zero_grad(set_to_none=True)
 
     # timing and logging
     t1 = time.time()
@@ -324,13 +764,54 @@ while True:
         if local_iter_num >= 5: # let the training loop settle a bit
             mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%, update={int(update_now)}")
+        if wandb_log:
+            wandb.log({
+                "iter": iter_num,
+                "train/iter_loss": lossf,
+                "mfu": running_mfu * 100,
+                "prefix/update_now": int(update_now),
+            }, step=iter_num)
     iter_num += 1
     local_iter_num += 1
 
     # termination conditions
     if iter_num > max_iters:
         break
+
+if master_process and supervised and run_final_em and generation_eval == 'em':
+    em_data = test_data if em_eval_examples == 0 else test_data[:em_eval_examples]
+    final_em = evaluate_em(
+        em_data,
+        prefix_module,
+        max_new_tokens=em_max_new_tokens,
+        use_cache=prefix_cache,
+    )
+    print(f"final test EM: {final_em:.4f}")
+    if wandb_log:
+        wandb.log({"test/em": final_em}, step=iter_num)
+
+if master_process and supervised and generation_eval == 'rouge':
+    rouge_data = test_data if rouge_eval_examples == 0 else test_data[:rouge_eval_examples]
+    final_rouge = evaluate_rouge(
+        rouge_data,
+        prefix_module,
+        max_new_tokens=rouge_max_new_tokens,
+        use_cache=prefix_cache,
+    )
+    print(
+        f"final test ROUGE: "
+        f"R1={final_rouge['rouge1']:.4f}, "
+        f"R2={final_rouge['rouge2']:.4f}, "
+        f"RL={final_rouge['rougeL']:.4f}"
+    )
+    if wandb_log:
+        wandb.log({
+            "test/rouge1": final_rouge["rouge1"],
+            "test/rouge2": final_rouge["rouge2"],
+            "test/rougeL": final_rouge["rougeL"],
+        }, step=iter_num)
+
 
 if ddp:
     destroy_process_group()

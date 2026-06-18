@@ -26,6 +26,32 @@ class LayerNorm(nn.Module):
     def forward(self, input):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
+class SoftPrefix(nn.Module):
+    def __init__(self, prefix_len, n_embd, device, init_embeddings=None):
+        super().__init__()
+        self.prefix_len = prefix_len
+        if init_embeddings is not None:
+            assert init_embeddings.shape == (prefix_len, n_embd), \
+                f"init_embeddings shape {init_embeddings.shape} != ({prefix_len}, {n_embd})"
+            self.P = nn.Parameter(init_embeddings.to(device))
+        else:
+            # fallback to random Gaussian (original behavior)
+            self.P = nn.Parameter(torch.randn(prefix_len, n_embd, device=device) * 0.02)
+        self.cached_kv = None
+        self.cache_valid = False
+
+    # prefix changes -> cache must be invalidated
+    # prefix frozen -> you can reuse cached KV
+    def invalidate(self):
+        self.cached_kv = None
+        self.cache_valid = False
+
+
+class DeepPrefix(nn.Module):
+    def __init__(self, prefix_len, n_embd, n_layer, device):
+        super().__init__()
+    ...
+
 class CausalSelfAttention(nn.Module):
 
     def __init__(self, config):
@@ -48,8 +74,28 @@ class CausalSelfAttention(nn.Module):
             # causal mask to ensure that attention is only applied to the left in the input sequence
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
+        # Cache for prefix attention masks to avoid recreation overhead
+        self._prefix_mask_cache = {}
 
-    def forward(self, x):
+    def _get_prefix_mask(self, T, L, device, dtype=torch.bool):
+        """Get or create prefix attention mask with caching.
+
+        Masks are cached by (T, L, dtype) key to avoid recreating them every forward pass.
+        """
+        cache_key = (T, L, dtype)
+
+        if cache_key not in self._prefix_mask_cache:
+            # Create the mask: prefix tokens fully visible + causal for new tokens
+            prefix_mask = torch.ones(T, L, device=device, dtype=dtype)
+            token_mask = torch.tril(torch.ones(T, T, device=device, dtype=dtype))
+            full_mask = torch.cat([prefix_mask, token_mask], dim=1)
+            full_mask = full_mask.view(1, 1, T, L + T)
+
+            # Cache it
+            self._prefix_mask_cache[cache_key] = full_mask
+
+        return self._prefix_mask_cache[cache_key]
+    def forward(self, x, deep_prefix=None, prefix_kv=None):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
@@ -58,22 +104,94 @@ class CausalSelfAttention(nn.Module):
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 
+        if prefix_kv is not None:
+            prefix_k, prefix_v = prefix_kv
+            k = torch.cat([prefix_k, k], dim=2)
+            v = torch.cat([prefix_v, v], dim=2)
+            L = prefix_k.size(2)
+
+        if deep_prefix is not None:
+            ...
+
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
+        # if self.flash and prefix_kv is None:
+        #     y = torch.nn.functional.scaled_dot_product_attention(
+        #         q, k, v,
+        #         attn_mask=None,
+        #         dropout_p=self.dropout if self.training else 0,
+        #         is_causal=True
+        #     )
+        #
+        # else:
+        #     # manual implementation of attention
+        #
+        #     att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+        #     if prefix_kv is not None:
+        #         prefix_mask = torch.ones(T, L, device=x.device)
+        #         token_mask = torch.tril(torch.ones(T, T, device=x.device))
+        #         full_mask = torch.cat([prefix_mask, token_mask], dim=1)  # (T, L+T)
+        #         mask = full_mask.view(1, 1, T, L + T)
+        #     else:
+        #         mask = self.bias[:,:,:T,:T]
+        #     att = att.masked_fill(mask== 0, float('-inf'))
+        #     att = F.softmax(att, dim=-1)
+        #     att = self.attn_dropout(att)
+        #     y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+
+        # FlashAttention path
         if self.flash:
-            # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
+            # Standard causal attention (cache OFF)
+            if prefix_kv is None:
+                y = torch.nn.functional.scaled_dot_product_attention(
+                    q,
+                    k,
+                    v,
+                    attn_mask=None,
+                    dropout_p=self.dropout if self.training else 0,
+                    is_causal=True
+                )
+            # Prefix-cache attention (cache ON)
+            else:
+                # Use cached mask to avoid recreation overhead every forward pass
+                full_mask = self._get_prefix_mask(T, L, x.device)
+
+
+                y = torch.nn.functional.scaled_dot_product_attention(
+                    q,
+                    k,
+                    v,
+                    attn_mask=full_mask,
+                    dropout_p=self.dropout if self.training else 0,
+                    is_causal=False
+                )
         else:
-            # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+            att = (q @ k.transpose(-2, -1)) * (
+                    1.0 / math.sqrt(k.size(-1))
+            )
+            if prefix_kv is not None:
+                # Use cached mask (default dtype for non-flash is float32)
+                mask = self._get_prefix_mask(T, L, x.device, dtype=torch.float32)
+            else:
+                mask = self.bias[:, :, :T, :T]
+
+            att = att.masked_fill(mask == 0, float('-inf'))
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
-            y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+
+            y = att @ v
         y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
 
         # output projection
         y = self.resid_dropout(self.c_proj(y))
         return y
+
+    def project_qkv(self, x):
+        B, T, C = x.size()
+        q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
+        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+        return q, k, v
 
 class MLP(nn.Module):
 
@@ -100,8 +218,8 @@ class Block(nn.Module):
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
-    def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
+    def forward(self, x, deep_prefix=None, prefix_kv=None):
+        x = x + self.attn(self.ln_1(x), deep_prefix = deep_prefix, prefix_kv = prefix_kv)
         x = x + self.mlp(self.ln_2(x))
         return x
 
@@ -167,19 +285,48 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None):
+    def forward(self, idx, targets=None, prefix=None, prefix_kv=None):
         device = idx.device
         b, t = idx.size()
-        assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
-        pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
 
-        # forward the GPT model itself
-        tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
-        pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
-        x = self.transformer.drop(tok_emb + pos_emb)
-        for block in self.transformer.h:
-            x = block(x)
+        has_soft_prefix = prefix is not None and isinstance(prefix, SoftPrefix)
+        has_deep_prefix = prefix is not None and isinstance(prefix, DeepPrefix)
+        using_uncached_soft_prefix = has_soft_prefix and prefix_kv is None
+        cached_prefix_len = 0 if prefix_kv is None else prefix_kv[0][0].size(2)
+        effective_prefix_len = prefix.prefix_len if using_uncached_soft_prefix else cached_prefix_len
+
+        assert effective_prefix_len + t <= self.config.block_size, (
+            f"Cannot forward sequence of length {t} with prefix length {effective_prefix_len}; "
+            f"block size is only {self.config.block_size}"
+        )
+
+        tok_emb = self.transformer.wte(idx)
+
+        if using_uncached_soft_prefix:
+            prefix_pos = torch.arange(0, effective_prefix_len, dtype=torch.long, device=device)
+            token_pos = torch.arange(effective_prefix_len, effective_prefix_len + t, dtype=torch.long, device=device)
+
+            prefix_emb = prefix.P + self.transformer.wpe(prefix_pos)
+            prefix_emb = prefix_emb.unsqueeze(0).expand(b, -1, -1)
+            token_emb = tok_emb + self.transformer.wpe(token_pos)
+            x = torch.cat([prefix_emb, token_emb], dim=1)
+        else:
+            token_pos = torch.arange(effective_prefix_len, effective_prefix_len + t, dtype=torch.long, device=device)
+            x = tok_emb + self.transformer.wpe(token_pos)
+
+        x = self.transformer.drop(x)
+
+        # DeepPrefix should be threaded per layer inside this loop once implemented.
+        for layer_idx, block in enumerate(self.transformer.h):
+            layer_prefix_kv = None if prefix_kv is None else prefix_kv[layer_idx]
+            if has_deep_prefix:
+                x = block(x, deep_prefix=prefix.deep[layer_idx], prefix_kv=layer_prefix_kv)
+            else:
+                x = block(x, prefix_kv=layer_prefix_kv)
         x = self.transformer.ln_f(x)
+
+        if using_uncached_soft_prefix:
+            x = x[:, effective_prefix_len:, :]
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
@@ -191,6 +338,34 @@ class GPT(nn.Module):
             loss = None
 
         return logits, loss
+
+    @torch.no_grad()
+    def build_prefix_kv(self, prefix_module, batch_size):
+        assert isinstance(prefix_module, SoftPrefix), "build_prefix_kv currently only supports SoftPrefix"
+
+        L = prefix_module.prefix_len
+        assert L <= self.config.block_size, (
+            f"Cannot build prefix cache of length {L}; block size is only {self.config.block_size}"
+        )
+
+        pos = torch.arange(0, L, dtype=torch.long, device=prefix_module.P.device)
+        x = prefix_module.P + self.transformer.wpe(pos)
+        x = x.unsqueeze(0).expand(batch_size, -1, -1)
+        x = self.transformer.drop(x)
+
+        prefix_kv = []
+        for block in self.transformer.h:
+            ln_x = block.ln_1(x)
+            _, k, v = block.attn.project_qkv(ln_x)
+            prefix_kv.append((k.detach(), v.detach()))
+
+            # Propagate the prefix activations exactly like a normal block so the
+            # next layer sees the correct hidden states for its own KV cache.
+            attn_out = block.attn(ln_x)
+            x = x + attn_out
+            x = x + block.mlp(block.ln_2(x))
+
+        return prefix_kv
 
     def crop_block_size(self, block_size):
         # model surgery to decrease the block size if necessary
@@ -303,17 +478,25 @@ class GPT(nn.Module):
         return mfu
 
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
+    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, prefix=None, prefix_kv=None):
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
         Most likely you'll want to make sure to be in model.eval() mode of operation for this.
         """
+        prefix_len = 0
+        if prefix_kv is not None:
+            prefix_len = prefix_kv[0][0].size(2)
+        elif prefix is not None and isinstance(prefix, SoftPrefix):
+            prefix_len = prefix.prefix_len
+
+        max_token_len = self.config.block_size - prefix_len
+        assert max_token_len > 0, "prefix length must be smaller than the model block size"
         for _ in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
-            idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
+            idx_cond = idx if idx.size(1) <= max_token_len else idx[:, -max_token_len:]
             # forward the model to get the logits for the index in the sequence
-            logits, _ = self(idx_cond)
+            logits, _ = self(idx_cond, prefix=prefix, prefix_kv=prefix_kv)
             # pluck the logits at the final step and scale by desired temperature
             logits = logits[:, -1, :] / temperature
             # optionally crop the logits to only the top k options
