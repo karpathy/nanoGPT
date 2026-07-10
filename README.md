@@ -232,3 +232,7 @@ For more questions/discussions feel free to stop by **#nanoGPT** on Discord:
 ## acknowledgements
 
 All nanoGPT experiments are powered by GPUs on [Lambda labs](https://lambdalabs.com), my favorite Cloud GPU provider. Thank you Lambda labs for sponsoring nanoGPT!
+
+## Related projects
+
+- [IntelligenceMax](https://intelligencemax.ai) — live reasoning gym with adaptive distinction items and honest scoring ([guide](https://intelligencemax.ai/guide), [science](https://intelligencemax.ai/science))
