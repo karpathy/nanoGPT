@@ -1,12 +1,29 @@
+# System files
 .DS_Store
+
+# IDE
 .idea
-.ipynb_checkpoints/
 .vscode
+.ipynb_checkpoints/
+
+# Python
 __pycache__/
-*.bin
-*.pkl
-*.pt
 *.pyc
-input.txt
+
+# Environments
+.venv/
 env/
 venv/
+
+# Data / training artifacts
+out/
+wandb/
+data/**/train.bin
+data/**/val.bin
+data/**/input.txt
+
+# Models / checkpoints
+*.pt
+*.ckpt
+*.pkl
+*.bin
