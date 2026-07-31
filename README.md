@@ -200,6 +200,17 @@ python sample.py \
     --num_samples=5 --max_new_tokens=100
 ```
 
+## Bonus:
+
+To stream responses set stremable as True in sample.py and run the following command:
+
+```sh
+python sample.py \
+    --init_from=gpt2-xl \
+    --start="What is the answer to life, the universe, and everything?" \
+    --num_samples=5 --max_new_tokens=100
+```
+
 If you'd like to sample from a model you trained, use the `--out_dir` to point the code appropriately. You can also prompt the model with some text from a file, e.g. ```python sample.py --start=FILE:prompt.txt```.
 
 ## efficiency notes
