@@ -194,6 +194,8 @@ model.to(device)
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
+if init_from == 'resume' and checkpoint.get('scaler'):
+    scaler.load_state_dict(checkpoint['scaler'])
 
 # optimizer
 optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
@@ -277,6 +279,7 @@ while True:
                 checkpoint = {
                     'model': raw_model.state_dict(),
                     'optimizer': optimizer.state_dict(),
+                    'scaler': scaler.state_dict(),
                     'model_args': model_args,
                     'iter_num': iter_num,
                     'best_val_loss': best_val_loss,
@@ -334,3 +337,4 @@ while True:
 
 if ddp:
     destroy_process_group()
+
