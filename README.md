@@ -112,7 +112,7 @@ A more serious deep learning professional may be more interested in reproducing 
 python data/openwebtext/prepare.py
 ```
 
-This downloads and tokenizes the [OpenWebText](https://huggingface.co/datasets/openwebtext) dataset. It will create a `train.bin` and `val.bin` which holds the GPT2 BPE token ids in one sequence, stored as raw uint16 bytes. Then we're ready to kick off training. To reproduce GPT-2 (124M) you'll want at least an 8X A100 40GB node and run:
+This downloads and tokenizes the [OpenWebText](https://huggingface.co/datasets/Skylion007/openwebtext) dataset. It will create a `train.bin` and `val.bin` which holds the GPT2 BPE token ids in one sequence, stored as raw uint16 bytes. Then we're ready to kick off training. To reproduce GPT-2 (124M) you'll want at least an 8X A100 40GB node and run:
 
 ```sh
 torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
