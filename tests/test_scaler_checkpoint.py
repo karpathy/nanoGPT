@@ -94,6 +94,24 @@ class ScalerCheckpointTest(unittest.TestCase):
         self.assertEqual(scaler.state_dict()["scale"], state["scale"])
         self.assertEqual(scaler.state_dict()["_growth_tracker"], 777 + expected_steps)
 
+    def test_disabled_checkpoint_resumes_with_fresh_enabled_scaler(self):
+        _, checkpoint = self.run_training(dtype="float32")
+        self.assertEqual(checkpoint["scaler"], {})
+        start_iter = checkpoint["iter_num"]
+        scaler, resumed = self.run_training(resume=True, dtype="float16")
+        self.assertTrue(scaler.is_enabled())
+        self.assertEqual(scaler.state_dict()["scale"], 32.0)
+        self.assertEqual(scaler.state_dict()["_growth_tracker"], 3 - start_iter)
+        self.assertEqual(resumed["scaler"]["scale"], 32.0)
+
+    def test_enabled_checkpoint_resumes_with_disabled_scaler(self):
+        _, checkpoint = self.run_training(dtype="float16")
+        self.assertTrue(checkpoint["scaler"])
+        scaler, resumed = self.run_training(resume=True, dtype="float32")
+        self.assertFalse(scaler.is_enabled())
+        self.assertEqual(scaler.state_dict(), {})
+        self.assertEqual(resumed["scaler"], {})
+
     def test_old_and_disabled_checkpoints_remain_loadable(self):
         _, checkpoint = self.run_training(dtype="float32")
         checkpoint.pop("scaler", None)

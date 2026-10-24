@@ -337,4 +337,3 @@ while True:
 
 if ddp:
     destroy_process_group()
-
