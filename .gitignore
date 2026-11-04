@@ -20,3 +20,5 @@ data/*/manifest.json
 *.bin
 *.pkl
 *.npy
+logs/
+slurm/logs/
