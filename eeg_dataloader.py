@@ -19,7 +19,9 @@ class EEGDataLoader:
         for f in sorted(glob.glob(os.path.join(data_dir, split, '*.npz'))):
             d = np.load(f)
             r = len(self.recs)
-            self.recs.append(dict(codes=d['codes'], xyz=d['xyz'], names=d['channel_names']))
+            loc = d['location_id'].astype(np.int64) if 'location_id' in d.files else np.full(len(d['codes']), -1)
+            self.recs.append(dict(codes=d['codes'], xyz=d['xyz'], names=d['channel_names'],
+                                  loc=loc, std_rows=np.flatnonzero(loc >= 0)))
             seg = d['segment_ids']
             bounds = np.r_[0, np.flatnonzero(np.diff(seg)) + 1, len(seg)]      # 60 s chunk edges, in frames
             for lo, hi in zip(bounds[:-1], bounds[1:]):
@@ -30,6 +32,9 @@ class EEGDataLoader:
         self.runs = np.array(runs, dtype=np.int64)                              # (recording, first start, n starts, n channels)
         w = self.runs[:, 2] * self.runs[:, 3]                                   # every (channel, time) window equally likely
         self.p_single = w / w.sum()
+        has_std = np.array([len(self.recs[r]['std_rows']) > 0 for r in self.runs[:, 0]])
+        self.p_grid = self.runs[:, 2] * has_std                                 # every start time equally likely
+        self.p_grid = self.p_grid / self.p_grid.sum()                           # (recordings with no usable channel skipped)
         self.block_size = block_size
         print(f"{split}: {len(self.recs)} recordings, {len(self.runs)} chunks, {int(w.sum()):,} single-channel windows")
 
@@ -45,7 +50,26 @@ class EEGDataLoader:
             y.append(w[1:])
         return torch.from_numpy(np.stack(x)), torch.from_numpy(np.stack(y))
 
-    # Multi-channel, later (step 5):
-    # def get_grid_batch(self, batch_size, max_channels) -> x, y [B, C, T], xyz [B, C, 3], valid [B, C]
-    #   pick runs with p proportional to n starts (self.runs[:, 2]), one start time per window,
-    #   a random subset of <= max_channels rows of that recording, pad the rest and mark them in `valid`.
+    # Multi-channel
+    def get_grid_batch(self, batch_size, max_channels, channel_select='standard94'):
+        """Multi-channel windows. x [B, C, T] ids (T = the length given to __init__, C = max_channels),
+        and a dict: loc [B, C] standard location id (-1 = none), xyz [B, C, 3], valid [B, C] (False = padded row).
+        channel_select: 'standard94' = one channel per standard location (location_id >= 0); 'all' = every channel.
+        Recordings with more usable channels than max_channels contribute a random subset."""
+        T = self.block_size
+        k = np.random.choice(len(self.runs), size=batch_size, p=self.p_grid)
+        x = np.zeros((batch_size, max_channels, T), np.int64)
+        loc = np.full((batch_size, max_channels), -1, np.int64)
+        xyz = np.zeros((batch_size, max_channels, 3), np.float32)
+        valid = np.zeros((batch_size, max_channels), bool)
+        for b, (r, lo, n, _) in enumerate(self.runs[k]):
+            rec = self.recs[r]
+            rows = rec['std_rows'] if channel_select == 'standard94' else np.arange(len(rec['codes']))
+            rows = np.random.permutation(rows)[:max_channels]                   # random order, at most max_channels
+            s = lo + np.random.randint(n)                                       # one start time for all channels
+            c = len(rows)
+            x[b, :c] = rec['codes'][rows, s:s + T]
+            loc[b, :c] = rec['loc'][rows]
+            xyz[b, :c] = rec['xyz'][rows]
+            valid[b, :c] = True
+        return torch.from_numpy(x), dict(loc=torch.from_numpy(loc), xyz=torch.from_numpy(xyz), valid=torch.from_numpy(valid))

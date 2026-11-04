@@ -59,6 +59,12 @@ eeg_dataloader = False # True: windows from data/<dataset>/{train,val}/*.npz, ne
 pos_encoding = 'learned' # 'learned' (wpe, original) | 'sinusoidal' (fixed sin/cos table)
 bidirectional = False # True: masked-token prediction with full attention (BERT) instead of next-token (GPT)
 mask_ratio = 0.15 # bidirectional only: fraction of tokens replaced by MASK and predicted
+multichannel = False # True: windows of [channels, frames] from the per-recording grids (needs eeg_dataloader and bidirectional)
+max_channels = 94 # multichannel: rows per window (fewer are padded); block_size must be >= max_channels * window_frames
+window_frames = 32 # multichannel: frames per channel per window (8 per second -> 4 s)
+channel_select = 'standard94' # 'standard94' (one channel per standard location, within 2 cm) | 'all'
+channel_encoding = 'none' # multichannel: 'none' (control) | 'learned' (one learned vector per standard location)
+
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
 max_iters = 600000 # total number of training iterations
@@ -121,9 +127,15 @@ data_dir = os.path.join('data', dataset)
 if eeg_dataloader:
     from eeg_dataloader import EEGDataLoader
     np.random.seed(1337 + seed_offset)   # the loader samples with numpy; torch.manual_seed above does not cover it
-    loaders = {split: EEGDataLoader(data_dir, split, block_size) for split in ('train', 'val')}
+    if multichannel:
+        assert bidirectional and max_channels * window_frames <= block_size, "multichannel needs bidirectional and block_size >= max_channels * window_frames"
+    loaders = {split: EEGDataLoader(data_dir, split, window_frames if multichannel else block_size) for split in ('train', 'val')}
 def get_batch(split):
-    if eeg_dataloader:
+    kw = {}                                                    # extra model inputs (multichannel only)
+    if eeg_dataloader and multichannel:
+        x, kw = loaders[split].get_grid_batch(batch_size, max_channels, channel_select)
+        y = x                                                  # replaced by the masking below
+    elif eeg_dataloader:
         x, y = loaders[split].get_batch(batch_size)
     else:
         # We recreate np.memmap every batch to avoid a memory leak, as per
@@ -137,6 +149,8 @@ def get_batch(split):
         y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
     if bidirectional: #jm
         mask = torch.rand(x.shape) < mask_ratio            # which positions to hide
+        if multichannel:
+            mask &= kw['valid'][:, :, None]                    # only real channels; padding keeps target -1
         y = torch.where(mask, x, torch.full_like(x, -1))   # target: the original token where masked, -1 (ignored) elsewhere
         x = x.masked_fill(mask, mask_token_id)             # input: MASK id at those positions    
     if device_type == 'cuda':
@@ -144,7 +158,8 @@ def get_batch(split):
         x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
     else:
         x, y = x.to(device), y.to(device)
-    return x, y
+    kw = {k: v.to(device) for k, v in kw.items()}
+    return x, y, kw
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
@@ -177,7 +192,8 @@ model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=bloc
                   bias=bias, vocab_size=None, dropout=dropout,
                   codebook_dim=codebook.shape[1] if codebook is not None else 0,
                   pos_encoding=pos_encoding,
-                  bidirectional=bidirectional)
+                  bidirectional=bidirectional,
+                  channel_encoding=channel_encoding) #jm
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -253,9 +269,9 @@ def estimate_loss():
     for split in ['train', 'val']:
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
-            X, Y = get_batch(split)
+            X, Y, kw = get_batch(split)
             with ctx:
-                logits, loss = model(X, Y)
+                logits, loss = model(X, Y, **kw)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -281,7 +297,7 @@ if wandb_log and master_process:
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # training loop
-X, Y = get_batch('train') # fetch the very first batch
+X, Y, kw = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
@@ -333,10 +349,10 @@ while True:
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            logits, loss = model(X, Y)
+            logits, loss = model(X, Y, **kw)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
-        X, Y = get_batch('train')
+        X, Y, kw = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
     # clip the gradient

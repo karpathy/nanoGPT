@@ -50,7 +50,7 @@ class CausalSelfAttention(nn.Module):
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
 
-    def forward(self, x):
+    def forward(self, x, attn_mask=None):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
@@ -62,12 +62,14 @@ class CausalSelfAttention(nn.Module):
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
             # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=self.causal)
+            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=self.dropout if self.training else 0, is_causal=self.causal)
         else:
             # manual implementation of attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
             if self.causal: #jm
                 att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+            if attn_mask is not None: #jm padded channels are never attended to
+                att = att.masked_fill(~attn_mask, float('-inf'))
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
             y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
@@ -102,8 +104,8 @@ class Block(nn.Module):
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
-    def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
+    def forward(self, x, attn_mask=None): #jm attn_mask: [b, 1, 1, t] bool, False = padded token, never attended to
+        x = x + self.attn(self.ln_1(x), attn_mask)
         x = x + self.mlp(self.ln_2(x))
         return x
 
@@ -127,6 +129,8 @@ class GPTConfig:
     codebook_dim: int = 0 #jm 0 = learned wte table (original); >0 = tokens enter as their DAC codebook vector (this many dims)
     pos_encoding: str = 'learned' #jm 'learned' = wpe table (original); 'sinusoidal' = fixed sin/cos table, nothing learned
     bidirectional: bool = False #jm False = causal next-token (GPT); True = full attention, masked-token prediction (BERT)
+    channel_encoding: str = 'none' #jm multichannel: 'none' | 'learned' (one learned vector per standard location)
+    n_locations: int = 94 #jm number of standard locations (10-20/10-10 system)    
 
 class GPT(nn.Module):
 
@@ -151,6 +155,8 @@ class GPT(nn.Module):
         if config.pos_encoding == 'sinusoidal': #jm
             del self.transformer['wpe']                                                   # no learned position table
             self.register_buffer('pos_table', sinusoidal_table(config.block_size, config.n_embd))  # fixed, (block_size, n_embd) 
+        if config.channel_encoding == 'learned': #jm
+            self.transformer['wce'] = nn.Embedding(config.n_locations + 1, config.n_embd)   # last row: padding / no location
 
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         # with weight tying when using torch.compile() some warnings get generated:
@@ -190,11 +196,20 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None):
+    def forward(self, idx, targets=None, loc=None, xyz=None, valid=None): #jm loc/xyz/valid [b, c(, 3)]: multichannel only
         device = idx.device
-        b, t = idx.size()
-        assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
-        pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
+        grid = idx.dim() == 3                                    #jm multichannel batch [b, c, t]
+        if grid:
+            b, c, t = idx.shape
+            idx = idx.reshape(b, c * t)                          # flatten channel by channel: row 0's frames, then row 1's, ...
+            if targets is not None:
+                targets = targets.reshape(b, c * t)
+            pos = torch.arange(t, dtype=torch.long, device=device).repeat(c)   # frame index of every token: 0..t-1, c times
+        else:
+            b, t = idx.size()
+            c = 1
+            pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
+        assert c * t <= self.config.block_size, f"Cannot forward sequence of length {c * t}, block size is only {self.config.block_size}"
 
         # forward the GPT model itself
         if self.config.codebook_dim > 0: #jm
@@ -205,9 +220,14 @@ class GPT(nn.Module):
             pos_emb = self.pos_table[pos]                  # (t, n_embd), same lookup, fixed values
         else:            
             pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
-        x = self.transformer.drop(tok_emb + pos_emb)
+        x = tok_emb + pos_emb
+        if self.config.channel_encoding == 'learned': #jm one vector per standard location, the same for all frames of a channel
+            loc_ids = torch.where(loc >= 0, loc, self.config.n_locations)       # -1 (padding) -> the extra row
+            x = x + self.transformer.wce(loc_ids.repeat_interleave(t, dim=1))   # [b, c] -> [b, c*t]
+        x = self.transformer.drop(x)
+        attn_mask = valid.repeat_interleave(t, dim=1)[:, None, None, :] if grid else None   # [b, 1, 1, c*t]
         for block in self.transformer.h:
-            x = block(x)
+            x = block(x, attn_mask)
         x = self.transformer.ln_f(x)
 
         if targets is not None:
