@@ -39,3 +39,5 @@ warmup_iters = 100 # not super necessary potentially
 pos_encoding = 'sinusoidal' #jm
 use_codebook = True   #jm tokens enter as their DAC codebook vectors (data/<dataset>/codebook.npy)
 eeg_dataloader = True   #jm windows from the per-recording grids
+bidirectional = True   #jm
+mask_ratio = 0.15      #jm

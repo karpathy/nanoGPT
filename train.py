@@ -57,6 +57,8 @@ bias = False # do we use bias inside LayerNorm and Linear layers?
 use_codebook = False # True: feed each token's DAC codebook vector (data/<dataset>/codebook.npy) instead of a learned embedding
 eeg_dataloader = False # True: windows from data/<dataset>/{train,val}/*.npz, never across channels, recordings or 60 s chunks
 pos_encoding = 'learned' # 'learned' (wpe, original) | 'sinusoidal' (fixed sin/cos table)
+bidirectional = False # True: masked-token prediction with full attention (BERT) instead of next-token (GPT)
+mask_ratio = 0.15 # bidirectional only: fraction of tokens replaced by MASK and predicted
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
 max_iters = 600000 # total number of training iterations
@@ -133,6 +135,10 @@ def get_batch(split):
         ix = torch.randint(len(data) - block_size, (batch_size,))
         x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
         y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
+    if bidirectional: #jm
+        mask = torch.rand(x.shape) < mask_ratio            # which positions to hide
+        y = torch.where(mask, x, torch.full_like(x, -1))   # target: the original token where masked, -1 (ignored) elsewhere
+        x = x.masked_fill(mask, mask_token_id)             # input: MASK id at those positions    
     if device_type == 'cuda':
         # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
         x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
@@ -151,6 +157,7 @@ if os.path.exists(meta_path):
     with open(meta_path, 'rb') as f:
         meta = pickle.load(f)
     meta_vocab_size = meta['vocab_size']
+    mask_token_id = meta_vocab_size   # one extra id after the real codes (8192 for EEG); used when bidirectional
     print(f"found vocab_size = {meta_vocab_size} (inside {meta_path})")
 
 #jm unigram baseline: bits per token of a model that only knows how often each token occurs (val split)
@@ -169,18 +176,19 @@ if use_codebook: #jm
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size, #jm
                   bias=bias, vocab_size=None, dropout=dropout,
                   codebook_dim=codebook.shape[1] if codebook is not None else 0,
-                  pos_encoding=pos_encoding)
+                  pos_encoding=pos_encoding,
+                  bidirectional=bidirectional)
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
     # determine the vocab size we'll use for from-scratch training
     if meta_vocab_size is None:
         print("defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)")
-    model_args['vocab_size'] = meta_vocab_size if meta_vocab_size is not None else 50304
+    model_args['vocab_size'] = (meta_vocab_size if meta_vocab_size is not None else 50304) + (1 if bidirectional else 0) #jm
     gptconf = GPTConfig(**model_args)
     model = GPT(gptconf)
     if codebook is not None: #jm
-        model.codebook.copy_(codebook)   # fill the frozen buffer with the DAC's vectors
+        model.codebook[:codebook.shape[0]].copy_(codebook)   # the MASK row (last) stays zero
 elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
     # resume training from a checkpoint.
