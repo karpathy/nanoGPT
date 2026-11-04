@@ -17,4 +17,6 @@ data/*/train/
 data/*/val/
 data/*/manifest.json
 *.npz
-data/
+*.bin
+*.pkl
+*.npy
