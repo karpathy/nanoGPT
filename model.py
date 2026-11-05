@@ -117,6 +117,18 @@ def sinusoidal_table(n_positions, dim):   #jm
     table = torch.cat([angles.sin(), angles.cos()], dim=1)                    # (n, dim)
     return F.normalize(table, dim=1)                                          # each row length 1, comparable to the token vectors
 
+def sinusoidal_xyz(xyz, dim, max_wavelength=0.4, min_wavelength=0.01):   #jm
+    """[..., 3] electrode positions (metres) -> [..., dim] fixed space vectors, nothing learned.
+    dim/3 dims per axis (x | y | z); per axis sin and cos of the coordinate at dim/6 wavelengths,
+    geometric from 40 cm (head scale) down to 1 cm (electrode spacing). Unit length, like the time table."""
+    per_axis = dim // 3                                                    # 128 for n_embd = 384
+    n_freq = per_axis // 2                                                 # 64 wavelengths -> 64 sin + 64 cos
+    wavelengths = torch.logspace(math.log10(max_wavelength), math.log10(min_wavelength), n_freq, device=xyz.device)
+    angles = xyz.float()[..., None] * (2 * math.pi / wavelengths)          # [..., 3, n_freq]
+    v = torch.cat([angles.sin(), angles.cos()], dim=-1).flatten(-2)        # [..., 3 * per_axis]: x block, y block, z block
+    v = F.pad(v, (0, dim - v.shape[-1]))                                   # only if dim is not divisible by 6 (tiny test models)
+    return F.normalize(v, dim=-1)
+
 @dataclass
 class GPTConfig:
     block_size: int = 1024
@@ -129,7 +141,7 @@ class GPTConfig:
     codebook_dim: int = 0 #jm 0 = learned wte table (original); >0 = tokens enter as their DAC codebook vector (this many dims)
     pos_encoding: str = 'learned' #jm 'learned' = wpe table (original); 'sinusoidal' = fixed sin/cos table, nothing learned
     bidirectional: bool = False #jm False = causal next-token (GPT); True = full attention, masked-token prediction (BERT)
-    channel_encoding: str = 'none' #jm multichannel: 'none' | 'learned' (one learned vector per standard location)
+    channel_encoding: str = 'none' #jm multichannel: 'none' | 'learned' | 'sinusoidal' (one learned vector per standard location)
     n_locations: int = 94 #jm number of standard locations (10-20/10-10 system)    
 
 class GPT(nn.Module):
@@ -224,6 +236,9 @@ class GPT(nn.Module):
         if self.config.channel_encoding == 'learned': #jm one vector per standard location, the same for all frames of a channel
             loc_ids = torch.where(loc >= 0, loc, self.config.n_locations)       # -1 (padding) -> the extra row
             x = x + self.transformer.wce(loc_ids.repeat_interleave(t, dim=1))   # [b, c] -> [b, c*t]
+        elif self.config.channel_encoding == 'sinusoidal': #jm fixed sin/cos of the electrode position, the same for all frames of a channel
+            space = sinusoidal_xyz(xyz, self.config.n_embd)                     # [b, c] positions -> [b, c, n_embd]
+            x = x + space.repeat_interleave(t, dim=1).to(x.dtype)               # [b, c*t, n_embd], like wce
         x = self.transformer.drop(x)
         attn_mask = valid.repeat_interleave(t, dim=1)[:, None, None, :] if grid else None   # [b, 1, 1, c*t]
         for block in self.transformer.h:

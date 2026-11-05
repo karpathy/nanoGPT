@@ -241,6 +241,7 @@ if block_size < model.config.block_size:
     model.crop_block_size(block_size)
     model_args['block_size'] = block_size # so that the checkpoint will have the right value
 model.to(device)
+codebook_dev = codebook.to(device) if codebook is not None else None   #jm (8192, 8) unit vectors, for the eval L2 metric
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
@@ -262,19 +263,51 @@ if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
+# @torch.no_grad()
+# def estimate_loss():
+#     out = {}
+#     model.eval()
+#     for split in ['train', 'val']:
+#         losses = torch.zeros(eval_iters)
+#         for k in range(eval_iters):
+#             X, Y, kw = get_batch(split)
+#             with ctx:
+#                 logits, loss = model(X, Y, **kw)
+#             losses[k] = loss.item()
+#         out[split] = losses.mean()
+#     model.train()
+#     return out
+
 @torch.no_grad()
-def estimate_loss():
-    out = {}
+def token_metrics(logits, Y):   #jm per-token metrics over the predicted positions (Y != -1); used for train steps and eval
+    tgt = Y.reshape(-1)
+    keep = tgt != -1
+    lg = logits.reshape(-1, logits.size(-1))[keep][:, :meta_vocab_size].float()   # never count MASK as a prediction
+    logp = torch.log_softmax(lg, dim=-1)
+    true = tgt[keep]
+    pred = lg.argmax(-1)
+    m = {'top1': (pred == true).float().mean().item(),                                # most likely code is the true one
+         'top5': (lg.topk(5, dim=-1).indices == true[:, None]).any(-1).float().mean().item(),   # true code among the 5 most likely
+         'entropy': -(logp.exp() * logp).sum(-1).mean().item(),                       # spread of the prediction (nats)
+         'conf': logp.max(-1).values.exp().mean().item(),                              # probability of the favourite
+         'conf_nll': -logp.max(-1).values.mean().item()}                               # -ln p(favourite), loss scale
+    if codebook_dev is not None:
+        m['l2_code'] = (codebook_dev[pred] - codebook_dev[true]).norm(dim=-1).mean().item()   # DAC 8-dim distance, 0 = exact
+    return m
+
+@torch.no_grad()
+def estimate_loss():   #jm validation only (training metrics are logged every step from the training batch)
     model.eval()
-    for split in ['train', 'val']:
-        losses = torch.zeros(eval_iters)
-        for k in range(eval_iters):
-            X, Y, kw = get_batch(split)
-            with ctx:
-                logits, loss = model(X, Y, **kw)
-            losses[k] = loss.item()
-        out[split] = losses.mean()
+    losses, metrics = [], []
+    for k in range(eval_iters):
+        X, Y, kw = get_batch('val')
+        with ctx:
+            logits, loss = model(X, Y, **kw)
+        losses.append(loss.item())
+        metrics.append(token_metrics(logits, Y))
     model.train()
+    out = {'val': float(np.mean(losses))}
+    out.update({'val_' + key: float(np.mean([m[key] for m in metrics])) for key in metrics[0]})
     return out
 
 # learning rate decay scheduler (cosine with warmup)
@@ -294,7 +327,13 @@ def get_lr(it):
 # logging
 if wandb_log and master_process:
     import wandb
-    wandb.init(project=wandb_project, name=wandb_run_name, config=config)
+    n_params = sum(p.numel() for p in model.parameters())
+    config['n_params'] = n_params                                    #jm shows up as a config column in wandb
+    notes = (f"{n_layer} layers x {n_head} heads x {n_embd} dim, {n_params/1e6:.2f}M params; "
+             f"dataset {dataset}, block {block_size}, batch {batch_size}, {max_iters} iters; "
+             f"mask {mask_ratio if bidirectional else 'none (next-token)'}, channels {channel_encoding}, "
+             f"time {pos_encoding}, codebook input {use_codebook}")
+    wandb.init(project=wandb_project, name=wandb_run_name, config=config, notes=notes)
 
 # training loop
 X, Y, kw = get_batch('train') # fetch the very first batch
@@ -312,17 +351,15 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
-        print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        print(f"step {iter_num}: val loss {losses['val']:.4f}")
         if wandb_log:
-            wandb.log({
-                "iter": iter_num,
-                "train/loss": losses['train'],
+            wandb.log({   #jm step=iter_num: wandb's x-axis is the training iteration
                 "val/loss": losses['val'],
-                "val/bits": losses['val'] / math.log(2),
                 "val/bits_saved": unigram_bits - losses['val'] / math.log(2),
-                "lr": lr,
-                "mfu": running_mfu*100, # convert to percentage
-            })
+                "val/perplexity": math.exp(losses['val']),
+                "val/effective_codes": math.exp(losses['val_entropy']),
+                **{f"val/{k[4:]}": v for k, v in losses.items() if k != 'val'},   # val/top1, val/top5, val/l2_code, val/entropy, val/conf, val/conf_nll
+            }, step=iter_num)
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
             if iter_num > 0:
@@ -351,14 +388,17 @@ while True:
         with ctx:
             logits, loss = model(X, Y, **kw)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
+        if micro_step == gradient_accumulation_steps - 1 and iter_num % log_interval == 0: #jm metrics of the batch just trained on
+            step_metrics = token_metrics(logits, Y)
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, Y, kw = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
     # clip the gradient
+    grad_norm = float('nan') #jm
     if grad_clip != 0.0:
         scaler.unscale_(optimizer)
-        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip).item() #jm norm before clipping
     # step the optimizer and scaler if training in fp16
     scaler.step(optimizer)
     scaler.update()
@@ -376,7 +416,10 @@ while True:
         if local_iter_num >= 5: # let the training loop settle a bit
             mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+        # print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+        if wandb_log:
+            wandb.log({"train/loss": lossf, "train/perplexity": math.exp(lossf), "train/grad_norm": grad_norm, "lr": lr, #jm
+                       **{f"train/{k}": v for k, v in step_metrics.items() if k != 'conf_nll'}}, step=iter_num)   #jm conf_nll: val only
     iter_num += 1
     local_iter_num += 1
 

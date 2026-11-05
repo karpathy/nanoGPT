@@ -3,7 +3,7 @@
 out_dir = 'out/eeg-multi'
 eval_interval = 250
 eval_iters = 200
-log_interval = 10
+log_interval = 1
 
 # we expect to overfit on this small dataset, so only save when val improves
 always_save_checkpoint = False
