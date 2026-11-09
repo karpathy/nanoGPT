@@ -1,83 +1,28 @@
-# chat.py — คุยกับโมเดลที่เทรนเสร็จแล้ว (รันใน Colab หลัง finetune.py)
-#   ถามครั้งเดียว:    !python chat.py ข้อความที่ต้องการถาม
-#   โหมดคุยต่อเนื่อง:  !python chat.py   (พิมพ์ exit เพื่อออก)
-#   ให้ค้นเว็บก่อนตอบ: ขึ้นต้นข้อความด้วย "ค้น " เช่น  ค้น Roblox TweenService วิธีใช้
-#   ต้องมีไฟล์ search.py อยู่โฟลเดอร์เดียวกัน และ !pip install ddgs
+# search.py — ค้นเว็บด้วย DuckDuckGo (ฟรี ไม่ต้องใช้ API key)
+#   ติดตั้ง: !pip install ddgs
 
-import os
-import sys
-import warnings
-from contextlib import redirect_stderr, redirect_stdout
-
-os.environ["TRANSFORMERS_VERBOSITY"] = "error"
-os.environ["UNSLOTH_COMPILE_DISABLE"] = "0"
-warnings.filterwarnings("ignore")
-
-ADAPTER = "lora-th-coder"  # โฟลเดอร์ที่ finetune.py สร้างไว้
-
-# บุคลิกของ AI อ่านจากไฟล์ persona.txt (แก้ไฟล์นั้นได้เลย)
-_here = os.path.dirname(os.path.abspath(__file__))
-try:
-    with open(os.path.join(_here, "persona.txt"), encoding="utf-8") as _f:
-        PERSONA = _f.read().strip()
-except OSError:
-    PERSONA = "คุณคือผู้ช่วยเขียนโค้ดภาษาไทย พูดสั้น ตรงประเด็น ลงท้ายด้วย 'ครับ'"
+def web_search(query, n=4):
+    try:
+        from ddgs import DDGS
+    except ImportError:
+        from duckduckgo_search import DDGS
+    try:
+        with DDGS() as d:
+            results = list(d.text(query, max_results=n))
+    except Exception as e:
+        return f"(ค้นหาไม่สำเร็จ: {e})"
+    if not results:
+        return "(ไม่พบผลลัพธ์)"
+    return "\n\n".join(
+        f"[{i}] {r.get('title', '')}\n{r.get('body', '')}\n{r.get('href', '')}"
+        for i, r in enumerate(results, 1)
+    )
 
 
-def show():
-    print("AI is thinking...", end="", flush=True)
-
-
-def hide():
-    print("\r\033[K", end="", flush=True)
-
-
-show()
-
-# ซ่อนข้อความของ Unsloth/torch ตอนโหลดโมเดล (ถ้าอยากดู log ให้ลบบรรทัด with ออก)
-with open(os.devnull, "w") as _null, redirect_stdout(_null), redirect_stderr(_null):
-    from unsloth import FastLanguageModel
-    from search import build_prompt
-
-    model, tok = FastLanguageModel.from_pretrained(ADAPTER, load_in_4bit=True)
-    FastLanguageModel.for_inference(model)
-
-
-def prep(text):
-    if text.startswith("ค้น "):
-        return build_prompt(text[4:].strip())
-    return text
-
-
-def ask(history):
-    messages = [{"role": "system", "content": PERSONA}] + history
-    ids = tok.apply_chat_template(
-        messages, add_generation_prompt=True, return_tensors="pt"
-    ).to("cuda")
-    with open(os.devnull, "w") as _null, redirect_stderr(_null):
-        out = model.generate(
-            ids, max_new_tokens=512, max_length=None, temperature=0.3, do_sample=True
-        )
-    return tok.decode(out[0][ids.shape[1]:], skip_special_tokens=True)
-
-
-if len(sys.argv) > 1:  # ถามครั้งเดียวแล้วจบ
-    text = " ".join(sys.argv[1:])
-    reply = ask([{"role": "user", "content": prep(text)}])
-    hide()
-    print(reply)
-else:  # โหมดคุยต่อเนื่อง
-    hide()
-    history = []
-    while True:
-        text = input("คุณ: ").strip()
-        if text.lower() in ("exit", "quit", "ออก"):
-            break
-        if not text:
-            continue
-        history.append({"role": "user", "content": prep(text)})
-        show()
-        reply = ask(history)
-        hide()
-        print("AI:", reply)
-        history.append({"role": "assistant", "content": reply})
+def build_prompt(question):
+    ctx = web_search(question)
+    return (
+        "ใช้ข้อมูลจากผลค้นหาด้านล่างช่วยตอบคำถาม "
+        "ถ้าข้อมูลไม่พอให้บอกตรง ๆ ห้ามเดา\n\n"
+        f"ผลค้นหา:\n{ctx}\n\nคำถาม: {question}"
+    )
