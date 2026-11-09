@@ -1,14 +1,23 @@
 # chat.py — คุยกับโมเดลที่เทรนเสร็จแล้ว (รันใน Colab หลัง finetune.py)
-#   ถามครั้งเดียว:  !python chat.py ข้อความที่ต้องการถาม
-#   โหมดคุยต่อเนื่อง: !python chat.py   (พิมพ์ exit เพื่อออก)
+#   ถามครั้งเดียว:    !python chat.py ข้อความที่ต้องการถาม
+#   โหมดคุยต่อเนื่อง:  !python chat.py   (พิมพ์ exit เพื่อออก)
+#   ให้ค้นเว็บก่อนตอบ: ขึ้นต้นข้อความด้วย "ค้น " เช่น  ค้น Roblox TweenService วิธีใช้
+#   ต้องมีไฟล์ search.py อยู่โฟลเดอร์เดียวกัน และ !pip install ddgs
 
 import sys
 from unsloth import FastLanguageModel
+from search import build_prompt
 
 ADAPTER = "lora-th-coder"  # โฟลเดอร์ที่ finetune.py สร้างไว้
 
 model, tok = FastLanguageModel.from_pretrained(ADAPTER, load_in_4bit=True)
 FastLanguageModel.for_inference(model)
+
+
+def prep(text):
+    if text.startswith("ค้น "):
+        return build_prompt(text[4:].strip())
+    return text
 
 
 def ask(history):
@@ -20,7 +29,8 @@ def ask(history):
 
 
 if len(sys.argv) > 1:  # ถามครั้งเดียวแล้วจบ
-    print(ask([{"role": "user", "content": " ".join(sys.argv[1:])}]))
+    text = " ".join(sys.argv[1:])
+    print(ask([{"role": "user", "content": prep(text)}]))
 else:  # โหมดคุยต่อเนื่อง
     history = []
     while True:
@@ -29,7 +39,7 @@ else:  # โหมดคุยต่อเนื่อง
             break
         if not text:
             continue
-        history.append({"role": "user", "content": text})
+        history.append({"role": "user", "content": prep(text)})
         reply = ask(history)
         print("AI:", reply)
         history.append({"role": "assistant", "content": reply})
