@@ -16,10 +16,13 @@ warnings.filterwarnings("ignore")
 # ดู log เต็ม ๆ เวลามีปัญหา:  !CHAT_DEBUG=1 python chat.py สวัสดี
 DEBUG = os.environ.get("CHAT_DEBUG") == "1"
 
-ADAPTER = "lora-th-coder"  # โฟลเดอร์ที่ finetune.py สร้างไว้
+_here = os.path.dirname(os.path.abspath(__file__))
+ADAPTER = os.path.join(_here, "lora-th-coder")  # โฟลเดอร์ที่ finetune.py สร้างไว้
+
+if not os.path.isdir(ADAPTER):
+    sys.exit("ไม่พบโฟลเดอร์ lora-th-coder ต้องรัน  !python finetune.py  ก่อน")
 
 # บุคลิกของ AI อ่านจากไฟล์ persona.txt (แก้ไฟล์นั้นได้เลย)
-_here = os.path.dirname(os.path.abspath(__file__))
 try:
     with open(os.path.join(_here, "persona.txt"), encoding="utf-8") as _f:
         PERSONA = _f.read().strip()
@@ -35,6 +38,16 @@ def quiet():
     stack.enter_context(redirect_stdout(null))
     stack.enter_context(redirect_stderr(null))
     return stack
+
+
+def _check_gpu():
+    import torch
+
+    if not torch.cuda.is_available():
+        sys.exit("ไม่พบ GPU ไปที่ Runtime > Change runtime type > T4 GPU แล้วรันใหม่")
+
+
+_check_gpu()
 
 
 def show():
