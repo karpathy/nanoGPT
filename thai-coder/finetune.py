@@ -32,7 +32,22 @@ model = FastLanguageModel.get_peft_model(
 )
 
 ds = load_dataset("json", data_files=DATA, split="train")
-ds = ds.map(lambda x: {"text": tok.apply_chat_template(x["messages"], tokenize=False)})
+# ใส่บุคลิกจาก persona.txt เป็น system prompt ในทุกตัวอย่าง (ให้ตรงกับตอนคุยใน chat.py)
+import os
+
+_here = os.path.dirname(os.path.abspath(__file__))
+with open(os.path.join(_here, "persona.txt"), encoding="utf-8") as _f:
+    PERSONA = _f.read().strip()
+
+
+def add_persona(x):
+    m = x["messages"]
+    if m and m[0]["role"] != "system":
+        m = [{"role": "system", "content": PERSONA}] + m
+    return {"text": tok.apply_chat_template(m, tokenize=False)}
+
+
+ds = ds.map(add_persona)
 
 trainer = SFTTrainer(
     model=model,
