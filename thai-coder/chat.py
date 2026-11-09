@@ -15,6 +15,14 @@ warnings.filterwarnings("ignore")
 
 ADAPTER = "lora-th-coder"  # โฟลเดอร์ที่ finetune.py สร้างไว้
 
+# บุคลิกของ AI อ่านจากไฟล์ persona.txt (แก้ไฟล์นั้นได้เลย)
+_here = os.path.dirname(os.path.abspath(__file__))
+try:
+    with open(os.path.join(_here, "persona.txt"), encoding="utf-8") as _f:
+        PERSONA = _f.read().strip()
+except OSError:
+    PERSONA = "คุณคือผู้ช่วยเขียนโค้ดภาษาไทย พูดสั้น ตรงประเด็น ลงท้ายด้วย 'ครับ'"
+
 
 def show():
     print("AI is thinking...", end="", flush=True)
@@ -42,8 +50,9 @@ def prep(text):
 
 
 def ask(history):
+    messages = [{"role": "system", "content": PERSONA}] + history
     ids = tok.apply_chat_template(
-        history, add_generation_prompt=True, return_tensors="pt"
+        messages, add_generation_prompt=True, return_tensors="pt"
     ).to("cuda")
     with open(os.devnull, "w") as _null, redirect_stderr(_null):
         out = model.generate(
