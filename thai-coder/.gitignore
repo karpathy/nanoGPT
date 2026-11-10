@@ -1,0 +1,4 @@
+memory.db
+__pycache__/
+.env
+.vercel
