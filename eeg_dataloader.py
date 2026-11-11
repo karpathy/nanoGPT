@@ -28,7 +28,7 @@ class EEGDataLoader:
                 n = hi - lo - block_size                                        # valid start times (x + one target token)
                 if n > 0:
                     runs.append((r, lo, n, d['codes'].shape[0]))
-        assert runs, f"no chunk in {data_dir}/{split} is longer than block_size={block_size} frames"
+        assert runs, f"no chunk in {data_dir=}/{split=} is longer than block_size={block_size} frames"
         self.runs = np.array(runs, dtype=np.int64)                              # (recording, first start, n starts, n channels)
         w = self.runs[:, 2] * self.runs[:, 3]                                   # every (channel, time) window equally likely
         self.p_single = w / w.sum()
