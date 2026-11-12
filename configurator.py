@@ -29,7 +29,8 @@ for arg in sys.argv[1:]:
     else:
         # assume it's a --key=value argument
         assert arg.startswith('--')
-        key, val = arg.split('=')
+        # Only the first '=' separates a key from its value.
+        key, val = arg.split('=', 1)
         key = key[2:]
         if key in globals():
             try:
