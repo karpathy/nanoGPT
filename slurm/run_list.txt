@@ -1,0 +1,8 @@
+# one run per line: dataset encoding seed   (sbatch --array=1-N picks line N; '#' lines and blanks are skipped by the launcher)
+RD_hop_000 sinusoidal 0
+#
+RD_hop_003 sinusoidal 0
+#
+RD_hop_006 sinusoidal 0
+#
+vq_long_006 sinusoidal 0

@@ -12,7 +12,8 @@ wandb_log = True # override via command line if you like
 wandb_project = 'nanogpt-eeg-cw'
 wandb_run_name = 'eeg-multi-none-cw'
 
-dataset = '/data/groups/bci/datasets/tmp_dac_tokens_jonas/eeg_multi' # (CW) - was 'eeg_multi'
+
+dataset = 'data/eeg_multi/RD_hop_006' 
 gradient_accumulation_steps = 1
 batch_size = 16             # 16 windows * 3008 tokens ~ 48k tokens per step (single-channel: 64 * 256 = 16k)
 block_size = 3008           # max_channels * window_frames = 94 * 32

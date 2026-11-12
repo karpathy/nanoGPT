@@ -64,6 +64,7 @@ max_channels = 94 # multichannel: rows per window (fewer are padded); block_size
 window_frames = 32 # multichannel: frames per channel per window (8 per second -> 4 s)
 channel_select = 'standard94' # 'standard94' (one channel per standard location, within 2 cm) | 'all'
 channel_encoding = 'none' # multichannel: 'none' (control) | 'learned' (one learned vector per standard location)
+seed = 1337 # base random seed (torch and the numpy loader); the DDP rank is added per process
 
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
@@ -114,7 +115,7 @@ print(f"tokens per iteration will be: {tokens_per_iter:,}")
 
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
-torch.manual_seed(1337 + seed_offset)
+torch.manual_seed(seed + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
@@ -127,7 +128,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 data_dir = dataset # (CW) - was above ^
 if eeg_dataloader:
     from eeg_dataloader import EEGDataLoader
-    np.random.seed(1337 + seed_offset)   # the loader samples with numpy; torch.manual_seed above does not cover it
+    np.random.seed(seed + seed_offset)   # the loader samples with numpy; torch.manual_seed above does not cover it
     if multichannel:
         assert bidirectional and max_channels * window_frames <= block_size, "multichannel needs bidirectional and block_size >= max_channels * window_frames"
     loaders = {split: EEGDataLoader(data_dir, split, window_frames if multichannel else block_size) for split in ('train', 'val')}

@@ -26,7 +26,7 @@ import numpy as np
 
 CHECKPOINT_NAME = "RD_hop_006" # {vq_long_006, RD_hop_000, RD_hop_003, RD_hop_006}
 DAC_REPO = "/data/groups/bci/chris/workspace/bci_descript-audio-codec"
-CKPT = f"{DAC_REPO}/runs/{CHECKPOINT_NAME}/latest/dac/weights.pth"      
+# CKPT = f"{DAC_REPO}/runs/{CHECKPOINT_NAME}/latest/dac/weights.pth"      
 V8 = "/data/groups/bci/datasets/processed/v8_sets/10k"
 SR = 256                                                               # hop (samples per token) is read from the checkpoint
 TARGET_STD, CLIP = 0.3, 1.0                                            # the DAC's EEGNormalize: std 0.3, clip +-1
@@ -117,7 +117,7 @@ def pick_recordings(args):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ckpt", default=CKPT)
+    ap.add_argument("--ckpt", default=CHECKPOINT_NAME)
     ap.add_argument("--n_train", type=int, default=48)
     ap.add_argument("--n_val", type=int, default=8)
     ap.add_argument("--seed", type=int, default=0, help="which recordings get sampled")
@@ -125,10 +125,13 @@ def main():
     ap.add_argument("--out_dir", default=os.path.dirname(os.path.abspath(__file__)))
     args = ap.parse_args()
 
-    out_dir = os.path.join(args.out_dir, CHECKPOINT_NAME)
 
-    model, codebook, hop = load_dac(args.ckpt, args.device)
-    print(f"checkpoint {args.ckpt}: hop {hop} samples -> {SR / hop:g} tokens/s")
+    out_dir = args.out_dir
+    ckpt = os.path.join(DAC_REPO, "runs", args.ckpt, "latest", "dac", "weights.pth")
+
+
+    model, codebook, hop = load_dac(ckpt, args.device)
+    print(f"checkpoint {ckpt}: hop {hop} samples -> {SR / hop:g} tokens/s")
     os.makedirs(out_dir, exist_ok=True)
     files = pick_recordings(args)
     for split in ("train", "val"):
@@ -152,7 +155,7 @@ def main():
         print(f"{split}: {len(files[split])} recordings, {len(streams)} channel streams, {len(ids):,} tokens, {time.time() - t0:.0f} s")
     np.save(os.path.join(out_dir, "codebook.npy"), codebook)
     with open(os.path.join(out_dir, "meta.pkl"), "wb") as f:
-        pickle.dump({"vocab_size": int(codebook.shape[0]), "ckpt": args.ckpt, "hop": hop, "tokens_per_s": SR / hop,
+        pickle.dump({"vocab_size": int(codebook.shape[0]), "ckpt": ckpt, "hop": hop, "tokens_per_s": SR / hop,
                      "locations": standard_positions()[0]}, f)
     print(f"meta.pkl: vocab_size {codebook.shape[0]}; codebook.npy {codebook.shape}")
 
