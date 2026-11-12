@@ -39,7 +39,10 @@ if real_data:
         ix = torch.randint(len(data) - block_size, (batch_size,))
         x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
         y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
-        x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
+        if device_type == 'cuda':
+            x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
+        else:
+            x, y = x.to(device), y.to(device)
         return x, y
 else:
     # alternatively, if fixed data is desired to not care about data loading
@@ -70,7 +73,9 @@ if profile:
     wait, warmup, active = 5, 5, 5
     num_steps = wait + warmup + active
     with torch.profiler.profile(
-        activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
+        activities=[torch.profiler.ProfilerActivity.CPU] + (
+            [torch.profiler.ProfilerActivity.CUDA] if device_type == 'cuda' else []
+        ),
         schedule=torch.profiler.schedule(wait=wait, warmup=warmup, active=active, repeat=1),
         on_trace_ready=torch.profiler.tensorboard_trace_handler('./bench_log'),
         record_shapes=False,
@@ -96,7 +101,8 @@ if profile:
 else:
 
     # simple benchmarking
-    torch.cuda.synchronize()
+    if device_type == 'cuda':
+        torch.cuda.synchronize()
     for stage, num_steps in enumerate([10, 20]): # burnin, then benchmark
         t0 = time.time()
         X, Y = get_batch('train')
@@ -109,7 +115,8 @@ else:
             optimizer.step()
             lossf = loss.item()
             print(f"{k}/{num_steps} loss: {lossf:.4f}")
-        torch.cuda.synchronize()
+        if device_type == 'cuda':
+            torch.cuda.synchronize()
         t1 = time.time()
         dt = t1-t0
         mfu = model.estimate_mfu(batch_size * 1 * num_steps, dt)
