@@ -77,14 +77,27 @@ def encode_recording(path, model, device):
          channel_names [channels] str            e.g. 'Fz', 'EEG FP1-REF' (as named in the file)
          xyz          [channels, 3] float32      electrode position in head coordinates (metres); NaN if the file has none
     """
+    x, xyz, names = read_fif(path)
+    return encode_array(x, xyz, names, path, model, device)
+
+
+def read_fif(path):
+    """A v8 .fif -> x [channels, samples] float32, xyz [channels, 3] (NaN = unknown), channel names."""
     import mne
-    import torch
     raw = mne.io.read_raw_fif(path, preload=True, verbose="error")
     raw.pick("eeg", verbose="error")                                   # channels flagged bad are dropped by default
     assert raw.info["sfreq"] == SR, raw.info["sfreq"]
     x = raw.get_data().astype(np.float32)                              # [channels, samples]
     xyz = np.array([ch["loc"][:3] for ch in raw.info["chs"]], dtype=np.float32)
     xyz[(xyz == 0).all(1)] = np.nan                                    # mne stores "unknown" as zeros
+    return x, xyz, raw.ch_names
+
+
+def encode_array(x, xyz, names, source, model, device):
+    """The encoding half of encode_recording, for a signal already in memory (also used by data/eeg_labelled/prepare.py).
+    Frame f covers samples [32 f, 32 f + 32): every 60 s chunk is exactly 480 frames; only the final chunk is trimmed
+    to whole frames or dropped (< 5 s)."""
+    import torch
     pieces, seg_ids = [], []
     for k, start in enumerate(range(0, x.shape[1], CHUNK_S * SR)):
         seg = x[:, start:start + CHUNK_S * SR]
@@ -102,7 +115,7 @@ def encode_recording(path, model, device):
         return None
     location_id, location_dist = snap_to_standard(xyz)
     return dict(codes=np.concatenate(pieces, axis=1), segment_ids=np.concatenate(seg_ids),
-                channel_names=np.array(raw.ch_names), xyz=xyz, source=path,
+                channel_names=np.array(names), xyz=xyz, source=source,
                 location_id=location_id, location_dist=location_dist)
 
 
