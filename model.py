@@ -50,7 +50,7 @@ class CausalSelfAttention(nn.Module):
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
 
-    def forward(self, x, attn_mask=None):
+    def forward(self, x, attn_mask=None, rope=None):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
@@ -58,15 +58,18 @@ class CausalSelfAttention(nn.Module):
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        if rope is not None: #jm 4D RoPE: turn q and k by each token's (frame, x, y, z); v is never turned
+            rotary, cos, sin = rope
+            q, k = rotary.rotate(q, cos, sin), rotary.rotate(k, cos, sin)
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
             # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=self.dropout if self.training else 0, is_causal=self.causal)
+            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=self.dropout if self.training else 0, is_causal=self.causal and attn_mask is None) #jm a grid brings its own (frame-causal) mask
         else:
             # manual implementation of attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            if self.causal: #jm
+            if self.causal and attn_mask is None: #jm
                 att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
             if attn_mask is not None: #jm padded channels are never attended to
                 att = att.masked_fill(~attn_mask, float('-inf'))
@@ -104,8 +107,8 @@ class Block(nn.Module):
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
-    def forward(self, x, attn_mask=None): #jm attn_mask: [b, 1, 1, t] bool, False = padded token, never attended to
-        x = x + self.attn(self.ln_1(x), attn_mask)
+    def forward(self, x, attn_mask=None, rope=None): #jm
+        x = x + self.attn(self.ln_1(x), attn_mask, rope)
         x = x + self.mlp(self.ln_2(x))
         return x
 
@@ -129,6 +132,32 @@ def sinusoidal_xyz(xyz, dim, max_wavelength=0.4, min_wavelength=0.01):   #jm
     v = F.pad(v, (0, dim - v.shape[-1]))                                   # only if dim is not divisible by 6 (tiny test models)
     return F.normalize(v, dim=-1)
 
+class RotaryPositions(nn.Module):   #jm 4D RoPE
+    """Turns pairs of numbers in q and k by angles set by each token's (frame, x, y, z), so that the
+    attention score depends only on the differences dt, dx, dy, dz.
+    dims: how many of the head's numbers each axis turns, e.g. (32, 8, 8, 8) of 64; the rest stay unturned.
+    Speeds per axis are geometric, like the sinusoidal tables: time over frame indices (base 10000),
+    space over centimetres (base 100)."""
+    def __init__(self, head_dim, dims=(32, 8, 8, 8)):
+        super().__init__()
+        assert sum(dims) <= head_dim and all(d % 2 == 0 for d in dims), (dims, head_dim)
+        self.dims, self.rot = dims, sum(dims)
+        for axis, d in enumerate(dims):
+            base = 10000.0 if axis == 0 else 100.0
+            self.register_buffer(f'speed_{axis}', base ** (-torch.arange(0, d, 2, dtype=torch.float32) / d), persistent=False)
+
+    def angles(self, coords):
+        """coords [b, L, 4] = (frame, x cm, y cm, z cm) -> cos, sin [b, 1, L, rot/2]; the 1 is shared by all heads."""
+        ang = torch.cat([coords[..., a:a + 1] * getattr(self, f'speed_{a}') for a in range(4) if self.dims[a]], dim=-1)
+        return ang.cos()[:, None], ang.sin()[:, None]
+
+    def rotate(self, x, cos, sin):
+        """x [b, heads, L, head_dim]: turn consecutive pairs (a, b) of the first `rot` numbers, leave the rest."""
+        r = x[..., :self.rot].float().unflatten(-1, (-1, 2))          # [b, h, L, rot/2, 2]: the pairs
+        a, b = r[..., 0], r[..., 1]
+        r = torch.stack((a * cos - b * sin, a * sin + b * cos), dim=-1).flatten(-2)   # the rotation formula
+        return torch.cat((r.to(x.dtype), x[..., self.rot:]), dim=-1)
+
 @dataclass
 class GPTConfig:
     block_size: int = 1024
@@ -143,6 +172,7 @@ class GPTConfig:
     bidirectional: bool = False #jm False = causal next-token (GPT); True = full attention, masked-token prediction (BERT)
     channel_encoding: str = 'none' #jm multichannel: 'none' | 'learned' | 'sinusoidal' (one learned vector per standard location)
     n_locations: int = 94 #jm number of standard locations (10-20/10-10 system)    
+    rope_dims: str = '32,8,8,8' #jm rope4d: head numbers turned by frame, x, y, z (must fit the head size; rest unturned)
 
 class GPT(nn.Module):
 
@@ -169,6 +199,8 @@ class GPT(nn.Module):
             self.register_buffer('pos_table', sinusoidal_table(config.block_size, config.n_embd))  # fixed, (block_size, n_embd) 
         if config.channel_encoding == 'learned': #jm
             self.transformer['wce'] = nn.Embedding(config.n_locations + 1, config.n_embd)   # last row: padding / no location
+        if config.channel_encoding == 'rope4d': #jm one rotary module, shared by all layers
+            self.rotary = RotaryPositions(config.n_embd // config.n_head, tuple(int(d) for d in config.rope_dims.split(',')))
 
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         # with weight tying when using torch.compile() some warnings get generated:
@@ -232,7 +264,12 @@ class GPT(nn.Module):
             pos_emb = self.pos_table[pos]                  # (t, n_embd), same lookup, fixed values
         else:            
             pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
-        x = tok_emb + pos_emb
+
+        if self.config.channel_encoding == 'rope4d': #jm time and space enter as rotations inside attention, nothing added
+            x = tok_emb
+        else:
+            x = tok_emb + pos_emb
+
         if self.config.channel_encoding == 'learned': #jm one vector per standard location, the same for all frames of a channel
             loc_ids = torch.where(loc >= 0, loc, self.config.n_locations)       # -1 (padding) -> the extra row
             x = x + self.transformer.wce(loc_ids.repeat_interleave(t, dim=1))   # [b, c] -> [b, c*t]
@@ -241,8 +278,17 @@ class GPT(nn.Module):
             x = x + space.repeat_interleave(t, dim=1).to(x.dtype)               # [b, c*t, n_embd], like wce
         x = self.transformer.drop(x)
         attn_mask = valid.repeat_interleave(t, dim=1)[:, None, None, :] if grid else None   # [b, 1, 1, c*t]
+        if grid and not self.config.bidirectional: #jm next-token: a token sees every channel at its own and earlier frames, never a later frame
+            attn_mask = attn_mask & (pos[None, :] <= pos[:, None])          # [q, k]: frame(k) <= frame(q) -> [b, 1, c*t, c*t]
+        rope = None
+        if self.config.channel_encoding == 'rope4d': #jm per token: (frame, x, y, z in cm) -> cos/sin tables shared by all layers
+            assert grid, "rope4d needs multichannel batches (it uses each token's electrode position)"
+            coords = torch.cat([pos.float()[None, :, None].expand(b, -1, -1),            # [b, c*t, 1] frame index
+                                (100 * xyz.float()).repeat_interleave(t, dim=1)], dim=-1)  # [b, c*t, 3] electrode, cm
+            cos, sin = self.rotary.angles(coords)
+            rope = (self.rotary, cos, sin)
         for block in self.transformer.h:
-            x = block(x, attn_mask)
+            x = block(x, attn_mask, rope)
         x = self.transformer.ln_f(x)
 
         if targets is not None:

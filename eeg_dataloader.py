@@ -51,12 +51,14 @@ class EEGDataLoader:
         return torch.from_numpy(np.stack(x)), torch.from_numpy(np.stack(y))
 
     # Multi-channel
-    def get_grid_batch(self, batch_size, max_channels, channel_select='standard94'):
+    def get_grid_batch(self, batch_size, max_channels, channel_select='standard94', extra_frames=0):
         """Multi-channel windows. x [B, C, T] ids (T = the length given to __init__, C = max_channels),
         and a dict: loc [B, C] standard location id (-1 = none), xyz [B, C, 3], valid [B, C] (False = padded row).
         channel_select: 'standard94' = one channel per standard location (location_id >= 0); 'all' = every channel.
+        extra_frames: 1 for next-token prediction (x gets T + 1 frames; the caller splits it into input and target).
         Recordings with more usable channels than max_channels contribute a random subset."""
-        T = self.block_size
+        assert extra_frames in (0, 1), "the index only guarantees one frame past the window"
+        T = self.block_size + extra_frames
         k = np.random.choice(len(self.runs), size=batch_size, p=self.p_grid)
         x = np.zeros((batch_size, max_channels, T), np.int64)
         loc = np.full((batch_size, max_channels), -1, np.int64)

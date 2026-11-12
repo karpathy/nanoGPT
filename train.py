@@ -59,11 +59,12 @@ eeg_dataloader = False # True: windows from data/<dataset>/{train,val}/*.npz, ne
 pos_encoding = 'learned' # 'learned' (wpe, original) | 'sinusoidal' (fixed sin/cos table)
 bidirectional = False # True: masked-token prediction with full attention (BERT) instead of next-token (GPT)
 mask_ratio = 0.15 # bidirectional only: fraction of tokens replaced by MASK and predicted
-multichannel = False # True: windows of [channels, frames] from the per-recording grids (needs eeg_dataloader and bidirectional)
+multichannel = False # True: windows of [channels, frames] from the per-recording grids (needs eeg_dataloader); next-token = every channel predicts its own next frame
 max_channels = 94 # multichannel: rows per window (fewer are padded); block_size must be >= max_channels * window_frames
 window_frames = 32 # multichannel: frames per channel per window (8 per second -> 4 s)
 channel_select = 'standard94' # 'standard94' (one channel per standard location, within 2 cm) | 'all'
-channel_encoding = 'none' # multichannel: 'none' (control) | 'learned' (one learned vector per standard location)
+channel_encoding = 'none' # multichannel: 'none' (control) | 'learned' (one learned vector per standard location) | 'sinusoidal' (fixed sin/cos of xyz) | 'rope4d' (rotations by frame, x, y, z inside attention)
+rope_dims = '32,8,8,8' # rope4d: head numbers turned by frame, x, y, z (sum <= n_embd / n_head; the rest stay unturned)
 
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
@@ -72,6 +73,7 @@ weight_decay = 1e-1
 beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
+seed = 1337 # random seed: model init, batch sampling, masking (#jm)
 # learning rate decay settings
 decay_lr = True # whether to decay the learning rate
 warmup_iters = 2000 # how many steps to warm up for
@@ -114,7 +116,7 @@ print(f"tokens per iteration will be: {tokens_per_iter:,}")
 
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
-torch.manual_seed(1337 + seed_offset)
+torch.manual_seed(seed + seed_offset) #jm
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
@@ -126,15 +128,18 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 data_dir = os.path.join('data', dataset)
 if eeg_dataloader:
     from eeg_dataloader import EEGDataLoader
-    np.random.seed(1337 + seed_offset)   # the loader samples with numpy; torch.manual_seed above does not cover it
+    np.random.seed(seed + seed_offset)   # the loader samples with numpy; torch.manual_seed above does not cover it
     if multichannel:
-        assert bidirectional and max_channels * window_frames <= block_size, "multichannel needs bidirectional and block_size >= max_channels * window_frames"
+        assert max_channels * window_frames <= block_size, "multichannel needs block_size >= max_channels * window_frames"
     loaders = {split: EEGDataLoader(data_dir, split, window_frames if multichannel else block_size) for split in ('train', 'val')}
 def get_batch(split):
     kw = {}                                                    # extra model inputs (multichannel only)
     if eeg_dataloader and multichannel:
-        x, kw = loaders[split].get_grid_batch(batch_size, max_channels, channel_select)
-        y = x                                                  # replaced by the masking below
+        x, kw = loaders[split].get_grid_batch(batch_size, max_channels, channel_select, extra_frames=0 if bidirectional else 1)
+        if bidirectional:
+            y = x                                              # replaced by the masking below
+        else:  #jm next-token for every channel: the target of (channel c, frame t) is (channel c, frame t+1)
+            x, y = x[:, :, :-1], x[:, :, 1:].masked_fill(~kw['valid'][:, :, None], -1)   # padded rows: no target
     elif eeg_dataloader:
         x, y = loaders[split].get_batch(batch_size)
     else:
@@ -193,7 +198,8 @@ model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=bloc
                   codebook_dim=codebook.shape[1] if codebook is not None else 0,
                   pos_encoding=pos_encoding,
                   bidirectional=bidirectional,
-                  channel_encoding=channel_encoding) #jm
+                  channel_encoding=channel_encoding,
+                  rope_dims=rope_dims) #jm
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -329,7 +335,8 @@ if wandb_log and master_process:
     import wandb
     n_params = sum(p.numel() for p in model.parameters())
     config['n_params'] = n_params                                    #jm shows up as a config column in wandb
-    notes = (f"{n_layer} layers x {n_head} heads x {n_embd} dim, {n_params/1e6:.2f}M params; "
+    wandb_run_name = wandb_run_name.replace('{params}', f"{n_params/1e6:.1f}M")   #jm e.g. eeg-multi-ntp-rope-{params}-d384-l12-r4
+    notes = (f"{n_params/1e6:.2f}M params, {n_layer} layers x {n_head} heads x {n_embd} dim; "
              f"dataset {dataset}, block {block_size}, batch {batch_size}, {max_iters} iters; "
              f"mask {mask_ratio if bidirectional else 'none (next-token)'}, channels {channel_encoding}, "
              f"time {pos_encoding}, codebook input {use_codebook}")
