@@ -198,10 +198,12 @@ class GPT(nn.Module):
         # but want to use a smaller block size for some smaller, simpler model
         assert block_size <= self.config.block_size
         self.config.block_size = block_size
-        self.transformer.wpe.weight = nn.Parameter(self.transformer.wpe.weight[:block_size])
+        # Clone the slice so the old, longer embedding storage can be freed.
+        self.transformer.wpe.weight = nn.Parameter(self.transformer.wpe.weight[:block_size].clone())
         for block in self.transformer.h:
             if hasattr(block.attn, 'bias'):
-                block.attn.bias = block.attn.bias[:,:,:block_size,:block_size]
+                # A view would retain the original quadratic causal-mask storage.
+                block.attn.bias = block.attn.bias[:,:,:block_size,:block_size].clone()
 
     @classmethod
     def from_pretrained(cls, model_type, override_args=None):
