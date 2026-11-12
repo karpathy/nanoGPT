@@ -75,3 +75,52 @@ class EEGDataLoader:
             xyz[b, :c] = rec['xyz'][rows]
             valid[b, :c] = True
         return torch.from_numpy(x), dict(loc=torch.from_numpy(loc), xyz=torch.from_numpy(xyz), valid=torch.from_numpy(valid))
+
+class EEGLabelledLoader:   #jm
+    """Labelled windows (task='classify'). data/<dataset>/windows.npz says where every window starts and what its
+    label is; the token grids are data/<dataset>/{train,val,test}/*.npz (both from data/eeg_labelled/prepare.py)."""
+    SPLITS = {'train': 0, 'val': 1, 'test': 2}
+
+    def __init__(self, data_dir, split):
+        self.recs = {}
+        for f in sorted(glob.glob(os.path.join(data_dir, split, '*.npz'))):
+            d = np.load(f)
+            loc = d['location_id'].astype(np.int64)
+            self.recs[int(d['recording_id'])] = dict(codes=d['codes'], xyz=d['xyz'], loc=loc, std_rows=np.flatnonzero(loc >= 0))
+        w = np.load(os.path.join(data_dir, 'windows.npz'))
+        keep = (w['split'] == self.SPLITS[split]) & np.isin(w['recording_id'], list(self.recs))
+        self.rec_id, self.start, self.label = w['recording_id'][keep], w['start_frame'][keep], w['label'][keep]
+        self.n_frames = int(w['n_frames'][keep][0])
+        counts = np.bincount(self.label)
+        self.p_balanced = 1.0 / counts[self.label]                              # rare classes drawn more often
+        self.p_balanced /= self.p_balanced.sum()
+        print(f"{split}: {len(self.recs)} recordings, {len(self.label)} windows of {self.n_frames} frames, per class {counts.tolist()}")
+
+    def _grid(self, idx, max_channels, channel_select, shuffle_channels):
+        """Windows idx -> x [B, C, T], dict(loc, xyz, valid) as in get_grid_batch, y [B] class ids."""
+        B, T = len(idx), self.n_frames
+        x = np.zeros((B, max_channels, T), np.int64)
+        loc = np.full((B, max_channels), -1, np.int64)
+        xyz = np.zeros((B, max_channels, 3), np.float32)
+        valid = np.zeros((B, max_channels), bool)
+        for b, i in enumerate(idx):
+            rec, s = self.recs[self.rec_id[i]], self.start[i]
+            rows = rec['std_rows'] if channel_select == 'standard94' else np.arange(len(rec['codes']))
+            rows = (np.random.permutation(rows) if shuffle_channels else rows)[:max_channels]
+            c = len(rows)
+            x[b, :c] = rec['codes'][rows, s:s + T]
+            loc[b, :c] = rec['loc'][rows]
+            xyz[b, :c] = rec['xyz'][rows]
+            valid[b, :c] = True
+        kw = dict(loc=torch.from_numpy(loc), xyz=torch.from_numpy(xyz), valid=torch.from_numpy(valid))
+        return torch.from_numpy(x), kw, torch.from_numpy(self.label[idx])
+
+    def get_batch(self, batch_size, max_channels, channel_select='standard94'):
+        """Random training windows, every class equally likely."""
+        idx = np.random.choice(len(self.label), size=batch_size, p=self.p_balanced)
+        return self._grid(idx, max_channels, channel_select, shuffle_channels=True)
+
+    def iter_all(self, batch_size, max_channels, channel_select='standard94'):
+        """Every window once, in order, fixed channel subset: for evaluation."""
+        for i in range(0, len(self.label), batch_size):
+            yield self._grid(np.arange(i, min(i + batch_size, len(self.label))), max_channels, channel_select, shuffle_channels=False)
