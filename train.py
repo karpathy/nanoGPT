@@ -20,6 +20,7 @@ import os
 import time
 import math
 import pickle
+import tempfile
 from contextlib import nullcontext
 
 import numpy as np
@@ -28,6 +29,21 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
 from model import GPTConfig, GPT
+
+
+def save_checkpoint_atomic(checkpoint, path):
+    """Replace the last good checkpoint only after a complete save."""
+    fd, temp_path = tempfile.mkstemp(
+        prefix=".ckpt-", suffix=".tmp", dir=os.path.dirname(os.path.abspath(path))
+    )
+    os.close(fd)
+    try:
+        torch.save(checkpoint, temp_path)
+        os.replace(temp_path, path)
+    finally:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -283,7 +299,7 @@ while True:
                     'config': config,
                 }
                 print(f"saving checkpoint to {out_dir}")
-                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+                save_checkpoint_atomic(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
     if iter_num == 0 and eval_only:
         break
 
