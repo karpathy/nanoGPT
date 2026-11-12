@@ -13,6 +13,7 @@ init_from = 'resume' # either 'resume' (from an out_dir) or a gpt2 variant (e.g.
 out_dir = 'out' # ignored if init_from is not 'resume'
 start = "\n" # or "<|endoftext|>" or etc. Can also specify a file, use as: "FILE:prompt.txt"
 num_samples = 10 # number of samples to draw
+sample_batch_size = 1 # optionally generate several samples in a single model forward batch
 max_new_tokens = 500 # number of tokens generated in each sample
 temperature = 0.8 # 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
 top_k = 200 # retain only the top_k most likely tokens, clamp others to have 0 probability
@@ -80,10 +81,21 @@ if start.startswith('FILE:'):
 start_ids = encode(start)
 x = (torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...])
 
+def generate_samples(model, prompt, num_samples, sample_batch_size, max_new_tokens, temperature, top_k):
+    """Yield every sample while bounding the size of each generation batch."""
+    if sample_batch_size < 1:
+        raise ValueError("sample_batch_size must be a positive integer")
+    for offset in range(0, num_samples, sample_batch_size):
+        batch_size = min(sample_batch_size, num_samples - offset)
+        # expand avoids copying the shared prompt for each sample.
+        batch = prompt.expand(batch_size, -1)
+        generated = model.generate(batch, max_new_tokens, temperature=temperature, top_k=top_k)
+        yield from generated
+
+
 # run generation
 with torch.no_grad():
     with ctx:
-        for k in range(num_samples):
-            y = model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k)
-            print(decode(y[0].tolist()))
+        for y in generate_samples(model, x, num_samples, sample_batch_size, max_new_tokens, temperature, top_k):
+            print(decode(y.tolist()))
             print('---------------')
