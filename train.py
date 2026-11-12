@@ -215,16 +215,19 @@ if ddp:
 @torch.no_grad()
 def estimate_loss():
     out = {}
-    model.eval()
+    # Only the master evaluates. DDP.forward can synchronize buffers across
+    # ranks, so evaluate the underlying module without entering DDP.forward.
+    eval_model = model.module if ddp else model
+    eval_model.eval()
     for split in ['train', 'val']:
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = get_batch(split)
             with ctx:
-                logits, loss = model(X, Y)
+                logits, loss = eval_model(X, Y)
             losses[k] = loss.item()
         out[split] = losses.mean()
-    model.train()
+    eval_model.train()
     return out
 
 # learning rate decay scheduler (cosine with warmup)
