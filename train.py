@@ -65,6 +65,9 @@ window_frames = 32 # multichannel: frames per channel per window (8 per second -
 channel_select = 'standard94' # 'standard94' (one channel per standard location, within 2 cm) | 'all'
 channel_encoding = 'none' # multichannel: 'none' (control) | 'learned' (one learned vector per standard location) | 'sinusoidal' (fixed sin/cos of xyz) | 'rope4d' (rotations by frame, x, y, z inside attention)
 rope_dims = '32,8,8,8' # rope4d: head numbers turned by frame, x, y, z (sum <= n_embd / n_head; the rest stay unturned)
+task = 'lm' # 'lm' (masked or next-token pretraining) | 'classify' (one label per window; needs data/<dataset>/windows.npz)
+pretrained_ckpt = '' # classify: a pretrained ckpt.pt whose backbone weights are copied in ('' = train on labels only)
+freeze_backbone = False # classify: train only cls_head (pretrained features + linear probe)
 
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
@@ -127,13 +130,21 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 # poor man's data loader
 data_dir = os.path.join('data', dataset)
 if eeg_dataloader:
-    from eeg_dataloader import EEGDataLoader
+    from eeg_dataloader import EEGDataLoader, EEGLabelledLoader
     np.random.seed(seed + seed_offset)   # the loader samples with numpy; torch.manual_seed above does not cover it
-    if multichannel:
-        assert max_channels * window_frames <= block_size, "multichannel needs block_size >= max_channels * window_frames"
-    loaders = {split: EEGDataLoader(data_dir, split, window_frames if multichannel else block_size) for split in ('train', 'val')}
+    if task == 'classify': #jm
+        loaders = {split: EEGLabelledLoader(data_dir, split) for split in ('train', 'val')}
+        assert max_channels * loaders['train'].n_frames <= block_size, "classify needs block_size >= max_channels * frames per window"
+    else:
+        if multichannel:
+            assert max_channels * window_frames <= block_size, "multichannel needs block_size >= max_channels * window_frames"
+        loaders = {split: EEGDataLoader(data_dir, split, window_frames if multichannel else block_size) for split in ('train', 'val')}
 def get_batch(split):
     kw = {}                                                    # extra model inputs (multichannel only)
+    if task == 'classify': #jm the labels travel in kw, so the loop's model(X, Y, **kw) is unchanged (Y = None)
+        x, kw, y = loaders[split].get_batch(batch_size, max_channels, channel_select)
+        kw['labels'] = y
+        return x.to(device, non_blocking=True), None, {k: v.to(device, non_blocking=True) for k, v in kw.items()}
     if eeg_dataloader and multichannel:
         x, kw = loaders[split].get_grid_batch(batch_size, max_channels, channel_select, extra_frames=0 if bidirectional else 1)
         if bidirectional:
@@ -152,7 +163,7 @@ def get_batch(split):
         ix = torch.randint(len(data) - block_size, (batch_size,))
         x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
         y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
-    if bidirectional: #jm
+    if bidirectional and task == 'lm': #jm
         mask = torch.rand(x.shape) < mask_ratio            # which positions to hide
         if multichannel:
             mask &= kw['valid'][:, :, None]                    # only real channels; padding keeps target -1
@@ -181,12 +192,14 @@ if os.path.exists(meta_path):
     print(f"found vocab_size = {meta_vocab_size} (inside {meta_path})")
 
 #jm unigram baseline: bits per token of a model that only knows how often each token occurs (val split)
-_val = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
-_p = np.bincount(_val, minlength=meta_vocab_size or 0).astype(np.float64) / len(_val)
-_p = _p[_p > 0]
-unigram_bits = float(-(_p * np.log2(_p)).sum())
+unigram_bits = float('nan') #jm labelled datasets have no val.bin
+if os.path.exists(os.path.join(data_dir, 'val.bin')):
+    _val = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
+    _p = np.bincount(_val, minlength=meta_vocab_size or 0).astype(np.float64) / len(_val)
+    _p = _p[_p > 0]
+    unigram_bits = float(-(_p * np.log2(_p)).sum())
+    print(f"unigram baseline: {unigram_bits:.2f} bits per token")
 config['unigram_bits'] = unigram_bits   # stored with the wandb run
-print(f"unigram baseline: {unigram_bits:.2f} bits per token")
 
 # model init
 codebook = None
@@ -199,7 +212,8 @@ model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=bloc
                   pos_encoding=pos_encoding,
                   bidirectional=bidirectional,
                   channel_encoding=channel_encoding,
-                  rope_dims=rope_dims) #jm
+                  rope_dims=rope_dims,
+                  n_classes=meta['n_classes'] if task == 'classify' else 0) #jm
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -242,6 +256,16 @@ elif init_from.startswith('gpt2'):
     # read off the created config params, so we can store them into checkpoint correctly
     for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
         model_args[k] = getattr(model.config, k)
+if pretrained_ckpt: #jm copy the backbone of a pretrained run; tensors missing or of another shape are skipped
+    sd = torch.load(pretrained_ckpt, map_location='cpu', weights_only=False)['model']   # lm_head, MASK row, pos_table of another block_size
+    sd = {k.removeprefix('_orig_mod.'): v for k, v in sd.items()}
+    own = model.state_dict()
+    keep = {k: v for k, v in sd.items() if k in own and v.shape == own[k].shape}
+    model.load_state_dict(keep, strict=False)
+    print(f"pretrained: {len(keep)} tensors from {pretrained_ckpt}; skipped {sorted(set(sd) - set(keep))}; fresh {sorted(set(own) - set(keep))}")
+if freeze_backbone: #jm linear probe; configure_optimizers only takes parameters that require grad
+    for n, p in model.named_parameters():
+        p.requires_grad_(n.startswith('cls_head'))
 # crop down the model block size if desired, using model surgery
 if block_size < model.config.block_size:
     model.crop_block_size(block_size)
@@ -316,6 +340,24 @@ def estimate_loss():   #jm validation only (training metrics are logged every st
     out.update({'val_' + key: float(np.mean([m[key] for m in metrics])) for key in metrics[0]})
     return out
 
+@torch.no_grad()
+def estimate_classifier():   #jm classify: every window of the val split once -> loss, accuracy, balanced accuracy, AUROC
+    from sklearn.metrics import roc_auc_score, balanced_accuracy_score
+    model.eval()
+    logits, labels, losses = [], [], []
+    for X, kw, Y in loaders['val'].iter_all(batch_size, max_channels, channel_select):
+        X, Y, kw = X.to(device), Y.to(device), {k: v.to(device) for k, v in kw.items()}
+        with ctx:
+            lg, loss = model(X, None, labels=Y, **kw)
+        logits.append(lg.float().cpu()); labels.append(Y.cpu()); losses.append(loss.item())
+    model.train()
+    logits, labels = torch.cat(logits), torch.cat(labels).numpy()
+    pred, probs = logits.argmax(-1).numpy(), logits.softmax(-1).numpy()
+    return {'val': float(np.mean(losses)),
+            'val_acc': float((pred == labels).mean()),
+            'val_balanced_acc': float(balanced_accuracy_score(labels, pred)),      # mean recall over classes; chance = 1 / n_classes
+            'val_auroc': float(roc_auc_score(labels, probs[:, 1] if probs.shape[1] == 2 else probs, multi_class='ovr'))}
+
 # learning rate decay scheduler (cosine with warmup)
 def get_lr(it):
     # 1) linear warmup for warmup_iters steps
@@ -357,16 +399,15 @@ while True:
 
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        losses = estimate_loss()
-        print(f"step {iter_num}: val loss {losses['val']:.4f}")
+        losses = estimate_classifier() if task == 'classify' else estimate_loss() #jm
+        print(f"step {iter_num}: " + ", ".join(f"{k} {v:.4f}" for k, v in losses.items()))
         if wandb_log:
-            wandb.log({   #jm step=iter_num: wandb's x-axis is the training iteration
-                "val/loss": losses['val'],
-                "val/bits_saved": unigram_bits - losses['val'] / math.log(2),
-                "val/perplexity": math.exp(losses['val']),
-                "val/effective_codes": math.exp(losses['val_entropy']),
-                **{f"val/{k[4:]}": v for k, v in losses.items() if k != 'val'},   # val/top1, val/top5, val/l2_code, val/entropy, val/conf, val/conf_nll
-            }, step=iter_num)
+            log = {"val/loss": losses['val'], **{f"val/{k[4:]}": v for k, v in losses.items() if k != 'val'}}   # val/top1, val/top5, ... or val/balanced_acc, val/auroc
+            if task == 'lm': #jm
+                log.update({"val/bits_saved": unigram_bits - losses['val'] / math.log(2),
+                            "val/perplexity": math.exp(losses['val']),
+                            "val/effective_codes": math.exp(losses['val_entropy'])})
+            wandb.log(log, step=iter_num)   #jm step=iter_num: wandb's x-axis is the training iteration
         if losses['val'] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses['val']
             if iter_num > 0:
@@ -396,7 +437,7 @@ while True:
             logits, loss = model(X, Y, **kw)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         if micro_step == gradient_accumulation_steps - 1 and iter_num % log_interval == 0: #jm metrics of the batch just trained on
-            step_metrics = token_metrics(logits, Y)
+            step_metrics = token_metrics(logits, Y) if task == 'lm' else {'acc': (logits.argmax(-1) == kw['labels']).float().mean().item()} #jm
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
         X, Y, kw = get_batch('train')
         # backward pass, with gradient scaling if training in fp16

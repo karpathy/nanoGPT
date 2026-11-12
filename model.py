@@ -173,6 +173,7 @@ class GPTConfig:
     channel_encoding: str = 'none' #jm multichannel: 'none' | 'learned' | 'sinusoidal' (one learned vector per standard location)
     n_locations: int = 94 #jm number of standard locations (10-20/10-10 system)    
     rope_dims: str = '32,8,8,8' #jm rope4d: head numbers turned by frame, x, y, z (must fit the head size; rest unturned)
+    n_classes: int = 0 #jm 0 = language model (lm_head); > 0 = a classifier head on the mean of the window's tokens
 
 class GPT(nn.Module):
 
@@ -203,6 +204,8 @@ class GPT(nn.Module):
             self.rotary = RotaryPositions(config.n_embd // config.n_head, tuple(int(d) for d in config.rope_dims.split(',')))
 
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        if config.n_classes > 0: #jm
+            self.cls_head = nn.Linear(config.n_embd, config.n_classes)
         # with weight tying when using torch.compile() some warnings get generated:
         # "UserWarning: functional_call was passed multiple values for tied weights.
         # This behavior is deprecated and will be an error in future versions"
@@ -240,7 +243,7 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None, loc=None, xyz=None, valid=None): #jm loc/xyz/valid [b, c(, 3)]: multichannel only
+    def forward(self, idx, targets=None, loc=None, xyz=None, valid=None, labels=None): #jm loc/xyz/valid [b, c(, 3)]: multichannel only; labels [b] class ids: classification instead of lm_head
         device = idx.device
         grid = idx.dim() == 3                                    #jm multichannel batch [b, c, t]
         if grid:
@@ -290,6 +293,12 @@ class GPT(nn.Module):
         for block in self.transformer.h:
             x = block(x, attn_mask, rope)
         x = self.transformer.ln_f(x)
+
+        if labels is not None: #jm classification: mean over the real tokens of the window, then one logit per class
+            m = valid.repeat_interleave(t, dim=1).unsqueeze(-1).to(x.dtype)     # [b, c*t, 1]: 0 on padded channels
+            pooled = (x * m).sum(1) / m.sum(1).clamp_min(1)                     # [b, n_embd]
+            logits = self.cls_head(pooled)
+            return logits, F.cross_entropy(logits.float(), labels)
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
