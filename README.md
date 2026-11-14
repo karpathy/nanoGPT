@@ -227,7 +227,7 @@ For some context on this repository, GPT, and language modeling it might be help
 
 For more questions/discussions feel free to stop by **#nanoGPT** on Discord:
 
-[![](https://dcbadge.vercel.app/api/server/3zy8kqD9Cp?compact=true&style=flat)](https://discord.gg/3zy8kqD9Cp)
+![](https://discord.gg/3zy8kqD9Cp)
 
 ## acknowledgements
 
