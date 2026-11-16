@@ -1,6 +1,10 @@
 
 # nanoGPT
 
+<p align="center">
+  <b>English</b> · <a href="https://github.com/karpathy/nanoGPT/blob/master/README.zh.md">简体中文</a>
+</p>
+
 ![nanoGPT](assets/nanogpt.jpg)
 
 
